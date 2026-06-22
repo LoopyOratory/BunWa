@@ -1,0 +1,15 @@
+# generated
+frontend-dist/
+.sessions/
+bun.lock
+dist/
+
+# env
+.env
+
+# deps
+node_modules/
+
+# temp / ide
+.chatui/
+.commandcode/

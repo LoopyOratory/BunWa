@@ -1,0 +1,1 @@
+export class ISessionMeRepository { [key: string]: any; }

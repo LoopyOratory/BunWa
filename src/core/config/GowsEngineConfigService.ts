@@ -1,0 +1,1 @@
+export class GowsEngineConfigService { [key: string]: any; }

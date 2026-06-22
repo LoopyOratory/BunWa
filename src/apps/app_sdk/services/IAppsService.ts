@@ -1,0 +1,1 @@
+export class IAppsService { [key: string]: any; }

@@ -1,0 +1,1 @@
+export class ISessionConfigRepository { [key: string]: any; }

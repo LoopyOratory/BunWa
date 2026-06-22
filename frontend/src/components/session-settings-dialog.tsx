@@ -1,0 +1,573 @@
+import { useState, useEffect, useRef } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { toast } from "sonner"
+import { api, type Session } from "@/lib/api"
+import { Plus, Trash2, X, ChevronDown, Check, MessageCircle } from "lucide-react"
+
+const WEBHOOK_EVENTS = [
+  { value: "*", label: "All Events" },
+  { value: "session.status", label: "Session Status" },
+  { value: "message", label: "Message" },
+  { value: "message.any", label: "Any Message" },
+  { value: "message.reaction", label: "Message Reaction" },
+  { value: "message.ack", label: "Message ACK" },
+  { value: "message.ack.group", label: "Message ACK Group" },
+  { value: "message.waiting", label: "Message Waiting" },
+  { value: "message.revoked", label: "Message Revoked" },
+  { value: "message.edited", label: "Message Edited" },
+  { value: "state.change", label: "State Change" },
+  { value: "group.join", label: "Group Join" },
+  { value: "group.leave", label: "Group Leave" },
+  { value: "group.v2.join", label: "Group V2 Join" },
+  { value: "group.v2.leave", label: "Group V2 Leave" },
+  { value: "group.v2.update", label: "Group V2 Update" },
+  { value: "group.v2.participants", label: "Group V2 Participants" },
+  { value: "presence.update", label: "Presence Update" },
+  { value: "poll.vote", label: "Poll Vote" },
+  { value: "poll.vote.failed", label: "Poll Vote Failed" },
+  { value: "chat.archive", label: "Chat Archive" },
+  { value: "call.received", label: "Call Received" },
+  { value: "call.accepted", label: "Call Accepted" },
+  { value: "call.rejected", label: "Call Rejected" },
+  { value: "label.upsert", label: "Label Upsert" },
+  { value: "label.deleted", label: "Label Deleted" },
+  { value: "label.chat.added", label: "Label Chat Added" },
+  { value: "label.chat.deleted", label: "Label Chat Deleted" },
+  { value: "event.response", label: "Event Response" },
+  { value: "event.response.failed", label: "Event Response Failed" },
+  { value: "engine.event", label: "Engine Event" },
+]
+
+const RETRY_POLICIES = [
+  { value: "linear", label: "Linear" },
+  { value: "exponential", label: "Exponential" },
+  { value: "constant", label: "Constant" },
+]
+
+const DEVICE_NAMES = [
+  { value: "Ubuntu", label: "Ubuntu" },
+  { value: "Mac OS", label: "Mac OS" },
+  { value: "Windows", label: "Windows" },
+  { value: "Linux", label: "Linux" },
+]
+
+const BROWSER_NAMES = [
+  { value: "Chrome", label: "Chrome" },
+  { value: "Firefox", label: "Firefox" },
+  { value: "Safari", label: "Safari" },
+  { value: "Edge", label: "Edge" },
+]
+
+interface WebhookConfig {
+  url: string
+  events: string[]
+  hmac?: { key?: string }
+  retries?: { attempts?: number; delaySeconds?: number; policy?: string }
+  customHeaders?: { name: string; value: string }[]
+}
+
+interface SessionSettingsDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  session: Session | null
+  onSaved: () => void
+}
+
+function MultiSelect({
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  value: string[]
+  onChange: (value: string[]) => void
+  options: { value: string; label: string }[]
+  placeholder: string
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
+
+  const toggle = (opt: string) => {
+    if (opt === "*") {
+      onChange(value.length === options.length ? [] : options.map(o => o.value))
+      return
+    }
+    onChange(value.includes(opt) ? value.filter(v => v !== opt) : [...value, opt])
+  }
+
+  const labels = value.map(v => options.find(o => o.value === v)?.label || v).slice(0, 4)
+  const extra = value.length - 4
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+      >
+        <span className="truncate">{value.length === 0 ? placeholder : `${labels.join(", ")}${extra > 0 ? ` +${extra}` : ""}`}</span>
+        <ChevronDown className="size-4 opacity-50 shrink-0 ml-2" />
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+          <ScrollArea className="h-56">
+            {options.map(opt => (
+              <div key={opt.value} className="flex cursor-pointer items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground" onClick={() => toggle(opt.value)}>
+                <div className="mr-2 flex size-4 items-center justify-center rounded-sm border border-primary">
+                  {value.includes(opt.value) && <Check className="size-3" />}
+                </div>
+                <span>{opt.label}</span>
+              </div>
+            ))}
+          </ScrollArea>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: SessionSettingsDialogProps) {
+  const [loading, setLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState<"webhooks" | "proxy" | "engine" | "ignore" | "advanced" | "integrations">("webhooks")
+
+  const [webhooks, setWebhooks] = useState<WebhookConfig[]>([])
+  const [proxyServer, setProxyServer] = useState("")
+  const [proxyUsername, setProxyUsername] = useState("")
+  const [proxyPassword, setProxyPassword] = useState("")
+  const [storeEnabled, setStoreEnabled] = useState(false)
+  const [fullSync, setFullSync] = useState(false)
+  const [markOnline, setMarkOnline] = useState(true)
+  const [deviceName, setDeviceName] = useState("")
+  const [browserName, setBrowserName] = useState("")
+  const [ignoreStatus, setIgnoreStatus] = useState(false)
+  const [ignoreGroups, setIgnoreGroups] = useState(false)
+  const [ignoreChannels, setIgnoreChannels] = useState(false)
+  const [ignoreBroadcast, setIgnoreBroadcast] = useState(false)
+  const [ignoreDm, setIgnoreDm] = useState(false)
+  const [debugMode, setDebugMode] = useState(false)
+  const [metadata, setMetadata] = useState<{ key: string; value: string }[]>([])
+
+  // Chatwoot integration state
+  const [chatwootEnabled, setChatwootEnabled] = useState(false)
+  const [chatwootConfig, setChatwootConfig] = useState({
+    url: "",
+    accountId: 1,
+    accountToken: "",
+    inboxId: 1,
+    inboxIdentifier: "",
+    locale: "en-US",
+  })
+  const [chatwootAppId, setChatwootAppId] = useState<string | null>(null)
+  const [chatwootLoaded, setChatwootLoaded] = useState(false)
+
+  useEffect(() => {
+    if (session?.config) {
+      const c = session.config as any
+      setWebhooks(c.webhooks?.map((w: any) => ({ url: w.url || "", events: w.events || [], hmac: w.hmac, retries: w.retries, customHeaders: w.customHeaders || [] })) || [])
+      setProxyServer(c.proxy?.server || "")
+      setProxyUsername(c.proxy?.username || "")
+      setProxyPassword(c.proxy?.password || "")
+      setStoreEnabled(c?.noweb?.store?.enabled ?? false)
+      setFullSync(c?.noweb?.store?.fullSync ?? false)
+      setMarkOnline(c?.noweb?.markOnline ?? true)
+      setDeviceName(c?.client?.deviceName ?? "")
+      setBrowserName(c?.client?.browserName ?? "")
+      setIgnoreStatus(c?.ignore?.status ?? false)
+      setIgnoreGroups(c?.ignore?.groups ?? false)
+      setIgnoreChannels(c?.ignore?.channels ?? false)
+      setIgnoreBroadcast(c?.ignore?.broadcast ?? false)
+      setIgnoreDm(c?.ignore?.dm ?? false)
+      setDebugMode(c?.debug?.mode ?? false)
+      setMetadata(c.metadata ? Object.entries(c.metadata).map(([k, v]) => ({ key: k, value: String(v) })) : [])
+    }
+  }, [session])
+
+  // Load Chatwoot app config for this session
+  useEffect(() => {
+    if (!open || !session) return
+    setChatwootLoaded(false)
+    api.getApps().then((apps) => {
+      const chatwoot = apps.find((a: any) => a.app === "chatwoot" && a.session === session.name)
+      if (chatwoot) {
+        setChatwootAppId(chatwoot.id)
+        setChatwootEnabled(chatwoot.enabled)
+        setChatwootConfig({
+          url: chatwoot.config?.url || "",
+          accountId: chatwoot.config?.accountId || 1,
+          accountToken: chatwoot.config?.accountToken || "",
+          inboxId: chatwoot.config?.inboxId || 1,
+          inboxIdentifier: chatwoot.config?.inboxIdentifier || "",
+          locale: chatwoot.config?.locale || "en-US",
+        })
+      } else {
+        setChatwootAppId(null)
+        setChatwootEnabled(false)
+      }
+    }).catch(() => {}).finally(() => setChatwootLoaded(true))
+  }, [open, session])
+
+  const handleSave = async () => {
+    if (!session) return
+    setLoading(true)
+    try {
+      const config: Record<string, any> = {}
+      if (webhooks.length > 0) {
+        config.webhooks = webhooks.filter(w => w.url).map(w => ({
+          url: w.url, events: w.events,
+          ...(w.hmac?.key && { hmac: w.hmac }),
+          ...(w.retries && { retries: w.retries }),
+          ...(w.customHeaders?.length && { customHeaders: w.customHeaders }),
+        }))
+      }
+      if (proxyServer) {
+        config.proxy = { server: proxyServer, ...(proxyUsername && { username: proxyUsername }), ...(proxyPassword && { password: proxyPassword }) }
+      }
+      config.noweb = { store: { enabled: storeEnabled, fullSync }, markOnline }
+      const client: Record<string, string> = {}
+      if (deviceName) client.deviceName = deviceName
+      if (browserName) client.browserName = browserName
+      if (Object.keys(client).length) config.client = client
+      config.ignore = { status: ignoreStatus, groups: ignoreGroups, channels: ignoreChannels, broadcast: ignoreBroadcast, dm: ignoreDm }
+      config.debug = { mode: debugMode }
+      if (metadata.length > 0) {
+        config.metadata = {}
+        metadata.forEach(m => { if (m.key) config.metadata[m.key] = m.value })
+      }
+      await api.updateSession(session.name, config)
+      await saveChatwootIntegration()
+      toast.success("Settings saved")
+      onSaved()
+      onOpenChange(false)
+    } catch (e: any) {
+      toast.error(e.message || "Failed to save settings")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const saveChatwootIntegration = async () => {
+    if (!session) return
+    try {
+      if (chatwootAppId) {
+        await api.updateApp(chatwootAppId, {
+          enabled: chatwootEnabled,
+          config: chatwootConfig,
+        })
+      } else {
+        await api.createApp({
+          session: session.name,
+          app: "chatwoot",
+          enabled: chatwootEnabled,
+          config: chatwootConfig,
+        })
+      }
+    } catch (e: any) {
+      throw new Error("Chatwoot: " + (e.message || "save failed"))
+    }
+  }
+
+  const addWebhook = () => setWebhooks([...webhooks, { url: "", events: ["message"], customHeaders: [] }])
+  const removeWebhook = (i: number) => setWebhooks(webhooks.filter((_, idx) => idx !== i))
+  const updateWebhook = (i: number, field: string, value: any) => { const u = [...webhooks]; u[i] = { ...u[i], [field]: value }; setWebhooks(u) }
+  const addHeader = (wi: number) => { const u = [...webhooks]; u[wi].customHeaders = [...(u[wi].customHeaders || []), { name: "", value: "" }]; setWebhooks(u) }
+  const removeHeader = (wi: number, hi: number) => { const u = [...webhooks]; u[wi].customHeaders = (u[wi].customHeaders || []).filter((_, i) => i !== hi); setWebhooks(u) }
+  const updateHeader = (wi: number, hi: number, field: string, val: string) => { const u = [...webhooks]; u[wi].customHeaders = [...(u[wi].customHeaders || [])]; u[wi].customHeaders[hi] = { ...u[wi].customHeaders[hi], [field]: val }; setWebhooks(u) }
+
+  const tabs = [
+    { id: "webhooks" as const, label: "Webhooks" },
+    { id: "proxy" as const, label: "Proxy" },
+    { id: "engine" as const, label: "Engine" },
+    { id: "ignore" as const, label: "Ignore" },
+    { id: "advanced" as const, label: "Advanced" },
+    { id: "integrations" as const, label: "Integrations" },
+  ]
+
+  if (!session) return null
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-full h-full sm:h-auto sm:max-w-5xl sm:max-h-[85vh] flex flex-col p-0 gap-0 rounded-none sm:rounded-xl">
+        <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 border-b shrink-0">
+          <DialogTitle className="text-base sm:text-sm">Session Settings — {session.name}</DialogTitle>
+        </DialogHeader>
+
+        {/* Tab Bar — horizontal scroll on mobile */}
+        <div className="flex gap-0.5 border-b overflow-x-auto shrink-0 scrollbar-none">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-3 text-xs sm:text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
+                activeTab === tab.id
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content Area — scrollable */}
+        <ScrollArea className="flex-1 min-h-0 overflow-y-auto">
+          <div className="p-4 sm:px-6 sm:py-4">
+            {activeTab === "webhooks" && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium">Webhook Endpoints</h4>
+                  <Button variant="outline" size="sm" onClick={addWebhook}><Plus className="size-4 mr-1" /> Add</Button>
+                </div>
+                {webhooks.length === 0 && <p className="text-sm text-muted-foreground py-4">No webhooks configured.</p>}
+                {webhooks.map((webhook, wi) => (
+                  <div key={wi} className="border rounded-lg p-3 sm:p-4 space-y-3 sm:space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Badge variant="secondary">Webhook {wi + 1}</Badge>
+                      <Button variant="ghost" size="icon-sm" onClick={() => removeWebhook(wi)}><Trash2 className="size-4 text-destructive" /></Button>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>URL</Label>
+                      <Input placeholder="https://example.com/webhook" value={webhook.url} onChange={(e) => updateWebhook(wi, "url", e.target.value)} className="w-full" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Events</Label>
+                      <MultiSelect value={webhook.events} onChange={(v) => updateWebhook(wi, "events", v)} options={WEBHOOK_EVENTS} placeholder="Select events..." />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>HMAC Key</Label>
+                      <Input type="password" placeholder="Secret" value={webhook.hmac?.key || ""} onChange={(e) => updateWebhook(wi, "hmac", { key: e.target.value })} className="w-full" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Retry Policy</Label>
+                      <Select value={webhook.retries?.policy || ""} onValueChange={(v) => updateWebhook(wi, "retries", { ...webhook.retries, policy: v })}>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Policy" /></SelectTrigger>
+                        <SelectContent>{RETRY_POLICIES.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Max Retries</Label>
+                      <Input type="number" placeholder="15" value={webhook.retries?.attempts || ""} onChange={(e) => updateWebhook(wi, "retries", { ...webhook.retries, attempts: parseInt(e.target.value) || undefined })} className="w-full" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between"><Label>Custom Headers</Label><Button variant="ghost" size="sm" onClick={() => addHeader(wi)}><Plus className="size-3 mr-1" /> Add</Button></div>
+                      {(webhook.customHeaders || []).map((h, hi) => (
+                        <div key={hi} className="flex gap-2">
+                          <Input placeholder="Name" value={h.name} onChange={(e) => updateHeader(wi, hi, "name", e.target.value)} className="flex-1" />
+                          <Input placeholder="Value" value={h.value} onChange={(e) => updateHeader(wi, hi, "value", e.target.value)} className="flex-1" />
+                          <Button variant="ghost" size="icon-sm" onClick={() => removeHeader(wi, hi)} className="shrink-0"><X className="size-4" /></Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeTab === "proxy" && (
+              <div className="space-y-4 max-w-xl">
+                <h4 className="text-sm font-medium">Proxy Configuration</h4>
+                <div className="space-y-2"><Label>Server URL</Label><Input placeholder="socks5://host:port or http://host:port" value={proxyServer} onChange={(e) => setProxyServer(e.target.value)} /></div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2"><Label>Username</Label><Input placeholder="Optional" value={proxyUsername} onChange={(e) => setProxyUsername(e.target.value)} /></div>
+                  <div className="space-y-2"><Label>Password</Label><Input type="password" placeholder="Optional" value={proxyPassword} onChange={(e) => setProxyPassword(e.target.value)} /></div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "engine" && (
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium">Bun Engine (Baileys)</h4>
+                  <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Enable Store</Label><p className="text-xs text-muted-foreground">Persist contacts, chats, messages</p></div><Switch checked={storeEnabled} onCheckedChange={setStoreEnabled} /></div>
+                  {storeEnabled && <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Full Sync</Label><p className="text-xs text-muted-foreground">1 year history vs 3 months</p></div><Switch checked={fullSync} onCheckedChange={setFullSync} /></div>}
+                  <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Mark Online</Label><p className="text-xs text-muted-foreground">Online presence on start</p></div><Switch checked={markOnline} onCheckedChange={setMarkOnline} /></div>
+                </div>
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium">Client Identity</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md">
+                    <div className="space-y-2"><Label>Device</Label><Select value={deviceName} onValueChange={setDeviceName}><SelectTrigger><SelectValue placeholder="Select device" /></SelectTrigger><SelectContent>{DEVICE_NAMES.map(d => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label>Browser</Label><Select value={browserName} onValueChange={setBrowserName}><SelectTrigger><SelectValue placeholder="Select browser" /></SelectTrigger><SelectContent>{BROWSER_NAMES.map(b => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>)}</SelectContent></Select></div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "ignore" && (
+              <div className="space-y-4 max-w-md">
+                <h4 className="text-sm font-medium">Ignore Messages</h4>
+                <p className="text-xs text-muted-foreground">Filter out specific message types</p>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between py-1"><Label>Status Broadcasts</Label><Switch checked={ignoreStatus} onCheckedChange={setIgnoreStatus} /></div>
+                  <div className="flex items-center justify-between py-1"><Label>Groups</Label><Switch checked={ignoreGroups} onCheckedChange={setIgnoreGroups} /></div>
+                  <div className="flex items-center justify-between py-1"><Label>Channels</Label><Switch checked={ignoreChannels} onCheckedChange={setIgnoreChannels} /></div>
+                  <div className="flex items-center justify-between py-1"><Label>Broadcasts</Label><Switch checked={ignoreBroadcast} onCheckedChange={setIgnoreBroadcast} /></div>
+                  <div className="flex items-center justify-between py-1"><Label>Direct Messages</Label><Switch checked={ignoreDm} onCheckedChange={setIgnoreDm} /></div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "advanced" && (
+              <div className="space-y-6 max-w-xl">
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium">Debug</h4>
+                  <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Debug Mode</Label><p className="text-xs text-muted-foreground">Verbose logging</p></div><Switch checked={debugMode} onCheckedChange={setDebugMode} /></div>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between"><h4 className="text-sm font-medium">Metadata</h4><Button variant="outline" size="sm" onClick={() => setMetadata([...metadata, { key: "", value: "" }])}><Plus className="size-4 mr-1" /> Add</Button></div>
+                  <p className="text-xs text-muted-foreground">Custom key-value data for webhook payloads</p>
+                  {metadata.map((m, i) => (
+                    <div key={i} className="flex gap-2">
+                      <Input placeholder="Key" value={m.key} onChange={(e) => { const u = [...metadata]; u[i] = { ...u[i], key: e.target.value }; setMetadata(u) }} className="flex-1" />
+                      <Input placeholder="Value" value={m.value} onChange={(e) => { const u = [...metadata]; u[i] = { ...u[i], value: e.target.value }; setMetadata(u) }} className="flex-1" />
+                      <Button variant="ghost" size="icon-sm" onClick={() => setMetadata(metadata.filter((_, idx) => idx !== i))}><X className="size-4" /></Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeTab === "integrations" && (
+              <div className="space-y-6 max-w-xl">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
+                    <MessageCircle className="size-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium">Chatwoot Integration</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Forward WhatsApp messages to Chatwoot and send agent replies back to WhatsApp
+                    </p>
+                  </div>
+                </div>
+
+                {!chatwootLoaded ? (
+                  <p className="text-sm text-muted-foreground py-4">Loading integration config...</p>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="space-y-0.5">
+                        <Label>Enabled</Label>
+                        <p className="text-xs text-muted-foreground">Bridge messages between this session and Chatwoot</p>
+                      </div>
+                      <Switch checked={chatwootEnabled} onCheckedChange={setChatwootEnabled} />
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Chatwoot URL *</Label>
+                        <Input
+                          placeholder="http://chatwoot:3000"
+                          value={chatwootConfig.url}
+                          onChange={(e) => setChatwootConfig({ ...chatwootConfig, url: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Account ID *</Label>
+                          <Input
+                            type="number"
+                            placeholder="1"
+                            value={chatwootConfig.accountId}
+                            onChange={(e) => setChatwootConfig({ ...chatwootConfig, accountId: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Account Token *</Label>
+                          <Input
+                            placeholder="Chatwoot API token"
+                            value={chatwootConfig.accountToken}
+                            onChange={(e) => setChatwootConfig({ ...chatwootConfig, accountToken: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Inbox ID *</Label>
+                          <Input
+                            type="number"
+                            placeholder="1"
+                            value={chatwootConfig.inboxId}
+                            onChange={(e) => setChatwootConfig({ ...chatwootConfig, inboxId: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Inbox Identifier</Label>
+                          <Input
+                            placeholder="Optional UUID"
+                            value={chatwootConfig.inboxIdentifier}
+                            onChange={(e) => setChatwootConfig({ ...chatwootConfig, inboxIdentifier: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Locale</Label>
+                        <Select
+                          value={chatwootConfig.locale}
+                          onValueChange={(v) => setChatwootConfig({ ...chatwootConfig, locale: v })}
+                        >
+                          <SelectTrigger className="w-full sm:w-48">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="en-US">English (US)</SelectItem>
+                            <SelectItem value="pt-BR">Português (Brasil)</SelectItem>
+                            <SelectItem value="es">Español</SelectItem>
+                            <SelectItem value="id">Bahasa Indonesia</SelectItem>
+                            <SelectItem value="fr">Français</SelectItem>
+                            <SelectItem value="de">Deutsch</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-emerald-500/20 bg-emerald-50 dark:bg-emerald-950/20 p-3">
+                      <p className="text-xs text-muted-foreground">
+                        <strong>Webhook URL:</strong> Configure Chatwoot to send{" "}
+                        <code className="text-[10px] bg-muted px-1 rounded">message_created</code> events to{" "}
+                        <code className="text-[10px] bg-muted px-1 rounded">http://YOUR_WAHA_HOST:3001/webhook/chatwoot/{session?.name}</code>
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+
+        {/* Footer — sticky */}
+        <div className="flex gap-2 px-4 sm:px-6 py-4 border-t bg-background shrink-0">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1 sm:flex-none">Cancel</Button>
+          <Button onClick={handleSave} disabled={loading} className="flex-1 sm:flex-none">{loading ? "Saving..." : "Save"}</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
