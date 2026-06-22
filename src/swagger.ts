@@ -75,6 +75,7 @@ export function buildOpenApiSpec(): any {
       { name: '🏷️ Labels', description: 'Labels - available only for WhatsApp Business accounts' },
       { name: '🖼️ Media', description: 'Media methods' },
       { name: '🔗 LIDs', description: 'LID to Phone Number mapping' },
+      { name: '🧩 Apps', description: 'App integrations (Chatwoot, etc.)' },
       { name: '🔍 Observability', description: 'Other methods' },
     ],
     paths: {
@@ -3106,6 +3107,114 @@ export function buildOpenApiSpec(): any {
           operationId: 'getWorkers',
           security: [{ apiKey: [] }],
           responses: { '200': { description: 'List of workers' } },
+        },
+      },
+      // Apps endpoints
+      '/api/apps': {
+        get: {
+          tags: ['🧩 Apps'],
+          summary: 'List all apps',
+          operationId: 'listApps',
+          security: [{ apiKey: *** }],
+          responses: { '200': { description: 'List of app configurations' } },
+        },
+        post: {
+          tags: ['🧩 Apps'],
+          summary: 'Create an app (Chatwoot)',
+          operationId: 'createApp',
+          security: [{ apiKey: *** }],
+          requestBody: {
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['session', 'app', 'config'],
+                  properties: {
+                    session: { type: 'string', example: 'default' },
+                    app: { type: 'string', enum: ['chatwoot'], example: 'chatwoot' },
+                    enabled: { type: 'boolean', default: true },
+                    config: {
+                      type: 'object',
+                      properties: {
+                        url: { type: 'string', example: 'http://chatwoot:3000' },
+                        accountId: { type: 'integer', example: 1 },
+                        accountToken: { type: 'string' },
+                        inboxId: { type: 'integer', example: 1 },
+                      },
+                      required: ['url', 'accountId', 'accountToken', 'inboxId'],
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '201': { description: 'App created' },
+            '400': { description: 'Validation error' },
+          },
+        },
+      },
+      '/api/apps/{id}': {
+        get: {
+          tags: ['🧩 Apps'],
+          summary: 'Get app by ID',
+          operationId: 'getApp',
+          security: [{ apiKey: *** }],
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'App configuration' }, '404': { description: 'Not found' } },
+        },
+        put: {
+          tags: ['🧩 Apps'],
+          summary: 'Update app',
+          operationId: 'updateApp',
+          security: [{ apiKey: *** }],
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'App updated' }, '404': { description: 'Not found' } },
+        },
+        delete: {
+          tags: ['🧩 Apps'],
+          summary: 'Delete app',
+          operationId: 'deleteApp',
+          security: [{ apiKey: *** }],
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'App deleted' }, '404': { description: 'Not found' } },
+        },
+      },
+      // Chatwoot webhook (no auth — verified by account_id)
+      '/webhook/chatwoot/{session}': {
+        post: {
+          tags: ['🧩 Apps'],
+          summary: 'Chatwoot webhook endpoint',
+          description: 'Receives message_created events from Chatwoot and forwards agent replies to WhatsApp',
+          operationId: 'chatwootWebhook',
+          parameters: [{ name: 'session', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: {
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    event: { type: 'string', example: 'message_created' },
+                    message_type: { type: 'string', example: 'outgoing' },
+                    content: { type: 'string' },
+                    conversation: {
+                      type: 'object',
+                      properties: {
+                        contact_inbox: {
+                          type: 'object',
+                          properties: { source_id: { type: 'string' } },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '200': { description: 'Webhook processed' },
+            '404': { description: 'No app configured for this session' },
+          },
         },
       },
     },
