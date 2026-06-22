@@ -340,8 +340,8 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   }
 
   getSocketConfig(agents: Agents | undefined, state): Partial<SocketConfig> {
-    // Detect browser
-    let browser = ['Ubuntu', 'Chrome', '22.04.4'] as WABrowserDescription;
+    // Detect browser — default to macOS Safari
+    let browser = Browsers.macOS('Safari');
     let deviceName =
       this.sessionConfig?.client?.deviceName ?? WAHA_CLIENT_DEVICE_NAME;
     let browserName =
