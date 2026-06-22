@@ -370,7 +370,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       }
     }
 
-    const fullSyncEnabled = this.sessionConfig?.noweb?.store?.fullSync || false;
+    const fullSyncEnabled = this.sessionConfig?.noweb?.store?.fullSync ?? true;
     let markOnlineOnConnect = this.sessionConfig?.noweb?.markOnline;
     if (markOnlineOnConnect == undefined) {
       markOnlineOnConnect = true;
@@ -431,7 +431,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     }
 
     this.logger.debug(`Making a new store...`);
-    const storeEnabled = this.sessionConfig?.noweb?.store?.enabled || false;
+    const storeEnabled = this.sessionConfig?.noweb?.store?.enabled ?? true;
     if (!storeEnabled) {
       this.logger.debug('Using NowebInMemoryStore');
       this.store = new NowebInMemoryStore();
