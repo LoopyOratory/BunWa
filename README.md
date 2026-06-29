@@ -181,31 +181,62 @@ BunWa exposes a [Model Context Protocol](https://modelcontextprotocol.io) server
 
 ## 🏗️ Architecture
 
-```
-┌─────────────────────────────────────────────┐
-│                   BunWa                      │
-│  ┌──────────┐  ┌──────────────────────────┐ │
-│  │  Hono    │  │      Dashboard            │ │
-│  │  REST    │  │  (React + shadcn/ui)      │ │
-│  │  API     │  │                           │ │
-│  └────┬─────┘  └───────────┬──────────────┘ │
-│       │                    │                 │
-│  ┌────┴────────────────────┴──────────────┐ │
-│  │         Session Manager                 │ │
-│  │  ┌─────────┐     ┌───────────────────┐ │ │
-│  │  │ NOWEB   │     │      WEBJS         │ │ │
-│  │  │(Baileys)│     │(whatsapp-web.js)   │ │ │
-│  │  └─────────┘     └───────────────────┘ │ │
-│  └─────────────────────────────────────────┘ │
-│  ┌──────────┐ ┌──────────┐ ┌──────────────┐ │
-│  │ Storage  │ │ Database │ │    MCP       │ │
-│  │ (local/  │ │(SQLite / │ │   Server     │ │
-│  │   S3)    │ │Postgres) │ │              │ │
-│  └──────────┘ └──────────┘ └──────────────┘ │
-└─────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Clients["Clients"]
+        HTTP["HTTP Clients<br/><small>curl, Postman, Apps</small>"]
+        AI["AI Agents<br/><small>MCP Clients</small>"]
+        Browser["Browser<br/><small>Dashboard UI</small>"]
+    end
+
+    subgraph BunWa["BunWa Server (Bun Runtime)"]
+        subgraph API["API Layer"]
+            Hono["Hono REST API<br/><small>WAHA-compatible endpoints</small>"]
+            MCP["MCP Server<br/><small>Model Context Protocol</small>"]
+            WS["WebSocket<br/><small>Real-time events</small>"]
+        end
+
+        subgraph Core["Core Layer"]
+            SM["Session Manager<br/><small>Lifecycle + State</small>"]
+            AM["Auth Manager<br/><small>API Keys + Basic Auth + CASL</small>"]
+            WH["Webhook Engine<br/><small>HMAC signing + SSRF guard</small>"]
+        end
+
+        subgraph Engines["WhatsApp Engines"]
+            NOWEB["NOWEB Engine<br/><small>Baileys (Lightweight)</small>"]
+            WEBJS["WEBJS Engine<br/><small>whatsapp-web.js + Puppeteer</small>"]
+        end
+
+        subgraph Data["Data Layer"]
+            DB[("Database<br/><small>SQLite / PostgreSQL</small>")]
+            ST[("Storage<br/><small>Local FS / S3-compatible</small>")]
+        end
+    end
+
+    HTTP --> Hono
+    AI --> MCP
+    Browser --> Hono
+    Browser --> WS
+
+    Hono --> SM
+    Hono --> AM
+    MCP --> SM
+    WS --> SM
+
+    SM --> NOWEB
+    SM --> WEBJS
+
+    SM --> DB
+    SM --> ST
+    Hono --> WH
+    WH --> HTTP
+
+    NOWEB --> WhatsApp["WhatsApp WebSocket<br/><small>Baileys Signal Protocol</small>"]
+    WEBJS --> Chrome["Chrome / Puppeteer"]
+    Chrome --> WhatsAppWeb["WhatsApp Web"]
 ```
 
-## 🏗️ Technology Stack
+## 🛠️ Technology Stack
 
 | Category | Technology |
 |----------|-----------|
