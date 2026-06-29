@@ -167,23 +167,23 @@ export function EventMonitorPage() {
                   <table className="w-full text-xs">
                     <thead className="sticky top-0 bg-muted">
                       <tr>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Time</th>
-                        <th className="hidden sm:table-cell px-3 py-2 text-left font-medium text-muted-foreground">Session</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Event</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Payload</th>
+                        <th className="px-3 py-2 text-left font-medium text-base text-muted-foreground">Time</th>
+                        <th className="hidden sm:table-cell px-3 py-2 text-left font-medium text-base text-muted-foreground">Session</th>
+                        <th className="px-3 py-2 text-left font-medium text-base text-muted-foreground">Event</th>
+                        <th className="px-3 py-2 text-left font-medium text-base text-muted-foreground">Payload</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filtered.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="px-3 py-8 text-center text-muted-foreground">
+                          <td colSpan={4} className="px-3 py-8 text-center text-base text-muted-foreground">
                             No events yet. Events will appear here in real-time.
                           </td>
                         </tr>
                       ) : (
                         filtered.map((entry) => (
                           <tr key={entry.id} className="border-t border-border hover:bg-muted/50">
-                            <td className="whitespace-nowrap px-3 py-1.5 font-mono text-[10px] text-muted-foreground">
+                            <td className="whitespace-nowrap px-3 py-1.5 font-mono text-[10px] text-base text-muted-foreground">
                               {new Date(entry.timestamp).toLocaleTimeString()}
                             </td>
                             <td className="hidden sm:table-cell px-3 py-1.5">
@@ -199,7 +199,7 @@ export function EventMonitorPage() {
                                 {entry.event}
                               </Badge>
                             </td>
-                            <td className="max-w-[150px] sm:max-w-md truncate px-3 py-1.5 font-mono text-[10px] text-muted-foreground">
+                            <td className="max-w-[150px] sm:max-w-md truncate px-3 py-1.5 font-mono text-[10px] text-base text-muted-foreground">
                               {entry.payload}
                             </td>
                           </tr>
@@ -210,7 +210,7 @@ export function EventMonitorPage() {
                   <div ref={bottomRef} />
                 </div>
               </div>
-              <p className="mt-2 text-[10px] text-muted-foreground">
+              <p className="mt-2 text-[10px] text-base text-muted-foreground">
                 {paused ? "Paused" : connected ? "Live (WebSocket)" : "Connecting..."} — Showing {filtered.length} events
               </p>
             </CardContent>

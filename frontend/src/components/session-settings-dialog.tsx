@@ -164,6 +164,8 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
   const [storeEnabled, setStoreEnabled] = useState(false)
   const [fullSync, setFullSync] = useState(false)
   const [markOnline, setMarkOnline] = useState(true)
+  const [engineType, setEngineType] = useState("noweb")
+  const [authTimeout, setAuthTimeout] = useState("")
   const [deviceName, setDeviceName] = useState("")
   const [browserName, setBrowserName] = useState("")
   const [ignoreStatus, setIgnoreStatus] = useState(false)
@@ -197,6 +199,8 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
       setStoreEnabled(c?.noweb?.store?.enabled ?? false)
       setFullSync(c?.noweb?.store?.fullSync ?? false)
       setMarkOnline(c?.noweb?.markOnline ?? true)
+      setEngineType((c?.engine || "noweb").toLowerCase())
+      setAuthTimeout(c?.webjs?.authTimeout?.toString() || "")
       setDeviceName(c?.client?.deviceName ?? "")
       setBrowserName(c?.client?.browserName ?? "")
       setIgnoreStatus(c?.ignore?.status ?? false)
@@ -249,7 +253,12 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
       if (proxyServer) {
         config.proxy = { server: proxyServer, ...(proxyUsername && { username: proxyUsername }), ...(proxyPassword && { password: proxyPassword }) }
       }
-      config.noweb = { store: { enabled: storeEnabled, fullSync }, markOnline }
+      config.engine = engineType.toUpperCase()
+      if (engineType === "webjs") {
+        config.webjs = { authTimeout: parseInt(authTimeout) || undefined }
+      } else {
+        config.noweb = { store: { enabled: storeEnabled, fullSync }, markOnline }
+      }
       const client: Record<string, string> = {}
       if (deviceName) client.deviceName = deviceName
       if (browserName) client.browserName = browserName
@@ -401,13 +410,50 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
             )}
 
             {activeTab === "engine" && (
-              <div className="space-y-6">
-                <div className="space-y-4">
-                  <h4 className="text-sm font-medium">Bun Engine (Baileys)</h4>
-                  <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Enable Store</Label><p className="text-xs text-muted-foreground">Persist contacts, chats, messages</p></div><Switch checked={storeEnabled} onCheckedChange={setStoreEnabled} /></div>
-                  {storeEnabled && <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Full Sync</Label><p className="text-xs text-muted-foreground">1 year history vs 3 months</p></div><Switch checked={fullSync} onCheckedChange={setFullSync} /></div>}
-                  <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Mark Online</Label><p className="text-xs text-muted-foreground">Online presence on start</p></div><Switch checked={markOnline} onCheckedChange={setMarkOnline} /></div>
+              <div className="space-y-6 max-w-xl">
+                {/* Engine Selector */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium">Engine Type</h4>
+                  <Select value={engineType} onValueChange={setEngineType}>
+                    <SelectTrigger className="w-full sm:w-64">
+                      <SelectValue placeholder="Select engine" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="noweb">NOWEB — Baileys (lightweight)</SelectItem>
+                      <SelectItem value="webjs">WEBJS — Chrome/Puppeteer (stable)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+
+                {/* NOWEB Config */}
+                {engineType === "noweb" && (
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-medium">Baileys Engine Settings</h4>
+                    <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Enable Store</Label><p className="text-xs text-muted-foreground">Persist contacts, chats, messages</p></div><Switch checked={storeEnabled} onCheckedChange={setStoreEnabled} /></div>
+                    {storeEnabled && <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Full Sync</Label><p className="text-xs text-muted-foreground">1 year history vs 3 months</p></div><Switch checked={fullSync} onCheckedChange={setFullSync} /></div>}
+                    <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Mark Online</Label><p className="text-xs text-muted-foreground">Online presence on start</p></div><Switch checked={markOnline} onCheckedChange={setMarkOnline} /></div>
+                  </div>
+                )}
+
+                {/* WEBJS Config */}
+                {engineType === "webjs" && (
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-medium">WebJS Engine Settings</h4>
+                    <div className="space-y-2">
+                      <Label>Auth Timeout (ms)</Label>
+                      <Input
+                        type="number"
+                        placeholder="30000"
+                        value={authTimeout}
+                        onChange={(e) => setAuthTimeout(e.target.value)}
+                        className="w-full sm:w-64"
+                      />
+                      <p className="text-xs text-muted-foreground">Max time to wait for authentication before timeout</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Common: Client Identity */}
                 <div className="space-y-4">
                   <h4 className="text-sm font-medium">Client Identity</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md">
@@ -552,7 +598,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                       <p className="text-xs text-muted-foreground">
                         <strong>Webhook URL:</strong> Configure Chatwoot to send{" "}
                         <code className="text-[10px] bg-muted px-1 rounded">message_created</code> events to{" "}
-                        <code className="text-[10px] bg-muted px-1 rounded">http://YOUR_WAHA_HOST:3001/webhook/chatwoot/{session?.name}</code>
+                        <code className="text-[10px] bg-muted px-1 rounded">http://YOUR_BUNWA_HOST:3001/webhook/chatwoot/{session?.name}</code>
                       </p>
                     </div>
                   </>

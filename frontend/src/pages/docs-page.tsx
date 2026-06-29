@@ -1,5 +1,9 @@
+/**
+ * BunWa Dashboard — Documentation Page
+ * Shows feature descriptions, engine comparisons, and API usage examples.
+ */
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import {
   MessageCircle,
@@ -13,51 +17,50 @@ import {
   Code,
   Server,
   Lock,
+  Smartphone,
 } from "lucide-react"
+import { SidebarTrigger } from "@/components/ui/sidebar"
 
 export function DocsPage() {
   return (
     <div className="flex h-full flex-col overflow-auto">
+      <div className="sticky top-0 z-10 flex items-center px-6 py-3 border-b bg-background/80 backdrop-blur-sm">
+        <SidebarTrigger className="md:hidden" />
+        <span className="text-sm font-medium text-muted-foreground">Documentation</span>
+      </div>
       <div className="mx-auto max-w-4xl px-6 py-12">
-        {/* Hero with Bun Logo */}
+        {/* Hero */}
         <div className="flex flex-col items-center text-center mb-16">
           <div className="mb-8">
-            <svg viewBox="0 0 1024 1024" className="size-32" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="512" cy="512" r="512" fill="#142120" />
-              <path d="M512 192c-176.73 0-320 143.27-320 320s143.27 320 320 320 320-143.27 320-320-143.27-320-320-320zm0 576c-141.38 0-256-114.62-256-256s114.62-256 256-256 256 114.62 256 256-114.62 256-256 256z" fill="#4ade80" />
-              <path d="M512 288c-123.71 0-224 100.29-224 224s100.29 224 224 224 224-100.29 224-224-100.29-224-224-224zm0 384c-88.37 0-160-71.63-160-160s71.63-160 160-160 160 71.63 160 160-71.63 160-160 160z" fill="#4ade80" />
-              <path d="M512 384c-70.69 0-128 57.31-128 128s57.31 128 128 128 128-57.31 128-128-57.31-128-128-128zm0 192c-35.35 0-64-28.65-64-64s28.65-64 64-64 64 28.65 64 64-28.65 64-64 64z" fill="#4ade80" />
-              <circle cx="512" cy="512" r="32" fill="#4ade80" />
-            </svg>
+            <img src="/logo.jpg" alt="BunWa" className="size-28 rounded-2xl object-cover shadow-lg" />
           </div>
           <h1 className="text-4xl font-bold tracking-tight mb-4">
-            WAHA <span className="text-emerald-500">Bun</span>
+            BunWa
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl">
             WhatsApp HTTP API powered by Bun runtime. A blazing-fast, 1:1 API-compatible
-            rewrite of WAHA with Hono framework.
+            rewrite of WAHA Bun with Hono framework.
           </p>
           <div className="flex gap-2 mt-6">
-            <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-500">
-              <Zap className="size-3 mr-1" /> Bun Runtime
-            </Badge>
-            <Badge variant="secondary" className="bg-blue-500/10 text-blue-500">
-              <Server className="size-3 mr-1" /> Hono Framework
-            </Badge>
-            <Badge variant="secondary" className="bg-purple-500/10 text-purple-500">
-              <Shield className="size-3 mr-1" /> 100% API Compatible
-            </Badge>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-500">
+              <Zap className="size-3" /> Bun Runtime
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-500">
+              <Server className="size-3" /> Hono Framework
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-500/10 px-3 py-1 text-xs font-medium text-purple-500">
+              <Shield className="size-3" /> 100% API Compatible
+            </span>
           </div>
         </div>
 
-        {/* Features Grid */}
-        <h2 className="text-2xl font-bold mb-6">Features</h2>
+        {/* Features */}
+        <h2 className="text-3xl font-bold tracking-tight mb-6">Features</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
           <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2 text-lg">
-                <MessageCircle className="size-5 text-emerald-500" />
-                Messaging
+                <MessageCircle className="size-5 text-emerald-500" /> Messaging
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -67,12 +70,10 @@ export function DocsPage() {
               </p>
             </CardContent>
           </Card>
-
           <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Users className="size-5 text-blue-500" />
-                Groups
+                <Users className="size-5 text-blue-500" /> Groups
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -82,12 +83,10 @@ export function DocsPage() {
               </p>
             </CardContent>
           </Card>
-
           <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Radio className="size-5 text-purple-500" />
-                Channels
+                <Radio className="size-5 text-purple-500" /> Channels
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -97,12 +96,10 @@ export function DocsPage() {
               </p>
             </CardContent>
           </Card>
-
           <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2 text-lg">
-                <CircleDot className="size-5 text-amber-500" />
-                Status
+                <CircleDot className="size-5 text-amber-500" /> Status
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -112,12 +109,10 @@ export function DocsPage() {
               </p>
             </CardContent>
           </Card>
-
           <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Database className="size-5 text-cyan-500" />
-                Storage
+                <Database className="size-5 text-cyan-500" /> Storage
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -127,18 +122,16 @@ export function DocsPage() {
               </p>
             </CardContent>
           </Card>
-
           <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Lock className="size-5 text-red-500" />
-                Security
+                <Lock className="size-5 text-red-500" /> Security
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
                 API key authentication, session isolation,
-                encrypted media, and secure WebSocket connections.
+                SSRF guard, HMAC webhook signing, and encrypted media.
               </p>
             </CardContent>
           </Card>
@@ -147,74 +140,144 @@ export function DocsPage() {
         <Separator className="my-12" />
 
         {/* Architecture */}
-        <h2 className="text-2xl font-bold mb-6">Architecture</h2>
+        <h2 className="text-3xl font-bold tracking-tight mb-6">Architecture</h2>
         <div className="space-y-4 mb-12">
           <div className="rounded-lg border p-4">
             <h3 className="font-semibold mb-2 flex items-center gap-2">
-              <Code className="size-4 text-emerald-500" /> Stack
+              <Code className="size-5 text-emerald-500" /> Stack
             </h3>
             <ul className="text-sm text-muted-foreground space-y-1 ml-6 list-disc">
               <li><strong>Runtime:</strong> Bun (drop-in Node.js replacement)</li>
               <li><strong>Framework:</strong> Hono (lightweight, ultrafast)</li>
-              <li><strong>WhatsApp:</strong> Baileys (@whiskeysockets/baileys)</li>
+              <li><strong>WhatsApp NOWEB:</strong> Baileys (@whiskeysockets/baileys)</li>
+              <li><strong>WhatsApp WEBJS:</strong> whatsapp-web.js + Chrome/Puppeteer</li>
               <li><strong>Storage:</strong> bun:sqlite + file-based auth</li>
               <li><strong>DI:</strong> tsyringe for dependency injection</li>
-              <li><strong>Validation:</strong> Zod schemas</li>
+              <li><strong>MCP:</strong> Model Context Protocol at POST /mcp</li>
             </ul>
-          </div>
-
-          <div className="rounded-lg border p-4">
-            <h3 className="font-semibold mb-2 flex items-center gap-2">
-              <Globe className="size-4 text-blue-500" /> API Endpoints
-            </h3>
-            <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
-              <div>
-                <p className="font-medium text-foreground">Sessions</p>
-                <ul className="ml-4 list-disc">
-                  <li>CRUD operations</li>
-                  <li>Start/Stop/Restart</li>
-                  <li>QR code generation</li>
-                </ul>
-              </div>
-              <div>
-                <p className="font-medium text-foreground">Messaging</p>
-                <ul className="ml-4 list-disc">
-                  <li>Send all message types</li>
-                  <li>Edit/Delete/Pin/Star</li>
-                  <li>Reactions & Replies</li>
-                </ul>
-              </div>
-              <div>
-                <p className="font-medium text-foreground">Contacts</p>
-                <ul className="ml-4 list-disc">
-                  <li>List & Search</li>
-                  <li>Check number exists</li>
-                  <li>Block/Unblock</li>
-                </ul>
-              </div>
-              <div>
-                <p className="font-medium text-foreground">Groups & Channels</p>
-                <ul className="ml-4 list-disc">
-                  <li>Full CRUD</li>
-                  <li>Participant management</li>
-                  <li>Follow/Mute channels</li>
-                </ul>
-              </div>
-            </div>
           </div>
         </div>
 
         <Separator className="my-12" />
 
+        {/* Engine Support */}
+        <h2 className="text-3xl font-bold tracking-tight mb-6">Engine Support</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
+          <Card className="border-blue-500/30">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <MessageCircle className="size-5 text-blue-500" /> NOWEB (Baileys)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
+              <p>Lightweight — No browser required, ~100MB RAM per session</p>
+              <p>Channels and Newsletters fully supported</p>
+              <p>HTTP/SOCKS proxy via HttpsProxyAgent</p>
+              <p>Limited history backfill (3 months or 1 year)</p>
+              <p>Reverse-engineered protocol, may break on WA updates</p>
+              <p className="mt-2 text-xs">Default engine. No Chrome needed.</p>
+            </CardContent>
+          </Card>
+          <Card className="border-purple-500/30">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Globe className="size-5 text-purple-500" /> WEBJS (Chrome)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
+              <p>Stable — Uses real WhatsApp Web via Chrome/Puppeteer</p>
+              <p>Full chat history via Chrome</p>
+              <p>Browser screenshot available</p>
+              <p>Proxy via Chrome --proxy-server argument</p>
+              <p>~300MB per session (Chrome overhead)</p>
+              <p>Channels limited support</p>
+              <p className="mt-2 text-xs">Requires /usr/bin/google-chrome or CHROME_PATH</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Separator className="my-12" />
+
+        {/* Phone Pairing */}
+        <h2 className="text-3xl font-bold tracking-tight mb-6">Phone Pairing</h2>
+        <Card className="mb-12">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Smartphone className="size-5 text-emerald-500" /> Pairing Code
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Instead of scanning a QR code, enter your phone number to receive a pairing code.
+              Works with both NOWEB and WEBJS engines. The session must be in SCAN_QR_CODE status.
+            </p>
+            <div className="rounded-lg bg-muted p-4 font-mono text-xs space-y-1">
+              <p className="text-muted-foreground text-xs">Request a pairing code:</p>
+              <p className="break-all">{'curl -X POST http://localhost:3000/api/my-session/auth/request-code'}</p>
+              <p>{'  -H "Content-Type: application/json"'}</p>
+              <p>{'  -d \'{"phoneNumber":"233501234567"}\''}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Separator className="my-12" />
+
+        {/* Proxy */}
+        <h2 className="text-3xl font-bold tracking-tight mb-6">Proxy Configuration</h2>
+        <Card className="mb-12">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Shield className="size-5 text-amber-500" /> Session Proxy
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground space-y-3">
+            <p>Configure per-session proxy for routing WhatsApp traffic. Supported URL schemes:</p>
+            <ul className="list-disc ml-6 space-y-1">
+              <li><code className="rounded bg-muted px-1">http://proxy:8080</code> — HTTP CONNECT</li>
+              <li><code className="rounded bg-muted px-1">https://proxy:8443</code> — HTTPS CONNECT</li>
+              <li><code className="rounded bg-muted px-1">socks4://host:1080</code> — SOCKS4</li>
+              <li><code className="rounded bg-muted px-1">socks5://user:pass@host:1080</code> — SOCKS5</li>
+            </ul>
+            <p className="text-xs">NOWEB uses HttpsProxyAgent/SocksProxyAgent. WEBJS passes --proxy-server to Chrome.</p>
+          </CardContent>
+        </Card>
+
+        <Separator className="my-12" />
+
+        {/* MCP */}
+        <h2 className="text-3xl font-bold tracking-tight mb-6">MCP Server</h2>
+        <Card className="mb-12">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Zap className="size-5 text-purple-500" /> Model Context Protocol
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              BunWa exposes a Model Context Protocol server at <code className="rounded bg-muted px-1">POST /mcp</code>.
+              AI agents can send messages, manage sessions, and interact with WhatsApp programmatically
+              using JSON-RPC over HTTP.
+            </p>
+            <div className="rounded-lg bg-muted p-4 font-mono text-xs space-y-1">
+              <p className="text-muted-foreground text-xs">Example MCP call (send_text tool):</p>
+              <p className="break-all">{'curl -X POST http://localhost:3000/mcp -H "Content-Type: application/json" -H "x-api-key: *** -d \'{"jsonrpc":"2.0","method":"tools/call","params":{"name":"send_text","arguments":{"session":"my-session","chatId":"233501234567@c.us","text":"Hello from MCP"}},"id":1}\''}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Separator className="my-12" />
+
         {/* Quick Start */}
-        <h2 className="text-2xl font-bold mb-6">Quick Start</h2>
+        <h2 className="text-3xl font-bold tracking-tight mb-6">Quick Start</h2>
         <div className="rounded-lg bg-muted p-6 font-mono text-sm">
           <p className="text-muted-foreground mb-2"># Install dependencies</p>
           <p className="mb-4">bun install</p>
           <p className="text-muted-foreground mb-2"># Start the server</p>
           <p className="mb-4">bun run src/main.ts</p>
-          <p className="text-muted-foreground mb-2"># Create a session</p>
+          <p className="text-muted-foreground mb-2"># Create a NOWEB session</p>
           <p className="mb-4">curl -X POST http://localhost:3000/api/sessions {'{'}"name": "my-session"{'}'}</p>
+          <p className="text-muted-foreground mb-2"># Create a WEBJS session</p>
+          <p className="mb-4">curl -X POST http://localhost:3000/api/sessions {'{'}"name": "my-webjs", "config": {'{'}"engine": "webjs"{'}'}{'}'}</p>
           <p className="text-muted-foreground mb-2"># Start the session</p>
           <p>curl -X POST http://localhost:3000/api/sessions/my-session/start</p>
         </div>
@@ -223,8 +286,8 @@ export function DocsPage() {
 
         {/* Footer */}
         <div className="text-center text-sm text-muted-foreground">
-          <p>WAHA Bun — Built with ❤️ using Bun + Hono + Baileys</p>
-          <p className="mt-1">100% API compatible with WAHA (WhatsApp HTTP API)</p>
+          <p>BunWa — Built with Bun + Hono + Baileys + whatsapp-web.js</p>
+          <p className="mt-1">100% API compatible with WAHA Bun (WhatsApp HTTP API)</p>
         </div>
       </div>
     </div>

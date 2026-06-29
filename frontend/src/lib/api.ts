@@ -36,6 +36,7 @@ export interface ChatOverview {
   id: string
   name: string
   picture?: string
+  unreadCount?: number
   lastMessage?: {
     id: string
     timestamp: number
@@ -111,11 +112,11 @@ function getDashboardAuth(): string | null {
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" }
 
-  // Use Basic auth from dashboard login
   const dashboardAuth = getDashboardAuth()
   if (dashboardAuth) {
     headers["Authorization"] = `Basic ${dashboardAuth}`
   }
+  headers["x-api-key"] = "waha"
 
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { ...headers, ...options?.headers },
@@ -128,6 +129,24 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json()
 }
 
+/** Fetch an image (blob) through the authenticated API, return an object URL */
+export async function fetchImageBlobUrl(imageUrl: string): Promise<string | null> {
+  if (!imageUrl) return null
+  const url = imageUrl.startsWith("http") ? imageUrl : `${API_BASE}${imageUrl}`
+  try {
+    const headers: Record<string, string> = {}
+    const dashboardAuth = getDashboardAuth()
+    if (dashboardAuth) headers["Authorization"] = `Basic ${dashboardAuth}`
+    headers["x-api-key"] = "waha"
+    const res = await fetch(url, { headers })
+    if (!res.ok) return null
+    const blob = await res.blob()
+    return URL.createObjectURL(blob)
+  } catch {
+    return null
+  }
+}
+
 export const api = {
   // ==================== SESSIONS ====================
   getVersion: () => request<ServerVersion>("/api/version"),
@@ -135,6 +154,8 @@ export const api = {
   getSession: (name: string) => request<Session>(`/api/sessions/${name}`),
   createSession: (name: string) =>
     request<Session>("/api/sessions", { method: "POST", body: JSON.stringify({ name }) }),
+  createSessionWithConfig: (name: string, config?: Record<string, any>) =>
+    request<Session>("/api/sessions", { method: "POST", body: JSON.stringify({ name, ...(config ? { config } : {}) }) }),
   startSession: (name: string) =>
     request<Session>(`/api/sessions/${name}/start`, { method: "POST" }),
   stopSession: (name: string) =>
@@ -148,6 +169,11 @@ export const api = {
   updateSession: (name: string, config: Record<string, any>) =>
     request<Session>(`/api/sessions/${name}`, { method: "PUT", body: JSON.stringify({ config }) }),
   getQRCode: (name: string) => request<QRCodeResponse>(`/api/${name}/auth/qr`),
+  requestPairingCode: (session: string, phoneNumber: string) =>
+    request<{ code?: string }>(`/api/${session}/auth/request-code`, {
+      method: "POST",
+      body: JSON.stringify({ phoneNumber }),
+    }),
   getScreenshot: (name: string) => request<ScreenshotResponse>(`/api/${name}/screenshot`),
   getWorkers: () => request<Worker[]>("/api/workers"),
 
@@ -156,12 +182,14 @@ export const api = {
     request<ChatOverview[]>(`/api/${session}/chats?limit=${limit}&offset=${offset}`),
   getChatsOverview: (session: string, limit = 50, offset = 0) =>
     request<ChatOverview[]>(`/api/${session}/chats/overview?limit=${limit}&offset=${offset}`),
-  getMessages: (session: string, chatId: string, limit = 50) =>
-    request<Message[]>(`/api/${session}/chats/${encodeURIComponent(chatId)}/messages?limit=${limit}&downloadMedia=false`),
+  getMessages: (session: string, chatId: string, limit = 50, offset = 0) =>
+    request<Message[]>(`/api/${session}/chats/${encodeURIComponent(chatId)}/messages?limit=${limit}&offset=${offset}&downloadMedia=false`),
   deleteChat: (session: string, chatId: string) =>
     request<void>(`/api/${session}/chats/${encodeURIComponent(chatId)}`, { method: "DELETE" }),
   readChatMessages: (session: string, chatId: string) =>
-    request<any>(`/api/${session}/chats/${encodeURIComponent(chatId)}/messages/read`, { method: "POST" }),
+    request<any>(`/api/${session}/chats/${encodeURIComponent(chatId)}/read`, { method: "POST" }),
+  getContactPicture: (session: string, contactId: string) =>
+    request<{ profilePictureURL?: string }>(`/api/contacts/profile-picture?session=${encodeURIComponent(session)}&contactId=${encodeURIComponent(contactId)}`, { method: "GET" }),
   editMessage: (session: string, chatId: string, messageId: string, text: string) =>
     request<any>(`/api/${session}/chats/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(messageId)}`, {
       method: "PUT",
@@ -268,7 +296,7 @@ export const api = {
       body: JSON.stringify({ session, chatId, text, reply_to: replyTo }),
     }),
   checkNumberStatus: (session: string, phone: string) =>
-    request<{ numberExists: boolean; chatId?: string }>(`/api/checkNumberStatus?session=${session}&phone=${phone}`),
+    request<{ exists: boolean; isBusiness: boolean; canReceiveMessage: boolean; number: string }>(`/api/checkNumberStatus?session=${session}&phone=${phone}`),
 
   // ==================== CONTACTS ====================
   getContacts: (session: string, limit = 50, offset = 0) =>

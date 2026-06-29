@@ -12,21 +12,27 @@ export function Topbar({ title, onRefresh }: TopbarProps) {
   const { theme, setTheme } = useTheme()
 
   return (
-    <header className="flex h-12 items-center gap-2 border-b px-4">
+    <header className="topbar">
       <SidebarTrigger />
-      <h1 className="flex-1 font-heading text-sm font-medium">{title}</h1>
+      <h1 className="topbar-title flex-1">{title}</h1>
       <div className="flex items-center gap-1">
         {onRefresh && (
-          <Button variant="ghost" size="icon-sm" onClick={onRefresh}>
-            <RefreshCw />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onRefresh}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <RefreshCw className="size-4" />
           </Button>
         )}
         <Button
           variant="ghost"
           size="icon-sm"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          className="text-muted-foreground hover:text-foreground"
         >
-          {theme === "dark" ? <Sun /> : <Moon />}
+          {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
         </Button>
       </div>
     </header>

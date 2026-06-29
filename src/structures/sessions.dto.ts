@@ -17,6 +17,7 @@ export class GowsConfig {
 
 export class WebjsConfig {
   tagsEventsOn?: boolean;
+  authTimeout?: number;
 }
 
 export class ClientSessionConfig {
@@ -57,6 +58,7 @@ export class WebhookConfig {
 export class SessionConfig {
   webhooks?: WebhookConfig[];
   metadata?: Record<string, any>;
+  engine?: string;
   proxy?: ProxyConfig;
   debug?: {
     mode?: boolean;

@@ -3115,14 +3115,14 @@ export function buildOpenApiSpec(): any {
           tags: ['🧩 Apps'],
           summary: 'List all apps',
           operationId: 'listApps',
-          security: [{ apiKey: *** }],
+          security: [{ apiKey: [] }],
           responses: { '200': { description: 'List of app configurations' } },
         },
         post: {
           tags: ['🧩 Apps'],
           summary: 'Create an app (Chatwoot)',
           operationId: 'createApp',
-          security: [{ apiKey: *** }],
+          security: [{ apiKey: [] }],
           requestBody: {
             content: {
               'application/json': {
@@ -3159,7 +3159,7 @@ export function buildOpenApiSpec(): any {
           tags: ['🧩 Apps'],
           summary: 'Get app by ID',
           operationId: 'getApp',
-          security: [{ apiKey: *** }],
+          security: [{ apiKey: [] }],
           parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
           responses: { '200': { description: 'App configuration' }, '404': { description: 'Not found' } },
         },
@@ -3167,7 +3167,7 @@ export function buildOpenApiSpec(): any {
           tags: ['🧩 Apps'],
           summary: 'Update app',
           operationId: 'updateApp',
-          security: [{ apiKey: *** }],
+          security: [{ apiKey: [] }],
           parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
           responses: { '200': { description: 'App updated' }, '404': { description: 'Not found' } },
         },
@@ -3175,7 +3175,7 @@ export function buildOpenApiSpec(): any {
           tags: ['🧩 Apps'],
           summary: 'Delete app',
           operationId: 'deleteApp',
-          security: [{ apiKey: *** }],
+          security: [{ apiKey: [] }],
           parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
           responses: { '200': { description: 'App deleted' }, '404': { description: 'Not found' } },
         },

@@ -15,6 +15,7 @@ import {
   SessionInfo,
 } from '../structures/sessions.dto';
 import { DefaultMap } from '../utils/DefaultMap';
+import { getBrowserExecutablePath } from './abc/session.browser';
 import { SwitchObservable } from '../utils/reactive/SwitchObservable';
 import { NotFoundException, BadRequestException } from './exceptions';
 import { LocalStoreCore } from './storage/LocalStoreCore';
@@ -68,11 +69,17 @@ export class SessionManager {
   }
 
   getEngine(engine: WAHAEngine): typeof WhatsappSession {
+    if (engine === WAHAEngine.WEBJS) {
+      // Dynamic import so we don't load puppeteer/chrome at boot
+      const { WhatsappSessionWebJs } = require('./engines/webjs/session.webjs.core');
+      return WhatsappSessionWebJs;
+    }
     return WhatsappSessionNoWebCore as any;
   }
 
   get EngineClass(): typeof WhatsappSession {
-    return WhatsappSessionNoWebCore as any;
+    // Default to NOWEB, session config overrides in start()
+    return this.getEngine(WAHAEngine.NOWEB);
   }
 
   getSessionEvent(session: string, event: WAHAEvents): Observable<any> {
@@ -113,7 +120,22 @@ export class SessionManager {
 
   async start(name: string): Promise<any> {
     const sessionConfig = this.sessionConfigs.get(name) || {};
-    const engine = WAHAEngine.NOWEB;
+    // Determine engine type from config, default to NOWEB
+    const engineRaw = sessionConfig?.engine || 'NOWEB';
+    const engine = engineRaw.toUpperCase() === 'WEBJS' ? WAHAEngine.WEBJS : WAHAEngine.NOWEB;
+
+    // Validate Chrome availability for webjs
+    if (engine === WAHAEngine.WEBJS) {
+      const chromePath = getBrowserExecutablePath();
+      if (!existsSync(chromePath)) {
+        throw new BadRequestException(
+          'whatsapp-web.js requires Chrome/Chromium. ' +
+          'Install it or set CHROME_PATH environment variable.\n' +
+          `Checked: ${getBrowserExecutablePath()}`
+        );
+      }
+    }
+
     const EngineClass = this.getEngine(engine);
 
     const logger = pino({ name: `Session.${name}` });

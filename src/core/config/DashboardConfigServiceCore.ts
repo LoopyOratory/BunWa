@@ -3,7 +3,7 @@ import { parseBool } from '../../helpers';
 
 @injectable()
 export class DashboardConfigServiceCore {
-  public dashboardUri = '/dashboard';
+  public dashboardUri = '/';
 
   get enabled(): boolean {
     const value = process.env.WAHA_DASHBOARD_ENABLED || 'true';

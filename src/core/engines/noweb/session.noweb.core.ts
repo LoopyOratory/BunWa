@@ -370,7 +370,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       }
     }
 
-    const fullSyncEnabled = this.sessionConfig?.noweb?.store?.fullSync ?? true;
+    const fullSyncEnabled = this.sessionConfig?.noweb?.store?.fullSync ?? false;
     let markOnlineOnConnect = this.sessionConfig?.noweb?.markOnline;
     if (markOnlineOnConnect == undefined) {
       markOnlineOnConnect = true;
@@ -1613,9 +1613,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       jidFilter,
       merge,
     );
-    // Remove unreadCount, it's not ready yet
-    chats.forEach((chat) => delete chat.unreadCount);
-
+    // unreadCount is available from the store
     // Batch lookup contacts for all chats (fixes N+1)
     const jids = chats.map((chat) => chat.id);
     const contactsMap = await this.store.getContactsByIds(jids);

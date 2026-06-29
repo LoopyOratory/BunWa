@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Table,
   TableBody,
@@ -12,13 +11,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import {
   Tooltip,
   TooltipContent,
@@ -37,18 +29,19 @@ import {
   Link2,
   RotateCcw,
   QrCode,
-  Eye,
+  MessageCircle,
   Smartphone,
   Cog,
   ExternalLink,
   Plus,
-  RefreshCw,
+  Loader2,
 } from "lucide-react"
 import { api, type Session, type Worker } from "@/lib/api"
 import { toast } from "sonner"
 import { Topbar } from "@/components/topbar"
-import { QRCodeDisplay } from "@/components/qr-code"
 import { SessionSettingsDialog } from "@/components/session-settings-dialog"
+import { CreateSessionDialog } from "@/components/create-session-dialog"
+import { SessionDetailDialog } from "@/pages/session-detail-dialog"
 
 let dashboardWorkersFailed = false
 
@@ -62,12 +55,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const [sessionSearch, setSessionSearch] = useState("")
   const [workerSearch, setWorkerSearch] = useState("")
   const [showCreateDialog, setShowCreateDialog] = useState(false)
-  const [newSessionName, setNewSessionName] = useState("")
-  const [showQrDialog, setShowQrDialog] = useState(false)
-  const [qrSessionName, setQrSessionName] = useState("")
-  const [qrUrl, setQrUrl] = useState<string | null>(null)
   const [showSettingsDialog, setShowSettingsDialog] = useState(false)
   const [settingsSession, setSettingsSession] = useState<Session | null>(null)
+  const [showDetailDialog, setShowDetailDialog] = useState(false)
+  const [detailSession, setDetailSession] = useState<Session | null>(null)
 
   const loadWorkers = useCallback(async (sessionCount: number, version: { engine?: string; version?: string; tier?: string } | null) => {
     if (dashboardWorkersFailed) return
@@ -77,7 +68,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     } catch {
       dashboardWorkersFailed = true
       setWorkers([{
-        name: "WAHA",
+        name: "BunWa",
         apiUrl: window.location.origin,
         engine: version?.engine || "NOWEB",
         version: version?.version || "",
@@ -127,93 +118,60 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     return w.name.toLowerCase().includes(workerSearch.toLowerCase())
   })
 
-  const fetchQr = useCallback(async (name: string) => {
-    try {
-      const response = await api.getQRCode(name)
-      if (response.qr?.raw) {
-        setQrUrl(response.qr.raw)
-      }
-    } catch {
-      // silent - QR may not be ready yet
-    }
-  }, [])
-
-  const handleShowQr = async (name: string) => {
-    const session = sessions.find((s) => s.name === name)
-    if (!session) return
-    if (session.status !== "SCAN_QR_CODE") {
-      toast.error(`Session must be in SCAN_QR_CODE status, current: ${session.status}`)
-      return
-    }
-    setQrSessionName(name)
-    setShowQrDialog(true)
-    setQrUrl(null)
-    await fetchQr(name)
-  }
-
-  useEffect(() => {
-    if (!showQrDialog || !qrSessionName) return
-    const interval = setInterval(() => fetchQr(qrSessionName), 5000)
-    return () => clearInterval(interval)
-  }, [showQrDialog, qrSessionName, fetchQr])
-
-  const handleCreate = async () => {
-    if (!newSessionName.trim()) return
-    try {
-      await api.createSession(newSessionName.trim())
-      toast.success("Session created")
-      setShowCreateDialog(false)
-      setNewSessionName("")
-      load()
-    } catch {
-      toast.error("Failed to create session")
-    }
-  }
-
   return (
     <div className="flex h-full flex-col">
       <Topbar title="Dashboard" onRefresh={load} />
       <div className="flex-1 overflow-auto p-3 sm:p-6">
         <div className="space-y-4 sm:space-y-6">
           {/* Stats Cards */}
-          <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-3">
-            <Card>
+          <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-3 animate-slide-up">
+            <Card className="stat-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">Sessions</CardTitle>
-                <MessageSquare className="size-5 text-muted-foreground" />
+                <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
+                  <MessageSquare className="size-6 text-primary" />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{sessions.length}</div>
-                <p className="text-xs text-muted-foreground">
-                  <span className="font-medium text-green-500">{workingCount} working</span>
-                  <span className="text-muted-foreground">, </span>
-                  <span className="font-medium text-orange-400">{attentionCount} needs attention</span>
+                <div className="text-3xl font-bold tracking-tight tracking-tight">{sessions.length}</div>
+                <p className="text-xs text-base text-muted-foreground">
+                  <span className="font-medium text-emerald-600 dark:text-emerald-400">{workingCount} working</span>
+                  {attentionCount > 0 && (
+                    <>
+                      <span className="text-muted-foreground mx-1">&middot;</span>
+                      <span className="font-medium text-amber-600 dark:text-amber-400">{attentionCount} needs attention</span>
+                    </>
+                  )}
                 </p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="stat-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">Workers</CardTitle>
-                <Server className="size-5 text-muted-foreground" />
+                <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
+                  <Server className="size-6 text-primary" />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{workers.length}</div>
-                <p className="text-xs text-muted-foreground">
-                  <span className="font-medium text-green-500">{workers.filter((w) => w.connected).length} connected</span>
+                <div className="text-3xl font-bold tracking-tight tracking-tight">{workers.length}</div>
+                <p className="text-xs text-base text-muted-foreground">
+                  <span className="font-medium text-emerald-600 dark:text-emerald-400">{workers.filter((w) => w.connected).length} connected</span>
                 </p>
               </CardContent>
             </Card>
-            <Card className="col-span-2 sm:col-span-1">
+            <Card className="col-span-2 sm:col-span-1 stat-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">Updates</CardTitle>
-                <CloudDownload className="size-5 text-muted-foreground" />
+                <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
+                  <CloudDownload className="size-6 text-primary" />
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-2 text-sm">
-                  <CheckCircle className="size-5 text-green-500" />
-                  <span className="font-medium text-green-500">All workers up to date!</span>
+                  <CheckCircle className="size-6 text-emerald-600 dark:text-emerald-400" />
+                  <span className="font-medium text-emerald-600 dark:text-emerald-400">All workers up to date!</span>
                 </div>
-                <div className="mt-1 flex gap-3 text-xs text-muted-foreground">
+                <div className="mt-1 flex gap-3 text-xs text-base text-muted-foreground">
                   <a href="https://waha.devlike.pro/docs/overview/changelog/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-foreground">
                     Changelog <ExternalLink className="size-3" />
                   </a>
@@ -228,12 +186,14 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           {/* Workers Table */}
           <Card>
             <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <CardTitle className="flex items-center gap-2">
-                <Server className="size-5" />
+              <CardTitle className="flex items-center gap-2.5">
+                <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10">
+                  <Server className="size-5 text-primary" />
+                </div>
                 Workers
               </CardTitle>
               <div className="flex items-center gap-2">
-                <Button variant="default" size="sm" className="bg-green-600 hover:bg-green-700">
+                <Button variant="default" size="sm">
                   <Link2 className="size-5" />
                   <span className="hidden sm:inline ml-1">Connect</span>
                 </Button>
@@ -263,7 +223,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                   <TableBody>
                     {filteredWorkers.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                        <TableCell colSpan={5} className="h-24 text-center text-base text-muted-foreground">
                           No workers found
                         </TableCell>
                       </TableRow>
@@ -274,9 +234,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                           <TableCell className="hidden sm:table-cell">
                             <div className="flex items-center gap-1">
                               {worker.connected ? (
-                                <CheckCircle className="size-4 text-green-500" />
+                                <CheckCircle className="size-5 text-green-500" />
                               ) : (
-                                <CheckCircle className="size-4 text-destructive" />
+                                <CheckCircle className="size-5 text-destructive" />
                               )}
                               <a href={worker.apiUrl} target="_blank" rel="noopener noreferrer" className="ml-1 hover:underline text-xs">
                                 {worker.apiUrl}
@@ -294,7 +254,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                             <div className="flex justify-end gap-1">
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon-sm"><Link2 /></Button>
+                                  <Button variant="ghost" size="icon" className="size-9"><Link2 /></Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Connect</TooltipContent>
                               </Tooltip>
@@ -312,8 +272,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           {/* Sessions Table */}
           <Card>
             <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <CardTitle className="flex items-center gap-2">
-                <MessageSquare className="size-5" />
+              <CardTitle className="flex items-center gap-2.5">
+                <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10">
+                  <MessageSquare className="size-5 text-primary" />
+                </div>
                 Sessions
               </CardTitle>
               <div className="flex items-center gap-2">
@@ -326,35 +288,15 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                     className="h-8 w-full sm:w-60 pl-8 text-xs"
                   />
                 </div>
-                <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-                  <DialogTrigger asChild>
-                    <Button size="sm">
-                      <Plus className="size-5" />
-                      <span className="hidden sm:inline ml-1">Start New</span>
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-xs sm:max-w-sm">
-                    <DialogHeader>
-                      <DialogTitle>Create New Session</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="dash-session-name">Session Name</Label>
-                        <Input
-                          id="dash-session-name"
-                          value={newSessionName}
-                          onChange={(e) => setNewSessionName(e.target.value)}
-                          placeholder="e.g., my-session"
-                          onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-                        />
-                      </div>
-                      <Button onClick={handleCreate} className="w-full">
-                        <Plus className="mr-2 size-5" />
-                        Create
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
+                <Button size="sm" onClick={() => setShowCreateDialog(true)}>
+                  <Plus className="size-5" />
+                  <span className="hidden sm:inline ml-1">Start New</span>
+                </Button>
+                <CreateSessionDialog
+                  open={showCreateDialog}
+                  onOpenChange={setShowCreateDialog}
+                  onCreated={load}
+                />
               </div>
             </CardHeader>
             <CardContent>
@@ -366,14 +308,14 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                       <TableHead>Name</TableHead>
                       <TableHead className="hidden lg:table-cell">Account</TableHead>
                       <TableHead className="w-24 sm:w-28">Status</TableHead>
-                      <TableHead className="hidden sm:table-cell">Server</TableHead>
+                      <TableHead className="hidden sm:table-cell">Engine</TableHead>
                       <TableHead className="w-16 sm:w-72">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredSessions.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                        <TableCell colSpan={6} className="h-24 text-center text-base text-muted-foreground">
                           No sessions found
                         </TableCell>
                       </TableRow>
@@ -388,25 +330,34 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                             <div className="sm:hidden text-xs text-muted-foreground truncate max-w-[120px]">{session.me?.pushName || ""}</div>
                           </TableCell>
                           <TableCell className="hidden lg:table-cell">
-                            {session.me?.pushName || session.me?.id || <span className="text-muted-foreground">-</span>}
+                            {session.me?.pushName || session.me?.id || <span className="text-base text-muted-foreground">-</span>}
                           </TableCell>
                           <TableCell>
                             <Badge variant={
                               session.status === "WORKING" ? "default"
                               : session.status === "SCAN_QR_CODE" ? "secondary"
                               : session.status === "FAILED" ? "destructive"
+                              : session.status === "STARTING" ? "secondary"
                               : "outline"
-                            }>
+                            } className="inline-flex items-center gap-1">
+                              {session.status === "STARTING" && <Loader2 className="size-3 animate-spin" />}
                               {session.status === "SCAN_QR_CODE" ? "SCAN_QR" : session.status}
                             </Badge>
                           </TableCell>
-                          <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">WAHA</TableCell>
+                          <TableCell className="hidden sm:table-cell">
+                            <Badge variant="outline" className={
+                              session.config?.engine === "WEBJS"
+                                ? "bg-purple-500/10 text-purple-500 border-purple-500/20"
+                                : "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                            }>
+                              {session.config?.engine || "NOWEB"}
+                            </Badge>
+                          </TableCell>
                           <TableCell>
-                            {/* Desktop */}
                             <div className="hidden sm:flex justify-end gap-1">
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon-sm" disabled={session.status !== "STOPPED"} onClick={() => api.startSession(session.name).then(load).catch(() => toast.error("Start failed"))}>
+                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status !== "STOPPED"} onClick={() => api.startSession(session.name).then(load).catch(() => toast.error("Start failed"))}>
                                     <Play />
                                   </Button>
                                 </TooltipTrigger>
@@ -414,7 +365,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon-sm" disabled={session.status === "STOPPED"} onClick={() => api.restartSession(session.name).then(load).catch(() => toast.error("Restart failed"))}>
+                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status === "STOPPED"} onClick={() => api.restartSession(session.name).then(load).catch(() => toast.error("Restart failed"))}>
                                     <RotateCcw />
                                   </Button>
                                 </TooltipTrigger>
@@ -422,7 +373,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon-sm" disabled={session.status === "STOPPED"} onClick={() => api.stopSession(session.name).then(load).catch(() => toast.error("Stop failed"))}>
+                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status === "STOPPED"} onClick={() => api.stopSession(session.name).then(load).catch(() => toast.error("Stop failed"))}>
                                     <Square />
                                   </Button>
                                 </TooltipTrigger>
@@ -430,7 +381,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon-sm" disabled={session.status === "STOPPED"} onClick={() => api.logoutSession(session.name).then(load).catch(() => toast.error("Logout failed"))}>
+                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status === "STOPPED"} onClick={() => api.logoutSession(session.name).then(load).catch(() => toast.error("Logout failed"))}>
                                     <LogOut />
                                   </Button>
                                 </TooltipTrigger>
@@ -438,7 +389,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon-sm" onClick={() => api.deleteSession(session.name).then(load).catch(() => toast.error("Delete failed"))}>
+                                  <Button variant="ghost" size="icon" className="size-9" onClick={() => api.deleteSession(session.name).then(load).catch(() => toast.error("Delete failed"))}>
                                     <Trash2 />
                                   </Button>
                                 </TooltipTrigger>
@@ -446,31 +397,31 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon-sm" disabled={session.status !== "SCAN_QR_CODE"} onClick={() => handleShowQr(session.name)}>
+                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status !== "SCAN_QR_CODE"} onClick={() => { setDetailSession(session); setShowDetailDialog(true) }}>
                                     <QrCode />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>QR Code</TooltipContent>
+                                <TooltipContent>QR / Pairing</TooltipContent>
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon-sm" disabled={true}>
+                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status !== "WORKING" || session.config?.engine !== "WEBJS"} onClick={() => api.getScreenshot(session.name).then(() => toast.success("Screenshot taken")).catch(() => toast.error("Screenshot failed"))}>
                                     <Smartphone />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Screenshot (WEBJS only)</TooltipContent>
+                                <TooltipContent>Screenshot (WEBJS)</TooltipContent>
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon-sm" disabled={session.status !== "WORKING"} onClick={() => onNavigate?.("chat", { sessionName: session.name })}>
-                                    <Eye />
+                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status !== "WORKING"} onClick={() => onNavigate?.("chat", { sessionName: session.name })}
+                                    ><MessageCircle className="size-4" />
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Chat</TooltipContent>
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon-sm" onClick={() => { setSettingsSession(session); setShowSettingsDialog(true) }}>
+                                  <Button variant="ghost" size="icon" className="size-9" onClick={() => { setSettingsSession(session); setShowSettingsDialog(true) }}>
                                     <Cog />
                                   </Button>
                                 </TooltipTrigger>
@@ -481,7 +432,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                             <div className="flex sm:hidden justify-end gap-1">
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon-sm" disabled={session.status !== "STOPPED"} onClick={() => api.startSession(session.name).then(load).catch(() => toast.error("Start failed"))}>
+                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status !== "STOPPED"} onClick={() => api.startSession(session.name).then(load).catch(() => toast.error("Start failed"))}>
                                     <Play />
                                   </Button>
                                 </TooltipTrigger>
@@ -489,7 +440,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon-sm" disabled={session.status === "STOPPED"} onClick={() => api.stopSession(session.name).then(load).catch(() => toast.error("Stop failed"))}>
+                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status === "STOPPED"} onClick={() => api.stopSession(session.name).then(load).catch(() => toast.error("Stop failed"))}>
                                     <Square />
                                   </Button>
                                 </TooltipTrigger>
@@ -497,7 +448,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon-sm" disabled={session.status !== "SCAN_QR_CODE"} onClick={() => handleShowQr(session.name)}>
+                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status !== "SCAN_QR_CODE"} onClick={() => { setDetailSession(session); setShowDetailDialog(true) }}>
                                     <QrCode />
                                   </Button>
                                 </TooltipTrigger>
@@ -505,15 +456,15 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon-sm" disabled={session.status !== "WORKING"} onClick={() => onNavigate?.("chat", { sessionName: session.name })}>
-                                    <Eye />
+                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status !== "WORKING"} onClick={() => onNavigate?.("chat", { sessionName: session.name })}
+                                    ><MessageCircle className="size-4" />
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Chat</TooltipContent>
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon-sm" onClick={() => { setSettingsSession(session); setShowSettingsDialog(true) }}>
+                                  <Button variant="ghost" size="icon" className="size-9" onClick={() => { setSettingsSession(session); setShowSettingsDialog(true) }}>
                                     <Cog />
                                   </Button>
                                 </TooltipTrigger>
@@ -521,7 +472,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon-sm" onClick={() => api.deleteSession(session.name).then(load).catch(() => toast.error("Delete failed"))}>
+                                  <Button variant="ghost" size="icon" className="size-9" onClick={() => api.deleteSession(session.name).then(load).catch(() => toast.error("Delete failed"))}>
                                     <Trash2 />
                                   </Button>
                                 </TooltipTrigger>
@@ -540,35 +491,16 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         </div>
       </div>
 
-      <Dialog open={showQrDialog} onOpenChange={setShowQrDialog}>
-        <DialogContent className="max-w-xs sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>QR Code - {qrSessionName}</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col items-center gap-4 py-4">
-            {qrUrl ? (
-              <QRCodeDisplay data={qrUrl} size={256} />
-            ) : (
-              <div className="flex flex-col items-center gap-2">
-                <RefreshCw className="size-8 animate-spin text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Loading QR code...</p>
-              </div>
-            )}
-            <Button variant="outline" size="sm" onClick={() => fetchQr(qrSessionName)}>
-              <RefreshCw className="size-4 mr-1" /> Refresh
-            </Button>
-            <p className="text-xs text-muted-foreground text-center">
-              Open WhatsApp → Settings → Linked Devices → Link a Device
-            </p>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       <SessionSettingsDialog
         open={showSettingsDialog}
         onOpenChange={setShowSettingsDialog}
         session={settingsSession}
         onSaved={load}
+      />
+      <SessionDetailDialog
+        open={showDetailDialog}
+        onOpenChange={setShowDetailDialog}
+        session={detailSession}
       />
     </div>
   )

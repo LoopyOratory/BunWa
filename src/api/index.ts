@@ -23,6 +23,10 @@ import { createScreenshotRouter } from './screenshot.routes';
 import { createMediaRouter } from './media.routes';
 import { createAppsRouter } from './apps.routes';
 import { createWorkersRouter } from './workers.routes';
+import { createWebhooksRouter } from './webhooks.routes';
+import { createTemplatesRouter } from './templates.routes';
+import { createAuditRouter } from './audit.routes';
+import { createInfraRouter } from './infra.routes';
 
 export function createApiRouter(): Hono {
   const router = new Hono();
@@ -50,6 +54,10 @@ export function createApiRouter(): Hono {
   router.route('/api', createMediaRouter());
   router.route('/api', createAppsRouter());
   router.route('/api', createWorkersRouter());
+  router.route('/api/sessions', createWebhooksRouter());
+  router.route('/api/sessions', createTemplatesRouter());
+  router.route('/api', createAuditRouter());
+  router.route('/api', createInfraRouter());
 
   return router;
 }

@@ -166,6 +166,11 @@ export class ChatwootAppService {
 
       // 3. Create the message in the conversation
       await this.createMessage(client, accountId, conversation.id, text, media);
+
+      // 4. Trigger Milo auto-reply via SocialFlow
+      this.triggerMiloReply(url, accountToken, accountId, conversation.id, text, chatId, app.session).catch((err) => {
+        this.logger.warn({ err: err.message, conversationId: conversation.id }, 'Milo auto-reply failed');
+      });
     } catch (err: any) {
       this.logger.error(
         { err: err.message, chatId, accountId },
@@ -181,51 +186,57 @@ export class ChatwootAppService {
     chatId: string,
     payload: any,
   ): Promise<ChatwootContact> {
-    // First try to find contact by source_id (WhatsApp chat ID)
+    // First try to find contact by source_id (WhatsApp chat ID) via contact_inboxes filter
     try {
-      const filterRes = await client.post(`/api/v1/accounts/${accountId}/contacts/filter`, {
+      const filterRes = await client.post(`/api/v1/accounts/${accountId}/contact_inboxes/filter`, {
         payload: [{ attribute_key: 'source_id', filter_operator: 'equal', values: [chatId] }],
         inbox_id: inboxId,
       });
-      const contacts: any[] = filterRes.data?.payload || filterRes.data || [];
-      if (contacts.length > 0) {
-        // Get full contact details
-        const contactId = contacts[0].id;
-        const detailRes = await client.get(`/api/v1/accounts/${accountId}/contacts/${contactId}`);
-        return detailRes.data?.payload?.contact || detailRes.data?.contact || contacts[0];
+      const inboxes: any[] = filterRes.data?.payload || [];
+      if (inboxes.length > 0) {
+        const ci = inboxes[0];
+        const detailRes = await client.get(`/api/v1/accounts/${accountId}/contacts/${ci.contact_id}`);
+        return detailRes.data?.payload?.contact || detailRes.data?.contact || { id: ci.contact_id, name: '', phone_number: '' };
       }
     } catch {
-      // Filter might not be available — fall through to inbox lookup
+      // Filter might not be available — fall through to create
     }
 
-    // Try to find existing contact_inbox by source_id
-    try {
-      const inboxRes = await client.get(
-        `/api/v1/accounts/${accountId}/contacts/${inboxId}/contact_inboxes`,
-      );
-      const inboxes: any[] = inboxRes.data?.payload || [];
-      const existing = inboxes.find((i: any) => i.source_id === chatId);
-      if (existing) {
-        const detailRes = await client.get(`/api/v1/accounts/${accountId}/contacts/${existing.contact_id}`);
-        return detailRes.data?.payload?.contact || detailRes.data?.contact || { id: existing.contact_id };
-      }
-    } catch {
-      // Fall through to create
-    }
-
-    // Create new contact
+    // Create new contact first
     const pushName = payload?.pushName || payload?.notifyName || chatId;
     const phoneNumber = chatId.replace(/@[\w.]+$/, '');
-    const createRes = await client.post(`/api/v1/accounts/${accountId}/contacts/inbox`, {
-      inbox_id: inboxId,
-      source_id: chatId,
-      name: pushName,
-      phone_number: phoneNumber,
-      custom_attributes: {
-        waha_whatsapp_jid: chatId,
+    const createContactRes = await client.post(`/api/v1/accounts/${accountId}/contacts`, {
+      contact: {
+        name: pushName,
+        phone_number: phoneNumber,
+        inbox_id: inboxId,
       },
     });
-    return createRes.data?.payload?.contact || createRes.data?.contact || createRes.data;
+    const newContact: ChatwootContact = createContactRes.data?.payload?.contact || createContactRes.data?.contact;
+    if (!newContact?.id) {
+      throw new Error('Failed to create contact in Chatwoot');
+    }
+
+    // Link the contact to the WhatsApp inbox
+    await client.post(`/api/v1/accounts/${accountId}/contacts/${newContact.id}/contact_inboxes`, {
+      inbox_id: inboxId,
+      source_id: chatId,
+    });
+
+    // Set custom attributes for WhatsApp identifiers
+    try {
+      await client.put(`/api/v1/accounts/${accountId}/contacts/${newContact.id}`, {
+        contact: {
+          custom_attributes: {
+            waha_whatsapp_jid: chatId,
+          },
+        },
+      });
+    } catch {
+      // Custom attributes update is optional
+    }
+
+    return newContact;
   }
 
   private async findOrCreateConversation(
@@ -288,6 +299,45 @@ export class ChatwootAppService {
       `/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`,
       body,
     );
+  }
+
+  // ── Trigger Milo auto-reply via SocialFlow ─────────────────────────
+  //
+  // After a WhatsApp message is forwarded to Chatwoot, we ask Milo
+  // (SocialFlow's AI chatbot) to generate an automated reply. If Milo
+  // is enabled and the API key is configured, a reply is posted back
+  // to the Chatwoot conversation.
+
+  private async triggerMiloReply(
+    chatwootUrl: string,
+    _accountToken: string,
+    _accountId: number,
+    conversationId: number,
+    text: string,
+    chatId?: string,
+    session?: string,
+  ): Promise<void> {
+    const miloUrl = process.env.MILO_API_URL || 'http://localhost:3003/api/webhooks/chatwoot/milo';
+    try {
+      const resp = await fetch(miloUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: conversationId,
+          content: text,
+          chatwoot_url: chatwootUrl,
+          chat_id: chatId,
+          session: session,
+          platform: 'whatsapp',
+        }),
+      });
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => 'unknown');
+        this.logger.warn({ status: resp.status, err: errText }, 'Milo API returned error');
+      }
+    } catch (err: any) {
+      this.logger.warn({ err: err.message }, 'Failed to call Milo API');
+    }
   }
 
   // ── OUTGOING: Chatwoot → WhatsApp (called from webhook handler) ─

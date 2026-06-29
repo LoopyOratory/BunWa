@@ -204,5 +204,16 @@ export function createChatsRouter(): Hono {
     }
   );
 
+  router.post('/:session/chats/:chatId/read',
+    policiesMiddleware(CanSession(Action.Read, FromParam('session'))),
+    workingSessionResolver(),
+    async (c) => {
+      const session = c.get('session');
+      const chatId = c.req.param('chatId');
+      await (session as any).readChatMessages(chatId, { count: 1 });
+      return c.json({ result: true });
+    }
+  );
+
   return router;
 }

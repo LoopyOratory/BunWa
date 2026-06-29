@@ -1,15 +1,66 @@
-# generated
-frontend-dist/
-.sessions/
-bun.lock
-dist/
-
-# env
-.env
-
-# deps
+# ─── Bun ────────────────────────────────────────────
 node_modules/
+bun.lock
+bun.lockb
 
-# temp / ide
+# ─── Build output ────────────────────────────────────
+frontend-dist/
+dist/
+build/
+*.tsbuildinfo
+
+# ─── Environment ────────────────────────────────────
+.env
+.env.local
+.env.production
+.env.development
+
+# ─── Session / database / storage ──────────────────
+.sessions/
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# ─── IDE / editor ──────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
 .chatui/
 .commandcode/
+*.code-workspace
+.claude/
+chatui/
+plans/
+# ─── Logs ───────────────────────────────────────────
+*.log
+logs/
+
+# ─── OS ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+
+# ─── Temp ───────────────────────────────────────────
+.tmp/
+tmp/
+*.tmp
+
+# ─── Coverage / testing ────────────────────────────
+coverage/
+.nyc_output/
+
+# ─── Docker ─────────────────────────────────────────
+.docker/
+
+FRONTEND-FIX-PLAN.md
+PRODUCTION-READINESS-PLAN.md
+hono-docs.txt
+UI-PLAN.md
+test-image.png
+test-chat-api.sh
+PLAN.md
+whatsapp_redesign_v2.html

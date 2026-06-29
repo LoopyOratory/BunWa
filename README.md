@@ -1,510 +1,287 @@
-<p align="center">
-  <img src="https://bun.sh/logo.svg" width="120" alt="Bun Logo" />
-</p>
+<div align="center">
+  <img src="frontend/public/logo.jpg" alt="BunWa Logo" width="180" height="160" style="border-radius: 16px;" />
+  <h1>BunWa</h1>
+  <p><strong>WhatsApp HTTP API — Blazing-fast, Bun-powered alternative to WAHA</strong></p>
 
-<h1 align="center">WAHA Bun</h1>
-
-<p align="center">
-  <strong>WhatsApp HTTP API — Bun/Hono + Baileys (NOWEB)</strong>
-</p>
-
-<p align="center">
-  <a href="#features">Features</a> •
-  <a href="#quick-start">Quick Start</a> •
-  <a href="#api">API</a> •
-  <a href="#apps--integrations">Apps</a> •
-  <a href="#architecture">Architecture</a> •
-  <a href="#configuration">Configuration</a> •
-  <a href="#dashboard">Dashboard</a>
-</p>
+  <!-- Badges -->
+  <img src="https://img.shields.io/badge/Bun-1.3%2B-14151a?style=flat-square&logo=bun" alt="Bun" />
+  <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="License" />
+  <img src="https://img.shields.io/badge/WhatsApp%20API-1%3A1%20WAHA%20Compatible-25D366?style=flat-square&logo=whatsapp" alt="WAHA Compatible" />
+  <img src="https://img.shields.io/badge/PRs-Welcome-brightgreen?style=flat-square" alt="PRs Welcome" />
+  <br />
+  <a href="https://selar.com/showlove/loopyoratory">
+    <img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FF813F?style=flat-square&logo=buy-me-a-coffee&logoColor=white" alt="Buy Me A Coffee" />
+  </a>
+</div>
 
 ---
 
-## Features
+**BunWa** is a WhatsApp HTTP API server built on the [Bun](https://bun.sh) runtime with [Hono](https://hono.dev). It is a 1:1 API-compatible rewrite of WAHA (WhatsApp HTTP API) that delivers the same functionality at significantly lower resource usage.
 
-### Messaging
-- Send text, images, videos, files, voice, locations, polls, contacts, buttons, lists
-- Link previews with custom thumbnails
-- Edit, delete, pin, star, forward messages
-- Reactions, replies, typing indicators
+Two WhatsApp engines are supported:
+- **NOWEB** (default) — Uses [Baileys](https://github.com/WhiskeySockets/Baileys), lightweight, no browser required, faster
+- **WEBJS** — Uses [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) with Chrome/Puppeteer, full WhatsApp Web parity
 
-### Contacts & Groups
-- List, search, check contacts
-- Block/unblock
-- Full group management (create, participants, admins, invite codes, settings)
+## ✨ Features
 
-### Channels & Status
-- Follow/unfollow, mute/unmute channels
-- Post/delete text, image, video, voice statuses
+- **🚄 Fast** — Bun runtime, batch-loaded auth state, no cold starts
+- **🔌 Dual Engine** — NOWEB or WEBJS, choose per session
+- **📱 Phone Pairing** — QR code scan or phone number pairing
+- **🔧 REST API** — Full WAHA-compatible API surface
+- **🌐 Webhooks** — Event-driven with HMAC signing + SSRF protection
+- **🛡️ Auth** — API key authentication + dashboard login + policy-based access control
+- **☁️ Storage** — Local filesystem or S3-compatible object storage
+- **🗄️ Database** — SQLite (via `bun:sqlite`) or PostgreSQL
+- **🧩 MCP Server** — Model Context Protocol endpoint for AI agents
+- **📊 Dashboard** — React + shadcn/ui dashboard with real-time chat
+- **📱 Mobile-first** — Responsive UI built for mobile
 
-### Integrations
-- **Chatwoot** — built-in bidirectional bridge between WhatsApp and Chatwoot CRM
-  - WhatsApp messages automatically appear as Chatwoot conversations
-  - Agent replies in Chatwoot are delivered back to WhatsApp
-  - Webhook endpoint for Chatwoot callbacks
-  - Configurable per-session via dashboard or API
-
-### Storage
-- **bun:sqlite** — native high-performance SQLite
-- PostgreSQL and MongoDB support for production
-- In-memory store for development
-
-### Real-time
-- WebSocket event streaming (API key or Basic auth)
-- Real-time message delivery, typing indicators, presence
-
-### Security
-- API key auth with timing-safe comparison
-- Basic auth for dashboard
-- Rate limiting (200 req/min API, 10 req/min login)
-- Configurable CORS, 10MB body limits
-- Session path-traversal prevention
-
----
-
-## Quick Start
-
-### Prerequisites
-
-- [Bun](https://bun.sh) v1.0+
-
-### Install & Run
+## 🚀 Quick Start
 
 ```bash
-# Clone
-git clone git@github.com:LoopyOratory/bun-native-waha-noweb-whatsapp.git
-cd bun-native-waha-noweb-whatsapp
+# Clone and enter
+git clone <your-repo-url> bunwa
+cd bunwa
 
-# Install deps
+# Install dependencies
 bun install
 
-# Build frontend dashboard
-bash scripts/build-frontend.sh
-
-# Copy env config
+# Copy and configure environment
 cp .env.example .env
-# Edit .env — at minimum set WAHA_API_KEY
+# Edit .env with your settings
 
-# Start server
+# Start the server
 bun run src/main.ts
 ```
 
-The server starts on `http://localhost:3000` (or `WHATSAPP_API_PORT` from `.env`).
+The dashboard opens at **http://localhost:3001** — the default login is `admin` / `admin` (change in `.env`).
 
-### First Session
+### Docker
 
 ```bash
-# Create
-curl -X POST http://localhost:3000/api/sessions \
+docker run -d \
+  --name bunwa \
+  -p 3001:3001 \
+  -v $(pwd)/.sessions:/app/.sessions \
+  -v $(pwd)/.env:/app/.env \
+  bunwa:latest
+```
+
+## 📸 Dashboard
+
+A full-featured web dashboard built with React 19, shadcn/ui, and Tailwind CSS:
+
+| Page | Description |
+|------|-------------|
+| **Dashboard** | Sessions overview, worker status, quick actions |
+| **Sessions** | Create, start, stop, restart, delete sessions |
+| **Chat** | Real-time messaging with reactions, status icons, file sharing |
+| **API Keys** | Generate and manage API authentication keys |
+| **Apps** | Webhook integrations with external services |
+| **Logs** | Live log streaming with filtering |
+| **Events** | Real-time WebSocket event monitor |
+| **Queue** | Job queue monitoring (BullMQ) |
+| **Infrastructure** | Database, storage, and server configuration |
+| **Templates** | Message templates for bulk messaging (coming soon) |
+| **Workers** | Multi-instance worker management |
+| **API Docs** | Interactive OpenAPI/Swagger documentation |
+
+## 🔧 Configuration
+
+### Server
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WHATSAPP_API_PORT` | `3001` | HTTP server port |
+| `WHATSAPP_API_KEY` | — | API key for programmatic access |
+| `DASHBOARD_USERNAME` | `admin` | Dashboard login username |
+| `DASHBOARD_PASSWORD` | `admin` | Dashboard login password |
+| `LOG_LEVEL` | `info` | Logging verbosity (`debug`, `info`, `warn`, `error`) |
+| `MCP_ENABLED` | `true` | Enable the MCP server at `POST /mcp` |
+
+### Database
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WAHA_DB_TYPE` | `sqlite` | Database driver (`sqlite` or `postgres`) |
+| `WAHA_SQLITE_PATH` | `.sessions/waha.db` | SQLite database file path |
+| `WAHA_DATABASE_URL` | — | PostgreSQL connection URL (required when `WAHA_DB_TYPE=postgres`) |
+
+### Storage (Session Auth Data)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WAHA_STORAGE_TYPE` | `local` | Storage backend (`local` or `s3`) |
+| | | |
+| **Local** | | |
+| `WAHA_LOCAL_PATH` | `.sessions` | Directory for session auth files |
+| | | |
+| **S3** | | |
+| `WAHA_S3_ENDPOINT` | — | S3-compatible endpoint URL (e.g. MinIO) |
+| `WAHA_S3_BUCKET` | `waha-bun` | Bucket name |
+| `WAHA_S3_REGION` | `us-east-1` | AWS region |
+| `WAHA_S3_ACCESS_KEY` | — | Access key ID |
+| `WAHA_S3_SECRET_KEY` | — | Secret access key |
+
+### WhatsApp Session
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WHATSAPP_SESSION_NAME` | — | Default session name (optional) |
+| `WHATSAPP_DEFAULT_ENGINE` | `noweb` | Default engine (`noweb` or `webjs`) |
+| `WHATSAPP_WEBJS_CHROME_PATH` | — | Custom Chrome/Chromium path for WEBJS engine |
+
+## 📡 API
+
+BunWa is **100% API compatible** with WAHA (WhatsApp HTTP API).
+
+```bash
+# Create a session
+curl -X POST http://localhost:3001/api/sessions \
   -H "Content-Type: application/json" \
-  -d '{"name": "default"}'
+  -d '{"name":"my-session"}'
 
-# Start
-curl -X POST http://localhost:3000/api/sessions/default/start
+# Start it
+curl -X POST http://localhost:3001/api/sessions/my-session/start
 
-# Get QR code
-curl http://localhost:3000/api/default/auth/qr
+# Send a message
+curl -X POST http://localhost:3001/api/sendText \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session": "my-session",
+    "chatId": "233501234567@c.us",
+    "text": "Hello from BunWa!"
+  }'
+
+# Get QR code (for new sessions)
+curl http://localhost:3001/api/sessions/my-session
 ```
 
-Scan the QR with WhatsApp (Settings → Linked Devices → Link a Device).
+Full interactive API docs at **http://localhost:3001/api-docs/** when the server is running.
 
----
+## 🧩 MCP Server
 
-## API
-
-All endpoints require `x-api-key` header authentication (or Basic auth if dashboard credentials are configured).
-
-### Sessions
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/sessions` | List all sessions |
-| `POST` | `/api/sessions` | Create a session |
-| `GET` | `/api/sessions/:name` | Get session info |
-| `PUT` | `/api/sessions/:name` | Update session config |
-| `DELETE` | `/api/sessions/:name` | Delete session |
-| `POST` | `/api/sessions/:name/start` | Start |
-| `POST` | `/api/sessions/:name/stop` | Stop |
-| `POST` | `/api/sessions/:name/restart` | Restart |
-| `POST` | `/api/sessions/:name/logout` | Logout |
-
-### Pairing
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/:session/auth/qr` | Get QR code for scanning |
-| `POST` | `/api/:session/auth/request-code` | Request pairing code (body: phoneNumber) |
-
-### Messaging
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/sendText` | Send text message |
-| `POST` | `/api/sendImage` | Send image |
-| `POST` | `/api/sendFile` | Send file |
-| `POST` | `/api/sendVoice` | Send voice |
-| `POST` | `/api/sendVideo` | Send video |
-| `POST` | `/api/sendLocation` | Send location |
-| `POST` | `/api/sendPoll` | Send poll |
-| `POST` | `/api/sendPollVote` | Vote on poll |
-| `POST` | `/api/sendContactVcard` | Send contact |
-| `POST` | `/api/sendButtons` | Send buttons |
-| `POST` | `/api/sendList` | Send list |
-| `POST` | `/api/sendLinkPreview` | Send link preview |
-| `POST` | `/api/send/link-custom-preview` | Send link with custom preview |
-| `POST` | `/api/reply` | Reply to message |
-| `POST` | `/api/forwardMessage` | Forward message |
-| `PUT` | `/api/reaction` | React to message |
-| `PUT` | `/api/star` | Star/unstar message |
-| `POST` | `/api/sendSeen` | Mark as read |
-| `POST` | `/api/startTyping` | Start typing |
-| `POST` | `/api/stopTyping` | Stop typing |
-| `GET` | `/api/checkNumberStatus` | Check if number on WhatsApp |
-| `GET` | `/api/:session/new-message-id` | Generate new message ID |
-
-### Chats
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/:session/chats` | List chats (pagination) |
-| `GET` | `/api/:session/chats/overview` | Chat overview |
-| `GET` | `/api/:session/chats/:chatId` | Get chat |
-| `DELETE` | `/api/:session/chats/:chatId` | Delete chat |
-| `GET` | `/api/:session/chats/:chatId/messages` | Get messages |
-| `POST` | `/api/:session/chats/:chatId/messages/read` | Mark read |
-| `POST` | `/api/:session/chats/:chatId/messages/:id/pin` | Pin message |
-| `POST` | `/api/:session/chats/:chatId/messages/:id/unpin` | Unpin |
-| `DELETE` | `/api/:session/chats/:chatId/messages` | Clear messages |
-| `DELETE` | `/api/:session/chats/:chatId/messages/:id` | Delete message |
-| `PUT` | `/api/:session/chats/:chatId/messages/:id` | Edit message |
-| `POST` | `/api/:session/chats/:chatId/archive` | Archive |
-| `POST` | `/api/:session/chats/:chatId/unarchive` | Unarchive |
-| `POST` | `/api/:session/chats/:chatId/unread` | Mark unread |
-
-### Contacts
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/contacts/all` | List all contacts |
-| `GET` | `/api/contacts/check-exists` | Check number exists |
-| `GET` | `/api/contacts/about` | Get contact status |
-| `GET` | `/api/contacts/profile-picture` | Get profile picture |
-| `POST` | `/api/contacts/block` | Block contact |
-| `POST` | `/api/contacts/unblock` | Unblock contact |
-| `GET` | `/api/:session/contacts/:id` | Get contact by ID |
-| `PUT` | `/api/:session/contacts/:chatId` | Update contact |
-
-### Groups
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/:session/groups` | List groups |
-| `GET` | `/api/:session/groups/count` | Group count |
-| `POST` | `/api/:session/groups` | Create group |
-| `GET` | `/api/:session/groups/:id` | Get group |
-| `GET` | `/api/:session/groups/:id/participants` | Participants |
-| `POST` | `/api/:session/groups/:id/participants/add` | Add participants |
-| `POST` | `/api/:session/groups/:id/participants/remove` | Remove participants |
-| `POST` | `/api/:session/groups/:id/admin/promote` | Promote admin |
-| `POST` | `/api/:session/groups/:id/admin/demote` | Demote admin |
-| `POST` | `/api/:session/groups/:id/leave` | Leave group |
-| `PUT` | `/api/:session/groups/:id/subject` | Set subject |
-| `PUT` | `/api/:session/groups/:id/description` | Set description |
-| `GET` | `/api/:session/groups/:id/invite-code` | Get invite code |
-| `POST` | `/api/:session/groups/:id/invite-code/revoke` | Revoke invite code |
-| `POST` | `/api/:session/groups/join` | Join via invite code |
-
-### Channels
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/:session/channels` | List channels |
-| `POST` | `/api/:session/channels` | Create channel |
-| `GET` | `/api/:session/channels/:id` | Get channel |
-| `DELETE` | `/api/:session/channels/:id` | Delete channel |
-| `POST` | `/api/:session/channels/:id/follow` | Follow |
-| `POST` | `/api/:session/channels/:id/unfollow` | Unfollow |
-| `POST` | `/api/:session/channels/:id/mute` | Mute |
-| `POST` | `/api/:session/channels/:id/unmute` | Unmute |
-| `GET` | `/api/:session/channels/:id/messages/preview` | Preview messages |
-
-### Status
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/:session/status/text` | Post text status |
-| `POST` | `/api/:session/status/image` | Post image status |
-| `POST` | `/api/:session/status/voice` | Post voice status |
-| `POST` | `/api/:session/status/video` | Post video status |
-| `DELETE` | `/api/:session/status/delete` | Delete status |
-
-### Profile
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/:session/profile` | Get profile |
-| `PUT` | `/api/:session/profile/name` | Set name |
-| `PUT` | `/api/:session/profile/status` | Set status |
-| `PUT` | `/api/:session/profile/picture` | Set picture |
-
-### Labels
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/:session/labels` | List labels |
-| `POST` | `/api/:session/labels` | Create label |
-| `PUT` | `/api/:session/labels/:id` | Update label |
-| `DELETE` | `/api/:session/labels/:id` | Delete label |
-| `GET` | `/api/:session/labels/chats/:chatId` | Get chat labels |
-| `PUT` | `/api/:session/labels/chats/:chatId` | Set chat labels |
-| `GET` | `/api/:session/labels/:id/chats` | Get chats by label |
-
-### Presence
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/:session/presence` | Set presence |
-| `GET` | `/api/:session/presence` | Get presences |
-| `POST` | `/api/:session/presence/:chatId/subscribe` | Subscribe |
-
-### Calls
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/:session/calls/reject` | Reject incoming call |
-
-### LIDs
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/:session/lids` | List LID mappings |
-| `GET` | `/api/:session/lids/:lid` | Find phone by LID |
-| `GET` | `/api/:session/lids/pn/:phone` | Find LID by phone |
-
-### Media
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/:session/media/convert/voice` | Convert to voice format |
-| `POST` | `/api/:session/media/convert/video` | Convert to video format |
-
-### Observability
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/ping` | Ping (no auth) |
-| `GET` | `/health` | Health check (no auth) |
-| `GET` | `/api/version` | Version info |
-| `GET` | `/api/server/version` | Server version |
-| `GET` | `/api/server/status` | Server status |
-| `POST` | `/api/server/stop` | Graceful stop |
-
-### API Keys
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/keys` | List API keys |
-| `POST` | `/api/keys` | Create API key |
-| `PUT` | `/api/keys/:id` | Update API key |
-| `DELETE` | `/api/keys/:id` | Delete API key |
-
-### Workers
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/workers` | List workers |
-
-### WebSocket
-
-Connect to `ws://localhost:3000/ws` with `x-api-key` header or Basic auth query params.
-
-| Query Param | Description |
-|-------------|-------------|
-| `session` | Session name or `*` for all |
-| `events` | Comma-separated event types |
-
-```javascript
-const ws = new WebSocket('ws://localhost:3000/ws?session=default&events=message,message.any', {
-  headers: { 'x-api-key': 'your-key' }
-});
-ws.onmessage = (event) => console.log(JSON.parse(event.data));
-```
-
----
-
-## Apps & Integrations
-
-### Chatwoot Bridge
-
-Bidirectional sync between WhatsApp and Chatwoot CRM:
-
-- **Incoming**: WhatsApp messages → Chatwoot conversations (auto-creates contacts)
-- **Outgoing**: Chatwoot agent replies → WhatsApp messages
-- Configured per-session via API or dashboard UI
-
-#### API
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/apps` | List all app configs |
-| `POST` | `/api/apps` | Create app (Chatwoot) |
-| `GET` | `/api/apps/:id` | Get app config |
-| `PUT` | `/api/apps/:id` | Update app config |
-| `DELETE` | `/api/apps/:id` | Delete app |
-
-#### Chatwoot Config
+BunWa exposes a [Model Context Protocol](https://modelcontextprotocol.io) server at `POST /mcp`. AI agents can send messages, manage sessions, and interact with WhatsApp programmatically:
 
 ```json
 {
-  "session": "default",
-  "app": "chatwoot",
-  "enabled": true,
-  "config": {
-    "url": "http://chatwoot:3000",
-    "accountId": 1,
-    "accountToken": "cw_account_token",
-    "inboxId": 1
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "send_message",
+    "arguments": {
+      "session": "my-session",
+      "chatId": "233501234567@c.us",
+      "text": "Hello from AI!"
+    }
   }
 }
 ```
 
-#### Chatwoot Webhook
-
-Configure Chatwoot to send `message_created` events to:
+## 🏗️ Architecture
 
 ```
-POST /webhook/chatwoot/:session
+┌─────────────────────────────────────────────┐
+│                   BunWa                      │
+│  ┌──────────┐  ┌──────────────────────────┐ │
+│  │  Hono    │  │      Dashboard            │ │
+│  │  REST    │  │  (React + shadcn/ui)      │ │
+│  │  API     │  │                           │ │
+│  └────┬─────┘  └───────────┬──────────────┘ │
+│       │                    │                 │
+│  ┌────┴────────────────────┴──────────────┐ │
+│  │         Session Manager                 │ │
+│  │  ┌─────────┐     ┌───────────────────┐ │ │
+│  │  │ NOWEB   │     │      WEBJS         │ │ │
+│  │  │(Baileys)│     │(whatsapp-web.js)   │ │ │
+│  │  └─────────┘     └───────────────────┘ │ │
+│  └─────────────────────────────────────────┘ │
+│  ┌──────────┐ ┌──────────┐ ┌──────────────┐ │
+│  │ Storage  │ │ Database │ │    MCP       │ │
+│  │ (local/  │ │(SQLite / │ │   Server     │ │
+│  │   S3)    │ │Postgres) │ │              │ │
+│  └──────────┘ └──────────┘ └──────────────┘ │
+└─────────────────────────────────────────────┘
 ```
 
-Example: `http://waha:3001/webhook/chatwoot/default`
+## 🏗️ Technology Stack
 
-#### UI Configuration
+| Category | Technology |
+|----------|-----------|
+| **Runtime** | [Bun](https://bun.sh) 1.3+ |
+| **API Framework** | [Hono](https://hono.dev) |
+| **Database** | SQLite (`bun:sqlite`) or [PostgreSQL](https://www.postgresql.org) |
+| **Storage** | Local filesystem or [S3-compatible](https://aws.amazon.com/s3/) (MinIO, R2, etc.) |
+| **Frontend** | [React 19](https://react.dev) + [Vite](https://vite.dev) + [shadcn/ui](https://ui.shadcn.com) + [Tailwind CSS](https://tailwindcss.com) |
+| **WhatsApp Engine (NOWEB)** | [Baileys](https://github.com/WhiskeySockets/Baileys) |
+| **WhatsApp Engine (WEBJS)** | [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) + Puppeteer/Chrome |
+| **WebSockets** | [Hono WS](https://hono.dev/docs/helpers/websocket) + [RxJS](https://rxjs.dev) |
+| **Queue** | [BullMQ](https://docs.bullmq.io) (Redis) |
+| **Auth** | API key + dashboard Basic Auth + [CASL](https://casl.js.org) policies |
+| **Container** | [Docker](https://docker.com) + [s6-overlay](https://github.com/just-containers/s6-overlay) |
 
-Dashboard → Sessions → Click ⚙️ on a session → **Integrations** tab
+## 📖 Documentation
+
+- **Interactive API Docs** — `http://localhost:3001/api-docs/` (Swagger/OpenAPI)
+- **Engine Comparison** — `http://localhost:3001/docs` (NOWEB vs WEBJS feature matrix)
+- **Phone Pairing** — QR scan or number pairing supported for both engines
+- **Proxy Support** — HTTP, HTTPS, SOCKS4, SOCKS5 proxy for WhatsApp connections
+
+## ⭐ Support
+
+If BunWa helps you, consider supporting the project:
+
+<div align="center">
+  <a href="https://selar.com/showlove/loopyoratory">
+    <img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FF813F?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white" alt="Buy Me A Coffee" />
+  </a>
+  <br /><br />
+  <a href="#">
+    <img src="https://img.shields.io/badge/⭐%20Star%20on%20GitHub-2ea44f?style=for-the-badge" alt="Star on GitHub" />
+  </a>
+</div>
 
 ---
 
-## Architecture
+## 📄 License
 
-```
-src/
-├── main.ts                         # Server entry point (Bun.serve + Hono)
-├── api/                            # API route handlers
-│   ├── apps.routes.ts              # Apps CRUD (/api/apps)
-│   ├── sessions.routes.ts          # Session CRUD
-│   ├── chatting.routes.ts          # Messaging
-│   ├── chats.routes.ts             # Chat operations
-│   ├── contacts.routes.ts          # Contacts
-│   ├── groups.routes.ts            # Groups
-│   ├── channels.routes.ts          # Channels
-│   ├── status.routes.ts            # Status
-│   ├── profile.routes.ts           # Profile
-│   ├── labels.routes.ts            # Labels
-│   ├── presence.routes.ts          # Presence
-│   ├── websocket.ts                # WebSocket handler
-│   └── ...
-├── apps/                           # Built-in app integrations
-│   └── chatwoot/
-│       ├── api/chatwoot-webhook.routes.ts  # Webhook endpoint
-│       ├── dto/chatwoot-config.dto.ts      # Type definitions
-│       ├── services/ChatwootAppService.ts  # Core bridge logic
-│       └── storage/                # App config persistence
-├── core/
-│   ├── manager.core.ts             # Session manager
-│   ├── webhook-delivery.ts         # Webhook event delivery
-│   ├── engines/noweb/              # NOWEB (Baileys) engine
-│   └── storage/                    # bun:sqlite / Postgres / Mongo
-├── middleware/
-│   ├── api-key-auth.ts             # Timing-safe API key auth
-│   ├── basic-auth.ts               # Dashboard basic auth
-│   ├── rate-limit.ts               # In-memory rate limiter
-│   └── error-handler.ts            # Global error handler
-├── structures/                     # DTOs and types
-├── di/container.ts                 # tsyringe DI setup
-└── utils/                          # Utilities
-```
+### Project License (MIT)
 
-### Stack
+Copyright © 2026
 
-| Component | Technology |
-|-----------|------------|
-| Runtime | Bun |
-| Framework | Hono |
-| WhatsApp | Baileys (@whiskeysockets/baileys, NOWEB engine) |
-| Storage | bun:sqlite (native) / PostgreSQL / MongoDB |
-| DI | tsyringe |
-| Events | RxJS |
-| Frontend | React 19 + Vite + shadcn/ui |
-| Jobs | BullMQ (via ioredis) |
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
+
+### Third-Party Licenses & Attributions
+
+BunWa builds on several open-source projects. We are grateful for their work:
+
+| Dependency | License | Notes |
+|------------|---------|-------|
+| [Bun](https://bun.sh) | MIT + OSL-3.0 | JavaScript runtime |
+| [Hono](https://hono.dev) | MIT | Web framework |
+| [Baileys](https://github.com/WhiskeySockets/Baileys) | MIT | WhatsApp WebSocket library (NOWEB engine) |
+| [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) | Apache-2.0 | WhatsApp Web client (WEBJS engine) |
+| [React](https://react.dev) | MIT | Frontend UI library |
+| [shadcn/ui](https://ui.shadcn.com) | MIT | UI component library |
+| [Tailwind CSS](https://tailwindcss.com) | MIT | CSS framework |
+| [RxJS](https://rxjs.dev) | Apache-2.0 | Reactive extensions |
+| [BullMQ](https://docs.bullmq.io) | MIT | Queue management |
+| [AWS SDK v3](https://github.com/aws/aws-sdk-js-v3) | Apache-2.0 | S3 storage integration |
+| [CASL](https://casl.js.org) | MIT | Permission management |
+| [class-validator](https://github.com/typestack/class-validator) | MIT | Request validation |
+| [tsyringe](https://github.com/microsoft/tsyringe) | MIT | Dependency injection |
+
+This project originated as a fork of [WAHA](https://waha.devlike.pro/) (WhatsApp HTTP API) and has been independently developed and optimized for the Bun runtime.
 
 ---
 
-## Configuration
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WHATSAPP_API_PORT` | `3000` | Server port |
-| `WAHA_API_KEY` | — | API key for auth |
-| `WAHA_DASHBOARD_USERNAME` | — | Dashboard login user |
-| `WAHA_DASHBOARD_PASSWORD` | — | Dashboard login password |
-| `WAHA_CORS_ORIGIN` | — | Allowed CORS origins |
-| `WAHA_LOG_LEVEL` | `info` | Log level |
-| `WAHA_WEBHOOK_URL` | — | Global webhook URL |
-| `WHATSAPP_START_SESSION` | — | Auto-start sessions (comma-separated) |
-| `WHATSAPP_RESTART_ALL_SESSIONS` | `false` | Restore all sessions on reboot |
-| `WAHA_DATABASE_DRIVER` | `sqlite` | Storage driver (sqlite/postgresql) |
-| `REDIS_URL` | — | Redis for apps/workers (BullMQ) |
-
-See `.env.example` for the full list.
-
----
-
-## Dashboard
-
-The web dashboard is at `/dashboard/` (or `/ui/`).
-
-### Features
-- **Sessions** — create, start, stop, delete, view QR codes
-- **Chat** — real-time messaging UI with WebSocket
-- **Event Monitor** — watch incoming events live
-- **Integrations** — configure Chatwoot per-session (Integrations tab in Session Settings)
-- **Workers** — connected instance status
-- **API Docs** — built-in Scalar/OpenAPI explorer at `/api-docs/`
-
-### Build
-
-```bash
-bash scripts/build-frontend.sh
-```
-
----
-
-## Development
-
-```bash
-# Dev mode with hot reload
-bun --watch run src/main.ts
-
-# Frontend dev (HMR)
-cd frontend && bun run dev
-
-# Tests
-bun test
-
-# Lint
-bun run lint
-```
-
----
-
-## API Documentation
-
-Interactive OpenAPI docs at `/api-docs/` when the server is running.
-
----
-
-## License
-
-MIT
+<div align="center">
+  <sub>Built with ❤️ using <a href="https://bun.sh">Bun</a> + <a href="https://hono.dev">Hono</a></sub>
+  <br />
+  <sub>WhatsApp HTTP API Server</sub>
+</div>

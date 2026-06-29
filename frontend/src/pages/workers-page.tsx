@@ -37,7 +37,7 @@ export function WorkersPage() {
       const v = await api.getVersion().catch(() => null)
       const sessions = await api.getSessions().catch(() => [])
       setWorkers([{
-        name: "WAHA",
+        name: "BunWa",
         apiUrl: window.location.origin,
         engine: v?.engine || "NOWEB",
         version: v?.version || "",
@@ -71,7 +71,7 @@ export function WorkersPage() {
                 <Server className="size-5 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{workers.length}</div>
+                <div className="text-3xl font-bold tracking-tight">{workers.length}</div>
               </CardContent>
             </Card>
             <Card>
@@ -80,7 +80,7 @@ export function WorkersPage() {
                 <CheckCircle className="size-5 text-green-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-500">
+                <div className="text-3xl font-bold tracking-tight text-green-500">
                   {workers.filter((w) => w.connected).length}
                 </div>
               </CardContent>
@@ -91,7 +91,7 @@ export function WorkersPage() {
                 <XCircle className="size-5 text-destructive" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-destructive">
+                <div className="text-3xl font-bold tracking-tight text-destructive">
                   {workers.filter((w) => !w.connected).length}
                 </div>
               </CardContent>
@@ -136,7 +136,7 @@ export function WorkersPage() {
                   <TableBody>
                     {filtered.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                        <TableCell colSpan={6} className="h-24 text-center text-base text-muted-foreground">
                           No workers found
                         </TableCell>
                       </TableRow>
@@ -152,7 +152,7 @@ export function WorkersPage() {
                           <TableCell>
                             <code className="rounded bg-muted px-1 py-0.5 text-xs">{worker.engine}</code>
                           </TableCell>
-                          <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
+                          <TableCell className="hidden md:table-cell text-xs text-base text-muted-foreground">
                             {worker.version} {worker.tier}
                           </TableCell>
                           <TableCell className="hidden md:table-cell">

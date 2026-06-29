@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Lock, AlertCircle } from "lucide-react"
+import { AlertCircle } from "lucide-react"
 import { useAuth } from "@/lib/auth"
 
 export function LoginPage() {
@@ -31,19 +31,21 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex h-screen items-center justify-center bg-muted/30">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-primary/10">
-            <Lock className="size-6 text-primary" />
+    <div className="login-container">
+      <Card className="w-full max-w-sm animate-scale-in shadow-xl">
+        <CardHeader className="text-center space-y-3">
+          <div className="mx-auto flex size-16 items-center justify-center rounded-2xl">
+            <img src="/logo.jpg" alt="BunWa" className="size-14 rounded-xl object-cover" />
           </div>
-          <CardTitle className="font-heading text-xl">WAHA Dashboard</CardTitle>
-          <CardDescription>Sign in to manage your WhatsApp sessions</CardDescription>
+          <div>
+            <CardTitle className="font-heading text-xl tracking-tight">BunWa Dashboard</CardTitle>
+            <CardDescription className="mt-1">Sign in to manage your WhatsApp sessions</CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <Alert variant="destructive">
+              <Alert variant="destructive" className="animate-slide-up">
                 <AlertCircle className="size-4" />
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
@@ -71,7 +73,14 @@ export function LoginPage() {
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Signing in..." : "Sign in"}
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <span className="loading-spinner size-4" />
+                  Signing in...
+                </span>
+              ) : (
+                "Sign in"
+              )}
             </Button>
           </form>
         </CardContent>

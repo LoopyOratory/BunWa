@@ -1,8 +1,8 @@
-import { useState } from "react"
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { AppSidebar } from "./components/app-sidebar"
-import { ThemeProvider, useTheme } from "./components/theme-provider"
+import { ThemeProvider } from "./components/theme-provider"
 import { AuthProvider, useAuth } from "./lib/auth"
 import { DashboardPage } from "./pages/dashboard-page"
 import { WorkersPage } from "./pages/workers-page"
@@ -11,78 +11,88 @@ import { EventMonitorPage } from "./pages/event-monitor-page"
 import { ChatPage } from "./pages/chat-page"
 import { LoginPage } from "./pages/login-page"
 import { AppsPage } from "./pages/apps-page"
+import { TemplatesPage } from "./pages/templates-page"
+import { LogsPage } from "./pages/logs-page"
+import { MessageTesterPage } from "./pages/message-tester-page"
+import { ApiKeysPage } from "./pages/api-keys-page"
+import { InfrastructurePage } from "./pages/infrastructure-page"
+import { QueuePage } from "./pages/queue-page"
+import { PageLayout } from "@/components/page-layout"
 import { Toaster } from "@/components/ui/sonner"
+import { ErrorBoundary } from "./components/ErrorBoundary"
 
 function GlobalBackground() {
-  const { theme } = useTheme()
-  const isDark = theme === "dark"
   return (
-    <div className="absolute inset-0 z-0 pointer-events-none" style={isDark ? {
-      backgroundImage: `
-        repeating-linear-gradient(0deg, rgba(255,255,255,0.04) 0, rgba(255,255,255,0.04) 1px, transparent 1px, transparent 40px),
-        repeating-linear-gradient(45deg, rgba(0,255,128,0.09) 0, rgba(0,255,128,0.09) 1px, transparent 1px, transparent 20px),
-        repeating-linear-gradient(-45deg, rgba(255,0,128,0.10) 0, rgba(255,0,128,0.10) 1px, transparent 1px, transparent 30px),
-        repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 80px),
-        radial-gradient(circle at 60% 40%, rgba(0,255,128,0.05) 0, transparent 60%)
+    <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden" style={{
+      background: `
+        radial-gradient(ellipse at 20% 0%, oklch(0.841 0.238 128.85 / 0.04) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 100%, oklch(0.841 0.238 128.85 / 0.03) 0%, transparent 50%)
       `,
-      backgroundSize: "80px 80px, 40px 40px, 60px 60px, 80px 80px, 100% 100%",
-      backgroundPosition: "0 0, 0 0, 0 0, 40px 40px, center",
-    } : {
-      backgroundImage: `
-        linear-gradient(to right, rgba(209,213,219,0.5) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(209,213,219,0.5) 1px, transparent 1px),
-        radial-gradient(circle 500px at 20% 80%, rgba(16,185,129,0.12), transparent),
-        radial-gradient(circle 500px at 80% 20%, rgba(5,150,105,0.12), transparent)
-      `,
-      backgroundSize: "48px 48px, 48px 48px, 100% 100%, 100% 100%",
     }} />
   )
 }
 
-function AppContent() {
-  const { isAuthenticated } = useAuth()
-  const [currentPage, setCurrentPage] = useState("dashboard")
-  const [chatSessionName, setChatSessionName] = useState<string | null>(null)
+function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <SidebarProvider defaultOpen={true}>
+      <AppSidebar />
+      <SidebarInset className="relative overflow-hidden">
+        <GlobalBackground />
+        <div className="relative z-10 flex flex-col h-full animate-fade-in">{children}</div>
+      </SidebarInset>
+    </SidebarProvider>
+  )
+}
 
-  const handleNavigate = (page: string, options?: { sessionName?: string }) => {
-    if (options?.sessionName) {
-      setChatSessionName(options.sessionName)
-    }
-    setCurrentPage(page)
-  }
+function AppRoutes() {
+  const { isAuthenticated } = useAuth()
 
   if (!isAuthenticated) {
-    return <LoginPage />
+    return <Routes><Route path="*" element={<LoginPage />} /></Routes>
   }
 
   return (
-    <TooltipProvider delayDuration={300}>
-      <SidebarProvider defaultOpen={true}>
-        <AppSidebar currentPage={currentPage} onNavigate={handleNavigate} />
-        <SidebarInset className="relative overflow-hidden">
-          <GlobalBackground />
-          <div className="relative z-10 flex flex-col h-full">
-            {currentPage === "dashboard" && <DashboardPage onNavigate={handleNavigate} />}
-            {currentPage === "apps" && <AppsPage />}
-            {currentPage === "workers" && <WorkersPage />}
-            {currentPage === "sessions" && <SessionsPage onNavigate={handleNavigate} />}
-            {currentPage === "chat" && <ChatPage initialSession={chatSessionName} />}
-            {currentPage === "event-monitor" && <EventMonitorPage />}
-          </div>
-        </SidebarInset>
-        <Toaster richColors closeButton />
-      </SidebarProvider>
-    </TooltipProvider>
+    <DashboardLayout>
+      <Routes>
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/sessions" element={<SessionsPage />} />
+        <Route path="/sessions/:id/chat" element={<ChatPage />} />
+        <Route path="/chat" element={<ChatPage />} />
+        <Route path="/workers" element={<WorkersPage />} />
+        <Route path="/apps" element={<AppsPage />} />
+        <Route path="/templates" element={<TemplatesPage />} />
+        <Route path="/messages" element={<MessageTesterPage />} />
+        <Route path="/messages/:chatId" element={<MessageTesterPage />} />
+        <Route path="/logs" element={<LogsPage />} />
+        <Route path="/api-keys" element={<ApiKeysPage />} />
+        <Route path="/infrastructure" element={<InfrastructurePage />} />
+        <Route path="/queue" element={<QueuePage />} />
+        <Route path="/events" element={<EventMonitorPage />} />
+        <Route path="/docs" element={
+          <PageLayout title="API Documentation" description="Scalar API reference for BunWa">
+            <iframe src="/api-docs/" className="w-full min-h-[calc(100vh-14rem)] rounded-xl border" title="API Docs" />
+          </PageLayout>
+        } />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </DashboardLayout>
   )
 }
 
 function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <TooltipProvider delayDuration={300}>
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+            <Toaster richColors closeButton />
+          </TooltipProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   )
 }
 

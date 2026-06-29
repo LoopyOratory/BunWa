@@ -7,6 +7,7 @@ import { WhatsappConfigService } from './config.service';
 import { VERSION } from './version';
 import { globalErrorHandler } from './middleware/error-handler';
 import { createApiRouter } from './api';
+import { createMcpRouter } from './mcp';
 import { createWebSocketHandler, setSessionManager } from './api/websocket';
 import { DashboardConfigServiceCore } from './core/config/DashboardConfigServiceCore';
 import { SwaggerConfigServiceCore } from './core/config/SwaggerConfigServiceCore';
@@ -17,6 +18,7 @@ import { existsSync, statSync } from 'fs';
 import { join, resolve } from 'path';
 import { SessionManager } from './core/manager.core';
 import { ChatwootAppService } from './apps/chatwoot/services/ChatwootAppService';
+import { shutdownService } from './core/shutdown.service';
 import { createChatwootWebhookRouter } from './apps/chatwoot/api/chatwoot-webhook.routes';
 import { Scalar } from '@scalar/hono-api-reference';
 import pino from 'pino';
@@ -139,9 +141,13 @@ async function bootstrap() {
   // Serve custom dashboard
   const customDashboardPath = join(import.meta.dir, '..', 'frontend-dist');
   if (existsSync(customDashboardPath)) {
-    app.use('/ui/*', async (c, next) => {
+    app.use('/*', async (c, next) => {
       const path = new URL(c.req.url).pathname;
-      let filePath = join(customDashboardPath, path.replace('/ui', ''));
+      // Skip API and other non-static routes
+      if (path.startsWith('/api/') || path.startsWith('/ping') || path.startsWith('/health') || path.startsWith('/mcp') || path.startsWith('/webhook/') || path.startsWith('/ws')) {
+        return next();
+      }
+      let filePath = join(customDashboardPath, path === '/' ? 'index.html' : path);
 
       if (!isPathSafe(filePath, customDashboardPath)) {
         return next();
@@ -186,15 +192,24 @@ async function bootstrap() {
         return new Response(file, {
           headers: {
             'Content-Type': contentType,
-            'Cache-Control': 'public, max-age=31536000, immutable',
+            'Cache-Control': 'public, max-age=86400',
           },
+        });
+      }
+
+      // SPA fallback: serve index.html for all non-file routes
+      const indexPath = join(customDashboardPath, 'index.html');
+      if (existsSync(indexPath)) {
+        const indexFile = Bun.file(indexPath);
+        return new Response(indexFile, {
+          headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' },
         });
       }
 
       return next();
     });
 
-    log.info(`Custom dashboard available at: /ui`);
+    log.info(`Custom dashboard available at: /`);
   }
 
   // Serve dashboard static files
@@ -275,6 +290,11 @@ async function bootstrap() {
   const chatwootAppService = container.resolve(ChatwootAppService);
   app.route('/webhook/chatwoot', createChatwootWebhookRouter(chatwootAppService));
 
+  // MCP (Model Context Protocol) server — stateless, new server per request
+  const mcpRouter = createMcpRouter(sessionManager);
+  app.route('/', mcpRouter);
+  log.info('MCP server available at POST /mcp');
+
   // Initialize Chatwoot app service (loads configs, subscribes to events)
   chatwootAppService.init(sessionManager).catch((err) => {
     log.error({ err }, 'Failed to initialize Chatwoot app service');
@@ -342,6 +362,14 @@ async function bootstrap() {
   });
 
   log.info(`Server running on port ${port}`);
+
+  // Graceful shutdown
+  shutdownService.setShutdownCallback(async () => {
+    log.info('Shutting down gracefully...');
+    server.stop();
+  });
+  shutdownService.setReadyCheck(() => true);
+  shutdownService.registerSignals();
 }
 
 bootstrap().catch((error) => {

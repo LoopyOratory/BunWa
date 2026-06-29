@@ -1,69 +1,96 @@
+import { useNavigate, useLocation } from "react-router-dom"
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarGroupContent,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarHeader,
-  SidebarFooter,
+  Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel,
+  SidebarGroupContent, SidebarMenu, SidebarMenuButton,
+  SidebarMenuItem, SidebarHeader, SidebarFooter, SidebarSeparator,
 } from "@/components/ui/sidebar"
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import { Home, MessageSquare, Eye, Server, LogOut, MessageCircle, BookOpen, Sun, Moon, Plug } from "lucide-react"
+  Home, MessageSquare, Eye, Server, LogOut, BookOpen,
+  Sun, Moon, Plug, FileText, Activity, Send, Key, Settings, ListOrdered, MessageCircle,
+} from "lucide-react"
 import { useAuth } from "@/lib/auth"
 import { useTheme } from "@/components/theme-provider"
 
 const menuItems = [
-  { id: "dashboard", label: "Dashboard", icon: Home },
-  { id: "apps", label: "Apps", icon: Plug },
-  { id: "workers", label: "Workers", icon: Server },
-  { id: "sessions", label: "Sessions", icon: MessageSquare },
-  { id: "chat", label: "Chat", icon: MessageCircle },
-  { id: "event-monitor", label: "Event Monitor", icon: Eye },
-  { id: "docs", label: "API Docs", icon: BookOpen, href: "/api-docs/" },
+  { path: "/", label: "Dashboard", icon: Home },
+  { path: "/sessions", label: "Sessions", icon: MessageSquare },
+  { path: "/chat", label: "Chat", icon: MessageCircle },
+  { path: "/templates", label: "Templates", icon: FileText },
+  { path: "/messages", label: "Message Tester", icon: Send },
+  { path: "/logs", label: "Audit Logs", icon: Activity },
+  { path: "/api-keys", label: "API Keys", icon: Key },
+  { path: "/infrastructure", label: "Infrastructure", icon: Settings },
+  { path: "/queue", label: "Queue", icon: ListOrdered },
 ]
 
-interface AppSidebarProps {
-  currentPage: string
-  onNavigate: (page: string, options?: { sessionName?: string }) => void
-}
+const secondaryItems = [
+  { path: "/workers", label: "Workers", icon: Server },
+  { path: "/apps", label: "Apps", icon: Plug },
+  { path: "/events", label: "Event Monitor", icon: Eye },
+  { path: "/docs", label: "API Docs", icon: BookOpen },
+]
 
-export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
+export function AppSidebar() {
+  const navigate = useNavigate()
+  const location = useLocation()
   const { logout, username } = useAuth()
   const { theme, setTheme } = useTheme()
   const isDark = theme === "dark"
+  const currentPath = location.pathname
 
   return (
-    <Sidebar variant="inset" collapsible="icon">
-      <SidebarHeader>
-        <div className="flex items-center gap-2 px-2 py-1">
-          <div className="flex size-6 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
-            W
+    <Sidebar variant="sidebar" collapsible="icon">
+      <SidebarHeader className="border-b px-5 py-4">
+        <div className="flex items-center gap-3">
+          <img src="/logo.jpg" alt="BunWa" className="size-10 shrink-0 rounded-xl object-cover shadow-md" />
+          <div className="flex flex-col group-data-[collapsible=icon]:hidden">
+            <span className="font-heading text-lg font-bold text-foreground tracking-tight">BunWa</span>
+            <span className="text-xs text-muted-foreground font-medium -mt-0.5">WhatsApp API</span>
           </div>
-          <span className="font-heading text-sm font-semibold group-data-[collapsible=icon]:hidden">
-            WAHA
-          </span>
         </div>
       </SidebarHeader>
-      <SidebarContent>
+
+      <SidebarContent className="px-3 py-3">
         <SidebarGroup>
-          <SidebarGroupLabel>Home</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 px-3 mb-1">
+            Main
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
-                <SidebarMenuItem key={item.id}>
+              {menuItems.map(item => (
+                <SidebarMenuItem key={item.path}>
                   <SidebarMenuButton
-                    isActive={currentPage === item.id}
-                    onClick={() => item.href ? window.open(item.href, "_blank") : onNavigate(item.id)}
+                    isActive={currentPath === item.path}
+                    onClick={() => navigate(item.path)}
                     tooltip={item.label}
+                    className="text-base py-3 group-data-[collapsible=icon]:py-2.5"
                   >
-                    <item.icon />
+                    <item.icon className="size-6 shrink-0" />
+                    <span>{item.label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarSeparator className="my-2 mx-3" />
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 px-3 mb-1">
+            Tools
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {secondaryItems.map(item => (
+                <SidebarMenuItem key={item.path}>
+                  <SidebarMenuButton
+                    isActive={currentPath === item.path}
+                    onClick={() => navigate(item.path)}
+                    tooltip={item.label}
+                    className="text-base py-3 group-data-[collapsible=icon]:py-2.5"
+                  >
+                    <item.icon className="size-6 shrink-0" />
                     <span>{item.label}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -72,27 +99,26 @@ export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="border-t p-2">
+
+      <SidebarFooter className="border-t px-4 py-4">
         <SidebarMenu>
           <SidebarMenuItem>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <SidebarMenuButton
-                  onClick={() => setTheme(isDark ? "light" : "dark")}
-                  tooltip={isDark ? "Light Mode" : "Dark Mode"}
-                >
-                  {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-                  <span>{isDark ? "Light Mode" : "Dark Mode"}</span>
-                </SidebarMenuButton>
-              </TooltipTrigger>
-              <TooltipContent side="right">{isDark ? "Light Mode" : "Dark Mode"}</TooltipContent>
-            </Tooltip>
+            <SidebarMenuButton
+              onClick={() => setTheme(isDark ? "light" : "dark")}
+              tooltip={isDark ? "Light Mode" : "Dark Mode"}
+              className="text-base py-3"
+            >
+              {isDark ? <Sun className="size-6" /> : <Moon className="size-6" />}
+              <span>{isDark ? "Light Mode" : "Dark Mode"}</span>
+            </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={logout} tooltip="Logout">
-              <LogOut className="size-4" />
-              <span className="group-data-[collapsible=icon]:hidden">{username}</span>
-              <span className="ml-auto group-data-[collapsible=icon]:hidden">Logout</span>
+            <SidebarMenuButton onClick={logout} tooltip="Logout" className="text-base py-3">
+              <LogOut className="size-6" />
+              <div className="flex flex-col group-data-[collapsible=icon]:hidden text-left">
+                <span>{username}</span>
+                <span className="text-xs text-muted-foreground">Sign out</span>
+              </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
