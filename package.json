@@ -13,7 +13,7 @@
     "test": "bun test",
     "lint": "oxlint src/",
     "lint-fix": "oxlint --fix src/",
-    "setup": "bun install && bash scripts/build-frontend.sh",
+    "setup": "bun install && bash scripts/build-frontend.sh"
   },
   "dependencies": {
     "@adiwajshing/keyed-db": "^0.2.4",

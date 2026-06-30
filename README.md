@@ -157,24 +157,54 @@ curl http://localhost:3001/api/sessions/my-session
 
 Full interactive API docs at **http://localhost:3001/api-docs/** when the server is running.
 
-## 🧩 MCP Server
+## 🧩 MCP Server (Model Context Protocol)
 
-BunWa exposes a [Model Context Protocol](https://modelcontextprotocol.io) server at `POST /mcp`. AI agents can send messages, manage sessions, and interact with WhatsApp programmatically:
+BunWa exposes a [Model Context Protocol](https://modelcontextprotocol.io) server at `POST /mcp` — AI assistants can send WhatsApp messages, manage sessions, query chats, and interact with groups through standardized MCP tools.
 
-```json
+### Available Tools
+
+| Category | Tools |
+|----------|-------|
+| **Session** | `SessionList`, `SessionGet`, `SessionStart`, `SessionStop`, `SessionRestart`, `SessionCheckNumber` |
+| **Messaging** | `MessageSendText`, `MessageSendImage`, `MessageSendFile`, `MessageSendVoice`, `MessageSendVideo`, `MessageSendLocation`, `MessageSendPoll`, `MessageSendContactVCard`, `MessageSendLinkPreview`, `MessageReply`, `MessageForward`, `MessageReact`, `MessageStar`, `MessageMarkRead`, `MessageStartTyping`, `MessageStopTyping` |
+| **Contacts** | `ContactCheckNumber` |
+
+### Per-Session Tool Policies
+
+Every tool can be enabled or disabled per-session from the **Dashboard → Session Settings → MCP Tools** tab:
+
+- **Master toggle** — enable/disable MCP for the session entirely
+- **Destructive ops gate** — block all irreversible operations (delete, clear) with a single switch
+- **Per-tool toggles** — disable individual tools or entire categories (group, presence, etc.)
+
+### Quick Connect
+
+```bash
+# Claude Desktop / Cursor — add to your MCP config
 {
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "tools/call",
-  "params": {
-    "name": "send_message",
-    "arguments": {
-      "session": "my-session",
-      "chatId": "233501234567@c.us",
-      "text": "Hello from AI!"
+  "mcpServers": {
+    "bunwa": {
+      "url": "http://localhost:3000/mcp",
+      "headers": { "X-Api-Key": "your-api-key" }
     }
   }
 }
+
+# Or via MCP Inspector
+bunx @modelcontextprotocol/inspector http://localhost:3000/mcp
+
+# Hermes Agent — add to ~/.hermes/config.yaml
+mcp_servers:
+  bunwa:
+    url: "http://localhost:3000/mcp"
+    headers:
+      X-Api-Key: "your-api-key"
+```
+
+### List All Tools
+
+```bash
+curl http://localhost:3000/api/mcp/tools | jq '.byCategory'
 ```
 
 ## 🏗️ Architecture
@@ -191,11 +221,19 @@ graph TB
         subgraph API["API Layer"]
             Hono["Hono REST API<br/><small>WAHA-compatible endpoints</small>"]
             MCP["MCP Server<br/><small>Model Context Protocol</small>"]
+            MCAPI["MCP Config API<br/><small>GET /api/mcp/tools<br/>GET|PUT /mcp/per-session</small>"]
             WS["WebSocket<br/><small>Real-time events</small>"]
+        end
+
+        subgraph MCPInternals["MCP Server Internals"]
+            TR["Tool Registry<br/><small>ToolDescriptor[]<br/>name, category, destructive</small>"]
+            PC["Permission Checker<br/><small>isToolAllowed()<br/>deny-list + destructive gate</small>"]
+            TH["Tool Handlers<br/><small>Session | Message | Contact</small>"]
         end
 
         subgraph Core["Core Layer"]
             SM["Session Manager<br/><small>Lifecycle + State</small>"]
+            SC["Session Config<br/><small>webhooks, proxy, mcp, ...</small>"]
             AM["Auth Manager<br/><small>API Keys + Basic Auth</small>"]
             WH["Webhook Engine<br/><small>HMAC signing + SSRF guard</small>"]
         end
@@ -208,6 +246,7 @@ graph TB
         subgraph Data["Data Layer"]
             DB[("Database<br/><small>SQLite / PostgreSQL</small>")]
             ST[("Storage<br/><small>Local FS / S3-compatible</small>")]
+            SI[("Session Index<br/><small>.sessions-index.json</small>")]
         end
     end
 
@@ -215,17 +254,26 @@ graph TB
     AI --> MCP
     Browser --> Hono
     Browser --> WS
+    Browser --> MCAPI
 
     Hono --> SM
     Hono --> AM
+    MCP --> TR
+    TR --> TH
+    TH --> PC
+    PC -.->|lookup session mcp config| SC
     MCP --> SM
     WS --> SM
+    MCAPI --> SM
+    MCAPI -.->|read/write| SC
 
     SM --> NOWEB
     SM --> WEBJS
 
     SM --> DB
     SM --> ST
+    SM --> SI
+    SC --> SI
     Hono --> WH
     WH --> HTTP
 

@@ -155,7 +155,7 @@ function MultiSelect({
 
 export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: SessionSettingsDialogProps) {
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<"webhooks" | "proxy" | "engine" | "ignore" | "advanced" | "integrations">("webhooks")
+  const [activeTab, setActiveTab] = useState<"webhooks" | "proxy" | "engine" | "ignore" | "advanced" | "integrations" | "mcp">("webhooks")
 
   const [webhooks, setWebhooks] = useState<WebhookConfig[]>([])
   const [proxyServer, setProxyServer] = useState("")
@@ -175,6 +175,13 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
   const [ignoreDm, setIgnoreDm] = useState(false)
   const [debugMode, setDebugMode] = useState(false)
   const [metadata, setMetadata] = useState<{ key: string; value: string }[]>([])
+
+  // MCP settings
+  const [mcpEnabled, setMcpEnabled] = useState(true)
+  const [mcpDestructiveOps, setMcpDestructiveOps] = useState(false)
+  const [mcpDeniedTools, setMcpDeniedTools] = useState<string[]>([])
+  const [mcpTools, setMcpTools] = useState<{ tools: any[]; byCategory: Record<string, any[]> } | null>(null)
+  const [mcpLoading, setMcpLoading] = useState(false)
 
   // Chatwoot integration state
   const [chatwootEnabled, setChatwootEnabled] = useState(false)
@@ -210,6 +217,12 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
       setIgnoreDm(c?.ignore?.dm ?? false)
       setDebugMode(c?.debug?.mode ?? false)
       setMetadata(c.metadata ? Object.entries(c.metadata).map(([k, v]) => ({ key: k, value: String(v) })) : [])
+      // MCP config (from session config; the dedicated endpoint overrides on mount)
+      if (c?.mcp) {
+        setMcpEnabled(c.mcp.enabled ?? true)
+        setMcpDestructiveOps(c.mcp.destructiveOps ?? false)
+        setMcpDeniedTools(c.mcp.deniedTools ?? [])
+      }
     }
   }, [session])
 
@@ -235,6 +248,23 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
         setChatwootEnabled(false)
       }
     }).catch(() => {}).finally(() => setChatwootLoaded(true))
+  }, [open, session])
+
+  // Load MCP tools list + session config
+  useEffect(() => {
+    if (!open || !session) return
+    setMcpLoading(true)
+    Promise.all([
+      api.getMcpTools(),
+      api.getSessionMcp(session.name),
+    ]).then(([tools, config]) => {
+      setMcpTools(tools)
+      setMcpEnabled(config.enabled)
+      setMcpDestructiveOps(config.destructiveOps)
+      setMcpDeniedTools(config.deniedTools || [])
+    }).catch(() => {
+      // MCP API not available — silently ignore
+    }).finally(() => setMcpLoading(false))
   }, [open, session])
 
   const handleSave = async () => {
@@ -269,8 +299,21 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
         config.metadata = {}
         metadata.forEach(m => { if (m.key) config.metadata[m.key] = m.value })
       }
+      // MCP config
+      config.mcp = {
+        enabled: mcpEnabled,
+        destructiveOps: mcpDestructiveOps,
+        deniedTools: mcpDeniedTools.length > 0 ? mcpDeniedTools : undefined,
+      }
       await api.updateSession(session.name, config)
-      await saveChatwootIntegration()
+
+      // Save Chatwoot separately — failure shouldn't block or look like a settings failure
+      try {
+        await saveChatwootIntegration()
+      } catch (e: any) {
+        toast.warning("Session saved, but Chatwoot integration failed: " + (e.message || "unknown error"))
+      }
+
       toast.success("Settings saved")
       onSaved()
       onOpenChange(false)
@@ -314,6 +357,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
     { id: "proxy" as const, label: "Proxy" },
     { id: "engine" as const, label: "Engine" },
     { id: "ignore" as const, label: "Ignore" },
+    { id: "mcp" as const, label: "MCP Tools" },
     { id: "advanced" as const, label: "Advanced" },
     { id: "integrations" as const, label: "Integrations" },
   ]
@@ -399,7 +443,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
             )}
 
             {activeTab === "proxy" && (
-              <div className="space-y-4 max-w-xl">
+              <div className="space-y-4">
                 <h4 className="text-sm font-medium">Proxy Configuration</h4>
                 <div className="space-y-2"><Label>Server URL</Label><Input placeholder="socks5://host:port or http://host:port" value={proxyServer} onChange={(e) => setProxyServer(e.target.value)} /></div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -410,7 +454,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
             )}
 
             {activeTab === "engine" && (
-              <div className="space-y-6 max-w-xl">
+              <div className="space-y-6">
                 {/* Engine Selector */}
                 <div className="space-y-3">
                   <h4 className="text-sm font-medium">Engine Type</h4>
@@ -465,7 +509,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
             )}
 
             {activeTab === "ignore" && (
-              <div className="space-y-4 max-w-md">
+              <div className="space-y-4">
                 <h4 className="text-sm font-medium">Ignore Messages</h4>
                 <p className="text-xs text-muted-foreground">Filter out specific message types</p>
                 <div className="space-y-3">
@@ -479,7 +523,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
             )}
 
             {activeTab === "advanced" && (
-              <div className="space-y-6 max-w-xl">
+              <div className="space-y-6">
                 <div className="space-y-4">
                   <h4 className="text-sm font-medium">Debug</h4>
                   <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Debug Mode</Label><p className="text-xs text-muted-foreground">Verbose logging</p></div><Switch checked={debugMode} onCheckedChange={setDebugMode} /></div>
@@ -498,8 +542,220 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
               </div>
             )}
 
+            {activeTab === "mcp" && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <h4 className="text-sm font-medium">MCP Server</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Model Context Protocol — AI assistants can call WhatsApp tools through MCP
+                    </p>
+                  </div>
+                  <Switch checked={mcpEnabled} onCheckedChange={setMcpEnabled} />
+                </div>
+
+                {mcpEnabled && (
+                  <>
+                    <Separator />
+
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="space-y-0.5">
+                        <Label>Allow Destructive Ops</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Permit delete, clear, and other irreversible operations
+                        </p>
+                      </div>
+                      <Switch
+                        checked={mcpDestructiveOps}
+                        onCheckedChange={setMcpDestructiveOps}
+                      />
+                    </div>
+
+                    {mcpDestructiveOps && (
+                      <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 px-4 py-3">
+                        <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                          Destructive operations are enabled. AI assistants will be able to delete
+                          messages, clear chats, remove group participants, and perform other
+                          irreversible actions.
+                        </p>
+                      </div>
+                    )}
+
+                    <Separator />
+
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-medium">Tool Toggles</h4>
+                      <p className="text-xs text-muted-foreground">
+                        Disable specific tools or entire categories by name
+                      </p>
+
+                      {mcpLoading ? (
+                        <p className="text-sm text-muted-foreground py-4">Loading tools...</p>
+                      ) : mcpTools ? (
+                        <div className="space-y-4">
+                          {Object.entries(mcpTools.byCategory).map(([category, tools]) => (
+                            <div key={category} className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary" className="uppercase text-[10px] tracking-wider">
+                                  {category}
+                                </Badge>
+                                <button
+                                  type="button"
+                                  className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                                  onClick={() => {
+                                    const allInCategory = tools.map((t: any) => t.name)
+                                    const allDenied = allInCategory.every((n: string) => mcpDeniedTools.includes(n))
+                                    if (allDenied) {
+                                      setMcpDeniedTools(mcpDeniedTools.filter(n => !allInCategory.includes(n)))
+                                    } else {
+                                      setMcpDeniedTools([...new Set([...mcpDeniedTools, ...allInCategory])])
+                                    }
+                                  }}
+                                >
+                                  {tools.every((t: any) => mcpDeniedTools.includes(t.name)) ? "Enable all" : "Disable all"}
+                                </button>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                {tools.map((tool: any) => {
+                                  const denied = mcpDeniedTools.includes(tool.name)
+                                  return (
+                                    <div
+                                      key={tool.name}
+                                      className={`flex items-center justify-between rounded-md border px-3 py-2 ${
+                                        denied ? "opacity-50" : ""
+                                      } ${tool.destructive ? "border-red-500/20" : ""}`}
+                                    >
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <span className="text-xs font-medium truncate">{tool.name}</span>
+                                        {tool.destructive && (
+                                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 text-red-500 border-red-500/30 shrink-0">
+                                            destructive
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <Switch
+                                        checked={!denied}
+                                        onCheckedChange={(checked) => {
+                                          if (checked) {
+                                            setMcpDeniedTools(mcpDeniedTools.filter(n => n !== tool.name))
+                                          } else {
+                                            setMcpDeniedTools([...mcpDeniedTools, tool.name])
+                                          }
+                                        }}
+                                        className="shrink-0 ml-2"
+                                      />
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground py-4">Could not load tool list.</p>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                <Separator className="my-4" />
+
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium">Connection Guide</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Connect any MCP-compatible client to <code className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-mono">{window.location.origin}/mcp</code>
+                    {" "}using your API key for authentication.
+                  </p>
+
+                  <div className="space-y-4 pt-1">
+                    <div>
+                      <p className="text-xs font-medium mb-1">Claude Desktop</p>
+                      <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">
+{`{
+  "mcpServers": {
+    "bunwa": {
+      "url": "${window.location.origin}/mcp",
+      "headers": {
+        "X-Api-Key": "your-waha-api-key"
+      }
+    }
+  }
+}`}
+                      </pre>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-medium mb-1">Cursor</p>
+                      <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">
+{`{
+  "mcpServers": {
+    "bunwa": {
+      "url": "${window.location.origin}/mcp",
+      "headers": {
+        "X-Api-Key": "your-waha-api-key"
+      }
+    }
+  }
+}`}
+                      </pre>
+                      <p className="text-xs text-muted-foreground mt-1">Place in <code className="rounded bg-muted px-1 py-0.5 text-[10px] font-mono">.cursor/mcp.json</code> in your project root.</p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-medium mb-1">Windsurf / VS Code (Continue)</p>
+                      <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">
+{`{
+  "mcpServers": {
+    "bunwa": {
+      "command": "bunx",
+      "args": ["@openclaw/mcp-proxy", "${window.location.origin}/mcp"],
+      "env": {
+        "X-Api-Key": "your-waha-api-key"
+      }
+    }
+  }
+}`}
+                      </pre>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-medium mb-1">Hermes Agent (Native MCP)</p>
+                      <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">
+{`mcp_servers:
+  bunwa:
+    url: "${window.location.origin}/mcp"
+    headers:
+      X-Api-Key: "your-waha-api-key"`}
+                      </pre>
+                      <p className="text-xs text-muted-foreground mt-1">Add to <code className="rounded bg-muted px-1 py-0.5 text-[10px] font-mono">~/.hermes/config.yaml</code></p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-medium mb-1">MCP Inspector (Test Tool)</p>
+                      <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">{`bunx @modelcontextprotocol/inspector ${window.location.origin}/mcp`}</pre>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-medium mb-1">Direct HTTP (cURL)</p>
+                      <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">{`# List available tools
+curl -X POST "${window.location.origin}/mcp" \
+  -H "X-Api-Key: your-w...key" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+# Call a tool
+curl -X POST "${window.location.origin}/mcp" \
+  -H "X-Api-Key: your-w...key" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"SessionList","arguments":{}}}'`}</pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {activeTab === "integrations" && (
-              <div className="space-y-6 max-w-xl">
+              <div className="space-y-6">
                 <div className="flex items-center gap-3">
                   <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
                     <MessageCircle className="size-5" />

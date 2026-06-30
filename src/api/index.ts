@@ -26,6 +26,7 @@ import { createWebhooksRouter } from './webhooks.routes';
 import { createTemplatesRouter } from './templates.routes';
 import { createAuditRouter } from './audit.routes';
 import { createInfraRouter } from './infra.routes';
+import { createMcpConfigRouter } from './mcp-config.routes';
 
 export function createApiRouter(): Hono {
   const router = new Hono();
@@ -56,6 +57,7 @@ export function createApiRouter(): Hono {
   router.route('/api/sessions', createTemplatesRouter());
   router.route('/api', createAuditRouter());
   router.route('/api', createInfraRouter());
+  router.route('/api', createMcpConfigRouter());
 
   return router;
 }

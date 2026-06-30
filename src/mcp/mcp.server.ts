@@ -14,6 +14,7 @@ import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/proto
 import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
 import pino from 'pino';
 import type { SessionManager } from '../core/manager.core';
+import type { SessionConfig } from '../structures/sessions.dto';
 import type { ToolDescriptor } from './tool-descriptor';
 import { ToolRegistryService } from './tool-registry.service';
 import { handleToolError, jsonToolResult, smartToolResult } from './tool-result';
@@ -49,10 +50,53 @@ function validateApiKey(rawKey: string | undefined, configuredKey: string | unde
 }
 
 /**
+ * Check whether a tool is allowed for the given session configuration.
+ * Global disabled tools are checked separately before calling this.
+ */
+function isToolAllowed(
+  tool: ToolDescriptor,
+  mcpConfig: SessionConfig['mcp'] | undefined,
+): { allowed: boolean; reason?: string } {
+  // MCP disabled for this session
+  if (mcpConfig?.enabled === false) {
+    return { allowed: false, reason: 'MCP is disabled for this session' };
+  }
+
+  // Deny list (explicit deny wins everything)
+  if (mcpConfig?.deniedTools) {
+    if (mcpConfig.deniedTools.includes(tool.name)) {
+      return { allowed: false, reason: `Tool '${tool.name}' is denied for this session` };
+    }
+    if (tool.category && mcpConfig.deniedTools.includes(tool.category)) {
+      return { allowed: false, reason: `Category '${tool.category}' tools are denied for this session` };
+    }
+  }
+
+  // Destructive operations gate
+  if (tool.destructive && mcpConfig?.destructiveOps !== true) {
+    return { allowed: false, reason: `Destructive operation '${tool.name}' is not allowed for this session` };
+  }
+
+  // Allow list mode — if set, tool must be explicitly allowed
+  if (mcpConfig?.allowedTools && mcpConfig.allowedTools.length > 0) {
+    if (mcpConfig.allowedTools.includes(tool.name)) {
+      return { allowed: true };
+    }
+    if (tool.category && mcpConfig.allowedTools.includes(tool.category)) {
+      return { allowed: true };
+    }
+    return { allowed: false, reason: `Tool '${tool.name}' is not in the allowed list for this session` };
+  }
+
+  return { allowed: true };
+}
+
+/**
  * Build the MCP server and register all tools from the registry.
  */
 function buildServer(
   registry: ToolRegistryService,
+  sessionManager: SessionManager,
   configuredKey: string | undefined,
   rateLimiter: KeyRateLimiter,
   readOnly: boolean,
@@ -86,6 +130,31 @@ function buildServer(
             );
           }
           rateLimiter.check(rawKey || 'anonymous');
+
+          // Permission check — resolve session config for session-scoped tools
+          if (tool.sessionScoped) {
+            const sessionId = input.sessionId as string | undefined;
+            if (sessionId) {
+              const sessionConfig = sessionManager.getSessionConfig(sessionId);
+              const { allowed, reason } = isToolAllowed(tool, sessionConfig?.mcp);
+              if (!allowed) {
+                return jsonToolResult(
+                  { success: false, name: 'PermissionDenied', message: reason || 'Tool not allowed' },
+                  true,
+                );
+              }
+            }
+          } else {
+            // Non-session-scoped tools still check MCP-level disable
+            const { allowed, reason } = isToolAllowed(tool, undefined);
+            if (!allowed) {
+              return jsonToolResult(
+                { success: false, name: 'PermissionDenied', message: reason || 'Tool not allowed' },
+                true,
+              );
+            }
+          }
+
           const result = await tool.handler(input as never);
           return tool.resultDisposition === 'json'
             ? jsonToolResult(result as object)
@@ -146,7 +215,7 @@ export function createMcpRouter(
 
   // Handle all HTTP methods — the transport decides what to do
   router.all(basePath, async (c) => {
-    const server = buildServer(registry, configuredKey, rateLimiter, readOnly, serverInfo);
+    const server = buildServer(registry, sessionManager, configuredKey, rateLimiter, readOnly, serverInfo);
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined, // Stateless mode
     });

@@ -15,6 +15,7 @@ export function sessionTools(manager: SessionManager): ToolDescriptor[] {
       description:
         'List all WhatsApp sessions this server manages (name, status). Use to discover available sessions before calling session-scoped tools.',
       tier: 'read',
+      category: 'session',
       inputSchema: z.object({}),
       handler: async () => {
         const sessions = await manager.getSessions();
@@ -28,6 +29,7 @@ export function sessionTools(manager: SessionManager): ToolDescriptor[] {
       name: 'SessionGet',
       description: 'Get details for a specific session by name, including connection status and config.',
       tier: 'read',
+      category: 'session',
       sessionScoped: true,
       inputSchema: z.object({ sessionId }),
       handler: async (input: { sessionId: string }) => {
@@ -48,6 +50,7 @@ export function sessionTools(manager: SessionManager): ToolDescriptor[] {
       name: 'SessionStart',
       description: 'Start a WhatsApp session. The session must be created first via the REST API.',
       tier: 'write',
+      category: 'session',
       sessionScoped: true,
       inputSchema: z.object({ sessionId }),
       handler: async (input: { sessionId: string }) => {
@@ -62,6 +65,7 @@ export function sessionTools(manager: SessionManager): ToolDescriptor[] {
       name: 'SessionStop',
       description: 'Stop a running WhatsApp session.',
       tier: 'write',
+      category: 'session',
       sessionScoped: true,
       inputSchema: z.object({ sessionId }),
       handler: async (input: { sessionId: string }) => {
@@ -73,6 +77,7 @@ export function sessionTools(manager: SessionManager): ToolDescriptor[] {
       name: 'SessionRestart',
       description: 'Restart a WhatsApp session (stop + start).',
       tier: 'write',
+      category: 'session',
       sessionScoped: true,
       inputSchema: z.object({ sessionId }),
       handler: async (input: { sessionId: string }) => {
@@ -88,6 +93,7 @@ export function sessionTools(manager: SessionManager): ToolDescriptor[] {
       description:
         'Check whether a phone number is registered on WhatsApp. Returns exists flag and the WhatsApp JID if found.',
       tier: 'read',
+      category: 'session',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,

@@ -441,4 +441,14 @@ export const api = {
   /** Get all LID mappings */
   getLids: (session: string, limit = 200, offset = 0) =>
     request<any[]>(`/api/${session}/lids/?limit=${limit}&offset=${offset}`),
+
+  // ==================== MCP ====================
+  /** Get all registered MCP tools with categories */
+  getMcpTools: () => request<{ tools: any[]; byCategory: Record<string, any[]> }>("/api/mcp/tools"),
+  /** Get MCP config for a session */
+  getSessionMcp: (name: string) =>
+    request<{ enabled: boolean; allowedTools: string[]; deniedTools: string[]; destructiveOps: boolean }>(`/api/sessions/${name}/mcp`),
+  /** Update MCP config for a session */
+  updateSessionMcp: (name: string, config: { enabled?: boolean; allowedTools?: string[]; deniedTools?: string[]; destructiveOps?: boolean }) =>
+    request<void>(`/api/sessions/${name}/mcp`, { method: "PUT", body: JSON.stringify(config) }),
 }

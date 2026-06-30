@@ -18,6 +18,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       name: 'MessageSendText',
       description: 'Send a plain text message to a chat or group.',
       tier: 'write',
+      category: 'message',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
@@ -37,6 +38,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       name: 'MessageSendImage',
       description: 'Send an image message via URL or base64.',
       tier: 'write',
+      category: 'message',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
@@ -58,6 +60,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       name: 'MessageSendFile',
       description: 'Send a file/document message via URL or base64.',
       tier: 'write',
+      category: 'message',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
@@ -79,6 +82,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       name: 'MessageSendVoice',
       description: 'Send a voice/audio message via URL or base64.',
       tier: 'write',
+      category: 'message',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
@@ -98,6 +102,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       name: 'MessageSendVideo',
       description: 'Send a video message via URL or base64.',
       tier: 'write',
+      category: 'message',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
@@ -119,6 +124,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       name: 'MessageSendLocation',
       description: 'Send a location pin message.',
       tier: 'write',
+      category: 'message',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
@@ -142,6 +148,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       name: 'MessageSendPoll',
       description: 'Send a poll message to a chat.',
       tier: 'write',
+      category: 'message',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
@@ -165,6 +172,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       name: 'MessageSendContactVCard',
       description: 'Send a contact card (vCard) message.',
       tier: 'write',
+      category: 'message',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
@@ -187,6 +195,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       name: 'MessageSendLinkPreview',
       description: 'Send a message with a link preview.',
       tier: 'write',
+      category: 'message',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
@@ -208,6 +217,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       name: 'MessageReply',
       description: 'Reply to a specific message (quoted reply).',
       tier: 'write',
+      category: 'message',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
@@ -229,6 +239,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       name: 'MessageForward',
       description: 'Forward a message to another chat.',
       tier: 'write',
+      category: 'message',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
@@ -249,6 +260,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       description:
         'Add or remove a reaction emoji on a message. Send empty string to remove.',
       tier: 'write',
+      category: 'message',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
@@ -271,6 +283,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       name: 'MessageStar',
       description: 'Star or unstar a message.',
       tier: 'write',
+      category: 'message',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
@@ -293,6 +306,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       name: 'MessageMarkRead',
       description: 'Mark a chat as read (clears unread count).',
       tier: 'write',
+      category: 'message',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
@@ -311,6 +325,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       name: 'MessageStartTyping',
       description: 'Show typing indicator in a chat.',
       tier: 'write',
+      category: 'message',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
@@ -329,6 +344,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       name: 'MessageStopTyping',
       description: 'Stop typing indicator in a chat.',
       tier: 'write',
+      category: 'message',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,

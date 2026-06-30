@@ -6,6 +6,8 @@ import type { z } from 'zod';
 
 export type ToolTier = 'read' | 'write';
 
+export type ToolCategory = 'session' | 'message' | 'chat' | 'contact' | 'group' | 'presence' | 'media';
+
 export interface ToolDescriptor<I = any> {
   /** Explicit, stable public name, e.g. 'MessageSendText'. */
   name: string;
@@ -20,6 +22,8 @@ export interface ToolDescriptor<I = any> {
   idempotent?: boolean;
   /** If true, input MUST carry `sessionId`. */
   sessionScoped?: boolean;
+  /** Functional category for UI grouping and permission policies. */
+  category?: ToolCategory;
   /** Result rendering hint for the MCP adapter. Default 'smart'. */
   resultDisposition?: 'json' | 'smart';
   /** Calls the service. Receives validated input. */

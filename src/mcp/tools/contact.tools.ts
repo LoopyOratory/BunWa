@@ -14,6 +14,7 @@ export function contactTools(manager: SessionManager): ToolDescriptor[] {
       description:
         'Check whether a phone number is registered on WhatsApp. Returns exists flag and the WhatsApp JID if found.',
       tier: 'read',
+      category: 'contact',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,

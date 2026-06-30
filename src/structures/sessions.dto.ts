@@ -55,6 +55,13 @@ export class WebhookConfig {
   }>;
 }
 
+export class McpConfig {
+  enabled?: boolean;
+  allowedTools?: string[];
+  deniedTools?: string[];
+  destructiveOps?: boolean;
+}
+
 export class SessionConfig {
   webhooks?: WebhookConfig[];
   metadata?: Record<string, any>;
@@ -68,6 +75,7 @@ export class SessionConfig {
   noweb?: NowebConfig;
   gows?: GowsConfig;
   webjs?: WebjsConfig;
+  mcp?: McpConfig;
 }
 
 export class MeInfo {

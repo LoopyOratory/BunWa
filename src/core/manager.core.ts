@@ -231,6 +231,10 @@ export class SessionManager {
     return session;
   }
 
+  getSessionConfig(name: string): SessionConfig | undefined {
+    return this.sessionConfigs.get(name);
+  }
+
   async getSessions(all: boolean = false): Promise<SessionInfo[]> {
     const sessions: SessionInfo[] = [];
     for (const [name, session] of this.sessions) {
