@@ -18,7 +18,6 @@ import { createAuthRouter } from './auth.routes';
 import { createCallsRouter } from './calls.routes';
 import { createEventsRouter } from './events.routes';
 import { createLidsRouter } from './lids.routes';
-import { createApiKeysRouter } from './apikeys.routes';
 import { createScreenshotRouter } from './screenshot.routes';
 import { createMediaRouter } from './media.routes';
 import { createAppsRouter } from './apps.routes';
@@ -49,7 +48,6 @@ export function createApiRouter(): Hono {
   router.route('/api', createCallsRouter());
   router.route('/api', createEventsRouter());
   router.route('/api', createLidsRouter());
-  router.route('/api', createApiKeysRouter());
   router.route('/api', createScreenshotRouter());
   router.route('/api', createMediaRouter());
   router.route('/api', createAppsRouter());

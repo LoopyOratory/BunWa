@@ -14,7 +14,6 @@ import { AppsPage } from "./pages/apps-page"
 import { TemplatesPage } from "./pages/templates-page"
 import { LogsPage } from "./pages/logs-page"
 import { MessageTesterPage } from "./pages/message-tester-page"
-import { ApiKeysPage } from "./pages/api-keys-page"
 import { InfrastructurePage } from "./pages/infrastructure-page"
 import { QueuePage } from "./pages/queue-page"
 import { PageLayout } from "@/components/page-layout"
@@ -64,7 +63,6 @@ function AppRoutes() {
         <Route path="/messages" element={<MessageTesterPage />} />
         <Route path="/messages/:chatId" element={<MessageTesterPage />} />
         <Route path="/logs" element={<LogsPage />} />
-        <Route path="/api-keys" element={<ApiKeysPage />} />
         <Route path="/infrastructure" element={<InfrastructurePage />} />
         <Route path="/queue" element={<QueuePage />} />
         <Route path="/events" element={<EventMonitorPage />} />

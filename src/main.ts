@@ -54,7 +54,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 async function bootstrap() {
-  log.info(`WAHA (WhatsApp HTTP API) - Running ${VERSION.tier} version...`);
+  log.info(`BUNWA (WhatsApp HTTP API) - Running ${VERSION.tier} version...`);
 
   const container = configureContainer();
   const config = container.resolve(WhatsappConfigService);
@@ -114,7 +114,7 @@ async function bootstrap() {
 
     app.get('/api-docs/', Scalar({
       url: '/api-docs',
-      pageTitle: 'WAHA API Documentation',
+      pageTitle: 'BUNWA API Documentation',
     }));
 
     log.info(`API Reference (Scalar) available at: /api-docs`);

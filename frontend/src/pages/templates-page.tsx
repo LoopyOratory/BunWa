@@ -3,12 +3,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Plus, Trash2, FileText, Eye, Variable, ScrollText, MessageSquare } from "lucide-react"
 import { PageLayout } from "@/components/page-layout"
 import { toast } from "sonner"
+import { getDashboardAuthHeader } from "@/lib/auth"
+import { api, type Session } from "@/lib/api"
 
 interface Template {
   id: string
@@ -21,46 +24,56 @@ interface Template {
   updatedAt: string
 }
 
+function authHeaders() {
+  const auth = getDashboardAuthHeader()
+  return { "x-api-key": "waha", ...(auth ? { Authorization: `Basic ${auth}` } : {}) }
+}
+
 export function TemplatesPage() {
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [selectedSession, setSelectedSession] = useState("")
   const [templates, setTemplates] = useState<Template[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null)
   const [formData, setFormData] = useState({ name: "", body: "", header: "", footer: "" })
 
-  useEffect(() => { loadTemplates() }, [])
+  useEffect(() => {
+    api.getSessions().then(list => {
+      setSessions(list)
+      if (list.length > 0 && !selectedSession) setSelectedSession(list[0].name)
+    }).catch(() => {})
+  }, [])
+
+  useEffect(() => { if (selectedSession) loadTemplates() }, [selectedSession])
 
   async function loadTemplates() {
     setLoading(true)
     try {
-      const res = await fetch("/api/sessions/default/templates", {
-        headers: { "x-api-key": localStorage.getItem("waha-api-key") || "" },
-      })
+      const res = await fetch(`/api/sessions/${selectedSession}/templates`, { headers: authHeaders() })
       if (res.ok) setTemplates(await res.json())
-    } catch (err) { toast.error("Failed to load templates") }
+    } catch { toast.error("Failed to load templates") }
     setLoading(false)
   }
 
   async function saveTemplate() {
     try {
-      const res = await fetch("/api/sessions/default/templates", {
+      const res = await fetch(`/api/sessions/${selectedSession}/templates`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": localStorage.getItem("waha-api-key") || "" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify(formData),
       })
       if (res.ok) { toast.success("Template created"); setDialogOpen(false); loadTemplates() }
-    } catch (err) { toast.error("Failed to save template") }
+      else { const err = await res.json().catch(() => ({ error: "Save failed" })); toast.error(err.error) }
+    } catch { toast.error("Failed to save template") }
   }
 
   async function deleteTemplate(id: string) {
     try {
-      await fetch(`/api/sessions/default/templates/${id}`, {
-        method: "DELETE",
-        headers: { "x-api-key": localStorage.getItem("waha-api-key") || "" },
-      })
+      await fetch(`/api/sessions/${selectedSession}/templates/${id}`, { method: "DELETE", headers: authHeaders() })
       toast.success("Template deleted")
       loadTemplates()
-    } catch (err) { toast.error("Failed to delete template") }
+    } catch { toast.error("Failed to delete template") }
   }
 
   function extractVariables(text: string): string[] {
@@ -81,7 +94,7 @@ export function TemplatesPage() {
   const newTemplateDialog = (
     <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
       <DialogTrigger asChild>
-        <Button onClick={() => setFormData({ name: "", body: "", header: "", footer: "" })}>
+        <Button disabled={!selectedSession} onClick={() => setFormData({ name: "", body: "", header: "", footer: "" })}>
           <Plus className="size-5 mr-2" />New Template
         </Button>
       </DialogTrigger>
@@ -93,40 +106,19 @@ export function TemplatesPage() {
         <div className="space-y-4">
           <div>
             <Label className="text-sm font-medium">Name</Label>
-            <Input
-              value={formData.name}
-              onChange={e => setFormData({ ...formData, name: e.target.value })}
-              placeholder="welcome-message"
-              className="mt-1.5 min-h-[44px]"
-            />
+            <Input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="welcome-message" className="mt-1.5 min-h-[44px]" />
           </div>
           <div>
             <Label className="text-sm font-medium">Header (optional)</Label>
-            <Input
-              value={formData.header}
-              onChange={e => setFormData({ ...formData, header: e.target.value })}
-              placeholder="Hello {{name}}!"
-              className="mt-1.5 min-h-[44px]"
-            />
+            <Input value={formData.header} onChange={e => setFormData({ ...formData, header: e.target.value })} placeholder="Hello {{name}}!" className="mt-1.5 min-h-[44px]" />
           </div>
           <div>
             <Label className="text-sm font-medium">Body</Label>
-            <Textarea
-              value={formData.body}
-              onChange={e => setFormData({ ...formData, body: e.target.value })}
-              placeholder="Welcome to our store! You ordered {{product}}."
-              rows={6}
-              className="mt-1.5 min-h-[120px] text-base"
-            />
+            <Textarea value={formData.body} onChange={e => setFormData({ ...formData, body: e.target.value })} placeholder="Welcome to our store! You ordered {{product}}." rows={6} className="mt-1.5 min-h-[120px] text-base" />
           </div>
           <div>
             <Label className="text-sm font-medium">Footer (optional)</Label>
-            <Input
-              value={formData.footer}
-              onChange={e => setFormData({ ...formData, footer: e.target.value })}
-              placeholder="Reply STOP to unsubscribe"
-              className="mt-1.5 min-h-[44px]"
-            />
+            <Input value={formData.footer} onChange={e => setFormData({ ...formData, footer: e.target.value })} placeholder="Reply STOP to unsubscribe" className="mt-1.5 min-h-[44px]" />
           </div>
           {formData.body && extractVariables(formData.body).length > 0 && (
             <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
@@ -136,12 +128,7 @@ export function TemplatesPage() {
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {extractVariables(formData.body).map(v => (
-                  <span
-                    key={v}
-                    className="inline-flex items-center gap-1 text-xs font-mono bg-primary/10 text-primary px-2.5 py-1 rounded-md"
-                  >
-                    {'{{'}{v}{'}}'}
-                  </span>
+                  <span key={v} className="inline-flex items-center gap-1 text-xs font-mono bg-primary/10 text-primary px-2.5 py-1 rounded-md">{'{{'}{v}{'}}'}</span>
                 ))}
               </div>
             </div>
@@ -161,8 +148,29 @@ export function TemplatesPage() {
       actions={newTemplateDialog}
     >
       <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Label className="text-sm font-medium shrink-0">Session</Label>
+          <Select value={selectedSession} onValueChange={setSelectedSession}>
+            <SelectTrigger className="w-64">
+              <SelectValue placeholder="Select a session" />
+            </SelectTrigger>
+            <SelectContent>
+              {sessions.length === 0 ? (
+                <SelectItem value="__none__" disabled>No sessions available</SelectItem>
+              ) : sessions.map(s => (
+                <SelectItem key={s.name} value={s.name}>
+                  <span className="flex items-center gap-2">
+                    <span className={`size-2 rounded-full ${s.status === "WORKING" ? "bg-emerald-500" : "bg-zinc-400"}`} />
+                    {s.name}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         {loading ? (
-          <div className="card-grid">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3].map(i => (
               <Card key={i} className="animate-pulse">
                 <CardHeader className="h-28" />
@@ -170,6 +178,12 @@ export function TemplatesPage() {
               </Card>
             ))}
           </div>
+        ) : !selectedSession ? (
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center justify-center py-16">
+              <p className="text-xl font-semibold text-muted-foreground">Select a session to get started</p>
+            </CardContent>
+          </Card>
         ) : templates.length === 0 ? (
           <Card className="border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-16">
@@ -186,15 +200,11 @@ export function TemplatesPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="card-grid">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {templates.map(template => {
               const vars = extractVariables(template.body)
               return (
-                <Card
-                  key={template.id}
-                  className="group relative overflow-hidden transition-all hover:shadow-lg hover:-translate-y-0.5"
-                >
-                  {/* Gradient accent bar */}
+                <Card key={template.id} className="group relative overflow-hidden transition-all hover:shadow-lg hover:-translate-y-0.5">
                   <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-violet-400 via-purple-500 to-indigo-500" />
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
@@ -203,58 +213,31 @@ export function TemplatesPage() {
                           <MessageSquare className="size-5" />
                         </div>
                         <div className="min-w-0">
-                          <CardTitle className="text-base font-semibold truncate">
-                            {template.name}
-                          </CardTitle>
+                          <CardTitle className="text-base font-semibold truncate">{template.name}</CardTitle>
                           <CardDescription className="text-xs mt-0.5">
-                            {vars.length} variable{vars.length !== 1 ? "s" : ""}
-                            {template.header && " — with header"}
-                            {template.footer && " — with footer"}
+                            {vars.length} variable{vars.length !== 1 ? "s" : ""}{template.header ? " — with header" : ""}{template.footer ? " — with footer" : ""}
                           </CardDescription>
                         </div>
                       </div>
-                      <Badge
-                        variant="secondary"
-                        className="text-xs shrink-0 bg-violet-500/10 text-violet-600 dark:text-violet-400"
-                      >
-                        {vars.length} vars
-                      </Badge>
+                      <Badge variant="secondary" className="text-xs shrink-0 bg-violet-500/10 text-violet-600 dark:text-violet-400">{vars.length} vars</Badge>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <div className="text-sm font-mono text-muted-foreground line-clamp-3 bg-muted/30 p-3 rounded-lg whitespace-pre-wrap">
-                      {template.body}
-                    </div>
+                    <div className="text-sm font-mono text-muted-foreground line-clamp-3 bg-muted/30 p-3 rounded-lg whitespace-pre-wrap">{template.body}</div>
                     {vars.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
                         {vars.map(v => (
-                          <Badge
-                            key={v}
-                            variant="outline"
-                            className="text-xs font-mono border-violet-500/20 text-violet-600 dark:text-violet-400"
-                          >
-                            <Variable className="size-3 mr-1" />
-                            {v}
+                          <Badge key={v} variant="outline" className="text-xs font-mono border-violet-500/20 text-violet-600 dark:text-violet-400">
+                            <Variable className="size-3 mr-1" />{v}
                           </Badge>
                         ))}
                       </div>
                     )}
                     <div className="flex items-center gap-2 pt-1 border-t">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-xs gap-1.5"
-                        onClick={() => setPreviewTemplate(template)}
-                      >
-                        <Eye className="size-3.5" />
-                        Preview
+                      <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => setPreviewTemplate(template)}>
+                        <Eye className="size-3.5" />Preview
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 text-xs gap-1.5 ml-auto text-muted-foreground hover:text-destructive"
-                        onClick={() => deleteTemplate(template.id)}
-                      >
+                      <Button size="sm" variant="ghost" className="h-8 text-xs gap-1.5 ml-auto text-muted-foreground hover:text-destructive" onClick={() => deleteTemplate(template.id)}>
                         <Trash2 className="size-3.5" />
                       </Button>
                     </div>
@@ -265,22 +248,16 @@ export function TemplatesPage() {
           </div>
         )}
 
-        {/* Preview Dialog */}
         <Dialog open={!!previewTemplate} onOpenChange={() => setPreviewTemplate(null)}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle className="text-xl">Preview: {previewTemplate?.name}</DialogTitle>
-              <DialogDescription className="text-base">
-                Sample rendering with placeholder values
-              </DialogDescription>
+              <DialogDescription className="text-base">Sample rendering with placeholder values</DialogDescription>
             </DialogHeader>
             <div className="min-h-[200px] bg-gradient-to-br from-muted/50 to-muted p-5 rounded-xl border">
-              {/* Message bubble */}
               <div className="max-w-[85%] ml-auto">
                 <div className="bg-primary text-primary-foreground p-4 rounded-2xl rounded-br-md shadow-sm">
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                    {previewTemplate && renderPreview(previewTemplate)}
-                  </p>
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{previewTemplate && renderPreview(previewTemplate)}</p>
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-1 text-right">just now</p>
               </div>
@@ -288,9 +265,7 @@ export function TemplatesPage() {
             {previewTemplate && extractVariables(previewTemplate.body).length > 0 && (
               <div className="flex flex-wrap gap-1.5 justify-center">
                 {extractVariables(previewTemplate.body).map(v => (
-                  <Badge key={v} variant="secondary" className="text-xs font-mono">
-                    <Variable className="size-3 mr-1" />{v}
-                  </Badge>
+                  <Badge key={v} variant="secondary" className="text-xs font-mono"><Variable className="size-3 mr-1" />{v}</Badge>
                 ))}
               </div>
             )}

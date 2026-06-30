@@ -14,8 +14,6 @@
     "lint": "oxlint src/",
     "lint-fix": "oxlint --fix src/",
     "setup": "bun install && bash scripts/build-frontend.sh",
-    "dashboard:download": "bash scripts/download-dashboard.sh",
-    "dashboard:serve": "cd dashboard && bun run --cwd . serve"
   },
   "dependencies": {
     "@adiwajshing/keyed-db": "^0.2.4",

@@ -1,5 +1,6 @@
 import { Database } from 'bun:sqlite';
 import pino from 'pino';
+import { injectable } from 'tsyringe';
 
 const logger = pino({ name: 'AuditService' });
 
@@ -90,6 +91,7 @@ function generateId(): string {
  *   AUDIT_RETENTION_DAYS — Days to keep audit logs (default: 90, <= 0 to disable)
  *   WAHA_STORAGE_DIR     — Directory for audit.db (default: './data')
  */
+@injectable()
 export class AuditService {
   private db: Database;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;

@@ -1,5 +1,6 @@
 import { Database } from 'bun:sqlite';
 import pino from 'pino';
+import { injectable } from 'tsyringe';
 
 const logger = pino({ name: 'TemplateService' });
 
@@ -44,6 +45,7 @@ function generateId(): string {
  * Configurable via environment variables:
  *   WAHA_STORAGE_DIR — Directory for templates.db (default: './data')
  */
+@injectable()
 export class TemplateService {
   private db: Database;
 

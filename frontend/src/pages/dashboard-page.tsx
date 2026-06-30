@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react"
+import { useNavigate } from "react-router-dom"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -49,7 +50,8 @@ interface DashboardPageProps {
   onNavigate?: (page: string, options?: { sessionName?: string }) => void
 }
 
-export function DashboardPage({ onNavigate }: DashboardPageProps) {
+export function DashboardPage(_props?: DashboardPageProps) {
+  const navigate = useNavigate()
   const [sessions, setSessions] = useState<Session[]>([])
   const [workers, setWorkers] = useState<Worker[]>([])
   const [sessionSearch, setSessionSearch] = useState("")
@@ -254,7 +256,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                             <div className="flex justify-end gap-1">
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-9"><Link2 /></Button>
+                                  <Button variant="ghost" size="icon" className="size-10 transition-all duration-150 hover:scale-110 hover:bg-accent active:scale-95"><Link2 /></Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Connect</TooltipContent>
                               </Tooltip>
@@ -354,10 +356,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <div className="hidden sm:flex justify-end gap-1">
+                            <div className={`hidden sm:flex justify-end gap-1 session-actions ${session.status === "WORKING" ? "session-active" : ""}`}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status !== "STOPPED"} onClick={() => api.startSession(session.name).then(load).catch(() => toast.error("Start failed"))}>
+                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status !== "STOPPED"} onClick={() => api.startSession(session.name).then(load).catch(() => toast.error("Start failed"))}>
                                     <Play />
                                   </Button>
                                 </TooltipTrigger>
@@ -365,7 +367,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status === "STOPPED"} onClick={() => api.restartSession(session.name).then(load).catch(() => toast.error("Restart failed"))}>
+                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status === "STOPPED"} onClick={() => api.restartSession(session.name).then(load).catch(() => toast.error("Restart failed"))}>
                                     <RotateCcw />
                                   </Button>
                                 </TooltipTrigger>
@@ -373,7 +375,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status === "STOPPED"} onClick={() => api.stopSession(session.name).then(load).catch(() => toast.error("Stop failed"))}>
+                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status === "STOPPED"} onClick={() => api.stopSession(session.name).then(load).catch(() => toast.error("Stop failed"))}>
                                     <Square />
                                   </Button>
                                 </TooltipTrigger>
@@ -381,7 +383,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status === "STOPPED"} onClick={() => api.logoutSession(session.name).then(load).catch(() => toast.error("Logout failed"))}>
+                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status === "STOPPED"} onClick={() => api.logoutSession(session.name).then(load).catch(() => toast.error("Logout failed"))}>
                                     <LogOut />
                                   </Button>
                                 </TooltipTrigger>
@@ -389,7 +391,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-9" onClick={() => api.deleteSession(session.name).then(load).catch(() => toast.error("Delete failed"))}>
+                                  <Button variant="ghost" size="icon" className="size-10" onClick={() => api.deleteSession(session.name).then(load).catch(() => toast.error("Delete failed"))}>
                                     <Trash2 />
                                   </Button>
                                 </TooltipTrigger>
@@ -397,7 +399,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status !== "SCAN_QR_CODE"} onClick={() => { setDetailSession(session); setShowDetailDialog(true) }}>
+                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status !== "SCAN_QR_CODE"} onClick={() => { setDetailSession(session); setShowDetailDialog(true) }}>
                                     <QrCode />
                                   </Button>
                                 </TooltipTrigger>
@@ -405,7 +407,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status !== "WORKING" || session.config?.engine !== "WEBJS"} onClick={() => api.getScreenshot(session.name).then(() => toast.success("Screenshot taken")).catch(() => toast.error("Screenshot failed"))}>
+                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status !== "WORKING" || session.config?.engine !== "WEBJS"} onClick={() => api.getScreenshot(session.name).then(() => toast.success("Screenshot taken")).catch(() => toast.error("Screenshot failed"))}>
                                     <Smartphone />
                                   </Button>
                                 </TooltipTrigger>
@@ -413,15 +415,15 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status !== "WORKING"} onClick={() => onNavigate?.("chat", { sessionName: session.name })}
-                                    ><MessageCircle className="size-4" />
+                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status !== "WORKING"} onClick={() => navigate(`/sessions/${session.name}/chat`)}>
+                                    <MessageCircle />
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Chat</TooltipContent>
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-9" onClick={() => { setSettingsSession(session); setShowSettingsDialog(true) }}>
+                                  <Button variant="ghost" size="icon" className="size-10" onClick={() => { setSettingsSession(session); setShowSettingsDialog(true) }}>
                                     <Cog />
                                   </Button>
                                 </TooltipTrigger>
@@ -429,10 +431,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                             </div>
                             {/* Mobile */}
-                            <div className="flex sm:hidden justify-end gap-1">
+                            <div className={`flex sm:hidden justify-end gap-1 ${session.status === "WORKING" ? "session-active" : ""}`}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status !== "STOPPED"} onClick={() => api.startSession(session.name).then(load).catch(() => toast.error("Start failed"))}>
+                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status !== "STOPPED"} onClick={() => api.startSession(session.name).then(load).catch(() => toast.error("Start failed"))}>
                                     <Play />
                                   </Button>
                                 </TooltipTrigger>
@@ -440,7 +442,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status === "STOPPED"} onClick={() => api.stopSession(session.name).then(load).catch(() => toast.error("Stop failed"))}>
+                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status === "STOPPED"} onClick={() => api.stopSession(session.name).then(load).catch(() => toast.error("Stop failed"))}>
                                     <Square />
                                   </Button>
                                 </TooltipTrigger>
@@ -448,7 +450,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status !== "SCAN_QR_CODE"} onClick={() => { setDetailSession(session); setShowDetailDialog(true) }}>
+                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status !== "SCAN_QR_CODE"} onClick={() => { setDetailSession(session); setShowDetailDialog(true) }}>
                                     <QrCode />
                                   </Button>
                                 </TooltipTrigger>
@@ -456,15 +458,15 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-9" disabled={session.status !== "WORKING"} onClick={() => onNavigate?.("chat", { sessionName: session.name })}
-                                    ><MessageCircle className="size-4" />
+                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status !== "WORKING"} onClick={() => navigate(`/sessions/${session.name}/chat`)}>
+                                    <MessageCircle />
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Chat</TooltipContent>
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-9" onClick={() => { setSettingsSession(session); setShowSettingsDialog(true) }}>
+                                  <Button variant="ghost" size="icon" className="size-10" onClick={() => { setSettingsSession(session); setShowSettingsDialog(true) }}>
                                     <Cog />
                                   </Button>
                                 </TooltipTrigger>
@@ -472,7 +474,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-9" onClick={() => api.deleteSession(session.name).then(load).catch(() => toast.error("Delete failed"))}>
+                                  <Button variant="ghost" size="icon" className="size-10" onClick={() => api.deleteSession(session.name).then(load).catch(() => toast.error("Delete failed"))}>
                                     <Trash2 />
                                   </Button>
                                 </TooltipTrigger>

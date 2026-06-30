@@ -61,7 +61,7 @@ The dashboard opens at **http://localhost:3001** — the default login is `admin
 ```bash
 docker run -d \
   --name bunwa \
-  -p 3001:3001 \
+  -p 3000:3000 \
   -v $(pwd)/.sessions:/app/.sessions \
   -v $(pwd)/.env:/app/.env \
   bunwa:latest
@@ -76,13 +76,11 @@ A full-featured web dashboard built with React 19, shadcn/ui, and Tailwind CSS:
 | **Dashboard** | Sessions overview, worker status, quick actions |
 | **Sessions** | Create, start, stop, restart, delete sessions |
 | **Chat** | Real-time messaging with reactions, status icons, file sharing |
-| **API Keys** | Generate and manage API authentication keys |
 | **Apps** | Webhook integrations with external services |
 | **Logs** | Live log streaming with filtering |
 | **Events** | Real-time WebSocket event monitor |
-| **Queue** | Job queue monitoring (BullMQ) |
 | **Infrastructure** | Database, storage, and server configuration |
-| **Templates** | Message templates for bulk messaging (coming soon) |
+| **Templates** | Reusable message templates with dynamic variables |
 | **Workers** | Multi-instance worker management |
 | **API Docs** | Interactive OpenAPI/Swagger documentation |
 
@@ -198,7 +196,7 @@ graph TB
 
         subgraph Core["Core Layer"]
             SM["Session Manager<br/><small>Lifecycle + State</small>"]
-            AM["Auth Manager<br/><small>API Keys + Basic Auth + CASL</small>"]
+            AM["Auth Manager<br/><small>API Keys + Basic Auth</small>"]
             WH["Webhook Engine<br/><small>HMAC signing + SSRF guard</small>"]
         end
 
@@ -248,9 +246,8 @@ graph TB
 | **WhatsApp Engine (NOWEB)** | [Baileys](https://github.com/WhiskeySockets/Baileys) |
 | **WhatsApp Engine (WEBJS)** | [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) + Puppeteer/Chrome |
 | **WebSockets** | [Hono WS](https://hono.dev/docs/helpers/websocket) + [RxJS](https://rxjs.dev) |
-| **Queue** | [BullMQ](https://docs.bullmq.io) (Redis) |
-| **Auth** | API key + dashboard Basic Auth + [CASL](https://casl.js.org) policies |
-| **Container** | [Docker](https://docker.com) + [s6-overlay](https://github.com/just-containers/s6-overlay) |
+| **Auth** | API key + dashboard Basic Auth |
+| **Container** | [Docker](https://docker.com) multi-stage |
 
 ## 📖 Documentation
 
@@ -301,9 +298,7 @@ BunWa builds on several open-source projects. We are grateful for their work:
 | [shadcn/ui](https://ui.shadcn.com) | MIT | UI component library |
 | [Tailwind CSS](https://tailwindcss.com) | MIT | CSS framework |
 | [RxJS](https://rxjs.dev) | Apache-2.0 | Reactive extensions |
-| [BullMQ](https://docs.bullmq.io) | MIT | Queue management |
 | [AWS SDK v3](https://github.com/aws/aws-sdk-js-v3) | Apache-2.0 | S3 storage integration |
-| [CASL](https://casl.js.org) | MIT | Permission management |
 | [class-validator](https://github.com/typestack/class-validator) | MIT | Request validation |
 | [tsyringe](https://github.com/microsoft/tsyringe) | MIT | Dependency injection |
 

@@ -146,6 +146,25 @@
     opacity: 1;
 }
 
+/* Session action buttons */
+.session-actions button:enabled {
+    transition: all 0.15s ease;
+}
+.session-actions button:enabled:hover {
+    transform: scale(1.1);
+}
+.session-actions button:enabled:active {
+    transform: scale(0.95);
+}
+
+/* Active session glow */
+.session-active button:enabled {
+    box-shadow: 0 0 10px hsl(var(--primary) / 0.2);
+}
+.session-active button:enabled:hover {
+    box-shadow: 0 0 16px hsl(var(--primary) / 0.4);
+}
+
 /* ==================== Login Page Enhancement ==================== */
 .login-container {
     min-height: 100vh;

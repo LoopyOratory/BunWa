@@ -1,46 +1,45 @@
-FROM oven/bun:1 AS base
+FROM oven/bun:1 AS builder
 WORKDIR /app
 
-# Install dependencies
-COPY package.json bun.lock* ./
+# Backend deps (all incl. dev — needed for frontend build)
+COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
-# Copy source
+# Frontend deps (separate tree)
+COPY frontend/package.json frontend/bun.lock ./frontend/
+RUN cd frontend && bun install --frozen-lockfile
+
+# Source + build frontend
 COPY . .
+RUN bash scripts/build-frontend.sh
 
-# Download dashboard
-RUN bash scripts/download-dashboard.sh
+# ──────────── production ────────────
 
-# Build
-RUN bun run build
-
-# Production stage
-FROM oven/bun:1-slim AS production
+FROM oven/bun:1-slim
 WORKDIR /app
 
-# Create non-root user
-RUN addgroup --system --gid 1001 waha && \
-    adduser --system --uid 1001 --ingroup waha waha
+# Non-root user
+RUN groupadd --system --gid 1001 waha && \
+    useradd --system --uid 1001 --gid waha waha
 
-# Copy built assets
-COPY --from=base /app/dist ./dist
-COPY --from=base /app/dashboard ./dashboard
-COPY --from=base /app/node_modules ./node_modules
-COPY --from=base /app/package.json ./
+# Only what's needed at runtime — no frontend/ source, no scripts/, no __tests__/
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/frontend-dist ./frontend-dist
+COPY --from=builder /app/package.json /app/bun.lock ./
 
-# Create media directories and set ownership
+# Production deps only (skips typescript, oxlint, @types/*)
+RUN bun install --frozen-lockfile --production
+
+# Writable data dirs
 RUN mkdir -p /app/.media /app/.sessions && \
-    chown -R waha:waha /app
+    chown waha:waha /app/.media /app/.sessions
 
-# Switch to non-root user
 USER waha
 
-# Environment defaults
 ENV PORT=3000
 ENV WHATSAPP_DEFAULT_ENGINE=NOWEB
 ENV WAHA_MEDIA_STORAGE=LOCAL
 ENV WHATSAPP_FILES_FOLDER=/app/.media
 
 EXPOSE 3000
-
-CMD ["bun", "run", "dist/main.js"]
+CMD ["bun", "run", "src/main.ts"]

@@ -36,7 +36,7 @@ export function buildOpenApiSpec(): any {
   return {
     openapi: '3.1.0',
     info: {
-      title: 'WAHA - WhatsApp HTTP API',
+      title: 'BUNWA - WhatsApp HTTP API',
       description:
         '<b>WhatsApp HTTP API</b> powered by Bun with native high-performance SQLite.<br/>' +
         '<a href="/dashboard"><b>📊 Dashboard</b></a><br/>' +
@@ -46,15 +46,15 @@ export function buildOpenApiSpec(): any {
         '<br/>' +
         'Learn more:' +
         '<ul>' +
-        '<li><a href="https://waha.devlike.pro/" target="_blank">Documentation</a></li>' +
-        '<li><a href="https://github.com/devlikeapro/waha" target="_blank">GitHub - WAHA</a></li>' +
+        '<li><a href="https://bunwa.ekosystems.dev/" target="_blank">Documentation</a></li>' +
+        '<li><a href="https://github.com/LoopyOratory/BunWa" target="_blank">GitHub - BUNWA</a></li>' +
         '</ul>',
       version: VERSION.version,
     },
     servers: [
       {
         url: '',
-        description: 'WAHA Server',
+        description: 'BUNWA Server',
       },
     ],
     security: [{ apiKey: [] }],
@@ -67,7 +67,6 @@ export function buildOpenApiSpec(): any {
       { name: '📢 Channels', description: 'Channels (newsletters) methods' },
       { name: '🟢 Status', description: 'Status (aka stories) methods' },
       { name: '💬 Chats', description: 'Chats methods' },
-      { name: '🔑 Api Keys', description: 'API Keys management' },
       { name: '👤 Contacts', description: 'Contacts methods' },
       { name: '👥 Groups', description: 'Groups methods' },
       { name: '📞 Calls', description: 'Call handling methods' },
@@ -116,7 +115,7 @@ export function buildOpenApiSpec(): any {
       '/api/version': {
         get: {
           tags: ['🔍 Observability'],
-          summary: 'Get WAHA version',
+          summary: 'Get BUNWA version',
           operationId: 'getVersion',
           responses: {
             '200': {
@@ -1909,30 +1908,6 @@ export function buildOpenApiSpec(): any {
             { name: 'phoneNumber', in: 'path', required: true, schema: { type: 'string' } },
           ],
           responses: { '200': { description: 'LID' } },
-        },
-      },
-      '/api/keys/': {
-        get: {
-          tags: ['🔑 Api Keys'],
-          summary: 'Get all API keys',
-          operationId: 'getApiKeys',
-          security: [{ apiKey: [] }],
-          responses: {
-            '200': {
-              description: 'List of API keys',
-            },
-          },
-        },
-        post: {
-          tags: ['🔑 Api Keys'],
-          summary: 'Create an API key',
-          operationId: 'createApiKey',
-          security: [{ apiKey: [] }],
-          responses: {
-            '200': {
-              description: 'API key created',
-            },
-          },
         },
       },
       // ==================== MISSING ENDPOINTS ====================

@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Download, AlertTriangle, Info, AlertCircle } from "lucide-react"
 import { PageLayout } from "@/components/page-layout"
 import { toast } from "sonner"
+import { getDashboardAuthHeader } from "@/lib/auth"
 
 interface AuditLog {
   id: string
@@ -46,8 +47,9 @@ export function LogsPage() {
     try {
       const params = new URLSearchParams({ limit: String(limit), offset: String(page * limit) })
       if (severityFilter !== "all") params.set("severity", severityFilter)
+      const auth = getDashboardAuthHeader()
       const res = await fetch(`/api/audit?${params}`, {
-        headers: { "x-api-key": localStorage.getItem("waha-api-key") || "" },
+        headers: { "x-api-key": "waha", ...(auth ? { Authorization: `Basic ${auth}` } : {}) },
       })
       if (res.ok) setLogs(await res.json())
     } catch (err) { toast.error("Failed to load logs") }

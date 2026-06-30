@@ -25,7 +25,7 @@ export class SwaggerConfigServiceCore {
   }
 
   get title(): string {
-    return process.env.WHATSAPP_SWAGGER_TITLE || 'WAHA - WhatsApp HTTP API';
+    return process.env.WHATSAPP_SWAGGER_TITLE || 'BUNWA - WhatsApp HTTP API';
   }
 
   get description(): string {
@@ -33,7 +33,7 @@ export class SwaggerConfigServiceCore {
   }
 
   get externalDocUrl(): string {
-    return process.env.WHATSAPP_SWAGGER_EXTERNAL_DOC_URL || 'https://waha.devlike.pro/';
+    return process.env.WHATSAPP_SWAGGER_EXTERNAL_DOC_URL || 'https://bunwa.ekosystems.dev//';
   }
 
   get advancedConfigEnabled(): boolean {

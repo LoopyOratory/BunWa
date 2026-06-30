@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/sidebar"
 import {
   Home, MessageSquare, Eye, Server, LogOut, BookOpen,
-  Sun, Moon, Plug, FileText, Activity, Send, Key, Settings, ListOrdered, MessageCircle,
+  Sun, Moon, Plug, FileText, Activity, Send, Settings, ListOrdered, MessageCircle,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth"
 import { useTheme } from "@/components/theme-provider"
@@ -18,7 +18,6 @@ const menuItems = [
   { path: "/templates", label: "Templates", icon: FileText },
   { path: "/messages", label: "Message Tester", icon: Send },
   { path: "/logs", label: "Audit Logs", icon: Activity },
-  { path: "/api-keys", label: "API Keys", icon: Key },
   { path: "/infrastructure", label: "Infrastructure", icon: Settings },
   { path: "/queue", label: "Queue", icon: ListOrdered },
 ]
