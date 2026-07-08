@@ -108,9 +108,17 @@ BunWa includes a Coolify-optimized Dockerfile. In Coolify:
 3. **Build Pack:** `Dockerfile`
 4. **Dockerfile Target:** `Dockerfile.coolify`
 5. Set the port to **3000**
-6. Add environment variables in the Coolify UI (`WAHA_API_KEY`, `WAHA_ALLOW_NO_AUTH=false`, etc.)
+6. Go to **Volumes** tab → add two persistent volumes:
+
+   | Source Path | Destination Path | 
+   |-------------|-----------------|
+   | `/app/.sessions` | `/app/.sessions` |
+   | `/app/.media` | `/app/.media` |
+
+7. Go to **Environment** tab → add `WAHA_API_KEY` and `WAHA_ALLOW_NO_AUTH=false` (plus any others from [Configuration](#configuration))
 
 The Coolify image is smaller (pre-built frontend, no dev deps) and includes a health check.
+Coolify uses the health check to know when the container is ready.
 
 <a id="dashboard"></a>
 ## 📸 Dashboard
@@ -555,8 +563,7 @@ graph TB
 <a id="documentation"></a>
 ## 📖 Documentation
 
-- **Interactive API Docs** — `http://localhost:3000/api-docs/` (Scalar/OpenAPI)
-- **Engine Comparison** — `http://localhost:3000/docs` (NOWEB vs WEBJS feature matrix)
+- **Interactive API Docs** — `http://localhost:3000/api-docs/` (Scalar/OpenAPI — embedded in the dashboard)
 - **MCP Connection** — Dashboard → Session Settings → MCP → Generate Key (one-click config generation)
 - **Phone Pairing** — QR scan or number pairing supported for both engines
 - **Proxy Support** — HTTP, HTTPS, SOCKS4, SOCKS5 proxy for WhatsApp connections
