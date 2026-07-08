@@ -1,5 +1,5 @@
 import type { GroupMetadata } from '@whiskeysockets/baileys';
-import { PaginationParams } from '../../../structures/pagination.dto';
+import { PaginationParams } from '../../../../structures/pagination.dto';
 
 export interface IGroupRepository {
   getAll(pagination?: PaginationParams): Promise<GroupMetadata[]>;

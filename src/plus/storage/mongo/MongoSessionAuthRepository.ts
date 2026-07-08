@@ -1,5 +1,5 @@
 import { MongoClient, Collection, Db } from 'mongodb';
-import { ISessionAuthRepository } from '../../core/storage/ISessionAuthRepository';
+import { ISessionAuthRepository } from '../../../core/storage/ISessionAuthRepository';
 
 export class MongoSessionAuthRepository implements ISessionAuthRepository {
   private client: MongoClient;

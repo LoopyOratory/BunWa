@@ -1,5 +1,5 @@
 import { Label } from '@whiskeysockets/baileys/lib/Types/Label';
-import { PaginationParams } from '../../../../structures/pagination.dto';
+import { PaginationParams } from '../../../../../structures/pagination.dto';
 import { ILabelsRepository } from '../ILabelsRepository';
 import Knex from 'knex';
 

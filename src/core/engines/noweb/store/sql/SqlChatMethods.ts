@@ -1,7 +1,7 @@
 import type { Chat } from '@whiskeysockets/baileys';
-import { SqlKVRepository } from '../../storage/sql/SqlKVRepository';
-import { OverviewFilter } from '../../../structures/chats.dto';
-import { PaginationParams } from '../../../structures/pagination.dto';
+import { SqlKVRepository } from '../../../../storage/sql/SqlKVRepository';
+import { OverviewFilter } from '../../../../../structures/chats.dto';
+import { PaginationParams } from '../../../../../structures/pagination.dto';
 import { Knex } from 'knex';
 
 export class SqlChatMethods {

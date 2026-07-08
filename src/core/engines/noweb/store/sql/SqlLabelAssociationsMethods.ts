@@ -1,5 +1,5 @@
 import type { LabelAssociation } from '@whiskeysockets/baileys/lib/Types/LabelAssociation';
-import { SqlKVRepository } from '../../storage/sql/SqlKVRepository';
+import { SqlKVRepository } from '../../../../storage/sql/SqlKVRepository';
 import { LabelAssociationType } from '../../labels/LabelAssociationType';
 
 export class SqlLabelAssociationsMethods {

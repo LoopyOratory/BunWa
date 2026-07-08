@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { MediaData, MediaStorageData } from '../../core/media/IMediaStorage';
+import { MediaData, MediaStorageData } from '../../../core/media/IMediaManager';
 
 export class PostgresMediaStorage {
   private pool: Pool;

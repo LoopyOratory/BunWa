@@ -1,4 +1,4 @@
-import { LimitOffsetParams } from '../../../structures/pagination.dto';
+import { LimitOffsetParams } from '../../../../structures/pagination.dto';
 
 export class LidToPN {
   id: string;

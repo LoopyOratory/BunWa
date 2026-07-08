@@ -1,6 +1,6 @@
 import { Chat } from '@whiskeysockets/baileys';
-import { PaginationParams } from '../../../../structures/pagination.dto';
-import { OverviewFilter } from '../../../../structures/chats.dto';
+import { PaginationParams } from '../../../../../structures/pagination.dto';
+import { OverviewFilter } from '../../../../../structures/chats.dto';
 import { IChatRepository } from '../IChatRepository';
 import Knex from 'knex';
 

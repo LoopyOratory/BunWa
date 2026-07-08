@@ -1,5 +1,5 @@
 import { GroupMetadata } from '@whiskeysockets/baileys/lib/Types/GroupMetadata';
-import { PaginationParams } from '../../../../structures/pagination.dto';
+import { PaginationParams } from '../../../../../structures/pagination.dto';
 import { IGroupRepository } from '../IGroupRepository';
 import Knex from 'knex';
 

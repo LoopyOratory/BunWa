@@ -13,7 +13,7 @@ import { WAHAWebhook } from '../../structures/webhooks.dto';
 import { waitUntil } from '../../utils/promiseTimeout';
 import { VERSION } from '../../version';
 import * as lodash from 'lodash';
-import { PinoLogger } from 'nestjs-pino';
+import type { Logger as PinoLogger } from 'pino';
 import { merge, Observable, of } from 'rxjs';
 
 import {

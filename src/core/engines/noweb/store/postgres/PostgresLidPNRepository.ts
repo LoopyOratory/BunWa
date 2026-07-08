@@ -1,4 +1,4 @@
-import { PaginationParams } from '../../../../structures/pagination.dto';
+import { PaginationParams } from '../../../../../structures/pagination.dto';
 import { INowebLidPNRepository } from '../INowebLidPNRepository';
 import Knex from 'knex';
 

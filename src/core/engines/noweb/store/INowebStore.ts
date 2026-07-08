@@ -9,12 +9,12 @@ import type { Label } from '@whiskeysockets/baileys/lib/Types/Label';
 import {
   GetChatMessagesFilter,
   OverviewFilter,
-} from '../../../structures/chats.dto';
-import { LidToPhoneNumber } from '../../../structures/lids.dto';
+} from '../../../../structures/chats.dto';
+import { LidToPhoneNumber } from '../../../../structures/lids.dto';
 import {
   LimitOffsetParams,
   PaginationParams,
-} from '../../../structures/pagination.dto';
+} from '../../../../structures/pagination.dto';
 
 export interface INowebStore {
   presences: any;

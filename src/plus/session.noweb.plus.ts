@@ -1,7 +1,7 @@
-import { WhatsappSessionNoWebCore } from './session.noweb.core';
-import { MessageImageRequest, MessageFileRequest, MessageVoiceRequest } from '../../structures/chatting.dto';
-import { BinaryFile, RemoteFile } from '../../structures/files.dto';
-import { AvailableInPlusVersion } from '../exceptions';
+import { WhatsappSessionNoWebCore } from '../core/engines/noweb/session.noweb.core';
+import { MessageImageRequest, MessageFileRequest, MessageVoiceRequest } from '../structures/chatting.dto';
+import { BinaryFile, RemoteFile } from '../structures/files.dto';
+import { AvailableInPlusVersion } from '../core/exceptions';
 
 export class WhatsappSessionNoWebPlus extends WhatsappSessionNoWebCore {
 

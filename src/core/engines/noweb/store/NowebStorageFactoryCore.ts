@@ -1,5 +1,5 @@
 import { LocalStore } from '../../../storage/LocalStore';
-import { DataStore } from '../../abc/DataStore';
+import { DataStore } from '../../../abc/DataStore';
 import { INowebStorage } from './INowebStorage';
 import { Sqlite3Storage } from './sqlite3/Sqlite3Storage';
 import { PostgresStorage } from './postgres/PostgresStorage';

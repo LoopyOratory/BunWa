@@ -1,5 +1,5 @@
-import { GetChatMessagesFilter } from '../../../structures/chats.dto';
-import { PaginationParams } from '../../../structures/pagination.dto';
+import { GetChatMessagesFilter } from '../../../../structures/chats.dto';
+import { PaginationParams } from '../../../../structures/pagination.dto';
 
 export interface IMessagesRepository {
   deleteAll(): Promise<void>;

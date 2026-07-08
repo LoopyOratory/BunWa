@@ -1,6 +1,6 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { MediaData, MediaStorageData } from '../../core/media/IMediaStorage';
+import { MediaData, MediaStorageData } from '../../../core/media/IMediaManager';
 
 export class S3Config {
   bucket: string;

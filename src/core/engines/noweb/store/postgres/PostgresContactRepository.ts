@@ -1,5 +1,5 @@
 import { Contact } from '@whiskeysockets/baileys';
-import { PaginationParams } from '../../../../structures/pagination.dto';
+import { PaginationParams } from '../../../../../structures/pagination.dto';
 import { IContactRepository } from '../IContactRepository';
 import Knex from 'knex';
 

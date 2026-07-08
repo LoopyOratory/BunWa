@@ -1,5 +1,5 @@
 import { proto } from '@whiskeysockets/baileys';
-import { PaginationParams } from '../../../../structures/pagination.dto';
+import { PaginationParams } from '../../../../../structures/pagination.dto';
 import { IMessagesRepository } from '../IMessagesRepository';
 import { INowebLidPNRepository } from '../INowebLidPNRepository';
 import Knex from 'knex';

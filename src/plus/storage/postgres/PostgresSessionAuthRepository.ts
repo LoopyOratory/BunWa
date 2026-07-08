@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { ISessionAuthRepository } from '../../core/storage/ISessionAuthRepository';
+import { ISessionAuthRepository } from '../../../core/storage/ISessionAuthRepository';
 
 export class PostgresSessionAuthRepository implements ISessionAuthRepository {
   private pool: Pool;

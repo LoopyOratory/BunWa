@@ -2,8 +2,8 @@ import { ALL_JID } from '../../session.noweb.core';
 import { SqlKVRepository } from '../../../../storage/sql/SqlKVRepository';
 import { AckToStatus } from '../../../../utils/acks';
 import { isLidUser } from '../../../../utils/jids';
-import { GetChatMessagesFilter } from '../../../../structures/chats.dto';
-import { PaginationParams } from '../../../../structures/pagination.dto';
+import { GetChatMessagesFilter } from '../../../../../structures/chats.dto';
+import { PaginationParams } from '../../../../../structures/pagination.dto';
 import { Knex } from 'knex';
 import { INowebLidPNRepository } from '../INowebLidPNRepository';
 

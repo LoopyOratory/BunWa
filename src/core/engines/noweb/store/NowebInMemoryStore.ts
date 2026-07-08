@@ -5,12 +5,12 @@ import { BadRequestException } from '../../../exceptions';
 import {
   GetChatMessagesFilter,
   OverviewFilter,
-} from '../../../structures/chats.dto';
-import { LidToPhoneNumber } from '../../../structures/lids.dto';
+} from '../../../../structures/chats.dto';
+import { LidToPhoneNumber } from '../../../../structures/lids.dto';
 import {
   LimitOffsetParams,
   PaginationParams,
-} from '../../../structures/pagination.dto';
+} from '../../../../structures/pagination.dto';
 import { PaginatorInMemory } from '../../../../utils/Paginator';
 
 import { INowebStore } from './INowebStore';

@@ -1,4 +1,4 @@
-import { EngineBootstrap } from '../abc/EngineBootstrap';
+import { EngineBootstrap } from '../../abc/EngineBootstrap';
 
 export class GowsBootstrap implements EngineBootstrap {
   async bootstrap(): Promise<void> {

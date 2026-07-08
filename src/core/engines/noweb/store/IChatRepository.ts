@@ -1,6 +1,6 @@
 import type { Chat } from '@whiskeysockets/baileys';
-import { OverviewFilter } from '../../../structures/chats.dto';
-import { PaginationParams } from '../../../structures/pagination.dto';
+import { OverviewFilter } from '../../../../structures/chats.dto';
+import { PaginationParams } from '../../../../structures/pagination.dto';
 
 export interface IChatRepository {
   getAll(): Promise<Chat[]>;
