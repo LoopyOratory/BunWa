@@ -25,47 +25,78 @@ Two WhatsApp engines are supported:
 ## ✨ Features
 
 - **🚄 Fast** — Bun runtime, batch-loaded auth state, no cold starts
-- **🔌 Dual Engine** — NOWEB or WEBJS, choose per session
+- **🔌 Dual Engine** — NOWEB (Baileys) or WEBJS (whatsapp-web.js + Chrome), choose per session
 - **📱 Phone Pairing** — QR code scan or phone number pairing
 - **🔧 REST API** — Full WAHA-compatible API surface
 - **🌐 Webhooks** — Event-driven with HMAC signing + SSRF protection
-- **🛡️ Auth** — API key authentication + dashboard login + policy-based access control
+- **🛡️ Auth** — API key + dashboard login + per-session MCP keys + policy-based access control
 - **☁️ Storage** — Local filesystem or S3-compatible object storage
-- **🗄️ Database** — SQLite (via `bun:sqlite`) or PostgreSQL
-- **🧩 MCP Server** — Model Context Protocol endpoint for AI agents
-- **📊 Dashboard** — React + shadcn/ui dashboard with real-time chat
+- **🗄️ Database** — SQLite (via `bun:sqlite`) or PostgreSQL with transaction support
+- **🧩 MCP Server** — Model Context Protocol with 23 tools, stdio + HTTP transports, per-session keys
+- **📊 Dashboard** — React + shadcn/ui dashboard with real-time chat, MCP key management
 - **📱 Mobile-first** — Responsive UI built for mobile
+- **🐳 Docker** — Multi-stage builds, Coolify-ready, ~200MB runtime image
 
 ## 🚀 Quick Start
 
 ```bash
 # Clone and enter
-git clone <your-repo-url> bunwa
+git clone https://github.com/LoopyOratory/BunWa.git bunwa
 cd bunwa
 
-# Install dependencies
-bun install
+# Install dependencies (skips Puppeteer Chromium download — use system Chrome for WEBJS)
+PUPPETEER_SKIP_DOWNLOAD=true bun install
 
 # Copy and configure environment
 cp .env.example .env
-# Edit .env with your settings
+# Edit .env — at minimum set WAHA_API_KEY for production
 
 # Start the server
 bun run src/main.ts
 ```
 
-The dashboard opens at **http://localhost:3000** — the default login is `admin` / `admin` (change in `.env`).
+The dashboard opens at **http://localhost:3000** — the default login is `admin` / `admin` (change via `WAHA_DASHBOARD_USERNAME` / `WAHA_DASHBOARD_PASSWORD` in `.env`).
+
+> **Production:** set `WAHA_API_KEY` to a strong random value and `WAHA_ALLOW_NO_AUTH=false`.
+> Without either, the API, dashboard, WebSocket, and MCP endpoint are reachable **without
+> authentication**.
 
 ### Docker
 
 ```bash
+# Build the image
+docker build -t bunwa:latest .
+
+# Run (NOWEB — no Chrome needed)
 docker run -d \
   --name bunwa \
   -p 3000:3000 \
   -v $(pwd)/.sessions:/app/.sessions \
   -v $(pwd)/.env:/app/.env \
   bunwa:latest
+
+# Run (WEBJS — mount Chrome binary and set CHROME_PATH)
+docker run -d \
+  --name bunwa-webjs \
+  -p 3000:3000 \
+  -v $(pwd)/.sessions:/app/.sessions \
+  -v $(pwd)/.env:/app/.env \
+  -e CHROME_PATH=/usr/bin/google-chrome \
+  bunwa:latest
 ```
+
+### Coolify
+
+BunWa includes a Coolify-optimized Dockerfile. In Coolify:
+
+1. **New Resource → Application**
+2. Connect your Git repo (or paste the URL)
+3. **Build Pack:** `Dockerfile`
+4. **Dockerfile Target:** `Dockerfile.coolify`
+5. Set the port to **3000**
+6. Add environment variables in the Coolify UI (`WAHA_API_KEY`, `WAHA_ALLOW_NO_AUTH=false`, etc.)
+
+The Coolify image is smaller (pre-built frontend, no dev deps) and includes a health check.
 
 ## 📸 Dashboard
 
@@ -76,12 +107,11 @@ A full-featured web dashboard built with React 19, shadcn/ui, and Tailwind CSS:
 | **Dashboard** | Sessions overview, worker status, quick actions |
 | **Sessions** | Create, start, stop, restart, delete sessions |
 | **Chat** | Real-time messaging with reactions, status icons, file sharing |
-| **Apps** | Webhook integrations with external services |
+| **Session Settings** | Engine selection (NOWEB/WEBJS), proxy, webhooks, MCP tool policies, **MCP key generation** |
+| **Apps** | Webhook integrations with external services (Chatwoot) |
 | **Logs** | Live log streaming with filtering |
 | **Events** | Real-time WebSocket event monitor |
 | **Infrastructure** | Database, storage, and server configuration |
-| **Templates** | Reusable message templates with dynamic variables |
-| **Workers** | Multi-instance worker management |
 | **API Docs** | Interactive OpenAPI/Swagger documentation |
 
 ## 🔧 Configuration
@@ -328,7 +358,51 @@ Full interactive API docs at **http://localhost:3000/api-docs/** when the server
 
 ## 🧩 MCP Server (Model Context Protocol)
 
-BunWa exposes a [Model Context Protocol](https://modelcontextprotocol.io) server at `POST /mcp` — AI assistants can send WhatsApp messages, manage sessions, query chats, and interact with groups through standardized MCP tools.
+BunWa exposes a [Model Context Protocol](https://modelcontextprotocol.io) server — AI assistants can send WhatsApp messages, manage sessions, query chats, and interact with groups through 23 standardized MCP tools. **Two transports are supported:** Streamable HTTP (`POST /mcp`) and stdio (subprocess, for local clients).
+
+### Per-Session MCP Keys 🔑
+
+Every session gets its own scoped MCP credential. From the **Dashboard → Session Settings → MCP** tab:
+
+1. Click **Generate MCP Key**
+2. Copy the key and the ready-made connection config (stdio or HTTP — each has its own Copy button)
+3. Close the dialog — the key is **never shown again**. Only a SHA-256 hash is stored.
+
+Per-session keys are **auto-scoped** — a key for session "support" can never access session "admin," even if the caller sends a different `sessionId`. Regenerate anytime to rotate (invalidates the old key instantly).
+
+### Quick Connect
+
+**stdio (recommended for local use — no network hop, works with all clients):**
+
+```json
+{
+  "mcpServers": {
+    "bunwa-default": {
+      "command": "bun",
+      "args": ["run", "src/mcp/stdio.ts"],
+      "env": {
+        "BUNWA_SESSION": "default",
+        "BUNWA_MCP_KEY": "sk_mcp_..."
+      }
+    }
+  }
+}
+```
+
+**HTTP / SSE (for remote or Docker deployments):**
+
+```json
+{
+  "mcpServers": {
+    "bunwa": {
+      "url": "http://localhost:3000/mcp",
+      "headers": { "X-Api-Key": "sk_mcp_..." }
+    }
+  }
+}
+```
+
+The dashboard generates both formats with your real key filled in — copy, paste, done.
 
 ### Available Tools
 
@@ -343,37 +417,28 @@ BunWa exposes a [Model Context Protocol](https://modelcontextprotocol.io) server
 Every tool can be enabled or disabled per-session from the **Dashboard → Session Settings → MCP Tools** tab:
 
 - **Master toggle** — enable/disable MCP for the session entirely
-- **Destructive ops gate** — block all irreversible operations (delete, clear) with a single switch
-- **Per-tool toggles** — disable individual tools or entire categories (group, presence, etc.)
+- **Destructive ops gate** — block all irreversible operations with a single switch
+- **Per-tool toggles** — disable individual tools or entire categories
 
-### Quick Connect
+### Auth Model
 
-```bash
-# Claude Desktop / Cursor — add to your MCP config
-{
-  "mcpServers": {
-    "bunwa": {
-      "url": "http://localhost:3000/mcp",
-      "headers": { "X-Api-Key": "your-api-key" }
-    }
-  }
-}
+| Key type | Scope | How to get one |
+|----------|-------|---------------|
+| `WAHA_API_KEY` (global) | All sessions, admin | Set in `.env` |
+| Per-session `sk_mcp_...` | Single session, auto-scoped | Dashboard → Session Settings → MCP → Generate Key |
 
-# Or via MCP Inspector
-bunx @modelcontextprotocol/inspector http://localhost:3000/mcp
+Both are accepted by both transports. The global key is always admin. Per-session keys are
+validated by hashing the provided key and comparing to the stored SHA-256 hash — plaintext
+is never persisted.
 
-# Hermes Agent — add to ~/.hermes/config.yaml
-mcp_servers:
-  bunwa:
-    url: "http://localhost:3000/mcp"
-    headers:
-      X-Api-Key: "your-api-key"
-```
-
-### List All Tools
+### Test the MCP Server
 
 ```bash
+# List all tools (REST API)
 curl http://localhost:3000/api/mcp/tools | jq '.byCategory'
+
+# MCP Inspector (interactive testing)
+bunx @modelcontextprotocol/inspector http://localhost:3000/mcp
 ```
 
 ## 🏗️ Architecture
@@ -463,15 +528,18 @@ graph TB
 | **WhatsApp Engine (NOWEB)** | [Baileys](https://github.com/WhiskeySockets/Baileys) |
 | **WhatsApp Engine (WEBJS)** | [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) + Puppeteer/Chrome |
 | **WebSockets** | [Hono WS](https://hono.dev/docs/helpers/websocket) + [RxJS](https://rxjs.dev) |
-| **Auth** | API key + dashboard Basic Auth |
-| **Container** | [Docker](https://docker.com) multi-stage |
+| **MCP SDK** | [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk) |
+| **Auth** | API key + dashboard Basic Auth + per-session MCP keys (SHA-256 hashed) |
+| **Container** | [Docker](https://docker.com) multi-stage + [Coolify](https://coolify.io) ready |
 
 ## 📖 Documentation
 
-- **Interactive API Docs** — `http://localhost:3000/api-docs/` (Swagger/OpenAPI)
+- **Interactive API Docs** — `http://localhost:3000/api-docs/` (Scalar/OpenAPI)
 - **Engine Comparison** — `http://localhost:3000/docs` (NOWEB vs WEBJS feature matrix)
+- **MCP Connection** — Dashboard → Session Settings → MCP → Generate Key (one-click config generation)
 - **Phone Pairing** — QR scan or number pairing supported for both engines
 - **Proxy Support** — HTTP, HTTPS, SOCKS4, SOCKS5 proxy for WhatsApp connections
+- **CI** — GitHub Actions runs `bun test`, `oxlint`, and a TypeScript error ratchet on every push
 
 ## ⭐ Support
 

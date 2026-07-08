@@ -1,0 +1,89 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# BunWa — Coolify Deployment Dockerfile
+#
+# Use this with Coolify's "Dockerfile" build pack.
+# In Coolify: New Resource → Application → Build Pack: Dockerfile →
+#   Dockerfile Target: Dockerfile.coolify → Port: 3000
+#
+# Differences from the default Dockerfile:
+#   - No VOLUME (Coolify manages persistent storage separately)
+#   - Labels for Coolify dashboard display
+#   - Exposes 3000 (Coolify auto-detects this)
+#   - Pre-built frontend is retained in the builder (Coolify builds from source)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ──────────── stage 1: build ────────────
+FROM oven/bun:1 AS builder
+WORKDIR /app
+
+# Skip Puppeteer's Chromium download — WEBJS users must mount a Chrome binary
+# or set CHROME_PATH to a system-installed Chrome.
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+
+# Backend deps (all, including dev — needed for frontend build)
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
+
+# Frontend deps (separate tree)
+COPY frontend/package.json frontend/bun.lock ./frontend/
+RUN cd frontend && bun install --frozen-lockfile
+
+# Source + build frontend into frontend-dist/
+COPY . .
+RUN bash scripts/build-frontend.sh
+
+# ──────────── stage 2: production ────────────
+FROM oven/bun:1-slim
+WORKDIR /app
+
+# ── labels (Coolify dashboard) ───────────────────────────────────────────────
+LABEL coolify.managed=true
+LABEL coolify.name="BunWa"
+LABEL coolify.description="WhatsApp HTTP API — Bun/Hono, dual-engine (NOWEB/WEBJS), MCP server, dashboard"
+LABEL coolify.port="3000"
+
+# Non-root user for security
+RUN groupadd --system --gid 1001 waha && \
+    useradd --system --uid 1001 --gid waha waha
+
+# Runtime files only — no frontend/ source, no scripts/, no __tests__/
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/frontend-dist ./frontend-dist
+COPY --from=builder /app/package.json /app/bun.lock ./
+
+# Install production deps only
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+RUN bun install --frozen-lockfile --production
+
+# ── data directories ──────────────────────────────────────────────────────
+# These are the writable runtime directories. In Coolify, persistent storage
+# should be configured via the Coolify UI (Volumes tab) rather than baked in:
+#   /app/.sessions  → WhatsApp auth state, session index, SQLite databases
+#   /app/.media     → downloaded WhatsApp media files
+#   /app/data       → audit logs, templates, export/import
+RUN mkdir -p /app/.sessions /app/.media /app/data && \
+    chown -R waha:waha /app/.sessions /app/.media /app/data
+
+USER waha
+
+# ── defaults ──────────────────────────────────────────────────────────────────
+# Every variable can be overridden in Coolify's Environment tab.
+ENV PORT=3000
+ENV WHATSAPP_DEFAULT_ENGINE=NOWEB
+ENV WHATSAPP_FILES_FOLDER=/app/.media
+ENV WAHA_LOCAL_STORE_BASE_DIR=/app/.sessions
+ENV WAHA_STORAGE_DIR=/app/data
+ENV DATA_DIR=/app/data
+
+# ── production security defaults ─────────────────────────────────────────────
+# Override these in Coolify's Environment tab with real values.
+ENV WAHA_ALLOW_NO_AUTH=false
+
+EXPOSE 3000
+
+# Coolify uses this health check to determine when the container is "ready"
+# and to restart it if it becomes unhealthy.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:3000/api/health || exit 1
+
+CMD ["bun", "run", "src/main.ts"]

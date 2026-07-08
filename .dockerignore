@@ -1,7 +1,43 @@
-node_modules
-dist
-dashboard
-.git
-*.md
+# Dependencies
+node_modules/
+
+# Build output (rebuilt during docker build)
+dist/
+frontend-dist/
+
+# Runtime data (should be volumes, not baked into image)
+.sessions/
+.media/
+data/
+
+# Environment (should be mounted or passed via -e)
 .env
-.env.*
+.env.local
+.env.production
+.env.development
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI
+.github/
+
+# Tests
+tests/
+src/__tests__/
+
+# Docs & plans
+docs/
+plans/
+*.md
+!README.md
+
+# Misc
+chatui/
+plugins/
+test-*
+*.txt
+*.html
+!frontend/**/*.html

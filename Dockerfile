@@ -1,20 +1,29 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# BunWa — WhatsApp HTTP API Server
+# Multi-stage Docker build: Bun builder → slim production runtime.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ──────────── stage 1: build ────────────
 FROM oven/bun:1 AS builder
 WORKDIR /app
 
-# Backend deps (all incl. dev — needed for frontend build)
+# Skip Puppeteer's Chromium download at install time — WEBJS users mount
+# Chrome from the host or install it in a derived image.
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+
+# Install all deps (including dev deps needed for the frontend build)
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
-# Frontend deps (separate tree)
+# Install frontend deps (separate tree)
 COPY frontend/package.json frontend/bun.lock ./frontend/
 RUN cd frontend && bun install --frozen-lockfile
 
-# Source + build frontend
+# Copy source and build the frontend
 COPY . .
 RUN bash scripts/build-frontend.sh
 
-# ──────────── production ────────────
-
+# ──────────── stage 2: production ────────────
 FROM oven/bun:1-slim
 WORKDIR /app
 
@@ -22,24 +31,45 @@ WORKDIR /app
 RUN groupadd --system --gid 1001 waha && \
     useradd --system --uid 1001 --gid waha waha
 
-# Only what's needed at runtime — no frontend/ source, no scripts/, no __tests__/
+# Runtime files only — no frontend/ source, no scripts/, no __tests__/
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/frontend-dist ./frontend-dist
 COPY --from=builder /app/package.json /app/bun.lock ./
 
-# Production deps only (skips typescript, oxlint, @types/*)
+# Production deps (skips typescript, oxlint, @types/*, and dev-only packages)
+ENV PUPPETEER_SKIP_DOWNLOAD=true
 RUN bun install --frozen-lockfile --production
 
-# Writable data dirs
-RUN mkdir -p /app/.media /app/.sessions && \
-    chown waha:waha /app/.media /app/.sessions
+# ── data dirs ────────────────────────────────────────────────────────────────
+# .sessions   — WhatsApp auth state, session index, SQLite databases
+# .media      — downloaded media files
+# data        — audit logs, templates, export/import artifacts
+RUN mkdir -p /app/.sessions /app/.media /app/data && \
+    chown -R waha:waha /app/.sessions /app/.media /app/data
+
+# ── volumes ──────────────────────────────────────────────────────────────────
+# Mount these from the host or a named volume so auth state and media survive
+# container restarts:
+#   /app/.sessions   — session auth state + SQLite DBs
+#   /app/.media      — downloaded WhatsApp media
+#   /app/data        — audit logs, templates
+#   /app/.env        — configuration (or use env vars)
+VOLUME ["/app/.sessions", "/app/.media", "/app/data"]
 
 USER waha
 
+# ── defaults (override with -e or .env) ──────────────────────────────────────
 ENV PORT=3000
 ENV WHATSAPP_DEFAULT_ENGINE=NOWEB
-ENV WAHA_MEDIA_STORAGE=LOCAL
 ENV WHATSAPP_FILES_FOLDER=/app/.media
+ENV WAHA_LOCAL_STORE_BASE_DIR=/app/.sessions
+ENV WAHA_STORAGE_DIR=/app/data
+ENV DATA_DIR=/app/data
 
 EXPOSE 3000
+
+# Health check — hits the /api/health endpoint every 30s
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:3000/api/health || exit 1
+
 CMD ["bun", "run", "src/main.ts"]
