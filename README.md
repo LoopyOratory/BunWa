@@ -22,6 +22,13 @@ Two WhatsApp engines are supported:
 - **NOWEB** (default) — Uses [Baileys](https://github.com/WhiskeySockets/Baileys), lightweight, no browser required, faster
 - **WEBJS** — Uses [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) with Chrome/Puppeteer, full WhatsApp Web parity
 
+<div align="center">
+
+[✨ Features](#features) · [🚀 Quick Start](#quick-start) · [📸 Dashboard](#dashboard) · [🔧 Configuration](#configuration) · [📡 API](#api) · [🧩 MCP](#mcp-server-model-context-protocol) · [🐳 Docker](#docker) · [🏗️ Architecture](#architecture) · [🛠️ Stack](#technology-stack) · [📖 Docs](#documentation)
+
+</div>
+
+<a id="features"></a>
 ## ✨ Features
 
 - **🚄 Fast** — Bun runtime, batch-loaded auth state, no cold starts
@@ -37,6 +44,7 @@ Two WhatsApp engines are supported:
 - **📱 Mobile-first** — Responsive UI built for mobile
 - **🐳 Docker** — Multi-stage builds, Coolify-ready, ~200MB runtime image
 
+<a id="quick-start"></a>
 ## 🚀 Quick Start
 
 ```bash
@@ -104,6 +112,7 @@ BunWa includes a Coolify-optimized Dockerfile. In Coolify:
 
 The Coolify image is smaller (pre-built frontend, no dev deps) and includes a health check.
 
+<a id="dashboard"></a>
 ## 📸 Dashboard
 
 A full-featured web dashboard built with React 19, shadcn/ui, and Tailwind CSS:
@@ -120,6 +129,7 @@ A full-featured web dashboard built with React 19, shadcn/ui, and Tailwind CSS:
 | **Infrastructure** | Database, storage, and server configuration |
 | **API Docs** | Interactive OpenAPI/Swagger documentation |
 
+<a id="configuration"></a>
 ## 🔧 Configuration
 
 All configuration is via environment variables. Copy [`.env.example`](.env.example) to `.env`
@@ -334,6 +344,7 @@ Set `STORAGE_TYPE=s3` and configure:
 |----------|---------|-------------|
 | `WHATSAPP_HEALTH_MONGO_TIMEOUT_MS` | `3000` | MongoDB health-check timeout (ms). |
 
+<a id="api"></a>
 ## 📡 API
 
 BunWa is **100% API compatible** with WAHA (WhatsApp HTTP API).
@@ -362,6 +373,7 @@ curl http://localhost:3000/api/sessions/my-session
 
 Full interactive API docs at **http://localhost:3000/api-docs/** when the server is running.
 
+<a id="mcp-server-model-context-protocol"></a>
 ## 🧩 MCP Server (Model Context Protocol)
 
 BunWa exposes a [Model Context Protocol](https://modelcontextprotocol.io) server — AI assistants can send WhatsApp messages, manage sessions, query chats, and interact with groups through 23 standardized MCP tools. **Two transports are supported:** Streamable HTTP (`POST /mcp`) and stdio (subprocess, for local clients).
@@ -447,6 +459,7 @@ curl http://localhost:3000/api/mcp/tools | jq '.byCategory'
 bunx @modelcontextprotocol/inspector http://localhost:3000/mcp
 ```
 
+<a id="architecture"></a>
 ## 🏗️ Architecture
 
 ```mermaid
@@ -522,6 +535,7 @@ graph TB
     Chrome --> WhatsAppWeb["WhatsApp Web"]
 ```
 
+<a id="technology-stack"></a>
 ## 🛠️ Technology Stack
 
 | Category | Technology |
@@ -538,6 +552,7 @@ graph TB
 | **Auth** | API key + dashboard Basic Auth + per-session MCP keys (SHA-256 hashed) |
 | **Container** | [Docker](https://docker.com) multi-stage + [Coolify](https://coolify.io) ready |
 
+<a id="documentation"></a>
 ## 📖 Documentation
 
 - **Interactive API Docs** — `http://localhost:3000/api-docs/` (Scalar/OpenAPI)
