@@ -4,6 +4,7 @@ import { ChatwootAppConfig, ChatwootWebhookPayload } from '../dto/chatwoot-confi
 import { ChatwootAppRepository } from '../storage/ChatwootAppRepository';
 import { SessionManager } from '../../../core/manager.core';
 import { WAHAEvents } from '../../../structures/enums.dto';
+import { verifyWebhookSignature as verifyHmac } from '../../../common/security/webhook-signing';
 
 interface ChatwootContact {
   id: number;
@@ -397,8 +398,36 @@ export class ChatwootAppService {
 
   // ── WEBHOOK VERIFICATION ───────────────────────────────────────
 
-  async verifyWebhookSignature(app: ChatwootAppConfig, body: any): Promise<boolean> {
-    // Basic validation: check that the account_id in the payload matches the app
+  async verifyWebhookSignature(app: ChatwootAppConfig, body: any, rawBody?: string, signature?: string): Promise<boolean> {
+    // HMAC verification: if a webhookSecret is configured, require valid HMAC
+    if (app.config.webhookSecret) {
+      if (!rawBody || !signature) {
+        this.logger.warn(
+          { session: app.session },
+          'Chatwoot webhook HMAC verification failed: missing signature header or body',
+        );
+        return false;
+      }
+      const valid = verifyHmac(rawBody, signature, app.config.webhookSecret);
+      if (!valid) {
+        this.logger.warn(
+          { session: app.session },
+          'Chatwoot webhook HMAC signature mismatch',
+        );
+        return false;
+      }
+      return true;
+    }
+
+    // No secret configured — warn and fall back to account_id check (legacy mode)
+    if (!app.config.webhookSecret) {
+      this.logger.warn(
+        { session: app.session },
+        'Chatwoot webhook secret not configured — using legacy account_id check',
+      );
+    }
+
+    // Legacy fallback: check that the account_id in the payload matches the app
     if (body?.account?.id && body.account.id !== app.config.accountId) {
       this.logger.warn(
         { payloadAccountId: body.account.id, expectedAccountId: app.config.accountId },

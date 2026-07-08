@@ -12,7 +12,7 @@ import { createWebSocketHandler, setSessionManager } from './api/websocket';
 import { DashboardConfigServiceCore } from './core/config/DashboardConfigServiceCore';
 import { SwaggerConfigServiceCore } from './core/config/SwaggerConfigServiceCore';
 import { basicAuthMiddleware } from './middleware/basic-auth';
-import { rateLimit } from './middleware/rate-limit';
+import { rateLimit, setBunServer } from './middleware/rate-limit';
 import { buildOpenApiSpec } from './swagger';
 import { existsSync, statSync } from 'fs';
 import { join, resolve } from 'path';
@@ -62,6 +62,13 @@ async function bootstrap() {
   const swaggerConfig = container.resolve(SwaggerConfigServiceCore);
   const sessionManager = container.resolve(SessionManager);
   setSessionManager(sessionManager);
+
+  // Warn if running without API key in fail-closed mode
+  const apiKey = config.getApiKey();
+  const allowNoAuth = process.env.WAHA_ALLOW_NO_AUTH !== 'false';
+  if (!apiKey && !allowNoAuth) {
+    log.warn('WAHA_ALLOW_NO_AUTH=false but no WAHA_API_KEY is set — all API requests will be rejected. Set WAHA_API_KEY or remove WAHA_ALLOW_NO_AUTH.');
+  }
 
   // Restore sessions from disk and start predefined ones
   await sessionManager.restoreSessions();
@@ -128,8 +135,16 @@ async function bootstrap() {
       async (c) => {
       const auth = c.req.header('Authorization') || '';
       const [user, pass] = dashboardCredentials;
-      const expected = btoa(`${user}:${pass}`);
-      if (auth === `Basic ${expected}`) {
+      // Decode the Basic auth header and compare with timing-safe comparison
+      const encoded = auth.replace('Basic ', '');
+      let decodedUser = '', decodedPass = '';
+      try {
+        const decoded = atob(encoded);
+        const parts = decoded.split(':');
+        decodedUser = parts[0] || '';
+        decodedPass = parts.slice(1).join(':');
+      } catch {}
+      if (safeCompare(decodedUser, user) && safeCompare(decodedPass, pass)) {
         return c.json({ ok: true });
       }
       return c.json({ ok: false, message: 'Invalid credentials' }, 401);
@@ -286,7 +301,7 @@ async function bootstrap() {
   const apiRouter = createApiRouter();
   app.route('/', apiRouter);
 
-  // Chatwoot webhook routes (no auth — verified by HMAC/account_id)
+  // Chatwoot webhook routes (no auth — verified by HMAC signature header)
   const chatwootAppService = container.resolve(ChatwootAppService);
   app.route('/webhook/chatwoot', createChatwootWebhookRouter(chatwootAppService));
 
@@ -362,6 +377,9 @@ async function bootstrap() {
   });
 
   log.info(`Server running on port ${port}`);
+
+  // Share server instance with rate-limiter for socket-IP keying
+  setBunServer(server);
 
   // Graceful shutdown
   shutdownService.setShutdownCallback(async () => {

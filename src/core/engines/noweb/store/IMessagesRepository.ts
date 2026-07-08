@@ -1,7 +1,7 @@
 import { GetChatMessagesFilter } from '../../../structures/chats.dto';
 import { PaginationParams } from '../../../structures/pagination.dto';
 
-export class IMessagesRepository {
+export interface IMessagesRepository {
   deleteAll(): Promise<void>;
 
   upsert(messages: any[]): Promise<void>;
@@ -24,4 +24,10 @@ export class IMessagesRepository {
   deleteByJidByIds(jid: string, ids: string[]): Promise<void>;
 
   deleteAllByJid(jid: string): Promise<void>;
+
+  /**
+   * Returns the newest message for each of the given JIDs.
+   * Executes a single query (MAX + GROUP BY / window function) for efficiency.
+   */
+  getNewestPerJid(jids: string[]): Promise<Map<string, any>>;
 }

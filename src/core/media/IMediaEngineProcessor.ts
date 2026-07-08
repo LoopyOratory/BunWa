@@ -1,4 +1,4 @@
-export class IMediaEngineProcessor<Message> {
+export interface IMediaEngineProcessor<Message> {
   hasMedia(message: Message): boolean;
   getFilename(message: Message): string | null;
   getMimetype(message: Message): string;

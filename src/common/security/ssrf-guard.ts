@@ -182,10 +182,11 @@ export async function resolveSafeFetchTarget(rawUrl: string): Promise<string[] |
 }
 
 /**
- * SSRF-safe fetch wrapper using Bun.fetch.
- * Returns a Response that the caller must consume immediately.
+ * SSRF-safe fetch with redirect pinning.
+ * Resolves the target, fetches with redirect:'manual', and follows
+ * safe redirects (re-validating each hop). Max 5 hops.
  */
-export async function safeFetch(rawUrl: string, init?: RequestInit): Promise<Response> {
+export async function resolveAndPinFetch(rawUrl: string, init?: RequestInit): Promise<Response> {
   if (!isSsrfProtectionEnabled()) {
     return fetch(rawUrl, init);
   }
@@ -196,12 +197,39 @@ export async function safeFetch(rawUrl: string, init?: RequestInit): Promise<Res
   const timeout = setTimeout(() => controller.abort(), 30_000);
 
   try {
-    return await fetch(rawUrl, {
-      ...init,
-      signal: controller.signal,
-      redirect: 'follow',
-    });
+    let url = rawUrl;
+    for (let hop = 0; hop < 5; hop++) {
+      const res = await fetch(url, {
+        ...init,
+        signal: controller.signal,
+        redirect: 'manual',
+      });
+
+      if (res.status >= 300 && res.status < 400) {
+        const location = res.headers.get('location');
+        if (!location) {
+          throw new SsrfBlockedError('Redirect with no Location header');
+        }
+        const nextUrl = new URL(location, url).toString();
+        await resolveSafeFetchTarget(nextUrl);
+        url = nextUrl;
+        continue;
+      }
+
+      return res;
+    }
+
+    throw new SsrfBlockedError('Max redirect hops exceeded');
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/**
+ * SSRF-safe fetch wrapper using Bun.fetch.
+ * Returns a Response that the caller must consume immediately.
+ * Delegates to resolveAndPinFetch.
+ */
+export async function safeFetch(rawUrl: string, init?: RequestInit): Promise<Response> {
+  return resolveAndPinFetch(rawUrl, init);
 }

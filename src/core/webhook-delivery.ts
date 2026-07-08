@@ -5,11 +5,17 @@
 
 import { injectable, inject } from 'tsyringe';
 import { WhatsappConfigService } from '../config.service';
-import { isSsrfProtectionEnabled, resolveSafeFetchTarget, SsrfBlockedError } from '../common/security/ssrf-guard';
+import { resolveAndPinFetch, isSsrfProtectionEnabled, resolveSafeFetchTarget, SsrfBlockedError } from '../common/security/ssrf-guard';
 import { generateWebhookSignature, generateIdempotencyKey } from '../common/security/webhook-signing';
-import { evaluateFilters, type WebhookFilters, type LidResolver } from '../engines/webhook-filters';
+import { evaluateFilters, type WebhookFilters, type LidResolver } from '../common/security/webhook-filters';
 import pino from 'pino';
 import { randomBytes } from 'crypto';
+
+export interface DeliveryResult {
+  ok: boolean;
+  statusCode?: number;
+  error?: string;
+}
 
 interface WebhookPayload {
   event: string;
@@ -20,6 +26,7 @@ interface WebhookPayload {
 
 interface WebhookConfig {
   url: string;
+  method?: string;
   secret?: string;
   retries?: number;
   retryDelayMs?: number;
@@ -45,15 +52,15 @@ export class WebhookDelivery {
     payload: WebhookPayload,
     webhookConfig?: WebhookConfig,
     resolveLid?: LidResolver,
-  ): Promise<void> {
+  ): Promise<DeliveryResult> {
     const url = webhookConfig?.url || this.config.getWebhookUrl();
-    if (!url) return;
+    if (!url) return { ok: false, error: 'No webhook URL configured' };
 
     // Apply webhook filters — skip if filters don't match
     if (webhookConfig?.filters) {
       if (!evaluateFilters(webhookConfig.filters, payload.event, payload.data, resolveLid)) {
         this.logger.debug(`Webhook filtered out: ${payload.event} for ${payload.session}`);
-        return;
+        return { ok: true };
       }
     }
 
@@ -96,16 +103,20 @@ export class WebhookDelivery {
           }
         }
 
-        const res = await fetch(url, {
-          method: 'POST',
-          headers,
-          body: bodyStr,
+        const httpMethod = (webhookConfig?.method || 'POST').toUpperCase();
+        const isGet = httpMethod === 'GET';
+        const fetchUrl = isGet ? `${url}?payload=${encodeURIComponent(bodyStr)}` : url;
+
+        const res = await resolveAndPinFetch(fetchUrl, {
+          method: httpMethod,
+          headers: isGet ? {} : headers,
+          body: isGet ? undefined : bodyStr,
           signal: AbortSignal.timeout(10_000),
         });
 
         if (res.ok) {
           this.logger.debug(`Webhook delivered: ${payload.event} for ${payload.session} (${deliveryId})`);
-          return;
+          return { ok: true, statusCode: res.status };
         }
 
         if (res.status >= 500 && attempt < maxRetries) {
@@ -115,11 +126,11 @@ export class WebhookDelivery {
         }
 
         this.logger.error(`Webhook delivery failed: ${payload.event} for ${payload.session} — HTTP ${res.status}`);
-        return;
+        return { ok: false, statusCode: res.status, error: `HTTP ${res.status}` };
       } catch (error: any) {
         if (error instanceof SsrfBlockedError) {
           this.logger.error(`Webhook SSRF blocked: ${error.message}`);
-          return;
+          return { ok: false, error: error.message };
         }
         if (attempt < maxRetries) {
           const delay = Math.pow(2, attempt) * retryDelayMs + Math.random() * 100;
@@ -127,8 +138,9 @@ export class WebhookDelivery {
           continue;
         }
         this.logger.error(`Webhook delivery failed: ${payload.event} for ${payload.session} — ${error.message}`);
-        return;
+        return { ok: false, error: error.message };
       }
     }
+    return { ok: false, error: 'Max retries exhausted' };
   }
 }

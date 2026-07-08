@@ -3,7 +3,7 @@ import type {
   LabelAssociationType,
 } from '@whiskeysockets/baileys/lib/Types/LabelAssociation';
 
-export class ILabelAssociationRepository {
+export interface ILabelAssociationRepository {
   deleteOne(association: LabelAssociation): Promise<void>;
 
   save(association: LabelAssociation): Promise<void>;

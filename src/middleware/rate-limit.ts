@@ -1,4 +1,5 @@
 import { MiddlewareHandler } from 'hono';
+import type { Server } from 'bun';
 
 interface RateLimitEntry {
   count: number;
@@ -17,13 +18,51 @@ interface RateLimitOptions {
 }
 
 /**
+ * Stores the Bun server instance so rate-limit middleware can
+ * resolve the remote client IP from the TCP socket rather than
+ * trusting spoofable headers.
+ */
+let bunServer: Server | null = null;
+
+export function setBunServer(server: Server): void {
+  bunServer = server;
+}
+
+/**
  * Simple in-memory rate limiter middleware for Hono.
  * Uses a sliding window counter per key (typically client IP).
+ *
+ * IP resolution:
+ *  - By default reads the real TCP socket IP via the Bun server,
+ *    which cannot be spoofed by client headers.
+ *  - When TRUSTED_PROXIES env var is set, falls back to
+ *    x-forwarded-for / x-real-ip headers so proxy-forwarded IPs
+ *    resolve correctly.
  */
 export function rateLimit(options: RateLimitOptions = {}): MiddlewareHandler {
   const windowMs = options.windowMs ?? 60_000;
   const max = options.max ?? 100;
   const keyFn = options.keyFn ?? ((c: any) => {
+    const trustedProxies = process.env.TRUSTED_PROXIES;
+
+    if (trustedProxies) {
+      // Behind a trusted proxy — use forwarded headers
+      return c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
+        || c.req.header('x-real-ip')
+        || 'unknown';
+    }
+
+    // Direct connection — read the real TCP socket IP (not spoofable)
+    try {
+      if (bunServer?.requestIP) {
+        const ipInfo = bunServer.requestIP(c.req.raw);
+        if (ipInfo?.address) return ipInfo.address;
+      }
+    } catch {
+      /* fall through */
+    }
+
+    // Last-resort fallback
     return c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
       || c.req.header('x-real-ip')
       || 'unknown';

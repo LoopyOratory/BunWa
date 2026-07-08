@@ -35,6 +35,7 @@ export class SessionManager {
   private events2: DefaultMap<WAHAEvents, SwitchObservable<any>>;
 
   private webhook: WebhookDelivery | null = null;
+  private subscriptions: Map<string, Array<{ unsubscribe: () => void }>> = new Map();
 
   constructor(
     @inject(WhatsappConfigService) private config: WhatsappConfigService,
@@ -59,7 +60,7 @@ export class SessionManager {
     for (const sessionName of startSessions) {
       await this.withLock(sessionName, async () => {
         this.logger.info(`Starting predefined session: ${sessionName}`);
-        await this.start(sessionName);
+        await this._start(sessionName);
       });
     }
   }
@@ -119,6 +120,10 @@ export class SessionManager {
   }
 
   async start(name: string): Promise<any> {
+    return this.withLock(name, () => this._start(name));
+  }
+
+  private async _start(name: string): Promise<any> {
     const sessionConfig = this.sessionConfigs.get(name) || {};
     // Determine engine type from config, default to NOWEB
     const engineRaw = sessionConfig?.engine || 'NOWEB';
@@ -158,35 +163,65 @@ export class SessionManager {
 
     this.sessions.set(name, session);
 
-    // Subscribe to session events for webhook delivery
-    if (this.webhook) {
-      const webhookEvents = [
-        WAHAEvents.SESSION_STATUS,
-        WAHAEvents.MESSAGE,
-        WAHAEvents.MESSAGE_ANY,
-      ];
+    // Collect all subscriptions for this session for later resync/cleanup
+    const sessionSubs: Array<{ unsubscribe: () => void }> = [];
+
+    // Subscribe to session events for webhook delivery (global env-config webhook)
+    this.subscribeGlobalWebhooks(name, session, sessionSubs);
+
+    // Per-session webhooks (from session config)
+    const sessionWebhooks = sessionConfig.webhooks || [];
+    for (const wh of sessionWebhooks) {
+      if (wh.enabled === false || !wh.url) continue;
+
+      const deliveryConfig = {
+        url: wh.url,
+        method: wh.method,
+        secret: wh.hmac?.key,
+        retries: wh.retries?.attempts ?? 3,
+        retryDelayMs: (wh.retries?.delaySeconds ?? 2) * 1000,
+        customHeaders: wh.customHeaders?.reduce((acc: Record<string, string>, h: any) => {
+          acc[h.name] = h.value;
+          return acc;
+        }, {}),
+        filters: wh.filters,
+      };
+
+      // Determine which events to subscribe to from the webhook config
+      const allEvents = Object.values(WAHAEvents);
+      const webhookEvents = wh.events.includes('*')
+        ? allEvents
+        : allEvents.filter(e => wh.events.includes(e));
+
       for (const event of webhookEvents) {
         try {
-          session.getEventObservable(event).subscribe({
+          const sub = session.getEventObservable(event).subscribe({
             next: (data: any) => {
               this.webhook!.deliver({
                 event,
                 session: name,
                 timestamp: Date.now(),
                 data,
-              });
+              }, deliveryConfig);
             },
           });
+          sessionSubs.push(sub);
         } catch {
           // Session doesn't support this event
         }
       }
     }
 
+    // Store subscriptions for later resync/cleanup
+    this.subscriptions.set(name, sessionSubs);
+
     // Start the session in background
     (session as any).start().catch((error: any) => {
-      this.logger.error(`Session ${name} failed to start:`, error.message);
-      this.sessions.delete(name);  // Remove ghost entry on failure
+      this.logger.error(`Session ${name} failed to start:`, error.stack || error.message);
+      // Only remove from map if it's still the same session (avoid race)
+      if (this.sessions.get(name) === session) {
+        this.sessions.delete(name);
+      }
     });
 
     this.logger.info(`Session ${name} started`);
@@ -199,10 +234,14 @@ export class SessionManager {
   }
 
   async stop(name: string, silent: boolean = false): Promise<void> {
+    return this.withLock(name, () => this._stop(name, silent));
+  }
+
+  private async _stop(name: string, silent: boolean = false): Promise<void> {
     const session = this.sessions.get(name);
     if (session) {
       await (session as any).stop();
-      this.sessions.set(name, null as any);  // Keep entry for restart, mark as stopped
+      this.sessions.set(name, null as any);
       if (!silent) {
         this.logger.info(`Session ${name} stopped`);
       }
@@ -210,8 +249,10 @@ export class SessionManager {
   }
 
   async restart(name: string): Promise<any> {
-    await this.stop(name, true);
-    return this.start(name);
+    return this.withLock(name, async () => {
+      await this._stop(name, true);
+      return this._start(name);
+    });
   }
 
   getSession(name: string): WhatsappSession {
@@ -255,7 +296,7 @@ export class SessionManager {
     return this.sessions.has(name);
   }
 
-  async isRunning(name: string): boolean {
+  isRunning(name: string): boolean {
     return this.sessions.has(name) && this.sessions.get(name) !== null;
   }
 
@@ -356,13 +397,15 @@ export class SessionManager {
   }
 
   async delete(name: string): Promise<void> {
-    const session = this.sessions.get(name);
-    if (session) {
-      await this.stop(name, true);
-    }
-    this.sessions.delete(name);
-    this.sessionConfigs.delete(name);
-    await this.saveSessionIndex();
+    return this.withLock(name, async () => {
+      const session = this.sessions.get(name);
+      if (session) {
+        await this._stop(name, true);
+      }
+      this.sessions.delete(name);
+      this.sessionConfigs.delete(name);
+      await this.saveSessionIndex();
+    });
   }
 
   async logout(name: string): Promise<void> {
@@ -379,5 +422,115 @@ export class SessionManager {
       await (session as any).unpair?.();
     }
     await this.delete(name);
+  }
+
+  /**
+   * Resubscribe all webhook subscriptions for a session.
+   * Unsubscribes existing ones first, then re-creates based on current config.
+   * Called from webhook CRUD routes after create/update/delete.
+   */
+  /**
+   * Subscribe to the common events delivered to the global env-configured
+   * webhook (WEBHOOK_URL). Pushes the created subscriptions onto `sink` so the
+   * caller can track them for later resync/cleanup. No-op when no global
+   * webhook is configured. Shared by _start and resyncWebhooks so a resync
+   * restores the global subscriptions it tears down.
+   */
+  private subscribeGlobalWebhooks(
+    name: string,
+    session: WhatsappSession,
+    sink: Array<{ unsubscribe: () => void }>,
+  ): void {
+    if (!this.webhook) return;
+
+    const globalEvents = [
+      WAHAEvents.SESSION_STATUS,
+      WAHAEvents.MESSAGE,
+      WAHAEvents.MESSAGE_ANY,
+    ];
+    for (const event of globalEvents) {
+      try {
+        const sub = session.getEventObservable(event).subscribe({
+          next: (data: any) => {
+            this.webhook!.deliver({
+              event,
+              session: name,
+              timestamp: Date.now(),
+              data,
+            });
+          },
+        });
+        sink.push(sub);
+      } catch {
+        // Session doesn't support this event
+      }
+    }
+  }
+
+  async resyncWebhooks(name: string): Promise<void> {
+    // Unsubscribe all existing subscriptions for this session
+    const existing = this.subscriptions.get(name);
+    if (existing) {
+      for (const sub of existing) {
+        try { sub.unsubscribe(); } catch { /* ignore */ }
+      }
+    }
+    this.subscriptions.delete(name);
+
+    // Re-subscribe only if the session is still active
+    const session = this.sessions.get(name);
+    if (!session || !this.webhook) return;
+
+    const sessionSubs: Array<{ unsubscribe: () => void }> = [];
+
+    // Restore the global env-config webhook subscriptions we just tore down
+    this.subscribeGlobalWebhooks(name, session, sessionSubs);
+
+    const sessionConfig = this.sessionConfigs.get(name) || {};
+    const sessionWebhooks = sessionConfig.webhooks || [];
+
+    for (const wh of sessionWebhooks) {
+      if (wh.enabled === false || !wh.url) continue;
+
+      const deliveryConfig = {
+        url: wh.url,
+        method: wh.method,
+        secret: wh.hmac?.key,
+        retries: wh.retries?.attempts ?? 3,
+        retryDelayMs: (wh.retries?.delaySeconds ?? 2) * 1000,
+        customHeaders: wh.customHeaders?.reduce((acc: Record<string, string>, h: any) => {
+          acc[h.name] = h.value;
+          return acc;
+        }, {}),
+        filters: wh.filters,
+      };
+
+      const allEvents = Object.values(WAHAEvents);
+      const webhookEvents = wh.events.includes('*')
+        ? allEvents
+        : allEvents.filter(e => wh.events.includes(e));
+
+      for (const event of webhookEvents) {
+        try {
+          const sub = session.getEventObservable(event).subscribe({
+            next: (data: any) => {
+              this.webhook!.deliver({
+                event,
+                session: name,
+                timestamp: Date.now(),
+                data,
+              }, deliveryConfig);
+            },
+          });
+          sessionSubs.push(sub);
+        } catch {
+          // Session doesn't support this event
+        }
+      }
+    }
+
+    if (sessionSubs.length > 0) {
+      this.subscriptions.set(name, sessionSubs);
+    }
   }
 }

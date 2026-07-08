@@ -54,7 +54,7 @@ cp .env.example .env
 bun run src/main.ts
 ```
 
-The dashboard opens at **http://localhost:3001** — the default login is `admin` / `admin` (change in `.env`).
+The dashboard opens at **http://localhost:3000** — the default login is `admin` / `admin` (change in `.env`).
 
 ### Docker
 
@@ -86,48 +86,217 @@ A full-featured web dashboard built with React 19, shadcn/ui, and Tailwind CSS:
 
 ## 🔧 Configuration
 
+All configuration is via environment variables. Copy [`.env.example`](.env.example) to `.env`
+and edit — that file is the canonical source and mirrors every variable below. All variables
+are optional and fall back to the defaults shown; booleans accept `true/false/1/0/yes/no`.
+
+> **Production note:** set `WAHA_API_KEY` and `WAHA_ALLOW_NO_AUTH=false`. With neither set,
+> the API, dashboard, WebSocket, and MCP endpoint are reachable **without authentication**.
+
 ### Server
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `WHATSAPP_API_PORT` | `3001` | HTTP server port |
-| `WHATSAPP_API_KEY` | — | API key for programmatic access |
-| `DASHBOARD_USERNAME` | `admin` | Dashboard login username |
-| `DASHBOARD_PASSWORD` | `admin` | Dashboard login password |
-| `LOG_LEVEL` | `info` | Logging verbosity (`debug`, `info`, `warn`, `error`) |
-| `MCP_ENABLED` | `true` | Enable the MCP server at `POST /mcp` |
+| `PORT` | `3000` | HTTP port. Takes precedence over `WHATSAPP_API_PORT`. |
+| `WHATSAPP_API_PORT` | `3000` | Fallback port if `PORT` is unset. |
+| `WHATSAPP_API_SCHEMA` | `http` | URL scheme (`http` or `https`). |
+| `WHATSAPP_API_HOSTNAME` | `localhost` | Server hostname. |
+| `WAHA_BASE_URL` | — | Override the auto-generated `schema://hostname:port` base URL. |
+| `TRUSTED_PROXIES` | — | Comma-separated trusted proxy IPs. When set, the rate limiter reads `x-forwarded-for` for client IP. |
+| `WAHA_CORS_ORIGIN` | — | Comma-separated CORS origins. When set, credentialed CORS is enabled for those origins; empty = wildcard, no credentials. |
+
+### Authentication
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WAHA_API_KEY` | — | API key for programmatic access (header `X-Api-Key`). **Strongly recommended.** |
+| `WAHA_ALLOW_NO_AUTH` | `true` | When `false`, requests without an API key are rejected. **Set `false` in production.** |
+| `WHATSAPP_API_KEY_EXCLUDE_PATH` | — | Comma-separated API paths excluded from API-key auth (e.g. `/api/health,/api/version`). |
+
+### Dashboard
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WAHA_DASHBOARD_ENABLED` | `true` | Enable/disable the web dashboard UI. |
+| `WAHA_DASHBOARD_USERNAME` | `admin` | Dashboard Basic Auth username. |
+| `WAHA_DASHBOARD_PASSWORD` | `admin` | Dashboard Basic Auth password. |
+
+### API Docs (Swagger / Scalar)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WHATSAPP_SWAGGER_ENABLED` | `true` | Enable the interactive API docs at `/api-docs`. |
+| `WHATSAPP_SWAGGER_USERNAME` | `admin` | API-docs Basic Auth username. |
+| `WHATSAPP_SWAGGER_PASSWORD` | — | API-docs Basic Auth password (empty = no auth). |
+| `WHATSAPP_SWAGGER_TITLE` | `BUNWA - WhatsApp HTTP API` | API-docs page title. |
+| `WHATSAPP_SWAGGER_DESCRIPTION` | — | API-docs description. |
+| `WHATSAPP_SWAGGER_EXTERNAL_DOC_URL` | `https://bunwa.ekosystems.dev/` | External docs URL shown in the API docs. |
+| `WHATSAPP_SWAGGER_CONFIG_ADVANCED` | `false` | Enable advanced Swagger config options. |
+
+### Logging
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WAHA_LOG_LEVEL` | `info` | Log level: `trace`, `debug`, `info`, `warn`, `error`, `fatal`. |
+| `WAHA_HTTP_LOG_LEVEL` | `info` | HTTP request log level. |
+| `WAHA_LOG_FORMAT` | `PRETTY` | Log output format: `PRETTY` or `JSON`. |
+| `DEBUG` | — | Set to `1` for verbose Baileys debug output. |
+| `WAHA_DEBUG_MODE` | `false` | Enable extra diagnostics. |
+
+### WhatsApp Engine
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WHATSAPP_DEFAULT_ENGINE` | `NOWEB` | Default engine: `NOWEB` (Baileys) or `WEBJS` (whatsapp-web.js). |
+| `ENGINE_TYPE` | — | Alternative engine-type override. |
+| `WAHA_NAMESPACE` / `WAHA_SESSION_NAMESPACE` | engine name | Namespace prefix for session names. |
+| `CHROME_PATH` / `PUPPETEER_EXECUTABLE_PATH` | — | Path to Chrome/Chromium binary (**required for the WEBJS engine**). |
+| `WAHA_PRINT_QR` | `true` | Set `false` to suppress QR output in the console. |
+
+> ⚠️ The **WEBJS engine requires Chrome/Chromium** installed on the host (set via `CHROME_PATH`
+> or `PUPPETEER_EXECUTABLE_PATH`). The engine will fail with a clear error if Chrome is
+> missing — it never crashes with a raw module-not-found error.
+
+### Client Config (NOWEB)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WAHA_CLIENT_DEVICE_NAME` | — | Device name shown to WhatsApp. |
+| `WAHA_CLIENT_BROWSER_NAME` | — | Browser name shown to WhatsApp. |
+
+### Session Management
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WHATSAPP_START_SESSION` | — | Comma-separated session names to auto-start on boot. |
+| `WHATSAPP_RESTART_ALL_SESSIONS` | `false` | Restore and start all previously-running sessions on boot. |
+| `WAHA_AUTO_START_DELAY_SECONDS` | `0` | Delay before auto-starting sessions. |
+| `WAHA_WORKER_ID` | — | Worker ID for multi-worker deployments. |
+| `WAHA_WORKER_RESTART_SESSIONS` | `true` | Worker restores sessions on start. |
+| `WAHA_VERSION` | auto | Version override: `CORE` or `PLUS`. |
+
+### Presence
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WAHA_PRESENCE_AUTO_ONLINE` | `true` | Mark session ONLINE on any message activity. |
+| `WAHA_PRESENCE_AUTO_ONLINE_DURATION_SECONDS` | `25` | Seconds to keep ONLINE after activity. |
+
+### Chat Filtering (global defaults)
+
+These set the **server-wide** ignore defaults. (Per-session ignore toggles in the dashboard
+are not yet applied by the engine — see [`plans/`](plans/).)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WAHA_SESSION_CONFIG_IGNORE_STATUS` | `false` | Ignore status/list messages. |
+| `WAHA_SESSION_CONFIG_IGNORE_GROUPS` | `false` | Ignore group chats. |
+| `WAHA_SESSION_CONFIG_IGNORE_CHANNELS` | `false` | Ignore channels. |
+| `WAHA_SESSION_CONFIG_IGNORE_BROADCAST` | `false` | Ignore broadcast lists. |
 
 ### Database
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `WAHA_DB_TYPE` | `sqlite` | Database driver (`sqlite` or `postgres`) |
-| `WAHA_SQLITE_PATH` | `.sessions/waha.db` | SQLite database file path |
-| `WAHA_DATABASE_URL` | — | PostgreSQL connection URL (required when `WAHA_DB_TYPE=postgres`) |
+| `WAHA_DATABASE_DRIVER` | `sqlite` | Driver: `sqlite`, `postgres`, or `mongo`. |
+| `WAHA_SQLITE_PATH` | `.sessions/waha.db` | SQLite file path (driver `sqlite`). |
+| `WAHA_DATABASE_URL` | — | PostgreSQL connection string (driver `postgres`). |
+| `WHATSAPP_SESSIONS_POSTGRESQL_URL` | — | Alias for `WAHA_DATABASE_URL`. |
+| `WHATSAPP_SESSIONS_MONGO_URL` | — | MongoDB connection string for session storage. |
+| `WAHA_DB_TYPE` | `sqlite` | Database type reported by the infrastructure endpoint. |
+| `WAHA_DB_HOST` | `localhost` | Reported DB host. |
+| `WAHA_DB_PORT` | `5432` | Reported DB port. |
+| `WAHA_DB_USERNAME` | — | Reported DB username. |
+| `WAHA_DB_NAME` | `./data/waha.sqlite` | Reported DB name. |
+| `WAHA_DB_SSL` | `false` | Reported DB SSL flag. |
 
-### Storage (Session Auth Data)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WAHA_STORAGE_TYPE` | `local` | Storage backend (`local` or `s3`) |
-| | | |
-| **Local** | | |
-| `WAHA_LOCAL_PATH` | `.sessions` | Directory for session auth files |
-| | | |
-| **S3** | | |
-| `WAHA_S3_ENDPOINT` | — | S3-compatible endpoint URL (e.g. MinIO) |
-| `WAHA_S3_BUCKET` | `waha-bun` | Bucket name |
-| `WAHA_S3_REGION` | `us-east-1` | AWS region |
-| `WAHA_S3_ACCESS_KEY` | — | Access key ID |
-| `WAHA_S3_SECRET_KEY` | — | Secret access key |
-
-### WhatsApp Session
+### Media
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `WHATSAPP_SESSION_NAME` | — | Default session name (optional) |
-| `WHATSAPP_DEFAULT_ENGINE` | `noweb` | Default engine (`noweb` or `webjs`) |
-| `WHATSAPP_WEBJS_CHROME_PATH` | — | Custom Chrome/Chromium path for WEBJS engine |
+| `WHATSAPP_FILES_FOLDER` | `/tmp/whatsapp-files` | Directory for downloaded media. |
+| `WHATSAPP_DOWNLOAD_MEDIA` | `true` | Enable automatic media download. |
+| `WHATSAPP_FILES_MIMETYPES` | — | Comma-separated allowed MIME types (empty = all). |
+| `WHATSAPP_HEALTH_MEDIA_FILES_THRESHOLD_MB` | `100` | Media-files health threshold (MB). |
+| `WHATSAPP_HEALTH_SESSION_FILES_THRESHOLD_MB` | `100` | Session-files health threshold (MB). |
+
+### Storage — Local
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `STORAGE_TYPE` | `local` | Storage backend: `local` or `s3`. |
+| `STORAGE_LOCAL_PATH` | `./data/media` | Local media storage path. |
+| `WAHA_LOCAL_STORE_BASE_DIR` | `.sessions` | Base directory for session auth data. |
+| `WAHA_STORAGE_DIR` | `./data` | Directory for internal databases (audit, templates). |
+| `DATA_DIR` | `./data` | General data directory (export/import). |
+| `EXPORT_IMPORT_MAX_BACKUPS` | — | Max backup files retained during export/import. |
+| `STORAGE_IMPORT_MAX_BYTES` | `209715200` | Per-entry import byte cap (default 200 MiB). |
+| `STORAGE_IMPORT_MAX_ENTRIES` | `100000` | Max entries per import. |
+| `AUDIT_RETENTION_DAYS` | `90` | Days to retain audit logs (`0` or negative disables). |
+| `WAHA_STORAGE_TYPE` / `WAHA_STORAGE_LOCAL_PATH` | — | Legacy aliases for `STORAGE_TYPE` / `STORAGE_LOCAL_PATH`. |
+
+### Storage — S3
+
+Set `STORAGE_TYPE=s3` and configure:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `S3_ENDPOINT` | — | S3-compatible endpoint URL (e.g. MinIO). |
+| `S3_ACCESS_KEY_ID` | — | Access key ID. |
+| `S3_SECRET_ACCESS_KEY` | — | Secret access key. |
+| `S3_ACCESS_KEY` / `S3_SECRET_KEY` | — | Legacy credential aliases (read as fallback). |
+| `S3_BUCKET` | `waha-bun` | Bucket name. |
+| `S3_REGION` | `us-east-1` | Region. |
+| `WAHA_S3_ENDPOINT` / `WAHA_S3_BUCKET` / `WAHA_S3_REGION` / `WAHA_S3_ACCESS_KEY` / `WAHA_S3_SECRET_KEY` | — | WAHA-prefixed vars used by the infrastructure endpoint. |
+
+### Webhook
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WAHA_WEBHOOK_URL` | — | Default webhook URL for all sessions (overridable per session). |
+| `WEBHOOK_SSRF_PROTECT` | `true` | Enable SSRF protection for webhook delivery. |
+| `SSRF_ALLOWED_HOSTS` | — | Comma-separated hosts/IPs allowed when SSRF protection is on. |
+
+### Proxy
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WHATSAPP_PROXY_SERVER` | — | Single proxy server (`protocol://host:port`). |
+| `WHATSAPP_PROXY_SERVER_LIST` | — | Comma-separated proxy list (overrides the single server). |
+| `WHATSAPP_PROXY_SERVER_INDEX_PREFIX` | — | Index prefix for mapping sessions to proxies. |
+| `WHATSAPP_PROXY_SERVER_USERNAME` / `WHATSAPP_PROXY_SERVER_PASSWORD` | — | Proxy authentication. |
+
+### Queue / Redis
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WAHA_QUEUE_ENABLED` | `false` | Redis-backed queue toggle. |
+| `WAHA_REDIS_HOST` | `localhost` | Redis host. |
+| `WAHA_REDIS_PORT` | `6379` | Redis port. |
+| `WAHA_REDIS_PASSWORD` | — | Redis password. |
+
+> ℹ️ These are currently **reported only** by the infrastructure endpoint — there is no active
+> queue backend bundled (the queue dependencies were removed). Setting them has no runtime effect yet.
+
+### MCP (Model Context Protocol)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_READONLY` | `false` | When `true`, MCP tools operate in read-only mode. |
+| `MCP_RATE_LIMIT_MAX` | `60` | Max MCP requests per window. |
+| `MCP_RATE_LIMIT_WINDOW_MS` | `60000` | MCP rate-limit window (ms). |
+
+### Chatwoot Integration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MILO_API_URL` | `http://localhost:3003/api/webhooks/chatwoot/milo` | Milo API URL for Chatwoot webhook forwarding. |
+
+### Health Check
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WHATSAPP_HEALTH_MONGO_TIMEOUT_MS` | `3000` | MongoDB health-check timeout (ms). |
 
 ## 📡 API
 
@@ -135,15 +304,15 @@ BunWa is **100% API compatible** with WAHA (WhatsApp HTTP API).
 
 ```bash
 # Create a session
-curl -X POST http://localhost:3001/api/sessions \
+curl -X POST http://localhost:3000/api/sessions \
   -H "Content-Type: application/json" \
   -d '{"name":"my-session"}'
 
 # Start it
-curl -X POST http://localhost:3001/api/sessions/my-session/start
+curl -X POST http://localhost:3000/api/sessions/my-session/start
 
 # Send a message
-curl -X POST http://localhost:3001/api/sendText \
+curl -X POST http://localhost:3000/api/sendText \
   -H "Content-Type: application/json" \
   -d '{
     "session": "my-session",
@@ -152,10 +321,10 @@ curl -X POST http://localhost:3001/api/sendText \
   }'
 
 # Get QR code (for new sessions)
-curl http://localhost:3001/api/sessions/my-session
+curl http://localhost:3000/api/sessions/my-session
 ```
 
-Full interactive API docs at **http://localhost:3001/api-docs/** when the server is running.
+Full interactive API docs at **http://localhost:3000/api-docs/** when the server is running.
 
 ## 🧩 MCP Server (Model Context Protocol)
 
@@ -299,8 +468,8 @@ graph TB
 
 ## 📖 Documentation
 
-- **Interactive API Docs** — `http://localhost:3001/api-docs/` (Swagger/OpenAPI)
-- **Engine Comparison** — `http://localhost:3001/docs` (NOWEB vs WEBJS feature matrix)
+- **Interactive API Docs** — `http://localhost:3000/api-docs/` (Swagger/OpenAPI)
+- **Engine Comparison** — `http://localhost:3000/docs` (NOWEB vs WEBJS feature matrix)
 - **Phone Pairing** — QR scan or number pairing supported for both engines
 - **Proxy Support** — HTTP, HTTPS, SOCKS4, SOCKS5 proxy for WhatsApp connections
 

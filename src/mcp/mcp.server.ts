@@ -13,6 +13,7 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
 import pino from 'pino';
+import { timingSafeEqual, createHash } from 'crypto';
 import type { SessionManager } from '../core/manager.core';
 import type { SessionConfig } from '../structures/sessions.dto';
 import type { ToolDescriptor } from './tool-descriptor';
@@ -42,18 +43,24 @@ function extractApiKey(extra: ToolExtra): string | undefined {
   return undefined;
 }
 
-/** Simple API key validation against the configured key. */
-function validateApiKey(rawKey: string | undefined, configuredKey: string | undefined): boolean {
+/** Timing-safe string comparison. */
+function safeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
+/** API key validation against the configured key using timing-safe comparison. */
+export function validateApiKey(rawKey: string | undefined, configuredKey: string | undefined): boolean {
   if (!configuredKey) return true; // No key configured = open access (dev mode)
   if (!rawKey) return false;
-  return rawKey === configuredKey;
+  return safeCompare(rawKey, configuredKey);
 }
 
 /**
  * Check whether a tool is allowed for the given session configuration.
  * Global disabled tools are checked separately before calling this.
  */
-function isToolAllowed(
+export function isToolAllowed(
   tool: ToolDescriptor,
   mcpConfig: SessionConfig['mcp'] | undefined,
 ): { allowed: boolean; reason?: string } {
@@ -123,26 +130,56 @@ function buildServer(
       async (input: Record<string, unknown>, extra: ToolExtra) => {
         const rawKey = extractApiKey(extra);
         try {
-          if (!validateApiKey(rawKey, configuredKey)) {
+          // Auth: global key first, then per-session hashed keys
+          const globalOk = validateApiKey(rawKey, configuredKey);
+          let scopedSession: string | undefined;
+
+          if (!globalOk && rawKey) {
+            const providedHash = createHash('sha256').update(rawKey).digest('hex');
+            const allSessions = sessionManager.getSessions();
+            for (const s of allSessions) {
+              try {
+                const cfg = sessionManager.getSessionConfig(s.name);
+                if (cfg?.mcp?.apiKeyHash && safeCompare(cfg.mcp.apiKeyHash, providedHash)) {
+                  scopedSession = s.name;
+                  break;
+                }
+              } catch {
+                // Session config not available — skip
+              }
+            }
+          }
+
+          if (!globalOk && !scopedSession) {
             return jsonToolResult(
               { success: false, name: 'Unauthorized', message: 'Invalid or missing API key' },
               true,
             );
           }
+
           rateLimiter.check(rawKey || 'anonymous');
+
+          // Auto-scoping: per-session key forces sessionId
+          if (scopedSession && tool.sessionScoped) {
+            input.sessionId = scopedSession;
+          }
 
           // Permission check — resolve session config for session-scoped tools
           if (tool.sessionScoped) {
             const sessionId = input.sessionId as string | undefined;
-            if (sessionId) {
-              const sessionConfig = sessionManager.getSessionConfig(sessionId);
-              const { allowed, reason } = isToolAllowed(tool, sessionConfig?.mcp);
-              if (!allowed) {
-                return jsonToolResult(
-                  { success: false, name: 'PermissionDenied', message: reason || 'Tool not allowed' },
-                  true,
-                );
-              }
+            if (!sessionId) {
+              return jsonToolResult(
+                { success: false, name: 'PermissionDenied', message: 'sessionId is required for this tool' },
+                true,
+              );
+            }
+            const sessionConfig = sessionManager.getSessionConfig(sessionId);
+            const { allowed, reason } = isToolAllowed(tool, sessionConfig?.mcp);
+            if (!allowed) {
+              return jsonToolResult(
+                { success: false, name: 'PermissionDenied', message: reason || 'Tool not allowed' },
+                true,
+              );
             }
           } else {
             // Non-session-scoped tools still check MCP-level disable
@@ -224,17 +261,9 @@ export function createMcpRouter(
       await server.connect(transport);
 
       // Hono's c.req.raw is a native Web Standard Request
-      const response = await transport.handleRequest(c.req.raw);
-
-      // Clean up after the request completes
-      try {
-        await transport.close();
-        await server.close();
-      } catch {
-        // Ignore cleanup errors
-      }
-
-      return response;
+      // The transport manages its own lifecycle and will close the stream
+      // naturally after all responses are sent — do NOT close it here.
+      return transport.handleRequest(c.req.raw);
     } catch (error) {
       logger.error({ err: error }, 'Error handling MCP request');
       try {

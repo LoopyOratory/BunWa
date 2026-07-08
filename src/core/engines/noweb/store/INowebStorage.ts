@@ -25,4 +25,6 @@ export abstract class INowebStorage {
   abstract getLabelAssociationRepository(): ILabelAssociationRepository;
 
   abstract getLidPNRepository(): INowebLidPNRepository;
+
+  abstract runInTransaction<T>(fn: () => Promise<T>): Promise<T>;
 }

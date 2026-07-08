@@ -1,6 +1,6 @@
 import type { Label } from '@whiskeysockets/baileys/lib/Types/Label';
 
-export class ILabelsRepository {
+export interface ILabelsRepository {
   getById(id: string): Promise<Label | null>;
 
   getAll(): Promise<Label[]>;

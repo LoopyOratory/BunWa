@@ -558,7 +558,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       } else if (connection === 'close') {
         this.logger.info(`[${this.name}] Connection closed after ${Date.now() - startTime}ms`);
         this.qr.save('');
-        const error = lastDisconnect.error as any;
+        const error = lastDisconnect?.error as any;
         const statusCode = error?.output?.statusCode;
 
         // Restart required from the server
@@ -600,7 +600,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
         // 401 / logged out — clear stale auth and fall back to QR code
         this.logger.warn(
-          `Connection closed due to '${lastDisconnect.error}' (status ${statusCode}). Clearing auth state and restarting for QR code scan.`,
+          `Connection closed due to '${lastDisconnect?.error}' (status ${statusCode}). Clearing auth state and restarting for QR code scan.`,
         );
         await this.clearAuthAndRestart();
       }
@@ -729,6 +729,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
         if (IsEditedMessage(message.message)) {
           const content = normalizeMessageContent(message.message);
           const protocolMsg = content?.protocolMessage;
+          if (!protocolMsg?.key) return;
           this.sock?.ev.emit('messages.update', [
             {
               key: {
@@ -1613,55 +1614,41 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       jidFilter,
       merge,
     );
-    // unreadCount is available from the store
-    // Batch lookup contacts for all chats (fixes N+1)
+    // Batch lookup: contacts + newest message per jid in a single query each
     const jids = chats.map((chat) => chat.id);
-    const contactsMap = await this.store.getContactsByIds(jids);
+    const [contactsMap, newestPerJid] = await Promise.all([
+      this.store.getContactsByIds(jids),
+      this.store.getNewestPerJid(jids),
+    ]);
 
-    const promises = [];
+    const result = [];
     for (const chat of chats) {
-      promises.push(this.fetchChatSummaryBatched(chat, merge, contactsMap));
+      const id = toCusFormat(chat.id);
+      let name = chat.name;
+      if (!name) {
+        const jid = toJID(chat.id);
+        const contact = contactsMap.get(jid);
+        name = contact?.name || contact?.notify;
+      }
+      // Resolve LID to phone number using LID repository
+      if (!name && id.endsWith('@lid')) {
+        try {
+          const pn = await this.store.findPNByLid(chat.id);
+          if (pn) name = pn.split('@')[0]; // strip @c.us
+        } catch { /* ignore */ }
+      }
+      // Skip profile-picture network fetch during overview for perf
+      // Skip per-chat message query — use batched getNewestPerJid result
+      const message = newestPerJid.get(chat.id) || null;
+      result.push({
+        id,
+        name: name || null,
+        picture: null,
+        lastMessage: message,
+        _chat: chat,
+      });
     }
-    const result = await Promise.all(promises);
     return result;
-  }
-
-  protected async fetchChatSummaryBatched(
-    chat: Chat,
-    merge: boolean,
-    contactsMap: Map<string, any>,
-  ): Promise<ChatSummary> {
-    const id = toCusFormat(chat.id);
-    let name = chat.name;
-    if (!name) {
-      // Get name from batch-fetched contacts
-      const jid = toJID(chat.id);
-      const contact = contactsMap.get(jid);
-      name = contact?.name || contact?.notify;
-    }
-    // Resolve LID to phone number using LID repository
-    if (!name && id.endsWith('@lid')) {
-      try {
-        const pn = await this.store.findPNByLid(chat.id);
-        if (pn) name = pn.split('@')[0]; // strip @c.us
-      } catch { /* ignore */ }
-    }
-    const picture = await this.getContactProfilePicture(chat.id, false);
-    const lastMessageQuery: GetChatMessagesQuery = {
-      limit: 1,
-      offset: 0,
-      downloadMedia: false,
-      merge: merge,
-    };
-    const messages = await this.getChatMessages(chat.id, lastMessageQuery, {});
-    const message = messages.length > 0 ? messages[0] : null;
-    return {
-      id: id,
-      name: name || null,
-      picture: picture,
-      lastMessage: message,
-      _chat: chat,
-    };
   }
 
   @Activity()
@@ -2524,7 +2511,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       mergeMap(async (message): Promise<WAMessageRevokedBody> => {
         const afterMessage = this.toWAMessage(message);
         // Extract the revoked message ID from protocolMessage.key
-        const revokedMessageId = message.message.protocolMessage.key?.id;
+        const revokedMessageId = message.message.protocolMessage?.key?.id;
         return {
           after: afterMessage,
           before: null,
@@ -2548,8 +2535,8 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
         let editedMessageId: string | undefined;
         if (IsEditedMessage(message.message)) {
           const content = normalizeMessageContent(message.message);
-          body = extractBody(content.protocolMessage.editedMessage) || '';
-          editedMessageId = content.protocolMessage.key?.id;
+          body = extractBody(content?.protocolMessage?.editedMessage) || '';
+          editedMessageId = content?.protocolMessage?.key?.id;
         } else if (IsSecretEncryptedMessageEdit(message.message)) {
           const sem = message.message.secretEncryptedMessage;
           editedMessageId = sem.targetMessageKey?.id;
@@ -2836,7 +2823,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     const id = buildMessageId(message.key);
     const fromToParticipant = getFromToParticipant(message.key);
     const reactionMessage = message.message.reactionMessage;
-    const messageId = buildMessageId(reactionMessage.key);
+    const messageId = buildMessageId(reactionMessage?.key);
     const source = this.getMessageSource(message.key.id);
     const reaction: WAMessageReaction = {
       id: id,

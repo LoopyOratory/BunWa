@@ -69,6 +69,18 @@ export class Sqlite3Storage extends INowebStorage {
     this.db.close();
   }
 
+  async runInTransaction<T>(fn: () => Promise<T>): Promise<T> {
+    this.db.run('BEGIN EXCLUSIVE TRANSACTION');
+    try {
+      const result = await fn();
+      this.db.run('COMMIT');
+      return result;
+    } catch (err) {
+      this.db.run('ROLLBACK');
+      throw err;
+    }
+  }
+
   getDb(): Database {
     return this.db;
   }

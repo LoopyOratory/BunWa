@@ -3,6 +3,9 @@ import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { Hono } from 'hono';
 import { createApiRouter } from '../api';
 
+// Set up API key so fail-closed middleware works in tests
+process.env.WAHA_API_KEY = 'waha';
+
 describe('Sessions API', () => {
   let app: Hono;
 

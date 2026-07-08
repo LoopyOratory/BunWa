@@ -1,7 +1,7 @@
 import type { Contact } from '@whiskeysockets/baileys';
 import { PaginationParams } from '../../../structures/pagination.dto';
 
-export class IContactRepository {
+export interface IContactRepository {
   getAll(pagination?: PaginationParams): Promise<Contact[]>;
 
   getById(id: string): Promise<Contact | null>;

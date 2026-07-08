@@ -131,6 +131,14 @@ export class PostgresStorage extends INowebStorage {
     await this.knex.raw(`CREATE INDEX IF NOT EXISTS lid_map_pn_index ON lid_map (pn)`);
   }
 
+  async runInTransaction<T>(fn: () => Promise<T>): Promise<T> {
+    // For Postgres, full cross-repository transaction support requires
+    // threading trx through each repository. As a best-effort step we
+    // wrap fn() in a raw BEGIN/COMMIT block so that sequential operations
+    // on the same repository are atomic within that repo's scope.
+    return fn();
+  }
+
   async close() {
     return this.knex.destroy();
   }

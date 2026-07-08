@@ -3,6 +3,10 @@ import { container } from 'tsyringe';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanSession, CanServer, Action, FromParam } from '../middleware/policies';
 import { SessionManager } from '../core/manager.core';
+import { BadRequestException, NotFoundException } from '../core/exceptions';
+import pino from 'pino';
+
+const routeLogger = pino({ name: 'SessionRoutes' });
 
 export function createSessionsRouter(): Hono {
   const router = new Hono();
@@ -34,8 +38,12 @@ export function createSessionsRouter(): Hono {
           config: (session as any).sessionConfig || {},
           me: (session as any).me || null,
         });
-      } catch {
-        return c.json({ name: sessionName, status: 'STOPPED', config: {}, me: null });
+      } catch (error: any) {
+        routeLogger.error({ err: error.stack || error.message }, `GET /:session error for ${sessionName}`);
+        if (error instanceof NotFoundException) {
+          return c.json({ name: sessionName, status: 'STOPPED', config: {}, me: null });
+        }
+        throw error;
       }
     }
   );
@@ -85,7 +93,14 @@ export function createSessionsRouter(): Hono {
 
       try {
         await manager.delete(sessionName);
-      } catch {
+      } catch (error: any) {
+        routeLogger.error({ err: error.stack || error.message }, `DELETE /:session error for ${sessionName}`);
+        if (error instanceof NotFoundException) {
+          return c.json({ statusCode: 404, message: error.message }, 404);
+        }
+        if (error instanceof BadRequestException) {
+          return c.json({ statusCode: 400, message: error.message }, 400);
+        }
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
 
@@ -107,7 +122,14 @@ export function createSessionsRouter(): Hono {
           status: result.status || 'STARTING',
           config: result.config || {},
         });
-      } catch {
+      } catch (error: any) {
+        routeLogger.error({ err: error.stack || error.message }, `POST /:session/start error for ${sessionName}`);
+        if (error instanceof BadRequestException) {
+          return c.json({ statusCode: 400, message: error.message }, 400);
+        }
+        if (error instanceof NotFoundException) {
+          return c.json({ statusCode: 404, message: error.message }, 404);
+        }
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -122,7 +144,14 @@ export function createSessionsRouter(): Hono {
 
       try {
         await manager.stop(sessionName);
-      } catch {
+      } catch (error: any) {
+        routeLogger.error({ err: error.stack || error.message }, `POST /:session/stop error for ${sessionName}`);
+        if (error instanceof NotFoundException) {
+          return c.json({ statusCode: 404, message: error.message }, 404);
+        }
+        if (error instanceof BadRequestException) {
+          return c.json({ statusCode: 400, message: error.message }, 400);
+        }
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
 
@@ -143,7 +172,14 @@ export function createSessionsRouter(): Hono {
 
       try {
         await manager.logout(sessionName);
-      } catch {
+      } catch (error: any) {
+        routeLogger.error({ err: error.stack || error.message }, `POST /:session/logout error for ${sessionName}`);
+        if (error instanceof NotFoundException) {
+          return c.json({ statusCode: 404, message: error.message }, 404);
+        }
+        if (error instanceof BadRequestException) {
+          return c.json({ statusCode: 400, message: error.message }, 400);
+        }
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
 
@@ -165,7 +201,14 @@ export function createSessionsRouter(): Hono {
           status: result.status || 'STARTING',
           config: result.config || {},
         });
-      } catch {
+      } catch (error: any) {
+        routeLogger.error({ err: error.stack || error.message }, `POST /:session/restart error for ${sessionName}`);
+        if (error instanceof NotFoundException) {
+          return c.json({ statusCode: 404, message: error.message }, 404);
+        }
+        if (error instanceof BadRequestException) {
+          return c.json({ statusCode: 400, message: error.message }, 400);
+        }
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }

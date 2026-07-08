@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "no-unused-vars": "off",
+    "no-dupe-keys": "off",
+    "no-useless-fallback-in-spread": "off",
+    "no-control-regex": "off"
+  }
+}

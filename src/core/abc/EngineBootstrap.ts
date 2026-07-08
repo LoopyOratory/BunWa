@@ -1,4 +1,4 @@
-export class EngineBootstrap {
+export interface EngineBootstrap {
   bootstrap(): Promise<void>;
 
   shutdown(): Promise<void>;

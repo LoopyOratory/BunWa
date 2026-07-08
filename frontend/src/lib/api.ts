@@ -103,6 +103,25 @@ export interface Presence {
   presences: Record<string, { lastKnownPresence: string }>
 }
 
+export interface WebhookFilterCondition {
+  field: string
+  operator: string
+  value: string | string[] | boolean
+  caseSensitive?: boolean
+}
+
+export interface Webhook {
+  id: string
+  enabled?: boolean
+  method?: string
+  url: string
+  events: string[]
+  hmac?: { key?: string }
+  retries?: { attempts?: number; delaySeconds?: number; policy?: string }
+  customHeaders?: { name: string; value: string }[]
+  filters?: { conditions?: WebhookFilterCondition[] }
+}
+
 const API_BASE = window.location.origin
 
 function getDashboardAuth(): string | null {
@@ -442,6 +461,18 @@ export const api = {
   getLids: (session: string, limit = 200, offset = 0) =>
     request<any[]>(`/api/${session}/lids/?limit=${limit}&offset=${offset}`),
 
+  // ==================== WEBHOOKS ====================
+  getWebhooks: (session: string) =>
+    request<Webhook[]>(`/api/sessions/${session}/webhooks`),
+  createWebhook: (session: string, config: any) =>
+    request<Webhook>(`/api/sessions/${session}/webhooks`, { method: "POST", body: JSON.stringify(config) }),
+  updateWebhook: (session: string, id: string, config: any) =>
+    request<Webhook>(`/api/sessions/${session}/webhooks/${id}`, { method: "PUT", body: JSON.stringify(config) }),
+  deleteWebhook: (session: string, id: string) =>
+    request<void>(`/api/sessions/${session}/webhooks/${id}`, { method: "DELETE" }),
+  testWebhook: (session: string, id: string) =>
+    request<any>(`/api/sessions/${session}/webhooks/${id}/test`, { method: "POST" }),
+
   // ==================== MCP ====================
   /** Get all registered MCP tools with categories */
   getMcpTools: () => request<{ tools: any[]; byCategory: Record<string, any[]> }>("/api/mcp/tools"),
@@ -451,4 +482,11 @@ export const api = {
   /** Update MCP config for a session */
   updateSessionMcp: (name: string, config: { enabled?: boolean; allowedTools?: string[]; deniedTools?: string[]; destructiveOps?: boolean }) =>
     request<void>(`/api/sessions/${name}/mcp`, { method: "PUT", body: JSON.stringify(config) }),
+
+  /** Generate a new per-session MCP key (returns plaintext once, stores hash) */
+  generateMcpKey: (name: string) =>
+    request<{ key: string; keyHash: string; connection: { stdio: { command: string; args: string[]; env: Record<string, string> }; http: { url: string; headers: Record<string, string> } } }>(
+      `/api/sessions/${name}/mcp/generate-key`,
+      { method: "POST" }
+    ),
 }

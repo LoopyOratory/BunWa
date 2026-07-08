@@ -80,4 +80,26 @@ export class PostgresMessagesRepository implements IMessagesRepository {
     const result = await this.knex('messages').where({ jid }).count('id as count').first();
     return parseInt(result?.count as string) || 0;
   }
+
+  async getNewestPerJid(jids: string[]): Promise<Map<string, any>> {
+    if (jids.length === 0) return new Map();
+    const rows = await this.knex('messages')
+      .select('*')
+      .whereIn('jid', jids)
+      .orderBy('messageTimestamp', 'desc')
+      .then((allRows) => {
+        // Manual dedup per JID since Knex doesn't have a clean ROW_NUMBER API
+        const seen = new Set<string>();
+        return allRows.filter((row) => {
+          if (seen.has(row.jid)) return false;
+          seen.add(row.jid);
+          return true;
+        });
+      });
+    const map = new Map<string, any>();
+    for (const row of rows) {
+      map.set(row.jid, row.data ? JSON.parse(row.data) : row);
+    }
+    return map;
+  }
 }

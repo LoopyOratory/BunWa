@@ -38,7 +38,12 @@ export class IgnoreConfig {
   broadcast?: boolean;
 }
 
+import type { WebhookFilters } from '../common/security/webhook-filters';
+
 export class WebhookConfig {
+  id?: string;
+  enabled?: boolean;
+  method?: string;
   url: string;
   events: string[];
   hmac?: {
@@ -53,6 +58,7 @@ export class WebhookConfig {
     name: string;
     value: string;
   }>;
+  filters?: WebhookFilters;
 }
 
 export class McpConfig {
@@ -60,6 +66,7 @@ export class McpConfig {
   allowedTools?: string[];
   deniedTools?: string[];
   destructiveOps?: boolean;
+  apiKeyHash?: string;  // SHA-256 of per-session MCP key (sk_mcp_...)
 }
 
 export class SessionConfig {

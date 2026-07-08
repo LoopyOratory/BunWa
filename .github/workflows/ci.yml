@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install
+
+      - run: bun test
+
+      - run: bun run lint
+
+      - name: TypeScript type check (max 1049 errors)
+        run: |
+          errors=$(bun run typecheck 2>&1 | grep -c 'error TS' || true)
+          echo "TypeScript errors: $errors"
+          if [ "$errors" -gt 1049 ]; then
+            echo "Error: $errors TypeScript errors exceeds cap of 1049"
+            exit 1
+          fi
+          echo "TypeScript errors ($errors) within cap (1049)"

@@ -4,7 +4,7 @@
  * every condition must match (logical AND) for the webhook to fire.
  */
 
-import { toNeutralJid, parseWaId } from '../engines/wa-id';
+import { toNeutralJid } from './wa-id';
 
 export type FilterOperator = 'is' | 'isNot' | 'contains' | 'equals';
 export type FieldKind = 'id' | 'idArray' | 'text' | 'enum' | 'boolean';

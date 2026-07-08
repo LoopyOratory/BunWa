@@ -11,7 +11,9 @@ export function createChatwootWebhookRouter(appService: ChatwootAppService): Hon
   router.post('/:session', async (c) => {
     try {
       const session = c.req.param('session');
-      const body: ChatwootWebhookPayload = await c.req.json();
+      // Read raw body as text for HMAC verification, then parse
+      const rawBody = await c.req.text();
+      const body: ChatwootWebhookPayload = JSON.parse(rawBody);
 
       log.debug(
         { event: body.event, type: body.message_type, conversationId: body.conversation?.id },
@@ -27,10 +29,13 @@ export function createChatwootWebhookRouter(appService: ChatwootAppService): Hon
         return c.json({ ok: false, message: 'No app configured for this session' }, 404);
       }
 
-      // Verify the webhook is from the right account
-      const verified = await appService.verifyWebhookSignature(app, body);
+      // Read HMAC signature from Chatwoot header
+      const signature = c.req.header('X-Chatwoot-Signature') || '';
+
+      // Verify the webhook signature (HMAC or account_id fallback)
+      const verified = await appService.verifyWebhookSignature(app, body, rawBody, signature);
       if (!verified) {
-        return c.json({ ok: false, message: 'Account mismatch' }, 403);
+        return c.json({ ok: false, message: 'Webhook signature verification failed' }, 403);
       }
 
       // Process the webhook asynchronously (don't block Chatwoot)

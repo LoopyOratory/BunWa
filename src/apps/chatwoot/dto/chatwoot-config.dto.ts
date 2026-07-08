@@ -9,6 +9,7 @@ export interface ChatwootAppConfig {
     accountToken: string;
     inboxId: number;
     inboxIdentifier?: string;
+    webhookSecret?: string; // HMAC secret for Chatwoot webhook signature verification
     locale?: string;
     commands?: { server?: boolean; queue?: boolean };
     conversations?: {

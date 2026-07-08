@@ -1,6 +1,6 @@
 import { ChildLoggerOptions, Level, LevelWithSilent, Logger } from 'pino';
 
-export class LoggerBuilder {
+export interface LoggerBuilder {
   child(bindings: Record<string, any>, options?: ChildLoggerOptions): Logger;
 }
 

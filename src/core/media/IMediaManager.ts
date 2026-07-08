@@ -1,6 +1,6 @@
 import { WAMedia } from '../../structures/media.dto';
 
-export class IMediaManager {
+export interface IMediaManager {
   processMedia<Message>(
     processor: any,
     message: Message,

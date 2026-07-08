@@ -452,8 +452,10 @@ export class NowebPersistentStore implements INowebStore {
 
   private async onChatDelete(ids: string[]) {
     for (const id of ids) {
-      await this.chatRepo.deleteById(id);
-      await this.messagesRepo.deleteAllByJid(id);
+      await this.runInTransaction(async () => {
+        await this.chatRepo.deleteById(id);
+        await this.messagesRepo.deleteAllByJid(id);
+      });
     }
   }
 
@@ -560,8 +562,10 @@ export class NowebPersistentStore implements INowebStore {
 
   private async onLabelsEdit(label: Label) {
     if (label.deleted) {
-      await this.labelsRepo.deleteById(label.id);
-      await this.labelAssociationsRepo.deleteByLabelId(label.id);
+      await this.runInTransaction(async () => {
+        await this.labelsRepo.deleteById(label.id);
+        await this.labelAssociationsRepo.deleteByLabelId(label.id);
+      });
     } else {
       await this.labelsRepo.save(label);
     }
@@ -619,6 +623,14 @@ export class NowebPersistentStore implements INowebStore {
     merge: boolean = true,
   ): Promise<any> {
     return this.messagesRepo.getByJidById(chatId, messageId, merge);
+  }
+
+  getNewestPerJid(jids: string[]): Promise<Map<string, any>> {
+    return this.messagesRepo.getNewestPerJid(jids);
+  }
+
+  runInTransaction<T>(fn: () => Promise<T>): Promise<T> {
+    return this.storage.runInTransaction(fn);
   }
 
   getChats(

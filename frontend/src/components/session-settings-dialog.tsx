@@ -77,12 +77,23 @@ const BROWSER_NAMES = [
   { value: "Edge", label: "Edge" },
 ]
 
+interface WebhookFilterCondition {
+  field: string
+  operator: string
+  value: string | string[] | boolean
+  caseSensitive?: boolean
+}
+
 interface WebhookConfig {
+  id?: string
+  enabled?: boolean
+  method?: string
   url: string
   events: string[]
   hmac?: { key?: string }
   retries?: { attempts?: number; delaySeconds?: number; policy?: string }
   customHeaders?: { name: string; value: string }[]
+  filters?: { conditions?: WebhookFilterCondition[] }
 }
 
 interface SessionSettingsDialogProps {
@@ -182,6 +193,10 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
   const [mcpDeniedTools, setMcpDeniedTools] = useState<string[]>([])
   const [mcpTools, setMcpTools] = useState<{ tools: any[]; byCategory: Record<string, any[]> } | null>(null)
   const [mcpLoading, setMcpLoading] = useState(false)
+  const [mcpKey, setMcpKey] = useState<string | null>(null)
+  const [mcpConnection, setMcpConnection] = useState<any>(null)
+  const [mcpKeyRevealed, setMcpKeyRevealed] = useState(false)
+  const [mcpKeyExists, setMcpKeyExists] = useState(false)
 
   // Chatwoot integration state
   const [chatwootEnabled, setChatwootEnabled] = useState(false)
@@ -199,7 +214,11 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
   useEffect(() => {
     if (session?.config) {
       const c = session.config as any
-      setWebhooks(c.webhooks?.map((w: any) => ({ url: w.url || "", events: w.events || [], hmac: w.hmac, retries: w.retries, customHeaders: w.customHeaders || [] })) || [])
+      setWebhooks(c.webhooks?.map((w: any) => ({
+        id: w.id, enabled: w.enabled !== false, method: w.method || "POST", url: w.url || "", events: w.events || [],
+        hmac: w.hmac, retries: w.retries, customHeaders: w.customHeaders || [],
+        filters: w.filters,
+      })) || [])
       setProxyServer(c.proxy?.server || "")
       setProxyUsername(c.proxy?.username || "")
       setProxyPassword(c.proxy?.password || "")
@@ -262,10 +281,25 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
       setMcpEnabled(config.enabled)
       setMcpDestructiveOps(config.destructiveOps)
       setMcpDeniedTools(config.deniedTools || [])
+      // Check if a key already exists (hash present, plaintext gone)
+      const hasKey = !!(config as any).apiKeyHash
+      setMcpKeyExists(hasKey)
+      setMcpKeyRevealed(false)
+      setMcpKey(null)
+      setMcpConnection(null)
     }).catch(() => {
       // MCP API not available — silently ignore
     }).finally(() => setMcpLoading(false))
   }, [open, session])
+
+  // Clear revealed key when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setMcpKeyRevealed(false)
+      setMcpKey(null)
+      setMcpConnection(null)
+    }
+  }, [open])
 
   const handleSave = async () => {
     if (!session) return
@@ -274,10 +308,14 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
       const config: Record<string, any> = {}
       if (webhooks.length > 0) {
         config.webhooks = webhooks.filter(w => w.url).map(w => ({
+          ...(w.id && { id: w.id }),
+          enabled: w.enabled !== false,
+          method: w.method || "POST",
           url: w.url, events: w.events,
           ...(w.hmac?.key && { hmac: w.hmac }),
           ...(w.retries && { retries: w.retries }),
           ...(w.customHeaders?.length && { customHeaders: w.customHeaders }),
+          ...(w.filters?.conditions?.length && { filters: w.filters }),
         }))
       }
       if (proxyServer) {
@@ -345,12 +383,51 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
     }
   }
 
-  const addWebhook = () => setWebhooks([...webhooks, { url: "", events: ["message"], customHeaders: [] }])
+  const addWebhook = () => setWebhooks([...webhooks, { enabled: true, method: "POST", url: "", events: ["message"], customHeaders: [], filters: { conditions: [] } }])
   const removeWebhook = (i: number) => setWebhooks(webhooks.filter((_, idx) => idx !== i))
   const updateWebhook = (i: number, field: string, value: any) => { const u = [...webhooks]; u[i] = { ...u[i], [field]: value }; setWebhooks(u) }
   const addHeader = (wi: number) => { const u = [...webhooks]; u[wi].customHeaders = [...(u[wi].customHeaders || []), { name: "", value: "" }]; setWebhooks(u) }
   const removeHeader = (wi: number, hi: number) => { const u = [...webhooks]; u[wi].customHeaders = (u[wi].customHeaders || []).filter((_, i) => i !== hi); setWebhooks(u) }
   const updateHeader = (wi: number, hi: number, field: string, val: string) => { const u = [...webhooks]; u[wi].customHeaders = [...(u[wi].customHeaders || [])]; u[wi].customHeaders[hi] = { ...u[wi].customHeaders[hi], [field]: val }; setWebhooks(u) }
+
+  // Filter helpers
+  const getFilterValue = (webhook: WebhookConfig, field: string): string => {
+    const cond = webhook.filters?.conditions?.find(c => c.field === field)
+    if (!cond) return ""
+    return Array.isArray(cond.value) ? cond.value.join(", ") : String(cond.value)
+  }
+  const setFilterValue = (wi: number, field: string, value: string) => {
+    const u = [...webhooks]
+    const wf = { ...u[wi].filters, conditions: [...(u[wi].filters?.conditions || [])] }
+    const idx = wf.conditions.findIndex(c => c.field === field)
+    if (!value && idx !== -1) {
+      wf.conditions.splice(idx, 1)
+    } else if (value) {
+      const cond = { field, operator: field === "body" ? "contains" : "is", value: field === "sender" ? value.replace(/[^\d,]/g, "").split(",").map(s => s.trim()).filter(Boolean).join(",") : value }
+      if (idx !== -1) wf.conditions[idx] = cond
+      else wf.conditions.push(cond)
+    }
+    u[wi] = { ...u[wi], filters: wf.conditions.length ? wf : undefined }
+    setWebhooks(u)
+  }
+  const getBoolFilter = (webhook: WebhookConfig, field: string): boolean => {
+    const cond = webhook.filters?.conditions?.find(c => c.field === field)
+    return cond?.value === true
+  }
+  const setBoolFilter = (wi: number, field: string, value: boolean) => {
+    const u = [...webhooks]
+    const wf = { ...u[wi].filters, conditions: [...(u[wi].filters?.conditions || [])] }
+    const idx = wf.conditions.findIndex(c => c.field === field)
+    if (!value && idx !== -1) {
+      wf.conditions.splice(idx, 1)
+    } else if (value) {
+      const cond = { field, operator: "is", value: true }
+      if (idx !== -1) wf.conditions[idx] = cond
+      else wf.conditions.push(cond)
+    }
+    u[wi] = { ...u[wi], filters: wf.conditions.length ? wf : undefined }
+    setWebhooks(u)
+  }
 
   const tabs = [
     { id: "webhooks" as const, label: "Webhooks" },
@@ -399,14 +476,47 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                 </div>
                 {webhooks.length === 0 && <p className="text-sm text-muted-foreground py-4">No webhooks configured.</p>}
                 {webhooks.map((webhook, wi) => (
-                  <div key={wi} className="border rounded-lg p-3 sm:p-4 space-y-3 sm:space-y-4">
+                  <div key={wi} className={`border rounded-lg p-3 sm:p-4 space-y-3 sm:space-y-4 ${webhook.enabled === false ? "opacity-60" : ""}`}>
                     <div className="flex items-center justify-between">
-                      <Badge variant="secondary">Webhook {wi + 1}</Badge>
-                      <Button variant="ghost" size="icon-sm" onClick={() => removeWebhook(wi)}><Trash2 className="size-4 text-destructive" /></Button>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">Webhook {wi + 1}</Badge>
+                        {webhook.id && <span className="text-[10px] font-mono text-muted-foreground">{webhook.id}</span>}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => updateWebhook(wi, "enabled", webhook.enabled === false ? true : false)}
+                          className="text-xs h-7 px-2">
+                          {webhook.enabled === false ? "Enable" : "Disable"}
+                        </Button>
+                        {session && webhook.id && (
+                          <Button variant="ghost" size="sm" onClick={async () => {
+                            try {
+                              await api.testWebhook(session.name, webhook.id!)
+                              toast.success("Test webhook sent")
+                            } catch (e: any) {
+                              toast.error("Test failed: " + (e.message || "unknown"))
+                            }
+                          }} className="text-xs h-7 px-2">
+                            Test
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="icon-sm" onClick={() => removeWebhook(wi)}><Trash2 className="size-4 text-destructive" /></Button>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>URL</Label>
-                      <Input placeholder="https://example.com/webhook" value={webhook.url} onChange={(e) => updateWebhook(wi, "url", e.target.value)} className="w-full" />
+                    <div className="flex gap-2">
+                      <div className="w-24 shrink-0 space-y-2">
+                        <Label>Method</Label>
+                        <Select value={webhook.method || "POST"} onValueChange={(v) => updateWebhook(wi, "method", v)}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="POST">POST</SelectItem>
+                            <SelectItem value="GET">GET</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex-1 space-y-2">
+                        <Label>URL</Label>
+                        <Input placeholder="https://example.com/webhook" value={webhook.url} onChange={(e) => updateWebhook(wi, "url", e.target.value)} className="w-full" />
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <Label>Events</Label>
@@ -414,18 +524,24 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                     </div>
                     <div className="space-y-2">
                       <Label>HMAC Key</Label>
-                      <Input type="password" placeholder="Secret" value={webhook.hmac?.key || ""} onChange={(e) => updateWebhook(wi, "hmac", { key: e.target.value })} className="w-full" />
+                      <Input type="password" placeholder="Secret for X-WAHA-Signature" value={webhook.hmac?.key || ""} onChange={(e) => updateWebhook(wi, "hmac", { key: e.target.value })} className="w-full" />
                     </div>
-                    <div className="space-y-2">
-                      <Label>Retry Policy</Label>
-                      <Select value={webhook.retries?.policy || ""} onValueChange={(v) => updateWebhook(wi, "retries", { ...webhook.retries, policy: v })}>
-                        <SelectTrigger className="w-full"><SelectValue placeholder="Policy" /></SelectTrigger>
-                        <SelectContent>{RETRY_POLICIES.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Max Retries</Label>
-                      <Input type="number" placeholder="15" value={webhook.retries?.attempts || ""} onChange={(e) => updateWebhook(wi, "retries", { ...webhook.retries, attempts: parseInt(e.target.value) || undefined })} className="w-full" />
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-2">
+                        <Label>Retry Policy</Label>
+                        <Select value={webhook.retries?.policy || ""} onValueChange={(v) => updateWebhook(wi, "retries", { ...webhook.retries, policy: v })}>
+                          <SelectTrigger className="w-full"><SelectValue placeholder="Policy" /></SelectTrigger>
+                          <SelectContent>{RETRY_POLICIES.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Max Retries</Label>
+                        <Input type="number" placeholder="3" value={webhook.retries?.attempts || ""} onChange={(e) => updateWebhook(wi, "retries", { ...webhook.retries, attempts: parseInt(e.target.value) || undefined })} className="w-full" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Retry Delay (s)</Label>
+                        <Input type="number" placeholder="2" value={webhook.retries?.delaySeconds || ""} onChange={(e) => updateWebhook(wi, "retries", { ...webhook.retries, delaySeconds: parseInt(e.target.value) || undefined })} className="w-full" />
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between"><Label>Custom Headers</Label><Button variant="ghost" size="sm" onClick={() => addHeader(wi)}><Plus className="size-3 mr-1" /> Add</Button></div>
@@ -436,6 +552,37 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                           <Button variant="ghost" size="icon-sm" onClick={() => removeHeader(wi, hi)} className="shrink-0"><X className="size-4" /></Button>
                         </div>
                       ))}
+                    </div>
+                    {/* Filters */}
+                    <div className="space-y-2">
+                      <Label className="text-muted-foreground">Filters</Label>
+                      <p className="text-[11px] text-muted-foreground">All conditions must match (AND logic)</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Sender</Label>
+                          <Input placeholder="1234567890 (comma-separated)" value={getFilterValue(webhook, "sender")} onChange={(e) => setFilterValue(wi, "sender", e.target.value)} className="h-8 text-xs" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Body contains</Label>
+                          <Input placeholder="Text to match" value={getFilterValue(webhook, "body")} onChange={(e) => setFilterValue(wi, "body", e.target.value)} className="h-8 text-xs" />
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        {[
+                          { field: "isGroup", label: "Group only" },
+                          { field: "fromMe", label: "Sent by me" },
+                          { field: "hasMedia", label: "Has media" },
+                        ].map(({ field, label }) => (
+                          <div key={field} className="flex items-center gap-1.5">
+                            <Switch
+                              checked={getBoolFilter(webhook, field)}
+                              onCheckedChange={(v) => setBoolFilter(wi, field, v)}
+                              className="scale-75"
+                            />
+                            <Label className="text-xs">{label}</Label>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -660,17 +807,112 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
 
                 <Separator className="my-4" />
 
+                {/* ── Per-Session MCP Key ──────────────────────────── */}
                 <div className="space-y-3">
-                  <h4 className="text-sm font-medium">Connection Guide</h4>
+                  <h4 className="text-sm font-medium">MCP Connection Key</h4>
                   <p className="text-xs text-muted-foreground">
-                    Connect any MCP-compatible client to <code className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-mono">{window.location.origin}/mcp</code>
-                    {" "}using your API key for authentication.
+                    Generate a scoped API key for this session. The key is shown <strong>once</strong> —
+                    copy it before closing this dialog. Only a SHA-256 hash is stored.
                   </p>
 
-                  <div className="space-y-4 pt-1">
-                    <div>
-                      <p className="text-xs font-medium mb-1">Claude Desktop</p>
-                      <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">
+                  {mcpKeyExists && !mcpKeyRevealed && (
+                    <p className="text-xs text-muted-foreground">
+                      A key is configured for this session. Click <strong>Regenerate</strong> to
+                      create a new one (invalidates the old key).
+                    </p>
+                  )}
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={mcpLoading}
+                    onClick={async () => {
+                      try {
+                        const result = await api.generateMcpKey(session.name)
+                        setMcpKey(result.key)
+                        setMcpConnection(result.connection)
+                        setMcpKeyRevealed(true)
+                        setMcpKeyExists(true)
+                      } catch (e: any) {
+                        toast.error(e.message || "Failed to generate MCP key")
+                      }
+                    }}
+                  >
+                    {mcpKeyExists ? "Regenerate Key" : "Generate MCP Key"}
+                  </Button>
+
+                  {mcpKeyRevealed && mcpKey && mcpConnection && (
+                    <div className="space-y-4 pt-2">
+                      {/* Key display */}
+                      <div>
+                        <p className="text-xs font-medium mb-1 text-destructive">
+                          Copy this key now — it will not be shown again.
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <pre className="flex-1 rounded-lg bg-muted p-2.5 text-[11px] font-mono overflow-x-auto select-all">{mcpKey}</pre>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              navigator.clipboard.writeText(mcpKey)
+                              toast.success("Key copied")
+                            }}
+                          >
+                            Copy
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* stdio config */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-xs font-medium">stdio (Claude Desktop, Cursor, Windsurf)</p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              navigator.clipboard.writeText(JSON.stringify({ mcpServers: { [`bunwa-${session.name}`]: mcpConnection.stdio } }, null, 2))
+                              toast.success("stdio config copied")
+                            }}
+                          >
+                            Copy
+                          </Button>
+                        </div>
+                        <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">
+{JSON.stringify({ mcpServers: { [`bunwa-${session.name}`]: mcpConnection.stdio } }, null, 2)}
+                        </pre>
+                      </div>
+
+                      {/* HTTP/SSE config */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-xs font-medium">HTTP / SSE (remote, Docker)</p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              navigator.clipboard.writeText(JSON.stringify({ mcpServers: { [`bunwa-${session.name}`]: mcpConnection.http } }, null, 2))
+                              toast.success("HTTP config copied")
+                            }}
+                          >
+                            Copy
+                          </Button>
+                        </div>
+                        <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">
+{JSON.stringify({ mcpServers: { [`bunwa-${session.name}`]: mcpConnection.http } }, null, 2)}
+                        </pre>
+                      </div>
+                    </div>
+                  )}
+
+                  {!mcpKeyRevealed && (
+                    <div className="space-y-4 pt-2">
+                      <p className="text-xs text-muted-foreground">
+                        Legacy connection guides (with placeholder key):
+                      </p>
+                      <div>
+                        <p className="text-xs font-medium mb-1">Claude Desktop</p>
+                        <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">
 {`{
   "mcpServers": {
     "bunwa": {
@@ -681,12 +923,12 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
     }
   }
 }`}
-                      </pre>
-                    </div>
+                        </pre>
+                      </div>
 
-                    <div>
-                      <p className="text-xs font-medium mb-1">Cursor</p>
-                      <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">
+                      <div>
+                        <p className="text-xs font-medium mb-1">Cursor</p>
+                        <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">
 {`{
   "mcpServers": {
     "bunwa": {
@@ -697,13 +939,12 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
     }
   }
 }`}
-                      </pre>
-                      <p className="text-xs text-muted-foreground mt-1">Place in <code className="rounded bg-muted px-1 py-0.5 text-[10px] font-mono">.cursor/mcp.json</code> in your project root.</p>
-                    </div>
+                        </pre>
+                      </div>
 
-                    <div>
-                      <p className="text-xs font-medium mb-1">Windsurf / VS Code (Continue)</p>
-                      <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">
+                      <div>
+                        <p className="text-xs font-medium mb-1">Windsurf / VS Code (Continue)</p>
+                        <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">
 {`{
   "mcpServers": {
     "bunwa": {
@@ -715,41 +956,15 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
     }
   }
 }`}
-                      </pre>
-                    </div>
+                        </pre>
+                      </div>
 
-                    <div>
-                      <p className="text-xs font-medium mb-1">Hermes Agent (Native MCP)</p>
-                      <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">
-{`mcp_servers:
-  bunwa:
-    url: "${window.location.origin}/mcp"
-    headers:
-      X-Api-Key: "your-waha-api-key"`}
-                      </pre>
-                      <p className="text-xs text-muted-foreground mt-1">Add to <code className="rounded bg-muted px-1 py-0.5 text-[10px] font-mono">~/.hermes/config.yaml</code></p>
+                      <div>
+                        <p className="text-xs font-medium mb-1">MCP Inspector (Test Tool)</p>
+                        <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">{`bunx @modelcontextprotocol/inspector ${window.location.origin}/mcp`}</pre>
+                      </div>
                     </div>
-
-                    <div>
-                      <p className="text-xs font-medium mb-1">MCP Inspector (Test Tool)</p>
-                      <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">{`bunx @modelcontextprotocol/inspector ${window.location.origin}/mcp`}</pre>
-                    </div>
-
-                    <div>
-                      <p className="text-xs font-medium mb-1">Direct HTTP (cURL)</p>
-                      <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">{`# List available tools
-curl -X POST "${window.location.origin}/mcp" \
-  -H "X-Api-Key: your-w...key" \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-
-# Call a tool
-curl -X POST "${window.location.origin}/mcp" \
-  -H "X-Api-Key: your-w...key" \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"SessionList","arguments":{}}}'`}</pre>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
             )}

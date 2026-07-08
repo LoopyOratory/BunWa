@@ -5,7 +5,7 @@ export class LidToPN {
   pn: string;
 }
 
-export class INowebLidPNRepository {
+export interface INowebLidPNRepository {
   /**
    * Save lid to phone number mapping
    */

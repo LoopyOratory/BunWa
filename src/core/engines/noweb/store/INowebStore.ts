@@ -16,7 +16,7 @@ import {
   PaginationParams,
 } from '../../../structures/pagination.dto';
 
-export class INowebStore {
+export interface INowebStore {
   presences: any;
 
   init(): Promise<void>;
@@ -33,6 +33,12 @@ export class INowebStore {
     pagination: PaginationParams,
     merge?: boolean,
   ): Promise<any>;
+
+  /** Returns the newest message per JID in a single query */
+  getNewestPerJid(jids: string[]): Promise<Map<string, any>>;
+
+  /** Execute a callback inside a database transaction */
+  runInTransaction<T>(fn: () => Promise<T>): Promise<T>;
 
   getMessageById(
     chatId: string,

@@ -124,6 +124,26 @@ export class Sqlite3MessagesRepository
     this.db.run(`DELETE FROM "${this.table}" WHERE jid = ?`, [jid]);
   }
 
+  async getNewestPerJid(jids: string[]): Promise<Map<string, any>> {
+    if (jids.length === 0) return new Map();
+    const placeholders = jids.map(() => '?').join(', ');
+    const sql = `
+      SELECT ranked.* FROM (
+        SELECT *,
+               ROW_NUMBER() OVER (PARTITION BY jid ORDER BY messageTimestamp DESC) AS rn
+        FROM "${this.table}"
+        WHERE jid IN (${placeholders})
+      ) ranked
+      WHERE ranked.rn = 1
+    `;
+    const rows = this.db.query(sql).all(...jids);
+    const map = new Map<string, any>();
+    for (const row of rows) {
+      map.set(row.jid, this.parse(row));
+    }
+    return map;
+  }
+
   private async resolvePnJid(jid: string): Promise<string> {
     if (!jid.endsWith('@lid')) return jid;
     if (this.lidRepository) {

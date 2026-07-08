@@ -73,6 +73,14 @@ export class NowebInMemoryStore implements INowebStore {
     throw new BadRequestException(this.errorMessage);
   }
 
+  getNewestPerJid(jids: string[]): Promise<Map<string, any>> {
+    throw new BadRequestException(this.errorMessage);
+  }
+
+  runInTransaction<T>(fn: () => Promise<T>): Promise<T> {
+    return fn();
+  }
+
   getChats(
     pagination: PaginationParams,
     broadcast: boolean,

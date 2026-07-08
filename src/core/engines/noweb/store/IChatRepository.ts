@@ -2,7 +2,7 @@ import type { Chat } from '@whiskeysockets/baileys';
 import { OverviewFilter } from '../../../structures/chats.dto';
 import { PaginationParams } from '../../../structures/pagination.dto';
 
-export class IChatRepository {
+export interface IChatRepository {
   getAll(): Promise<Chat[]>;
 
   getAllByIds(ids: string[]): Promise<Chat[]>;

@@ -1,7 +1,8 @@
+import { z } from 'zod';
 import { ApiProperty } from '../utils/decorators';
 import {
   AllEvents,
-  AllEventType,
+  type AllEventType,
   WAHAEvents,
 } from './enums.dto';
 import { Type } from 'class-transformer';
@@ -68,7 +69,57 @@ export class HmacConfiguration {
   key?: string;
 }
 
+export class WebhookFilterCondition {
+  @ApiProperty({ example: 'sender' })
+  @IsString()
+  field: string;
+
+  @ApiProperty({ example: 'is' })
+  @IsString()
+  operator: string;
+
+  @ApiProperty({ example: '1234567890@c.us' })
+  value: string | string[] | boolean;
+
+  @ApiProperty({ example: false })
+  @IsOptional()
+  caseSensitive?: boolean;
+}
+
+export class WebhookFilters {
+  @ApiProperty({ type: [WebhookFilterCondition] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => WebhookFilterCondition)
+  @IsOptional()
+  conditions?: WebhookFilterCondition[];
+}
+
 export class WebhookConfig {
+  @ApiProperty({
+    example: '01HZXYZ...',
+    description: 'Unique webhook identifier (auto-generated)',
+  })
+  @IsString()
+  @IsOptional()
+  id?: string;
+
+  @ApiProperty({
+    example: true,
+    description: 'Whether this webhook is active',
+  })
+  @IsOptional()
+  enabled?: boolean;
+
+  @ApiProperty({
+    example: 'POST',
+    enum: ['GET', 'POST'],
+    description: 'HTTP method for webhook delivery',
+  })
+  @IsOptional()
+  @IsString()
+  method?: string;
+
   @ApiProperty({
     example: 'https://webhook.site/11111111-1111-1111-1111-11111111',
     required: true,
@@ -114,4 +165,51 @@ export class WebhookConfig {
   @IsArray()
   @IsOptional()
   customHeaders?: CustomHeader[];
+
+  @ApiProperty({
+    example: null,
+    description: 'Webhook filter conditions (AND logic)',
+  })
+  @ValidateNested()
+  @Type(() => WebhookFilters)
+  @IsOptional()
+  filters?: WebhookFilters;
 }
+
+// ---- Zod schemas for webhook create / update ----
+
+export const WebhookCreateSchema = z.object({
+  url: z.string().url(),
+  events: z.string().array(),
+  enabled: z.boolean().optional(),
+  hmac: z.object({ key: z.string() }).optional(),
+  retries: z.object({
+    attempts: z.number(),
+    delaySeconds: z.number(),
+  }).optional(),
+  customHeaders: z.array(z.object({
+    name: z.string(),
+    value: z.string(),
+  })).optional(),
+  filters: z.any().optional(),
+});
+
+export type WebhookCreateInput = z.infer<typeof WebhookCreateSchema>;
+
+export const WebhookUpdateSchema = z.object({
+  url: z.string().url().optional(),
+  events: z.string().array().optional(),
+  enabled: z.boolean().optional(),
+  hmac: z.object({ key: z.string() }).optional(),
+  retries: z.object({
+    attempts: z.number().optional(),
+    delaySeconds: z.number().optional(),
+  }).optional(),
+  customHeaders: z.array(z.object({
+    name: z.string(),
+    value: z.string(),
+  })).optional(),
+  filters: z.any().optional(),
+});
+
+export type WebhookUpdateInput = z.infer<typeof WebhookUpdateSchema>;
