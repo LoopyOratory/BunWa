@@ -67,11 +67,16 @@ The dashboard opens at **http://localhost:3000** — the default login is `admin
 # Build the image
 docker build -t bunwa:latest .
 
+# Create named volumes (survive container removal)
+docker volume create bunwa-sessions
+docker volume create bunwa-media
+
 # Run (NOWEB — no Chrome needed)
 docker run -d \
   --name bunwa \
   -p 3000:3000 \
-  -v $(pwd)/.sessions:/app/.sessions \
+  -v bunwa-sessions:/app/.sessions \
+  -v bunwa-media:/app/.media \
   -v $(pwd)/.env:/app/.env \
   bunwa:latest
 
@@ -79,7 +84,8 @@ docker run -d \
 docker run -d \
   --name bunwa-webjs \
   -p 3000:3000 \
-  -v $(pwd)/.sessions:/app/.sessions \
+  -v bunwa-sessions:/app/.sessions \
+  -v bunwa-media:/app/.media \
   -v $(pwd)/.env:/app/.env \
   -e CHROME_PATH=/usr/bin/google-chrome \
   bunwa:latest
