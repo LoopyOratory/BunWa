@@ -49,10 +49,10 @@ export class SessionManager {
     this.events2 = new DefaultMap<WAHAEvents, SwitchObservable<any>>(
       (event) => new SwitchObservable<any>(),
     );
-    // Initialize webhook delivery if configured
-    if (config.getWebhookUrl()) {
-      this.webhook = new WebhookDelivery(config);
-    }
+    // Always initialize webhook delivery: per-session webhooks carry their own
+    // URL, so delivery must work even when the global WEBHOOK_URL is unset.
+    // (deliver() no-ops gracefully when neither a per-call nor global URL exists.)
+    this.webhook = new WebhookDelivery(config);
   }
 
   async startPredefinedSessions(): Promise<void> {
