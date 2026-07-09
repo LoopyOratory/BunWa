@@ -18,15 +18,15 @@ export function PageLayout({ title, description, actions, children }: PageLayout
   return (
     <div className="flex flex-col h-full">
       {/* Topbar */}
-      <header className="sticky top-0 z-20 flex items-center gap-3 px-6 py-4 border-b bg-background/80 backdrop-blur-sm">
+      <header className="sticky top-0 z-20 flex flex-wrap items-center gap-3 px-4 sm:px-6 py-4 border-b bg-background/80 backdrop-blur-sm">
         <SidebarTrigger className="md:hidden" />
-        <div className="flex flex-col gap-0.5 flex-1">
-          <h1 className="text-xl font-bold tracking-tight">{title}</h1>
+        <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+          <h1 className="text-xl font-bold tracking-tight truncate">{title}</h1>
           {description && (
-            <p className="text-sm text-muted-foreground">{description}</p>
+            <p className="text-sm text-muted-foreground truncate">{description}</p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
           {actions}
           <Button
             variant="ghost"
