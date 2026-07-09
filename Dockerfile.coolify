@@ -82,8 +82,10 @@ ENV WAHA_ALLOW_NO_AUTH=false
 EXPOSE 3000
 
 # Coolify uses this health check to determine when the container is "ready"
-# and to restart it if it becomes unhealthy.
+# and to restart it if it becomes unhealthy. Uses bun's built-in fetch (curl
+# is not present in the slim base image) against the unauthenticated /health
+# endpoint (note: the endpoint is /health, not /api/health).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD curl -f http://localhost:3000/api/health || exit 1
+  CMD bun -e "const r=await fetch('http://localhost:'+(process.env.PORT||3000)+'/health');process.exit(r.ok?0:1)"
 
 CMD ["bun", "run", "src/main.ts"]

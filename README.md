@@ -71,6 +71,30 @@ The dashboard opens at **http://localhost:3000** — the default login is `admin
 
 ### Docker
 
+A prebuilt multi-arch image (`linux/amd64`, `linux/arm64`) is published to Docker Hub by
+the [Docker Build & Push](.github/workflows/docker.yml) GitHub Action on every push to `main`
+and every `v*` tag:
+
+```bash
+docker pull loopyoratory/bunwa:latest
+```
+
+Tags: `:latest` (main), `:1.2.3` / `:1.2` (release tags), `:sha-<short>` (any build).
+
+To publish from your own fork, set two repository secrets under
+**Settings → Secrets and variables → Actions**:
+
+| Secret | Value |
+|--------|-------|
+| `DOCKERHUB_USERNAME` | Your Docker Hub account name |
+| `DOCKERHUB_TOKEN` | A Docker Hub access token with Read/Write scope ([create one](https://hub.docker.com/settings/security)) |
+
+Then edit `IMAGE_NAME` at the top of the workflow to point at your own `namespace/repo`.
+You can also trigger a build manually (Actions → Docker Build & Push → Run workflow) and
+choose which architectures to build.
+
+To build the image locally instead:
+
 ```bash
 # Build the image
 docker build -t bunwa:latest .
