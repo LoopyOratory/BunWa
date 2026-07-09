@@ -12,6 +12,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { toast } from "sonner"
+import { SidebarTrigger } from "@/components/ui/sidebar"
 import { ChatProvider, ChatMessages } from "@/components/ui/chat"
 import type { ChatUser, ChatMessageData } from "@/components/ui/chat"
 import { api, type Session, type ChatOverview, type Message, type Contact } from "@/lib/api"
@@ -573,11 +574,16 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   /* ── Empty state: no session ── */
   if (!selectedSession) {
     return (
-      <div className="flex h-dvh overflow-hidden items-center justify-center bg-[var(--chat-bg-main)]">
-        <div className="text-center">
-          <CircleDot className="mx-auto mb-3 size-10 text-[var(--chat-text-tertiary)]" />
-          <p className="text-sm text-[var(--chat-text-secondary)]">No active sessions</p>
-          <p className="text-xs text-[var(--chat-text-tertiary)] mt-1">Create and start a session first</p>
+      <div className="flex h-dvh flex-col overflow-hidden bg-[var(--chat-bg-main)]">
+        <div className="p-3 md:hidden">
+          <SidebarTrigger />
+        </div>
+        <div className="flex flex-1 items-center justify-center">
+          <div className="text-center">
+            <CircleDot className="mx-auto mb-3 size-10 text-[var(--chat-text-tertiary)]" />
+            <p className="text-sm text-[var(--chat-text-secondary)]">No active sessions</p>
+            <p className="text-xs text-[var(--chat-text-tertiary)] mt-1">Create and start a session first</p>
+          </div>
         </div>
       </div>
     )
