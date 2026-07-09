@@ -1,1 +1,0 @@
-export type { MessageId } from 'whatsapp-web.js'; export class MessageId { static fromId(id: string) { return id; } }

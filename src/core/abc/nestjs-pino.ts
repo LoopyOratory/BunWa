@@ -1,1 +1,0 @@
-export class PinoLogger { private logger: any; constructor() { this.logger = console; } log(...args: any[]) { this.logger.log(...args); } error(...args: any[]) { this.logger.error(...args); } warn(...args: any[]) { this.logger.warn(...args); } info(...args: any[]) { this.logger.info(...args); } debug(...args: any[]) { this.logger.debug(...args); } }
