@@ -550,7 +550,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
           Add an integration to connect BunWa with external services
         </p>
         <Button onClick={onAdd}>
-          <Plus className="size-5 mr-2" />Create Your First App
+          <Plus />Create Your First App
         </Button>
       </CardContent>
     </Card>
@@ -746,7 +746,7 @@ export function AppsPage() {
         <>
           {appDialog}
           <Button onClick={openCreate}>
-            <Plus className="size-5 mr-2" />Add App
+            <Plus />Add App
           </Button>
         </>
       }

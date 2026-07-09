@@ -58,8 +58,8 @@ export function InfrastructurePage() {
   return (
     <PageLayout title="Infrastructure" description="Configure database, storage, and queue settings" actions={
       <div className="flex gap-2">
-        <Button variant="outline" onClick={restart}><RefreshCw className="h-5 w-5 mr-2" />Restart</Button>
-        <Button onClick={saveConfig} disabled={saving}><Save className="h-5 w-5 mr-2" />{saving ? "Saving..." : "Save"}</Button>
+        <Button variant="outline" onClick={restart}><RefreshCw />Restart</Button>
+        <Button onClick={saveConfig} disabled={saving}><Save />{saving ? "Saving..." : "Save"}</Button>
       </div>
     }>
       <div className="space-y-6">

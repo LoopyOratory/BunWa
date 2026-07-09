@@ -17,9 +17,10 @@ import {
   Link2,
   Search,
   Server,
+  RefreshCw,
 } from "lucide-react"
 import { api, type Worker } from "@/lib/api"
-import { Topbar } from "@/components/topbar"
+import { PageLayout } from "@/components/page-layout"
 
 let workersFailedOnce = false
 
@@ -60,10 +61,16 @@ export function WorkersPage() {
   )
 
   return (
-    <div className="flex h-full flex-col">
-      <Topbar title="Workers" onRefresh={load} />
-      <div className="flex-1 overflow-auto p-3 sm:p-6">
-        <div className="space-y-4 sm:space-y-6">
+    <PageLayout
+      title="Workers"
+      description="Connected WhatsApp API worker instances"
+      actions={
+        <Button variant="ghost" size="icon" onClick={load} title="Refresh">
+          <RefreshCw />
+        </Button>
+      }
+    >
+      <div className="space-y-6">
           <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-3">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -180,7 +187,6 @@ export function WorkersPage() {
             </CardContent>
           </Card>
         </div>
-      </div>
-    </div>
+    </PageLayout>
   )
 }

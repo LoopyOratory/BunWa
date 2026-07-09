@@ -71,7 +71,7 @@ export function LogsPage() {
   const filtered = logs.filter(l => !search || l.message.toLowerCase().includes(search.toLowerCase()) || l.action.toLowerCase().includes(search.toLowerCase()))
 
   return (
-    <PageLayout title="Audit Logs" description="Track all system events and API activity" actions={<Button variant="outline" onClick={exportLogs}><Download className="h-5 w-5 mr-2" />Export CSV</Button>}>
+    <PageLayout title="Audit Logs" description="Track all system events and API activity" actions={<Button variant="outline" onClick={exportLogs}><Download />Export CSV</Button>}>
       <div className="space-y-6">
         <div className="flex gap-3">
           <div className="relative flex-1">

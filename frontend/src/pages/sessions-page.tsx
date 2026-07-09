@@ -38,10 +38,11 @@ import {
   Search,
   MessageSquare,
   Loader2,
+  RefreshCw,
 } from "lucide-react"
 import { api, type Session } from "@/lib/api"
 import { toast } from "sonner"
-import { Topbar } from "@/components/topbar"
+import { PageLayout } from "@/components/page-layout"
 import { SessionSettingsDialog } from "@/components/session-settings-dialog"
 import { CreateSessionDialog } from "@/components/create-session-dialog"
 import { SessionDetailDialog } from "@/pages/session-detail-dialog"
@@ -106,10 +107,16 @@ export function SessionsPage(_props?: SessionsPageProps) {
   const stoppedSessions = sessions.filter((s) => s.status === "STOPPED").length
 
   return (
-    <div className="flex h-full flex-col">
-      <Topbar title="Sessions" onRefresh={loadSessions} />
-      <div className="flex-1 overflow-auto p-3 sm:p-6">
-        <div className="space-y-4 sm:space-y-6">
+    <PageLayout
+      title="Sessions"
+      description="Manage your WhatsApp session connections"
+      actions={
+        <Button variant="ghost" size="icon" onClick={loadSessions} title="Refresh">
+          <RefreshCw />
+        </Button>
+      }
+    >
+      <div className="space-y-6">
           {/* Stats */}
           <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-4">
             <Card>
@@ -391,7 +398,6 @@ export function SessionsPage(_props?: SessionsPageProps) {
             session={detailSession}
           />
         </div>
-      </div>
-    </div>
+    </PageLayout>
   )
 }

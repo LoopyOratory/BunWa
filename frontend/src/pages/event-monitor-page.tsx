@@ -21,7 +21,7 @@ import {
   Wifi,
   WifiOff,
 } from "lucide-react"
-import { Topbar } from "@/components/topbar"
+import { PageLayout } from "@/components/page-layout"
 import { useWebSocket } from "@/lib/use-websocket"
 
 const EVENT_COLORS: Record<string, string> = {
@@ -106,10 +106,8 @@ export function EventMonitorPage() {
   const uniqueEvents = [...new Set(events.map((e) => e.event))]
 
   return (
-    <div className="flex h-full flex-col">
-      <Topbar title="Event Monitor" onRefresh={clearEvents} />
-      <div className="flex-1 overflow-auto p-3 sm:p-6">
-        <div className="space-y-4 sm:space-y-6">
+    <PageLayout title="Event Monitor" description="Live WebSocket event stream from your WhatsApp sessions">
+      <div className="space-y-6">
           <Alert>
             {connected ? <Wifi className="size-5 text-green-500" /> : <WifiOff className="size-5 text-red-500" />}
             <AlertDescription>
@@ -216,7 +214,6 @@ export function EventMonitorPage() {
             </CardContent>
           </Card>
         </div>
-      </div>
-    </div>
+    </PageLayout>
   )
 }

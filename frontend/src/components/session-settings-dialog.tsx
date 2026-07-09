@@ -472,7 +472,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-medium">Webhook Endpoints</h4>
-                  <Button variant="outline" size="sm" onClick={addWebhook}><Plus className="size-4 mr-1" /> Add</Button>
+                  <Button variant="outline" size="sm" onClick={addWebhook}><Plus />Add</Button>
                 </div>
                 {webhooks.length === 0 && <p className="text-sm text-muted-foreground py-4">No webhooks configured.</p>}
                 {webhooks.map((webhook, wi) => (
@@ -544,7 +544,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between"><Label>Custom Headers</Label><Button variant="ghost" size="sm" onClick={() => addHeader(wi)}><Plus className="size-3 mr-1" /> Add</Button></div>
+                      <div className="flex items-center justify-between"><Label>Custom Headers</Label><Button variant="ghost" size="sm" onClick={() => addHeader(wi)}><Plus />Add</Button></div>
                       {(webhook.customHeaders || []).map((h, hi) => (
                         <div key={hi} className="flex gap-2">
                           <Input placeholder="Name" value={h.name} onChange={(e) => updateHeader(wi, hi, "name", e.target.value)} className="flex-1" />
@@ -676,7 +676,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                   <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Debug Mode</Label><p className="text-xs text-muted-foreground">Verbose logging</p></div><Switch checked={debugMode} onCheckedChange={setDebugMode} /></div>
                 </div>
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between"><h4 className="text-sm font-medium">Metadata</h4><Button variant="outline" size="sm" onClick={() => setMetadata([...metadata, { key: "", value: "" }])}><Plus className="size-4 mr-1" /> Add</Button></div>
+                  <div className="flex items-center justify-between"><h4 className="text-sm font-medium">Metadata</h4><Button variant="outline" size="sm" onClick={() => setMetadata([...metadata, { key: "", value: "" }])}><Plus />Add</Button></div>
                   <p className="text-xs text-muted-foreground">Custom key-value data for webhook payloads</p>
                   {metadata.map((m, i) => (
                     <div key={i} className="flex gap-2">

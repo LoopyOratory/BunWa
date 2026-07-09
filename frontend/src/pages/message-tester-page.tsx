@@ -95,9 +95,7 @@ export function MessageTesterPage() {
       <div className="space-y-6">
         <div className="grid gap-6 md:grid-cols-2">
           {/* Left: Compose */}
-          <Card className="relative overflow-hidden">
-            {/* Accent bar */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-400 via-cyan-500 to-teal-500" />
+          <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Send className="size-5 text-primary" />
@@ -214,9 +212,9 @@ export function MessageTesterPage() {
                       className="w-full h-11 text-base"
                     >
                       {sending ? (
-                        <Loader2 className="size-5 mr-2 animate-spin" />
+                        <Loader2 className="size-5 animate-spin" />
                       ) : (
-                        <Send className="size-5 mr-2" />
+                        <Send className="size-5" />
                       )}
                       {sending ? "Sending..." : `Send ${tab.label}`}
                     </Button>
@@ -227,12 +225,10 @@ export function MessageTesterPage() {
           </Card>
 
           {/* Right: Result */}
-          <Card className="relative overflow-hidden">
-            {/* Accent bar */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500" />
+          <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                <CheckCircle className="size-5 text-muted-foreground" />
+                <CheckCircle className="size-5 text-primary" />
                 Delivery Result
               </CardTitle>
               <CardDescription className="text-base">

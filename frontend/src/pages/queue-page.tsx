@@ -73,7 +73,7 @@ export function QueuePage() {
   }
 
   return (
-    <PageLayout title="Queue Monitor" description="Monitor BullMQ workers and webhook delivery queue" actions={<Button variant="outline" onClick={loadJobs}><RefreshCw className="h-5 w-5 mr-2" />Refresh</Button>}>
+    <PageLayout title="Queue Monitor" description="Monitor BullMQ workers and webhook delivery queue" actions={<Button variant="outline" onClick={loadJobs}><RefreshCw />Refresh</Button>}>
       <div className="space-y-6">
 
       {/* Stats Cards */}

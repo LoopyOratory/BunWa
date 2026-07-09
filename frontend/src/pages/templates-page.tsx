@@ -95,7 +95,7 @@ export function TemplatesPage() {
     <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
       <DialogTrigger asChild>
         <Button disabled={!selectedSession} onClick={() => setFormData({ name: "", body: "", header: "", footer: "" })}>
-          <Plus className="size-5 mr-2" />New Template
+          <Plus />New Template
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
@@ -134,7 +134,7 @@ export function TemplatesPage() {
             </div>
           )}
           <Button onClick={saveTemplate} className="w-full h-11 text-base">
-            <ScrollText className="size-4 mr-2" />Save Template
+            <ScrollText className="size-5" />Save Template
           </Button>
         </div>
       </DialogContent>
@@ -195,7 +195,7 @@ export function TemplatesPage() {
                 Create reusable message templates with dynamic variables
               </p>
               <Button onClick={() => { setFormData({ name: "", body: "", header: "", footer: "" }); setDialogOpen(true) }}>
-                <Plus className="size-5 mr-2" />Create Your First Template
+                <Plus />Create Your First Template
               </Button>
             </CardContent>
           </Card>
@@ -204,12 +204,11 @@ export function TemplatesPage() {
             {templates.map(template => {
               const vars = extractVariables(template.body)
               return (
-                <Card key={template.id} className="group relative overflow-hidden transition-all hover:shadow-lg hover:-translate-y-0.5">
-                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-violet-400 via-purple-500 to-indigo-500" />
+                <Card key={template.id} className="card-hover">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="p-2.5 rounded-xl bg-violet-500/10 text-violet-500 shrink-0">
+                        <div className="p-2.5 rounded-xl bg-primary/10 text-primary shrink-0">
                           <MessageSquare className="size-5" />
                         </div>
                         <div className="min-w-0">
@@ -219,7 +218,7 @@ export function TemplatesPage() {
                           </CardDescription>
                         </div>
                       </div>
-                      <Badge variant="secondary" className="text-xs shrink-0 bg-violet-500/10 text-violet-600 dark:text-violet-400">{vars.length} vars</Badge>
+                      <Badge variant="secondary" className="text-xs shrink-0">{vars.length} vars</Badge>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">

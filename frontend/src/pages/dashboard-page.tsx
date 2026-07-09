@@ -36,10 +36,11 @@ import {
   ExternalLink,
   Plus,
   Loader2,
+  RefreshCw,
 } from "lucide-react"
 import { api, type Session, type Worker } from "@/lib/api"
 import { toast } from "sonner"
-import { Topbar } from "@/components/topbar"
+import { PageLayout } from "@/components/page-layout"
 import { SessionSettingsDialog } from "@/components/session-settings-dialog"
 import { CreateSessionDialog } from "@/components/create-session-dialog"
 import { SessionDetailDialog } from "@/pages/session-detail-dialog"
@@ -121,11 +122,17 @@ export function DashboardPage(_props?: DashboardPageProps) {
   })
 
   return (
-    <div className="flex h-full flex-col">
-      <Topbar title="Dashboard" onRefresh={load} />
-      <div className="flex-1 overflow-auto p-3 sm:p-6">
-        <div className="space-y-4 sm:space-y-6">
-          {/* Stats Cards */}
+    <PageLayout
+      title="Dashboard"
+      description="Overview of your sessions, workers, and system health"
+      actions={
+        <Button variant="ghost" size="icon" onClick={load} title="Refresh">
+          <RefreshCw />
+        </Button>
+      }
+    >
+      <div className="space-y-6">
+        {/* Stats Cards */}
           <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-3 animate-slide-up">
             <Card className="stat-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -491,7 +498,6 @@ export function DashboardPage(_props?: DashboardPageProps) {
             </CardContent>
           </Card>
         </div>
-      </div>
 
       <SessionSettingsDialog
         open={showSettingsDialog}
@@ -504,6 +510,6 @@ export function DashboardPage(_props?: DashboardPageProps) {
         onOpenChange={setShowDetailDialog}
         session={detailSession}
       />
-    </div>
+    </PageLayout>
   )
 }
