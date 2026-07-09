@@ -32,9 +32,12 @@ RUN groupadd --system --gid 1001 waha && \
     useradd --system --uid 1001 --gid waha waha
 
 # Runtime files only — no frontend/ source, no scripts/, no __tests__/
+# tsconfig.json is required at runtime: Bun reads experimentalDecorators /
+# emitDecoratorMetadata from it, without which class-transformer decorators
+# throw at import time.
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/frontend-dist ./frontend-dist
-COPY --from=builder /app/package.json /app/bun.lock ./
+COPY --from=builder /app/package.json /app/bun.lock /app/tsconfig.json ./
 
 # Production deps (skips typescript, oxlint, @types/*, and dev-only packages)
 ENV PUPPETEER_SKIP_DOWNLOAD=true
@@ -68,8 +71,9 @@ ENV DATA_DIR=/app/data
 
 EXPOSE 3000
 
-# Health check — hits the /api/health endpoint every 30s
+# Health check — hits the unauthenticated /health endpoint every 30s.
+# Uses bun's fetch since the slim image ships neither curl nor wget.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:3000/api/health || exit 1
+  CMD bun -e "const r=await fetch('http://localhost:'+(process.env.PORT||3000)+'/health');process.exit(r.ok?0:1)"
 
 CMD ["bun", "run", "src/main.ts"]
