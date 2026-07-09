@@ -48,7 +48,7 @@ import {
   getChannelInviteLink,
   getPublicUrlFromDirectPath,
   WhatsappSession,
-} from '../../abc/session.abc';
+} from '../../session/session.abc';
 import {
   ToGroupParticipant,
   ToGroupV2JoinEvent,
@@ -224,9 +224,9 @@ import {
   getOrigSenderJidForMsgSecret,
   jidToNonAD,
 } from '../../utils/secretEncryptedMessageEdit';
-import { extractWALocation } from '../waproto/locaiton';
+import { extractWALocation } from '../waproto/location';
 import { extractVCards } from '../waproto/vcards';
-import { Activity } from '../../abc/activity';
+import { Activity } from '../../session/activity';
 import {
   WAHA_CLIENT_BROWSER_NAME,
   WAHA_CLIENT_DEVICE_NAME,

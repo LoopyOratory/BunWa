@@ -1,4 +1,4 @@
-import { DataStore } from '../abc/DataStore';
+import { DataStore } from './DataStore';
 import { LocalStore } from './LocalStore';
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';

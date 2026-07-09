@@ -3,7 +3,7 @@ import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { EMPTY, merge, Observable } from 'rxjs';
 import { WhatsappConfigService } from '../config.service';
-import { WhatsappSession } from './abc/session.abc';
+import { WhatsappSession } from './session/session.abc';
 import { WhatsappSessionNoWebCore } from './engines/noweb/session.noweb.core';
 import {
   WAHAEngine,
@@ -15,7 +15,7 @@ import {
   SessionInfo,
 } from '../structures/sessions.dto';
 import { DefaultMap } from '../utils/DefaultMap';
-import { getBrowserExecutablePath } from './abc/session.browser';
+import { getBrowserExecutablePath } from './session/session.browser';
 import { SwitchObservable } from '../utils/reactive/SwitchObservable';
 import { NotFoundException, BadRequestException } from './exceptions';
 import { LocalStoreCore } from './storage/LocalStoreCore';

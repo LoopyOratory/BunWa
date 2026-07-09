@@ -1,4 +1,4 @@
-import { DataStore } from '../abc/DataStore';
+import { DataStore } from './DataStore';
 
 export abstract class LocalStore extends DataStore {
   abstract init(sessionName?: string): Promise<void>;

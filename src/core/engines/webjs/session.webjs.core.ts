@@ -64,7 +64,7 @@ import {
   ReadChatMessagesQuery,
   ReadChatMessagesResponse,
 } from '../../../structures/chats.dto';
-import { WhatsappSession } from '../../abc/session.abc';
+import { WhatsappSession } from '../../session/session.abc';
 import {
   NotImplementedByEngineError,
 } from '../../exceptions';

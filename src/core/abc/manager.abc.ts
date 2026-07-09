@@ -29,7 +29,7 @@ import {
 } from '../../structures/sessions.dto';
 import { ISessionAuthRepository } from '../storage/ISessionAuthRepository';
 import { ISessionConfigRepository } from '../storage/ISessionConfigRepository';
-import { WhatsappSession } from './session.abc';
+import { WhatsappSession } from '../session/session.abc';
 import { IApiKeyRepository } from '../storage/IApiKeyRepository';
 import {
   NotFoundException,

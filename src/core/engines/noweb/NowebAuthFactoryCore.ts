@@ -1,4 +1,4 @@
-import { DataStore } from '../../abc/DataStore';
+import { DataStore } from '../../storage/DataStore';
 import { LocalStore } from '../../storage/LocalStore';
 import { useMultiFileAuthState } from './useMultiFileAuthState';
 

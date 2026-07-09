@@ -129,7 +129,7 @@ import {
 } from '../exceptions';
 import { IMediaManager } from '../media/IMediaManager';
 import { QR } from '../QR';
-import { DataStore } from './DataStore';
+import { DataStore } from '../storage/DataStore';
 import { fetchBuffer } from '../../utils/fetch';
 import {
   PRESENCE_AUTO_ONLINE,
