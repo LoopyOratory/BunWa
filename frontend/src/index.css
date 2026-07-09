@@ -8,7 +8,6 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ── Core Typography ── */
-html { font-size: 15px; }                  /* bump baseline from 16 → 15 for crisp dashboard text */
 body { -webkit-font-smoothing: antialiased; }
 
 /* ── Utility: card groups that never grow wider than 400px per card ── */
