@@ -461,6 +461,14 @@ export const api = {
   getLids: (session: string, limit = 200, offset = 0) =>
     request<any[]>(`/api/${session}/lids?limit=${limit}&offset=${offset}`),
 
+  // ==================== INFRASTRUCTURE ====================
+  getInfraConfig: () =>
+    request<any>(`/api/infra/config`),
+  saveInfraConfig: (config: any) =>
+    request<any>(`/api/infra/config`, { method: "PUT", body: JSON.stringify(config) }),
+  restartServer: () =>
+    request<any>(`/api/infra/restart`, { method: "POST" }),
+
   // ==================== WEBHOOKS ====================
   getWebhooks: (session: string) =>
     request<Webhook[]>(`/api/sessions/${session}/webhooks`),

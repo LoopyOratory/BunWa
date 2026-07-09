@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Database, Server, HardDrive, RefreshCw, Save, Monitor, Smartphone } from "lucide-react"
 import { PageLayout } from "@/components/page-layout"
 import { toast } from "sonner"
+import { api } from "@/lib/api"
 
 interface InfraConfig {
   database: { type: string; host: string; port: string; username: string; name: string; ssl: boolean }
@@ -21,7 +22,7 @@ export function InfrastructurePage() {
     database: { type: "sqlite", host: "localhost", port: "5432", username: "", name: "./data/waha.sqlite", ssl: false },
     storage: { type: "local", localPath: "./data/media", s3: { endpoint: "", bucket: "", region: "us-east-1", accessKeyId: "", secretAccessKey: "" } },
     queue: { enabled: false, redis: { host: "localhost", port: "6379", password: "" } },
-    engine: "baileys",
+    engine: "NOWEB",
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -31,10 +32,7 @@ export function InfrastructurePage() {
   async function loadConfig() {
     setLoading(true)
     try {
-      const res = await fetch("/api/infra/config", {
-        headers: { "x-api-key": localStorage.getItem("waha-api-key") || "" },
-      })
-      if (res.ok) setConfig(await res.json())
+      setConfig(await api.getInfraConfig())
     } catch (err) { toast.error("Failed to load config") }
     setLoading(false)
   }
@@ -42,24 +40,17 @@ export function InfrastructurePage() {
   async function saveConfig() {
     setSaving(true)
     try {
-      const res = await fetch("/api/infra/config", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", "x-api-key": localStorage.getItem("waha-api-key") || "" },
-        body: JSON.stringify(config),
-      })
-      if (res.ok) toast.success("Configuration saved. Restart required.")
-    } catch (err) { toast.error("Failed to save config") }
+      await api.saveInfraConfig(config)
+      toast.success("Configuration saved. Restart to apply.")
+    } catch (err: any) { toast.error(err?.message || "Failed to save config") }
     setSaving(false)
   }
 
   async function restart() {
     try {
-      await fetch("/api/infra/restart", {
-        method: "POST",
-        headers: { "x-api-key": localStorage.getItem("waha-api-key") || "" },
-      })
-      toast.success("Server restarting...")
-    } catch (err) { toast.error("Failed to restart") }
+      await api.restartServer()
+      toast.success("Server restarting…")
+    } catch (err: any) { toast.error(err?.message || "Failed to restart") }
   }
 
   if (loading) return <div className="flex items-center justify-center h-64"><RefreshCw className="h-10 w-10 animate-spin" /></div>
@@ -159,11 +150,11 @@ export function InfrastructurePage() {
           <CardContent>
             <div className="grid grid-cols-2 gap-4">
               <div
-                className={`p-5 rounded-xl border-2 cursor-pointer transition-all hover:shadow-md ${config.engine === "baileys" ? "border-emerald-500 bg-emerald-500/5" : "border-border hover:border-muted-foreground/30"}`}
-                onClick={() => setConfig({ ...config, engine: "baileys" })}
+                className={`p-5 rounded-xl border-2 cursor-pointer transition-all hover:shadow-md ${config.engine === "NOWEB" ? "border-emerald-500 bg-emerald-500/5" : "border-border hover:border-muted-foreground/30"}`}
+                onClick={() => setConfig({ ...config, engine: "NOWEB" })}
               >
                 <div className="flex items-center gap-3 mb-3">
-                  <div className={`p-2 rounded-lg ${config.engine === "baileys" ? "bg-emerald-500/15 text-emerald-500" : "bg-muted text-muted-foreground"}`}>
+                  <div className={`p-2 rounded-lg ${config.engine === "NOWEB" ? "bg-emerald-500/15 text-emerald-500" : "bg-muted text-muted-foreground"}`}>
                     <Monitor className="h-5 w-5" />
                   </div>
                   <div>
@@ -172,14 +163,14 @@ export function InfrastructurePage() {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground/80">Free, fast, no Chrome needed. Uses raw WhatsApp protocol.</p>
-                {config.engine === "baileys" && <Badge className="mt-3 bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/20 border-0">Selected</Badge>}
+                {config.engine === "NOWEB" && <Badge className="mt-3 bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/20 border-0">Selected</Badge>}
               </div>
               <div
-                className={`p-5 rounded-xl border-2 cursor-pointer transition-all hover:shadow-md ${config.engine === "webjs" ? "border-blue-500 bg-blue-500/5" : "border-border hover:border-muted-foreground/30"}`}
-                onClick={() => setConfig({ ...config, engine: "webjs" })}
+                className={`p-5 rounded-xl border-2 cursor-pointer transition-all hover:shadow-md ${config.engine === "WEBJS" ? "border-blue-500 bg-blue-500/5" : "border-border hover:border-muted-foreground/30"}`}
+                onClick={() => setConfig({ ...config, engine: "WEBJS" })}
               >
                 <div className="flex items-center gap-3 mb-3">
-                  <div className={`p-2 rounded-lg ${config.engine === "webjs" ? "bg-blue-500/15 text-blue-500" : "bg-muted text-muted-foreground"}`}>
+                  <div className={`p-2 rounded-lg ${config.engine === "WEBJS" ? "bg-blue-500/15 text-blue-500" : "bg-muted text-muted-foreground"}`}>
                     <Monitor className="h-5 w-5" />
                   </div>
                   <div>
@@ -188,7 +179,7 @@ export function InfrastructurePage() {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground/80">More features but requires Chrome/Puppeteer.</p>
-                {config.engine === "webjs" && <Badge className="mt-3 bg-blue-500/15 text-blue-600 hover:bg-blue-500/20 border-0">Selected</Badge>}
+                {config.engine === "WEBJS" && <Badge className="mt-3 bg-blue-500/15 text-blue-600 hover:bg-blue-500/20 border-0">Selected</Badge>}
               </div>
             </div>
           </CardContent>
