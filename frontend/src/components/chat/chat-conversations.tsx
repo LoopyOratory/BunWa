@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { SidebarTrigger } from "@/components/ui/sidebar"
 import { api, fetchImageBlobUrl, type Session, type ChatOverview, type Contact } from "@/lib/api"
 import { SessionSelector } from "./session-selector"
 import { avColor, chatName, chatInitials } from "./helpers"
@@ -91,14 +92,17 @@ export function ChatConversations({
 
   return (
     <aside className="flex h-full w-80 shrink-0 flex-col border-r border-[var(--chat-border-strong)] bg-[var(--chat-bg-sidebar)]">
-      <div className="px-3 pt-3 pb-1.5">
-        <SessionSelector
-          sessions={sessions}
-          selectedSession={selectedSession}
-          onSessionChange={onSessionChange}
-          onStartSession={onStartSession}
-          onStopSession={onStopSession}
-        />
+      <div className="flex items-center gap-1 px-3 pt-3 pb-1.5">
+        <SidebarTrigger className="md:hidden shrink-0" />
+        <div className="min-w-0 flex-1">
+          <SessionSelector
+            sessions={sessions}
+            selectedSession={selectedSession}
+            onSessionChange={onSessionChange}
+            onStartSession={onStartSession}
+            onStopSession={onStopSession}
+          />
+        </div>
       </div>
 
       <div className="flex items-center justify-between px-4 py-1">
@@ -112,12 +116,12 @@ export function ChatConversations({
         </div>
         <div className="flex gap-0.5">
           <Tooltip><TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="size-7 text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)] hover:bg-[var(--chat-accent-soft)]" onClick={onOpenStatus}>
+            <Button aria-label="Post Status" variant="ghost" size="icon" className="size-7 text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)] hover:bg-[var(--chat-accent-soft)]" onClick={onOpenStatus}>
               <CircleDot className="size-3.5" />
             </Button>
           </TooltipTrigger><TooltipContent>Post Status</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="size-7 text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)] hover:bg-[var(--chat-accent-soft)]" onClick={onOpenNewChat}>
+            <Button aria-label="New Chat" variant="ghost" size="icon" className="size-7 text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)] hover:bg-[var(--chat-accent-soft)]" onClick={onOpenNewChat}>
               <MessageSquarePlus className="size-3.5" />
             </Button>
           </TooltipTrigger><TooltipContent>New Chat</TooltipContent></Tooltip>

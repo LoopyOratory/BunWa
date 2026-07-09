@@ -34,6 +34,7 @@ export function ChatHeader({
     <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-[var(--chat-border)] bg-[var(--chat-bg-header)] px-4 py-3 backdrop-blur-[20px] backdrop-saturate-[180%]">
       <button
         onClick={onBack}
+        aria-label="Back to conversations"
         className="mr-1 text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)] md:hidden"
       >
         <ChevronLeft className="size-5" />
@@ -62,6 +63,7 @@ export function ChatHeader({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
+              aria-label="Archive chat"
               variant="ghost"
               size="icon"
               className="size-8 rounded-lg text-[var(--chat-text-secondary)] hover:bg-[var(--chat-accent-soft)] hover:text-[var(--chat-text-primary)]"
@@ -76,6 +78,7 @@ export function ChatHeader({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
+              aria-label="More options"
               variant="ghost"
               size="icon"
               className="size-8 rounded-lg text-[var(--chat-text-secondary)] hover:bg-[var(--chat-accent-soft)] hover:text-[var(--chat-text-primary)]"
