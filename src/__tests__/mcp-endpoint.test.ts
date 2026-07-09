@@ -178,5 +178,42 @@ describe('MCP endpoint (Streamable-HTTP JSON-RPC)', () => {
         process.env.WAHA_API_KEY = oldKey;
       }
     });
+
+    it('cleanly rejects a wrong non-empty key without crashing the per-session lookup', async () => {
+      // Regression: the per-session key path called the async getSessions()
+      // without awaiting it, then iterated the returned Promise — throwing
+      // "{} is not iterable" for any wrong-but-present key (never reached by
+      // the no-key test above, which short-circuits before the lookup).
+      const oldKey = process.env.WAHA_API_KEY;
+      process.env.WAHA_API_KEY = 'test-secret-key';
+      try {
+        const sessionManager = container.resolve(SessionManager);
+        const authApp = new Hono();
+        authApp.route('/', createMcpRouter(sessionManager));
+
+        const res = await authApp.request('/mcp', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json, text/event-stream',
+            'Mcp-Protocol-Version': '2025-11-25',
+            'X-Api-Key': 'a-wrong-but-present-key',
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: { name: 'SessionList', arguments: {} },
+          }),
+        });
+
+        const body = await res.text();
+        // Must be a clean auth denial, not the old "is not iterable" TypeError.
+        expect(body).toContain('Invalid or missing API key');
+        expect(body).not.toContain('is not iterable');
+      } finally {
+        process.env.WAHA_API_KEY = oldKey;
+      }
+    });
   });
 });

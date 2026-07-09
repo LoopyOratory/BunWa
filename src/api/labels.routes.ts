@@ -9,7 +9,7 @@ export function createLabelsRouter(): Hono {
 
   router.use('*', apiKeyAuthMiddleware());
 
-  router.get('/:session/labels/',
+  router.get('/:session/labels',
     policiesMiddleware(CanSession(Action.Read, FromParam('session'))),
     workingSessionResolver(),
     async (c) => {
@@ -19,7 +19,7 @@ export function createLabelsRouter(): Hono {
     }
   );
 
-  router.post('/:session/labels/',
+  router.post('/:session/labels',
     policiesMiddleware(CanSession(Action.Send, FromParam('session'))),
     workingSessionResolver(),
     async (c) => {

@@ -136,7 +136,7 @@ function buildServer(
 
           if (!globalOk && rawKey) {
             const providedHash = createHash('sha256').update(rawKey).digest('hex');
-            const allSessions = sessionManager.getSessions();
+            const allSessions = await sessionManager.getSessions();
             for (const s of allSessions) {
               try {
                 const cfg = sessionManager.getSessionConfig(s.name);

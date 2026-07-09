@@ -224,7 +224,7 @@ export function createGroupsRouter(): Hono {
     }
   );
 
-  router.get('/:session/groups/:id/participants/',
+  router.get('/:session/groups/:id/participants',
     policiesMiddleware(CanSession(Action.Read, FromParam('session'))),
     workingSessionResolver(),
     async (c) => {

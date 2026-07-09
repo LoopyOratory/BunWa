@@ -3,6 +3,7 @@ import { container } from 'tsyringe';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanSession, Action, FromQuery } from '../middleware/policies';
 import { SessionManager } from '../core/manager.core';
+import { NotFoundException } from '../core/exceptions';
 import { getSessionFromBody } from '../middleware/get-session-from-body';
 
 export function createContactsRouter(): Hono {
@@ -23,12 +24,15 @@ export function createContactsRouter(): Hono {
         const contacts = await (session as any).getContacts({});
         return c.json(contacts);
       } catch (e: any) {
+        if (e instanceof NotFoundException) {
+          return c.json({ statusCode: 404, message: `Session ${sessionName} not found or not working` }, 404);
+        }
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
   );
 
-  router.get('/contacts/',
+  router.get('/contacts',
     policiesMiddleware(CanSession(Action.Read, FromQuery('session'))),
     async (c) => {
       const sessionName = c.req.query('session');
@@ -42,6 +46,9 @@ export function createContactsRouter(): Hono {
         const contact = await (session as any).getContact({ contactId });
         return c.json(contact);
       } catch (e: any) {
+        if (e instanceof NotFoundException) {
+          return c.json({ statusCode: 404, message: `Session ${sessionName} not found or not working` }, 404);
+        }
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }

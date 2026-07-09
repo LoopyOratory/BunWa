@@ -25,11 +25,13 @@ export function configureContainer(): DependencyContainer {
   // Register ChatwootAppService
   container.registerSingleton(ChatwootAppService);
 
-  // Register AuditService
-  container.registerSingleton(AuditService);
-
-  // Register TemplateService
-  container.registerSingleton(TemplateService);
+  // Register AuditService + TemplateService as explicit instances.
+  // Their constructors take an optional `dbOrPath?: Database | string` param,
+  // which emits `Object` design-type metadata that tsyringe cannot auto-inject
+  // (registerSingleton would throw "TypeInfo not known for Object"). Both
+  // default to an env-configured SQLite path when constructed with no args.
+  container.registerInstance(AuditService, new AuditService());
+  container.registerInstance(TemplateService, new TemplateService());
 
   return container;
 }

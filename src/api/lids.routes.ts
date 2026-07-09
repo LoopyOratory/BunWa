@@ -9,7 +9,7 @@ export function createLidsRouter(): Hono {
 
   router.use('*', apiKeyAuthMiddleware());
 
-  router.get('/:session/lids/',
+  router.get('/:session/lids',
     policiesMiddleware(CanSession(Action.Read, FromParam('session'))),
     workingSessionResolver(),
     async (c) => {

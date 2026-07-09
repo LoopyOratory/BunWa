@@ -459,7 +459,7 @@ export const api = {
     request<string | null>(`/api/${session}/lids/${encodeURIComponent(lid)}`),
   /** Get all LID mappings */
   getLids: (session: string, limit = 200, offset = 0) =>
-    request<any[]>(`/api/${session}/lids/?limit=${limit}&offset=${offset}`),
+    request<any[]>(`/api/${session}/lids?limit=${limit}&offset=${offset}`),
 
   // ==================== WEBHOOKS ====================
   getWebhooks: (session: string) =>
