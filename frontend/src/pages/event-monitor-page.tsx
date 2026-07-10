@@ -110,7 +110,10 @@ export function EventMonitorPage() {
       <div className="space-y-6">
           <Alert>
             {connected ? (
-              <Wifi className="size-5 text-green-500 drop-shadow-[0_0_6px_rgba(34,197,94,0.75)] animate-pulse-soft" />
+              <Wifi
+                className="size-5 drop-shadow-[0_0_6px_var(--primary)] animate-pulse-soft"
+                style={{ color: "var(--primary)" }}
+              />
             ) : (
               <WifiOff className="size-5 text-red-500" />
             )}
