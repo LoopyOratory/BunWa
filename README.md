@@ -8,6 +8,9 @@
   <img src="https://img.shields.io/badge/License-BCL%20v1.0%20(Free%20OSS%20%2F%20%24200%2Fmo%20Commercial)-blue?style=flat-square" alt="License" />
   <img src="https://img.shields.io/badge/WhatsApp%20API-1%3A1%20WAHA%20Compatible-25D366?style=flat-square&logo=whatsapp" alt="WAHA Compatible" />
   <img src="https://img.shields.io/badge/PRs-Welcome-brightgreen?style=flat-square" alt="PRs Welcome" />
+  <a href="https://hub.docker.com/r/loopyoratory/bunwa">
+    <img src="https://img.shields.io/badge/Docker%20Hub-loopyoratory%2Fbunwa-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Hub" />
+  </a>
   <br />
   <a href="https://selar.com/showlove/loopyoratory">
     <img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FF813F?style=flat-square&logo=buy-me-a-coffee&logoColor=white" alt="Buy Me A Coffee" />
