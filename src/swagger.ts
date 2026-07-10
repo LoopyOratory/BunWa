@@ -410,41 +410,6 @@ export function buildOpenApiSpec(): any {
           },
         },
       },
-      '/api/sendPoll': {
-        post: {
-          tags: ['📤 Chatting'],
-          summary: 'Send a poll',
-          operationId: 'sendPoll',
-          security: [{ apiKey: [] }],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['session', 'chatId', 'poll'],
-                  properties: {
-                    session: { type: 'string' },
-                    chatId: { type: 'string' },
-                    poll: {
-                      type: 'object',
-                      properties: {
-                        name: { type: 'string' },
-                        options: { type: 'array', items: { type: 'string' } },
-                        multipleAnswers: { type: 'boolean' },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            '200': {
-              description: 'Poll sent',
-            },
-          },
-        },
-      },
       '/api/sendLocation': {
         post: {
           tags: ['📤 Chatting'],
@@ -2031,7 +1996,15 @@ export function buildOpenApiSpec(): any {
                   properties: {
                     session: { type: 'string' },
                     chatId: { type: 'string' },
-                    poll: { type: 'object' },
+                    poll: {
+                      type: 'object',
+                      required: ['name', 'options'],
+                      properties: {
+                        name: { type: 'string', description: 'Poll question' },
+                        options: { type: 'array', items: { type: 'string' }, description: 'Poll choices (at least one)' },
+                        multipleAnswers: { type: 'boolean', description: 'Allow selecting more than one option' },
+                      },
+                    },
                     reply_to: { type: 'string' },
                   },
                 },
@@ -2132,8 +2105,24 @@ export function buildOpenApiSpec(): any {
                   properties: {
                     session: { type: 'string' },
                     chatId: { type: 'string' },
-                    buttons: { type: 'array' },
+                    buttons: {
+                      type: 'array',
+                      description: 'WhatsApp allows at most 3 quick-reply buttons per message',
+                      items: {
+                        type: 'object',
+                        required: ['type', 'text'],
+                        properties: {
+                          type: { type: 'string', enum: ['reply', 'url', 'call', 'copy'] },
+                          text: { type: 'string', description: 'Button label' },
+                          id: { type: 'string', description: 'Reply button id (type=reply); auto-generated if omitted' },
+                          url: { type: 'string', description: 'Target URL (type=url)' },
+                          phoneNumber: { type: 'string', description: 'Phone number to dial (type=call)' },
+                          copyCode: { type: 'string', description: 'Text copied to clipboard (type=copy)' },
+                        },
+                      },
+                    },
                     header: { type: 'string' },
+                    headerImage: { type: 'object', description: 'Image file object shown in the header (mimetype/filename/data or url)' },
                     body: { type: 'string' },
                     footer: { type: 'string' },
                   },
@@ -2142,6 +2131,52 @@ export function buildOpenApiSpec(): any {
             },
           },
           responses: { '200': { description: 'Buttons sent' } },
+        },
+      },
+      '/api/sendList': {
+        post: {
+          tags: ['📤 Chatting'],
+          summary: 'Send an interactive list message',
+          operationId: 'sendList',
+          security: [{ apiKey: [] }],
+          requestBody: {
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['session', 'chatId', 'title', 'description', 'button', 'sections'],
+                  properties: {
+                    session: { type: 'string' },
+                    chatId: { type: 'string' },
+                    title: { type: 'string', description: 'List header title' },
+                    description: { type: 'string', description: 'Body text shown above the list button' },
+                    button: { type: 'string', description: 'Label of the button that opens the list' },
+                    sections: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          title: { type: 'string' },
+                          rows: {
+                            type: 'array',
+                            items: {
+                              type: 'object',
+                              properties: {
+                                title: { type: 'string' },
+                                description: { type: 'string' },
+                                rowId: { type: 'string', description: 'Auto-generated if omitted' },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: { '200': { description: 'List sent' } },
         },
       },
       '/api/startTyping': {
