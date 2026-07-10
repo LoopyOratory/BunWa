@@ -181,6 +181,15 @@ function buildServer(
                 true,
               );
             }
+          } else if (scopedSession) {
+            // A per-session key must never reach a global/non-session-scoped
+            // tool — those aren't bound to any sessionId and would otherwise
+            // leak cross-session data (e.g. SessionList) to a key that's only
+            // supposed to see its own session.
+            return jsonToolResult(
+              { success: false, name: 'PermissionDenied', message: `Tool '${tool.name}' is not available to a session-scoped key` },
+              true,
+            );
           } else {
             // Non-session-scoped tools still check MCP-level disable
             const { allowed, reason } = isToolAllowed(tool, undefined);

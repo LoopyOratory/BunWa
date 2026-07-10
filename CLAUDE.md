@@ -59,7 +59,7 @@ Key env vars (see .env.example):
 | Variable | Default | Description |
 |----------|---------|-------------|
 | WHATSAPP_API_PORT | 3001 | HTTP server port |
-| WHATSAPP_API_KEY | - | API key for programmatic access |
+| WAHA_API_KEY | - | API key for programmatic access (required header: X-Api-Key) |
 | DASHBOARD_USERNAME | admin | Dashboard login username |
 | DASHBOARD_PASSWORD | admin | Dashboard login password |
 | LOG_LEVEL | info | Logging verbosity |
