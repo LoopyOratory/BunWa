@@ -28,6 +28,51 @@ Two WhatsApp engines are supported:
 
 </div>
 
+<details>
+<summary><strong>📑 Table of Contents</strong></summary>
+
+- [✨ Features](#features)
+- [🚀 Quick Start](#quick-start)
+  - [🐳 Docker](#docker)
+  - [☁️ Coolify](#coolify)
+- [📸 Dashboard](#dashboard)
+- [🔧 Configuration](#configuration)
+  - [Server](#server)
+  - [Authentication](#authentication)
+  - [Dashboard (auth)](#dashboard-1)
+  - [API Docs (Swagger / Scalar)](#api-docs-swagger--scalar)
+  - [Logging](#logging)
+  - [WhatsApp Engine](#whatsapp-engine)
+  - [Client Config (NOWEB)](#client-config-noweb)
+  - [Session Management](#session-management)
+  - [Presence](#presence)
+  - [Chat Filtering](#chat-filtering-global-defaults)
+  - [Database](#database)
+  - [Media](#media)
+  - [Storage — Local](#storage--local)
+  - [Storage — S3](#storage--s3)
+  - [Webhook](#webhook)
+  - [Proxy](#proxy)
+  - [Queue / Redis](#queue--redis)
+  - [MCP](#mcp-model-context-protocol)
+  - [Chatwoot Integration](#chatwoot-integration)
+  - [Health Check](#health-check)
+- [📡 API](#api)
+- [🧩 MCP Server (Model Context Protocol)](#mcp-server-model-context-protocol)
+  - [Per-Session MCP Keys](#per-session-mcp-keys-)
+  - [Quick Connect](#quick-connect)
+  - [Available Tools](#available-tools)
+  - [Per-Session Tool Policies](#per-session-tool-policies)
+  - [Auth Model](#auth-model)
+  - [Test the MCP Server](#test-the-mcp-server)
+- [🏗️ Architecture](#architecture)
+- [🛠️ Technology Stack](#technology-stack)
+- [📖 Documentation](#documentation)
+- [⭐ Support](#support)
+- [📄 License](#license)
+
+</details>
+
 <a id="features"></a>
 ## ✨ Features
 
