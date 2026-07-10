@@ -109,7 +109,11 @@ export function EventMonitorPage() {
     <PageLayout title="Event Monitor" description="Live WebSocket event stream from your WhatsApp sessions">
       <div className="space-y-6">
           <Alert>
-            {connected ? <Wifi className="size-5 text-green-500" /> : <WifiOff className="size-5 text-red-500" />}
+            {connected ? (
+              <Wifi className="size-5 text-green-500 drop-shadow-[0_0_6px_rgba(34,197,94,0.75)] animate-pulse-soft" />
+            ) : (
+              <WifiOff className="size-5 text-red-500" />
+            )}
             <AlertDescription>
               {connected
                 ? "Connected to WebSocket — receiving real-time events."
