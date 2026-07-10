@@ -1,4 +1,4 @@
-import { injectable, inject } from 'tsyringe';
+import { injectable, inject, container } from 'tsyringe';
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { EMPTY, merge, Observable } from 'rxjs';
@@ -20,6 +20,7 @@ import { SwitchObservable } from '../utils/reactive/SwitchObservable';
 import { NotFoundException, BadRequestException } from './exceptions';
 import { LocalStoreCore } from './storage/LocalStoreCore';
 import { WebhookDelivery } from './webhook-delivery';
+import { AuditService, AuditAction } from './audit/audit.service';
 import AsyncLock from 'async-lock';
 import pino from 'pino';
 
@@ -36,6 +37,17 @@ export class SessionManager {
 
   private webhook: WebhookDelivery | null = null;
   private subscriptions: Map<string, Array<{ unsubscribe: () => void }>> = new Map();
+  private auditService: AuditService | null = null;
+
+  /** Lazily resolved: AuditService is registered in the DI container after
+   *  SessionManager is constructed (see di/container.ts), so it can't be
+   *  taken as a constructor dependency. */
+  private get audit(): AuditService {
+    if (!this.auditService) {
+      this.auditService = container.resolve(AuditService);
+    }
+    return this.auditService;
+  }
 
   constructor(
     @inject(WhatsappConfigService) private config: WhatsappConfigService,
@@ -94,11 +106,31 @@ export class SessionManager {
         return EMPTY;
       }
     }
-    // Wildcard subscription: merge the event observable of every known
-    // session so wildcard clients (e.g. event monitor) receive events from
-    // any session, even ones that are created after the subscription.
+    // Wildcard subscription: `events2.get(event)` returns a long-lived
+    // SwitchObservable shared by every wildcard subscriber. Refresh it now
+    // so a brand-new subscriber immediately sees the current session set,
+    // and refresh it again whenever sessions start/stop (see
+    // refreshAllWildcardEvents) so already-connected subscribers keep
+    // receiving events from sessions started/stopped after they connected.
+    const observable = this.events2.get(event);
+    this.refreshWildcardEvent(event);
+    return observable;
+  }
+
+  getSessionEvents(session: string, events: WAHAEvents[]): Observable<any> {
+    return merge(
+      ...events.map((event) => this.getSessionEvent(session, event)),
+    );
+  }
+
+  /**
+   * Build the merged observable of every currently-running session's event
+   * stream for a single event type. Used to (re)populate the wildcard
+   * SwitchObservable in `events2`.
+   */
+  private computeWildcardMerge(event: WAHAEvents): Observable<any> {
     const sessionObservables: Observable<any>[] = [];
-    for (const [name, sessionObj] of this.sessions) {
+    for (const [, sessionObj] of this.sessions) {
       if (!sessionObj) continue;
       try {
         sessionObservables.push(sessionObj.getEventObservable(event));
@@ -106,17 +138,31 @@ export class SessionManager {
         // Session doesn't expose this event; skip
       }
     }
-    if (sessionObservables.length > 0) {
-      return merge(...sessionObservables);
-    }
-    // Fallback to global events for wildcard subscriptions
-    return this.events2.get(event);
+    return sessionObservables.length > 0 ? merge(...sessionObservables) : EMPTY;
   }
 
-  getSessionEvents(session: string, events: WAHAEvents[]): Observable<any> {
-    return merge(
-      ...events.map((event) => this.getSessionEvent(session, event)),
-    );
+  /**
+   * Re-point the wildcard SwitchObservable for a single event type at a
+   * fresh merge of currently-running sessions. No-ops if nobody has ever
+   * subscribed to this event via the wildcard path (avoids creating
+   * unnecessary SwitchObservable instances).
+   */
+  private refreshWildcardEvent(event: WAHAEvents): void {
+    if (!this.events2.has(event)) return;
+    this.events2.get(event).switch(this.computeWildcardMerge(event));
+  }
+
+  /**
+   * Refresh every wildcard event stream that currently has at least one
+   * subscriber. Call this whenever the running-session set changes (a
+   * session starts, stops, or is removed) so live wildcard subscribers
+   * (e.g. the Event Monitor) keep receiving events from sessions that
+   * didn't exist yet when they connected.
+   */
+  private refreshAllWildcardEvents(): void {
+    for (const event of this.events2.keys()) {
+      this.refreshWildcardEvent(event);
+    }
   }
 
   async start(name: string): Promise<any> {
@@ -162,9 +208,33 @@ export class SessionManager {
     });
 
     this.sessions.set(name, session);
+    this.refreshAllWildcardEvents();
+    this.audit.logInfo(AuditAction.SESSION_STARTED, { sessionName: name });
 
     // Collect all subscriptions for this session for later resync/cleanup
     const sessionSubs: Array<{ unsubscribe: () => void }> = [];
+
+    // Track status transitions for connect/disconnect/QR audit events
+    let previousStatus: WAHASessionStatus | null = null;
+    try {
+      const statusSub = session.getEventObservable(WAHAEvents.SESSION_STATUS).subscribe({
+        next: (data: any) => {
+          const status = data?.status as WAHASessionStatus | undefined;
+          if (!status) return;
+          if (status === WAHASessionStatus.SCAN_QR_CODE) {
+            this.audit.logInfo(AuditAction.SESSION_QR_GENERATED, { sessionName: name });
+          } else if (status === WAHASessionStatus.WORKING) {
+            this.audit.logInfo(AuditAction.SESSION_CONNECTED, { sessionName: name });
+          } else if (previousStatus === WAHASessionStatus.WORKING) {
+            this.audit.logWarn(AuditAction.SESSION_DISCONNECTED, { sessionName: name });
+          }
+          previousStatus = status;
+        },
+      });
+      sessionSubs.push(statusSub);
+    } catch {
+      // Session doesn't support this event
+    }
 
     // Subscribe to session events for webhook delivery (global env-config webhook)
     this.subscribeGlobalWebhooks(name, session, sessionSubs);
@@ -218,9 +288,14 @@ export class SessionManager {
     // Start the session in background
     (session as any).start().catch((error: any) => {
       this.logger.error(`Session ${name} failed to start:`, error.stack || error.message);
+      this.audit.logError(AuditAction.SESSION_STOPPED, {
+        sessionName: name,
+        errorMessage: error?.message || String(error),
+      });
       // Only remove from map if it's still the same session (avoid race)
       if (this.sessions.get(name) === session) {
         this.sessions.delete(name);
+        this.refreshAllWildcardEvents();
       }
     });
 
@@ -242,8 +317,10 @@ export class SessionManager {
     if (session) {
       await (session as any).stop();
       this.sessions.set(name, null as any);
+      this.refreshAllWildcardEvents();
       if (!silent) {
         this.logger.info(`Session ${name} stopped`);
+        this.audit.logInfo(AuditAction.SESSION_STOPPED, { sessionName: name });
       }
     }
   }
@@ -392,6 +469,7 @@ export class SessionManager {
     }
     if (!this.sessions.has(name)) {
       this.sessions.set(name, null as any);
+      this.audit.logInfo(AuditAction.SESSION_CREATED, { sessionName: name });
     }
     await this.saveSessionIndex();
   }
@@ -405,6 +483,7 @@ export class SessionManager {
       this.sessions.delete(name);
       this.sessionConfigs.delete(name);
       await this.saveSessionIndex();
+      this.audit.logInfo(AuditAction.SESSION_DELETED, { sessionName: name });
     });
   }
 
@@ -421,6 +500,7 @@ export class SessionManager {
     if (session) {
       await (session as any).unpair?.();
     }
+    this.audit.logWarn(AuditAction.SESSION_FORCE_KILLED, { sessionName: name });
     await this.delete(name);
   }
 

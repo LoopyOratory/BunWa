@@ -7,6 +7,7 @@ import { WebhookDelivery } from '../core/webhook-delivery';
 import { WhatsappConfigService } from '../config.service';
 import { generatePrefixedId } from '../utils/ids';
 import { WebhookCreateSchema, WebhookUpdateSchema } from '../structures/webhooks.config.dto';
+import { AuditService, AuditAction } from '../core/audit/audit.service';
 
 export function createWebhooksRouter(): Hono {
   const router = new Hono();
@@ -55,6 +56,10 @@ export function createWebhooksRouter(): Hono {
     config.webhooks = webhooks;
     await manager.upsert(session, config);
     await manager.resyncWebhooks(session);
+    container.resolve(AuditService).logInfo(AuditAction.WEBHOOK_CREATED, {
+      sessionName: session,
+      metadata: { webhookId: webhook.id, url: webhook.url },
+    });
 
     return c.json(webhook, 201);
   });
@@ -120,6 +125,10 @@ export function createWebhooksRouter(): Hono {
     config.webhooks = filtered;
     await manager.upsert(session, config);
     await manager.resyncWebhooks(session);
+    container.resolve(AuditService).logInfo(AuditAction.WEBHOOK_DELETED, {
+      sessionName: session,
+      metadata: { webhookId: id },
+    });
 
     return c.json({ result: true });
   });

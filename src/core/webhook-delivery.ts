@@ -3,11 +3,12 @@
  * Ported features from OpenWA + improved retry logic.
  */
 
-import { injectable, inject } from 'tsyringe';
+import { injectable, inject, container } from 'tsyringe';
 import { WhatsappConfigService } from '../config.service';
 import { resolveAndPinFetch, isSsrfProtectionEnabled, resolveSafeFetchTarget, SsrfBlockedError } from '../common/security/ssrf-guard';
 import { generateWebhookSignature, generateIdempotencyKey } from '../common/security/webhook-signing';
 import { evaluateFilters, type WebhookFilters, type LidResolver } from '../common/security/webhook-filters';
+import { AuditService, AuditAction } from './audit/audit.service';
 import pino from 'pino';
 import { randomBytes } from 'crypto';
 
@@ -116,6 +117,11 @@ export class WebhookDelivery {
 
         if (res.ok) {
           this.logger.debug(`Webhook delivered: ${payload.event} for ${payload.session} (${deliveryId})`);
+          container.resolve(AuditService).logInfo(AuditAction.WEBHOOK_TRIGGERED, {
+            sessionName: payload.session,
+            statusCode: res.status,
+            metadata: { event: payload.event, deliveryId },
+          });
           return { ok: true, statusCode: res.status };
         }
 
@@ -126,10 +132,21 @@ export class WebhookDelivery {
         }
 
         this.logger.error(`Webhook delivery failed: ${payload.event} for ${payload.session} — HTTP ${res.status}`);
+        container.resolve(AuditService).logWarn(AuditAction.WEBHOOK_FAILED, {
+          sessionName: payload.session,
+          statusCode: res.status,
+          errorMessage: `HTTP ${res.status}`,
+          metadata: { event: payload.event, deliveryId },
+        });
         return { ok: false, statusCode: res.status, error: `HTTP ${res.status}` };
       } catch (error: any) {
         if (error instanceof SsrfBlockedError) {
           this.logger.error(`Webhook SSRF blocked: ${error.message}`);
+          container.resolve(AuditService).logWarn(AuditAction.WEBHOOK_FAILED, {
+            sessionName: payload.session,
+            errorMessage: error.message,
+            metadata: { event: payload.event, deliveryId, reason: 'ssrf_blocked' },
+          });
           return { ok: false, error: error.message };
         }
         if (attempt < maxRetries) {
@@ -138,6 +155,11 @@ export class WebhookDelivery {
           continue;
         }
         this.logger.error(`Webhook delivery failed: ${payload.event} for ${payload.session} — ${error.message}`);
+        container.resolve(AuditService).logWarn(AuditAction.WEBHOOK_FAILED, {
+          sessionName: payload.session,
+          errorMessage: error.message,
+          metadata: { event: payload.event, deliveryId },
+        });
         return { ok: false, error: error.message };
       }
     }

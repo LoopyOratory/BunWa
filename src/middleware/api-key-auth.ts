@@ -2,7 +2,15 @@ import { MiddlewareHandler } from 'hono';
 import { container } from 'tsyringe';
 import { WhatsappConfigService } from '../config.service';
 import { DashboardConfigServiceCore } from '../core/config/DashboardConfigServiceCore';
+import { AuditService, AuditAction } from '../core/audit/audit.service';
 import { timingSafeEqual } from 'crypto';
+
+/** Best-effort client IP for audit logging (not spoof-proof; informational only). */
+function getClientIp(c: any): string | undefined {
+  return c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
+    || c.req.header('x-real-ip')
+    || undefined;
+}
 
 export class User {
   isAdmin: boolean = false;
@@ -52,6 +60,11 @@ export function apiKeyAuthMiddleware(): MiddlewareHandler {
         c.set('user', { isAdmin: true } as User);
         return next();
       }
+      container.resolve(AuditService).logWarn(AuditAction.API_KEY_AUTH_FAILED, {
+        ipAddress: getClientIp(c),
+        method: c.req.method,
+        path,
+      });
       return c.json({ statusCode: 401, message: 'Invalid API key' }, 401);
     }
 
@@ -73,6 +86,11 @@ export function apiKeyAuthMiddleware(): MiddlewareHandler {
       } catch {
         // Invalid basic auth format
       }
+      container.resolve(AuditService).logWarn(AuditAction.API_KEY_AUTH_FAILED, {
+        ipAddress: getClientIp(c),
+        method: c.req.method,
+        path,
+      });
       return c.json({ statusCode: 401, message: 'Invalid credentials' }, 401);
     }
 

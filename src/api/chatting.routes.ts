@@ -4,12 +4,37 @@ import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanSession, Action, FromParam } from '../middleware/policies';
 import { SessionManager } from '../core/manager.core';
 import { getSessionFromBody } from '../middleware/get-session-from-body';
+import { AuditService, AuditAction } from '../core/audit/audit.service';
 
 // Get session name from body for policy enforcement
 const FromBodySession = (c: any) => {
   const body = c.get('body');
   return body?.session;
 };
+
+/**
+ * Runs a send-message action and records it to the audit log, without
+ * changing the calling route's error handling — the underlying error is
+ * always rethrown so existing try/catch-or-propagate behavior in each
+ * handler is unaffected.
+ */
+async function sendAndAudit<T>(sessionName: string | undefined, action: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    const result = await fn();
+    container.resolve(AuditService).logInfo(AuditAction.MESSAGE_SENT, {
+      sessionName,
+      metadata: { action },
+    });
+    return result;
+  } catch (error: any) {
+    container.resolve(AuditService).logWarn(AuditAction.MESSAGE_FAILED, {
+      sessionName,
+      errorMessage: error?.message || String(error),
+      metadata: { action },
+    });
+    throw error;
+  }
+}
 
 export function createChattingRouter(): Hono {
   const router = new Hono();
@@ -22,12 +47,12 @@ export function createChattingRouter(): Hono {
     async (c) => {
       const session = c.get('session');
       const body = c.get('body');
-      const result = await (session as any).sendText({
+      const result = await sendAndAudit(body.session, 'sendText', () => (session as any).sendText({
         session: body.session,
         chatId: body.chatId,
         text: body.text,
         reply_to: body.reply_to,
-      });
+      }));
       return c.json(result);
     }
   );
@@ -39,12 +64,12 @@ export function createChattingRouter(): Hono {
       const session = c.get('session');
       const body = c.get('body');
       try {
-        const result = await (session as any).sendImage({
+        const result = await sendAndAudit(body.session, 'sendImage', () => (session as any).sendImage({
           session: body.session,
           chatId: body.chatId,
           file: body.file,
           caption: body.caption,
-        });
+        }));
         return c.json(result);
       } catch (e: any) {
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
@@ -59,12 +84,12 @@ export function createChattingRouter(): Hono {
       const session = c.get('session');
       const body = c.get('body');
       try {
-        const result = await (session as any).sendFile({
+        const result = await sendAndAudit(body.session, 'sendFile', () => (session as any).sendFile({
           session: body.session,
           chatId: body.chatId,
           file: body.file,
           caption: body.caption,
-        });
+        }));
         return c.json(result);
       } catch (e: any) {
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
@@ -79,11 +104,11 @@ export function createChattingRouter(): Hono {
       const session = c.get('session');
       const body = c.get('body');
       try {
-        const result = await (session as any).sendVoice({
+        const result = await sendAndAudit(body.session, 'sendVoice', () => (session as any).sendVoice({
           session: body.session,
           chatId: body.chatId,
           file: body.file,
-        });
+        }));
         return c.json(result);
       } catch (e: any) {
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
@@ -98,12 +123,12 @@ export function createChattingRouter(): Hono {
       const session = c.get('session');
       const body = c.get('body');
       try {
-        const result = await (session as any).sendVideo?.({
+        const result = await sendAndAudit(body.session, 'sendVideo', () => (session as any).sendVideo?.({
           session: body.session,
           chatId: body.chatId,
           file: body.file,
           caption: body.caption,
-        });
+        }));
         return c.json(result);
       } catch (e: any) {
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
@@ -117,13 +142,13 @@ export function createChattingRouter(): Hono {
     async (c) => {
       const session = c.get('session');
       const body = c.get('body');
-      const result = await (session as any).sendLocation({
+      const result = await sendAndAudit(body.session, 'sendLocation', () => (session as any).sendLocation({
         session: body.session,
         chatId: body.chatId,
         latitude: body.latitude,
         longitude: body.longitude,
         title: body.title,
-      });
+      }));
       return c.json(result);
     }
   );
@@ -134,11 +159,11 @@ export function createChattingRouter(): Hono {
     async (c) => {
       const session = c.get('session');
       const body = c.get('body');
-      const result = await (session as any).sendPoll({
+      const result = await sendAndAudit(body.session, 'sendPoll', () => (session as any).sendPoll({
         session: body.session,
         chatId: body.chatId,
         poll: body.poll,
-      });
+      }));
       return c.json(result);
     }
   );
@@ -157,11 +182,11 @@ export function createChattingRouter(): Hono {
     async (c) => {
       const session = c.get('session');
       const body = c.get('body');
-      const result = await (session as any).sendContactVCard({
+      const result = await sendAndAudit(body.session, 'sendContactVcard', () => (session as any).sendContactVCard({
         session: body.session,
         chatId: body.chatId,
         contacts: body.contacts,
-      });
+      }));
       return c.json(result);
     }
   );
@@ -172,12 +197,12 @@ export function createChattingRouter(): Hono {
     async (c) => {
       const session = c.get('session');
       const body = c.get('body');
-      const result = await (session as any).sendLinkPreview({
+      const result = await sendAndAudit(body.session, 'sendLinkPreview', () => (session as any).sendLinkPreview({
         session: body.session,
         chatId: body.chatId,
         url: body.url,
         title: body.title,
-      });
+      }));
       return c.json(result);
     }
   );
@@ -189,13 +214,13 @@ export function createChattingRouter(): Hono {
       const session = c.get('session');
       const body = c.get('body');
       try {
-        const result = await (session as any).sendLinkCustomPreview?.({
+        const result = await sendAndAudit(body.session, 'sendLinkCustomPreview', () => (session as any).sendLinkCustomPreview?.({
           session: body.session,
           chatId: body.chatId,
           url: body.url,
           title: body.title,
           body: body.bodyText,
-        });
+        }));
         return c.json(result);
       } catch (e: any) {
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
@@ -210,14 +235,14 @@ export function createChattingRouter(): Hono {
       const session = c.get('session');
       const body = c.get('body');
       try {
-        const result = await (session as any).sendButtons({
+        const result = await sendAndAudit(body.session, 'sendButtons', () => (session as any).sendButtons({
           session: body.session,
           chatId: body.chatId,
           buttons: body.buttons,
           header: body.header,
           body: body.body,
           footer: body.footer,
-        });
+        }));
         return c.json(result);
       } catch (e: any) {
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
@@ -232,7 +257,7 @@ export function createChattingRouter(): Hono {
       const session = c.get('session');
       const body = c.get('body');
       try {
-        const result = await (session as any).sendList?.(body);
+        const result = await sendAndAudit(body.session, 'sendList', () => (session as any).sendList?.(body));
         return c.json(result);
       } catch (e: any) {
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
@@ -254,11 +279,11 @@ export function createChattingRouter(): Hono {
     async (c) => {
       const session = c.get('session');
       const body = c.get('body');
-      const result = await (session as any).forwardMessage({
+      const result = await sendAndAudit(body.session, 'forwardMessage', () => (session as any).forwardMessage({
         session: body.session,
         chatId: body.chatId,
         messageId: body.messageId,
-      });
+      }));
       return c.json(result);
     }
   );
@@ -343,12 +368,12 @@ export function createChattingRouter(): Hono {
     async (c) => {
       const session = c.get('session');
       const body = c.get('body');
-      const result = await (session as any).reply({
+      const result = await sendAndAudit(body.session, 'reply', () => (session as any).reply({
         session: body.session,
         chatId: body.chatId,
         text: body.text,
         reply_to: body.messageId,
-      });
+      }));
       return c.json(result);
     }
   );
