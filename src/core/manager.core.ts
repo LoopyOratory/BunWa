@@ -1,7 +1,7 @@
 import { injectable, inject, container } from 'tsyringe';
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { EMPTY, merge, Observable } from 'rxjs';
+import { EMPTY, merge, Observable, map } from 'rxjs';
 import { WhatsappConfigService } from '../config.service';
 import { WhatsappSession } from './session/session.abc';
 import { WhatsappSessionNoWebCore } from './engines/noweb/session.noweb.core';
@@ -118,8 +118,17 @@ export class SessionManager {
   }
 
   getSessionEvents(session: string, events: WAHAEvents[]): Observable<any> {
+    // Tag each event with its type/session before merging: the underlying
+    // per-event observables (WAMessage, WAMessageAck, WAMessageReaction,
+    // session-status payloads, etc.) carry no self-describing "event" field,
+    // so once multiple event types are merged into one stream, consumers
+    // (Event Monitor, Chat page) have no way to tell them apart without it.
     return merge(
-      ...events.map((event) => this.getSessionEvent(session, event)),
+      ...events.map((event) =>
+        this.getSessionEvent(session, event).pipe(
+          map((payload) => ({ event, session, payload, timestamp: Date.now() })),
+        ),
+      ),
     );
   }
 

@@ -274,6 +274,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ session, chatId, poll }),
     }),
+  sendButtons: (session: string, chatId: string, body: string, buttons: { id: string; text: string }[]) =>
+    request<any>("/api/sendButtons", {
+      method: "POST",
+      body: JSON.stringify({
+        session,
+        chatId,
+        body,
+        buttons: buttons.map((b) => ({ type: "reply", id: b.id, text: b.text })),
+      }),
+    }),
   sendContactVcard: (session: string, chatId: string, contacts: any[]) =>
     request<any>("/api/sendContactVcard", {
       method: "POST",

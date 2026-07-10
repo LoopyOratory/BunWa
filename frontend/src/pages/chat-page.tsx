@@ -64,7 +64,7 @@ function NewChatDialog({ open, onOpenChange, session, onOpenChat }: {
 /* ── Send Media Dialog ── */
 function SendMediaDialog({ open, onOpenChange, type, session, chatId, onSent }: {
   open: boolean; onOpenChange: (v: boolean) => void
-  type: "image" | "file" | "voice" | "video" | "location" | "poll"
+  type: "image" | "file" | "voice" | "video" | "location" | "poll" | "buttons"
   session: string; chatId: string; onSent: () => void
 }) {
   const [file, setFile] = useState<File | null>(null)
@@ -75,6 +75,11 @@ function SendMediaDialog({ open, onOpenChange, type, session, chatId, onSent }: 
   const [pollName, setPollName] = useState("")
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""])
   const [pollType, setPollType] = useState<"single" | "multiple">("single")
+  const [buttonsBody, setButtonsBody] = useState("")
+  const [buttonsList, setButtonsList] = useState<{ id: string; text: string }[]>([
+    { id: "", text: "" },
+    { id: "", text: "" },
+  ])
   const [sending, setSending] = useState(false)
   const [recording, setRecording] = useState(false)
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
@@ -87,6 +92,7 @@ function SendMediaDialog({ open, onOpenChange, type, session, chatId, onSent }: 
   const reset = () => {
     setFile(null); setCaption(""); setLat(""); setLng(""); setTitle("")
     setPollName(""); setPollOptions(["", ""]); setPollType("single")
+    setButtonsBody(""); setButtonsList([{ id: "", text: "" }, { id: "", text: "" }])
     setRecording(false); setRecordedBlob(null); setRecordTime(0)
     if (recordTimerRef.current) clearInterval(recordTimerRef.current)
   }
@@ -101,7 +107,13 @@ function SendMediaDialog({ open, onOpenChange, type, session, chatId, onSent }: 
         await api.sendLocation(session, chatId, parseFloat(lat), parseFloat(lng), title)
       } else if (type === "poll") {
         const opts = pollOptions.map((o) => o.trim()).filter(Boolean)
-        await api.sendPoll(session, chatId, { name: pollName, values: opts, multipleAnswers: pollType === "multiple" })
+        await api.sendPoll(session, chatId, { name: pollName, options: opts, multipleAnswers: pollType === "multiple" })
+      } else if (type === "buttons") {
+        const btns = buttonsList
+          .map((b) => ({ id: b.id.trim(), text: b.text.trim() }))
+          .filter((b) => b.text)
+          .map((b, i) => ({ id: b.id || `btn_${i + 1}`, text: b.text }))
+        await api.sendButtons(session, chatId, buttonsBody, btns)
       } else if (type === "voice" && recordedBlob) {
         const base64 = await new Promise<string>((r) => { const reader = new FileReader(); reader.onload = () => r(reader.result as string); reader.readAsDataURL(recordedBlob) })
         await api.sendVoice(session, chatId, { mimetype: "audio/ogg", filename: "voice.ogg", data: base64 })
@@ -146,7 +158,7 @@ function SendMediaDialog({ open, onOpenChange, type, session, chatId, onSent }: 
   }
 
   const acceptTypes: Record<string, string> = { image: "image/*", video: "video/*", file: "*" }
-  const labels: Record<string, string> = { image: "Send Image", file: "Send File", voice: "Send Voice", video: "Send Video", location: "Send Location", poll: "Create Poll" }
+  const labels: Record<string, string> = { image: "Send Image", file: "Send File", voice: "Send Voice", video: "Send Video", location: "Send Location", poll: "Create Poll", buttons: "Send Buttons" }
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset() }}>
@@ -237,9 +249,32 @@ function SendMediaDialog({ open, onOpenChange, type, session, chatId, onSent }: 
           </div>
         )}
 
+        {type === "buttons" && (
+          <div className="space-y-3 py-2">
+            <Label className="text-xs">Message Text</Label>
+            <Textarea placeholder="What would you like to say?" value={buttonsBody} onChange={(e) => setButtonsBody(e.target.value)} className="min-h-[80px]" />
+            <Label className="text-xs">Buttons</Label>
+            {buttonsList.map((btn, i) => (
+              <div key={i} className="flex gap-2 items-center">
+                <Input placeholder={`Button ${i + 1} text`} value={btn.text} onChange={(e) => { const n = [...buttonsList]; n[i] = { ...n[i], text: e.target.value }; setButtonsList(n) }} />
+                {buttonsList.length > 1 && (
+                  <Button variant="ghost" size="icon" className="size-7 shrink-0" onClick={() => setButtonsList(buttonsList.filter((_, j) => j !== i))}>
+                    <Trash2 className="size-3" />
+                  </Button>
+                )}
+              </div>
+            ))}
+            {buttonsList.length < 3 && (
+              <Button variant="ghost" size="sm" className="gap-1" onClick={() => setButtonsList([...buttonsList, { id: "", text: "" }])}>
+                + Add Button
+              </Button>
+            )}
+          </div>
+        )}
+
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSend} disabled={sending || (type === "poll" ? !pollName.trim() : type === "location" ? !lat || !lng : type === "voice" ? !recordedBlob : !file)}>
+          <Button onClick={handleSend} disabled={sending || (type === "poll" ? !pollName.trim() : type === "buttons" ? (!buttonsBody.trim() || buttonsList.filter((b) => b.text.trim()).length === 0) : type === "location" ? !lat || !lng : type === "voice" ? !recordedBlob : !file)}>
             {sending && <RefreshCw className="size-4 animate-spin mr-2" />}Send
           </Button>
         </DialogFooter>
@@ -338,7 +373,7 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   const [contactPictures, setContactPictures] = useState<Map<string, string>>(new Map())
   const [newChatOpen, setNewChatOpen] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
-  const [mediaDialog, setMediaDialog] = useState<{ open: boolean; type: "image" | "file" | "voice" | "video" | "location" | "poll" }>({ open: false, type: "image" })
+  const [mediaDialog, setMediaDialog] = useState<{ open: boolean; type: "image" | "file" | "voice" | "video" | "location" | "poll" | "buttons" }>({ open: false, type: "image" })
 
   const currentSession = sessions.find((s) => s.name === selectedSession)
   const isWorking = currentSession?.status === "WORKING"
@@ -380,12 +415,20 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   }, [selectedSession, isWorking])
   useEffect(() => { loadContacts() }, [loadContacts])
 
+  const chatsLoadedForSessionRef = useRef<string | null>(null)
   const loadChats = useCallback(async () => {
     if (!selectedSession || !isWorking) { setChats([]); return }
-    setLoadingChats(true)
-    try { setChats(await api.getChatsOverview(selectedSession)) }
+    // Only show the blocking "Loading conversations..." placeholder on the
+    // first load for this session — background refreshes (5s poll, WS
+    // events) should update the list in place without blanking it out.
+    const isFirstLoad = chatsLoadedForSessionRef.current !== selectedSession
+    if (isFirstLoad) setLoadingChats(true)
+    try {
+      setChats(await api.getChatsOverview(selectedSession))
+      chatsLoadedForSessionRef.current = selectedSession
+    }
     catch { toast.error("Failed to load chats") }
-    finally { setLoadingChats(false) }
+    finally { if (isFirstLoad) setLoadingChats(false) }
   }, [selectedSession, isWorking])
   useEffect(() => { loadChats() }, [loadChats])
 
@@ -407,23 +450,51 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   selectedSessionRef.current = selectedSession
   const selectedChatRef = useRef(selectedChat?.id)
   selectedChatRef.current = selectedChat?.id
-  const loadMessagesRef = useRef(loadMessages)
-  loadMessagesRef.current = loadMessages
   const loadChatsRef = useRef(loadChats)
   loadChatsRef.current = loadChats
   const chatsLoadPendingRef = useRef(false)
 
   const handleWsMessage = useCallback((data: any) => {
     if (!data || typeof data !== "object") return
-    if (data.session && selectedSessionRef.current && data.session !== selectedSessionRef.current) return
     const event = data.event as string | undefined
-    if (!event) return
-    if (["message", "message.any", "message.ack", "message.reaction"].includes(event)) {
-      if (selectedChatRef.current) loadMessagesRef.current(selectedChatRef.current)
-      if (!chatsLoadPendingRef.current) {
-        chatsLoadPendingRef.current = true
-        setTimeout(() => { chatsLoadPendingRef.current = false; loadChatsRef.current() }, 2000)
+    const session = data.session as string | undefined
+    const payload = data.payload
+    if (!event || !payload) return
+    if (session && selectedSessionRef.current && session !== selectedSessionRef.current) return
+
+    const openChatId = selectedChatRef.current
+    const belongsToOpenChat = !!openChatId && (payload.from === openChatId || payload.to === openChatId)
+
+    if (event === "message" || event === "message.any") {
+      if (belongsToOpenChat) {
+        setMessages((prev) => (prev.some((m) => m.id === payload.id) ? prev : [payload, ...prev]))
+        api.sendSeen(selectedSessionRef.current, openChatId!).catch(() => {})
       }
+    } else if (event === "message.ack") {
+      if (belongsToOpenChat) {
+        setMessages((prev) => prev.map((m) => (m.id === payload.id ? { ...m, ack: payload.ack, ackName: payload.ackName } : m)))
+      }
+    } else if (event === "message.reaction") {
+      const messageId = payload.reaction?.messageId
+      const text = payload.reaction?.text
+      if (belongsToOpenChat && messageId) {
+        const reactor = payload.participant || payload.from
+        setMessages((prev) => prev.map((m) => {
+          if (m.id !== messageId) return m
+          const filtered = (m.reactions || []).filter((r) => r.key?.remoteJid !== reactor)
+          if (!text) return { ...m, reactions: filtered }
+          return { ...m, reactions: [...filtered, { text, key: { fromMe: payload.fromMe, remoteJid: reactor }, senderTimestampMs: (payload.timestamp || 0) * 1000 }] }
+        }))
+      }
+    } else {
+      return
+    }
+
+    // Sidebar refresh (last-message preview / unread badges) — debounced,
+    // still needed for chats other than the one currently open.
+    if (!chatsLoadPendingRef.current) {
+      chatsLoadPendingRef.current = true
+      setTimeout(() => { chatsLoadPendingRef.current = false; loadChatsRef.current() }, 2000)
     }
   }, [])
   useWebSocket({ session: selectedSession || "*", events: "message,message.any,message.ack,message.reaction", onMessage: handleWsMessage })
@@ -467,12 +538,33 @@ export function ChatPage({ initialSession }: ChatPageProps) {
       catch { toast.error("Failed to edit") }
       return
     }
+    const replyToId = replyingTo?.id
+    setReplyingTo(null)
+    // Optimistic append — show the message immediately instead of waiting on
+    // the send request + a reload. Reconciled below once the send resolves;
+    // the later WS echo (same real id) will no-op against it via dedup.
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`
+    const optimistic: Message = {
+      id: tempId,
+      timestamp: Math.floor(Date.now() / 1000),
+      from: currentUserJid,
+      fromMe: true,
+      to: selectedChat.id,
+      body: text,
+      hasMedia: false,
+      ack: 0,
+      ackName: "PENDING",
+      replyTo: replyToId || null,
+    }
+    setMessages((prev) => [optimistic, ...prev])
     try {
-      await api.sendText(selectedSession, selectedChat.id, text, replyingTo?.id)
-      setReplyingTo(null)
-      await loadMessages(selectedChat.id)
-      await loadChats()
-    } catch { toast.error("Failed to send") }
+      const sent = await api.sendText(selectedSession, selectedChat.id, text, replyToId)
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...optimistic, ...sent, id: sent?.id || tempId } : m)))
+      loadChats()
+    } catch {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId))
+      toast.error("Failed to send")
+    }
   }
 
   const handleVoiceRecorded = useCallback(async (base64: string, mimetype: string) => {

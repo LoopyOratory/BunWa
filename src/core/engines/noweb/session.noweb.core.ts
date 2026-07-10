@@ -56,7 +56,7 @@ import {
   ToGroupV2Participants,
   ToGroupV2UpdateEvent,
 } from './groups.noweb';
-import { randomId, sendButtonMessage } from './noweb.buttons';
+import { randomId, sendButtonMessage, buildButtonBinaryNodes } from './noweb.buttons';
 import {
   NOWEBNewsletterMetadata,
   toNewsletterMetadata,
@@ -1328,29 +1328,27 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       })),
     }));
     const options: any = await this.getMessageOptions(request);
+    // Sent as interactiveMessage directly (no viewOnceMessage wrapper — that
+    // marks the message view-once, unrelated to rendering the list/buttons).
     const data = {
-      viewOnceMessage: {
-        message: {
-          messageContextInfo: {
-            deviceListMetadata: {},
-            deviceListMetadataVersion: 2,
-          },
-          interactiveMessage: {
-            body: { text: request.description || '' },
-            header: request.title ? { title: request.title } : undefined,
-            nativeFlowMessage: {
-              buttons: [
-                {
-                  name: 'single_select',
-                  buttonParamsJson: JSON.stringify({
-                    title: request.button || 'Options',
-                    sections: sections,
-                  }),
-                },
-              ],
-              messageParamsJson: JSON.stringify({}),
+      messageContextInfo: {
+        deviceListMetadata: {},
+        deviceListMetadataVersion: 2,
+      },
+      interactiveMessage: {
+        body: { text: request.description || '' },
+        header: request.title ? { title: request.title } : undefined,
+        nativeFlowMessage: {
+          buttons: [
+            {
+              name: 'single_select',
+              buttonParamsJson: JSON.stringify({
+                title: request.button || 'Options',
+                sections: sections,
+              }),
             },
-          },
+          ],
+          messageParamsJson: JSON.stringify({}),
         },
       },
     };
@@ -1358,8 +1356,11 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     const fullMessage = generateWAMessageFromContent(chatId, msg, {
       userJid: this.sock?.user?.id,
     });
+    // WhatsApp requires the same biz/interactive/native_flow (+ bot for
+    // private chats) binary nodes as sendButtons for the list to render.
     await this.sock.relayMessage(chatId, fullMessage.message, {
       messageId: fullMessage.key.id,
+      additionalNodes: buildButtonBinaryNodes(chatId),
     });
     return fullMessage;
   }

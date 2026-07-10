@@ -9,7 +9,7 @@ interface ChatComposerWrapperProps {
   disabled?: boolean
   replyingTo?: ChatMessageData | null
   onCancelReply?: () => void
-  onOpenMediaDialog: (type: "image" | "file" | "voice" | "video" | "location" | "poll") => void
+  onOpenMediaDialog: (type: "image" | "file" | "voice" | "video" | "location" | "poll" | "buttons") => void
   onVoiceRecorded?: (base64: string, mimetype: string) => void
 }
 

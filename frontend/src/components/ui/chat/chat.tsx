@@ -27,6 +27,7 @@ import {
   Camera,
   MapPin,
   BarChart3,
+  MousePointerClick,
   Square,
 } from "lucide-react"
 import { createPortal } from "react-dom"
@@ -1160,7 +1161,7 @@ interface ChatComposerProps {
   onFileUpload?: (files: File[]) => void
   onVoiceRecord?: () => void
   onVoiceRecorded?: (base64: string, mimetype: string) => void
-  onOpenMediaDialog?: (type: "image" | "file" | "voice" | "video" | "location" | "poll") => void
+  onOpenMediaDialog?: (type: "image" | "file" | "voice" | "video" | "location" | "poll" | "buttons") => void
   placeholder?: string
   disabled?: boolean
   replyingTo?: ChatMessageData | null
@@ -1373,9 +1374,10 @@ function ChatComposer({
     { label: "Video", icon: Camera, type: "video" },
     { label: "Location", icon: MapPin, type: "location" },
     { label: "Poll", icon: BarChart3, type: "poll" },
+    { label: "Buttons", icon: MousePointerClick, type: "buttons" },
   ] as const
 
-  const handleMediaSelect = React.useCallback((type: "image" | "file" | "voice" | "video" | "location" | "poll") => {
+  const handleMediaSelect = React.useCallback((type: "image" | "file" | "voice" | "video" | "location" | "poll" | "buttons") => {
     setShowAttachMenu(false)
     if (type === "voice" && onVoiceRecorded) { setShowMicConfirm(true); return }
     onOpenMediaDialog?.(type)

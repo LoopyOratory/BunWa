@@ -149,12 +149,6 @@ export class CheckNumberStatusQuery {
   phone: string;
 }
 
-export class SendButtonsRequest {
-  session?: string;
-  chatId: string;
-  buttons: any[];
-}
-
 export class SendListRequest {
   session?: string;
   chatId: string;
