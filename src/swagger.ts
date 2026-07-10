@@ -410,159 +410,6 @@ export function buildOpenApiSpec(): any {
           },
         },
       },
-      '/api/sendLocation': {
-        post: {
-          tags: ['📤 Chatting'],
-          summary: 'Send a location',
-          operationId: 'sendLocation',
-          security: [{ apiKey: [] }],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['session', 'chatId', 'latitude', 'longitude'],
-                  properties: {
-                    session: { type: 'string' },
-                    chatId: { type: 'string' },
-                    latitude: { type: 'number' },
-                    longitude: { type: 'number' },
-                    title: { type: 'string' },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            '200': {
-              description: 'Location sent',
-            },
-          },
-        },
-      },
-      '/api/sendContactVcard': {
-        post: {
-          tags: ['📤 Chatting'],
-          summary: 'Send a contact vCard',
-          operationId: 'sendContactVcard',
-          security: [{ apiKey: [] }],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['session', 'chatId', 'contacts'],
-                  properties: {
-                    session: { type: 'string' },
-                    chatId: { type: 'string' },
-                    contacts: {
-                      type: 'array',
-                      items: {
-                        type: 'object',
-                        properties: {
-                          name: { type: 'string' },
-                          phone: { type: 'string' },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            '200': {
-              description: 'Contact sent',
-            },
-          },
-        },
-      },
-      '/api/sendLinkPreview': {
-        post: {
-          tags: ['📤 Chatting'],
-          summary: 'Send a link preview',
-          operationId: 'sendLinkPreview',
-          security: [{ apiKey: [] }],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['session', 'chatId', 'url'],
-                  properties: {
-                    session: { type: 'string' },
-                    chatId: { type: 'string' },
-                    url: { type: 'string' },
-                    title: { type: 'string' },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            '200': {
-              description: 'Link preview sent',
-            },
-          },
-        },
-      },
-      '/api/reply': {
-        post: {
-          tags: ['📤 Chatting'],
-          summary: 'Reply to a message',
-          operationId: 'reply',
-          security: [{ apiKey: [] }],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['session', 'chatId', 'text', 'messageId'],
-                  properties: {
-                    session: { type: 'string' },
-                    chatId: { type: 'string' },
-                    text: { type: 'string' },
-                    messageId: { type: 'string' },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            '200': {
-              description: 'Reply sent',
-            },
-          },
-        },
-      },
-      '/api/forwardMessage': {
-        post: {
-          tags: ['📤 Chatting'],
-          summary: 'Forward a message',
-          operationId: 'forwardMessage',
-          security: [{ apiKey: [] }],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['session', 'chatId', 'messageId'],
-                  properties: {
-                    session: { type: 'string' },
-                    chatId: { type: 'string' },
-                    messageId: { type: 'string' },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            '200': {
-              description: 'Message forwarded',
-            },
-          },
-        },
-      },
       '/api/sendSeen': {
         post: {
           tags: ['📤 Chatting'],
@@ -586,118 +433,6 @@ export function buildOpenApiSpec(): any {
           responses: {
             '200': {
               description: 'Messages marked as seen',
-            },
-          },
-        },
-      },
-      '/api/startTyping': {
-        post: {
-          tags: ['📤 Chatting'],
-          summary: 'Start typing indicator',
-          operationId: 'startTyping',
-          security: [{ apiKey: [] }],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['session', 'chatId'],
-                  properties: {
-                    session: { type: 'string' },
-                    chatId: { type: 'string' },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            '200': {
-              description: 'Typing started',
-            },
-          },
-        },
-      },
-      '/api/stopTyping': {
-        post: {
-          tags: ['📤 Chatting'],
-          summary: 'Stop typing indicator',
-          operationId: 'stopTyping',
-          security: [{ apiKey: [] }],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['session', 'chatId'],
-                  properties: {
-                    session: { type: 'string' },
-                    chatId: { type: 'string' },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            '200': {
-              description: 'Typing stopped',
-            },
-          },
-        },
-      },
-      '/api/reaction': {
-        put: {
-          tags: ['📤 Chatting'],
-          summary: 'Add reaction to message',
-          operationId: 'setReaction',
-          security: [{ apiKey: [] }],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['session', 'chatId', 'messageId', 'reaction'],
-                  properties: {
-                    session: { type: 'string' },
-                    chatId: { type: 'string' },
-                    messageId: { type: 'string' },
-                    reaction: { type: 'string', example: '👍' },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            '200': {
-              description: 'Reaction added',
-            },
-          },
-        },
-      },
-      '/api/star': {
-        put: {
-          tags: ['📤 Chatting'],
-          summary: 'Star or unstar a message',
-          operationId: 'setStar',
-          security: [{ apiKey: [] }],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['session', 'chatId', 'messageId', 'star'],
-                  properties: {
-                    session: { type: 'string' },
-                    chatId: { type: 'string' },
-                    messageId: { type: 'string' },
-                    star: { type: 'boolean' },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            '200': {
-              description: 'Message starred/unstarred',
             },
           },
         },
@@ -912,27 +647,6 @@ export function buildOpenApiSpec(): any {
           tags: ['👤 Contacts'],
           summary: 'Get all contacts',
           operationId: 'getContacts',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'query',
-              required: true,
-              schema: { type: 'string' },
-            },
-          ],
-          responses: {
-            '200': {
-              description: 'List of contacts',
-            },
-          },
-        },
-      },
-      '/api/contacts/all': {
-        get: {
-          tags: ['👤 Contacts'],
-          summary: 'Get all contacts for session',
-          operationId: 'getAllContacts',
           security: [{ apiKey: [] }],
           parameters: [
             {
@@ -2236,11 +1950,12 @@ export function buildOpenApiSpec(): any {
               'application/json': {
                 schema: {
                   type: 'object',
-                  required: ['session', 'messageId', 'reaction'],
+                  required: ['session', 'chatId', 'messageId', 'reaction'],
                   properties: {
                     session: { type: 'string' },
+                    chatId: { type: 'string' },
                     messageId: { type: 'string' },
-                    reaction: { type: 'string' },
+                    reaction: { type: 'string', description: 'Emoji, or empty string to remove the reaction', example: '👍' },
                   },
                 },
               },
@@ -2260,9 +1975,10 @@ export function buildOpenApiSpec(): any {
               'application/json': {
                 schema: {
                   type: 'object',
-                  required: ['session', 'messageId', 'star'],
+                  required: ['session', 'chatId', 'messageId', 'star'],
                   properties: {
                     session: { type: 'string' },
+                    chatId: { type: 'string' },
                     messageId: { type: 'string' },
                     star: { type: 'boolean' },
                   },
@@ -2308,12 +2024,12 @@ export function buildOpenApiSpec(): any {
               'application/json': {
                 schema: {
                   type: 'object',
-                  required: ['session', 'chatId', 'text', 'reply_to'],
+                  required: ['session', 'chatId', 'text', 'messageId'],
                   properties: {
                     session: { type: 'string' },
                     chatId: { type: 'string' },
                     text: { type: 'string' },
-                    reply_to: { type: 'string' },
+                    messageId: { type: 'string', description: 'ID of the message being replied to' },
                   },
                 },
               },
@@ -2569,8 +2285,6 @@ export function buildOpenApiSpec(): any {
           security: [{ apiKey: [] }],
           parameters: [
             { name: 'session', in: 'query', required: true, schema: { type: 'string' } },
-            { name: 'limit', in: 'query', schema: { type: 'integer', default: 50 } },
-            { name: 'offset', in: 'query', schema: { type: 'integer', default: 0 } },
           ],
           responses: { '200': { description: 'List of contacts' } },
         },
