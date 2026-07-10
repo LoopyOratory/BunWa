@@ -336,13 +336,17 @@ export function createChattingRouter(): Hono {
     async (c) => {
       const session = c.get('session');
       const body = c.get('body');
-      await (session as any).setReaction({
-        session: body.session,
-        chatId: body.chatId,
-        messageId: body.messageId,
-        reaction: body.reaction,
-      });
-      return c.json({ result: true });
+      try {
+        await sendAndAudit(body.session, 'reaction', () => (session as any).setReaction({
+          session: body.session,
+          chatId: body.chatId,
+          messageId: body.messageId,
+          reaction: body.reaction,
+        }));
+        return c.json({ result: true });
+      } catch (e: any) {
+        return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
+      }
     }
   );
 
@@ -352,13 +356,17 @@ export function createChattingRouter(): Hono {
     async (c) => {
       const session = c.get('session');
       const body = c.get('body');
-      await (session as any).setStar({
-        session: body.session,
-        chatId: body.chatId,
-        messageId: body.messageId,
-        star: body.star,
-      });
-      return c.json({ result: true });
+      try {
+        await sendAndAudit(body.session, 'star', () => (session as any).setStar({
+          session: body.session,
+          chatId: body.chatId,
+          messageId: body.messageId,
+          star: body.star,
+        }));
+        return c.json({ result: true });
+      } catch (e: any) {
+        return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
+      }
     }
   );
 

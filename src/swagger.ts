@@ -437,211 +437,6 @@ export function buildOpenApiSpec(): any {
           },
         },
       },
-      '/api/{session}/profile': {
-        get: {
-          tags: ['🆔 Profile'],
-          summary: 'Get Profile Info',
-          operationId: 'getProfile',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-          ],
-          responses: {
-            '200': {
-              description: 'Profile info',
-              content: {
-                'application/json': {
-                  schema: {
-                    type: 'object',
-                    properties: {
-                      id: { type: 'string' },
-                      pushName: { type: 'string' },
-                      lid: { type: 'string' },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-      '/api/{session}/profile/name': {
-        put: {
-          tags: ['🆔 Profile'],
-          summary: 'Set profile name',
-          operationId: 'setProfileName',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-          ],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['name'],
-                  properties: {
-                    name: { type: 'string', example: 'My Name' },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            '200': {
-              description: 'Profile name updated',
-            },
-          },
-        },
-      },
-      '/api/{session}/profile/status': {
-        put: {
-          tags: ['🆔 Profile'],
-          summary: 'Set profile status',
-          operationId: 'setProfileStatus',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-          ],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['status'],
-                  properties: {
-                    status: { type: 'string', example: 'Available' },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            '200': {
-              description: 'Profile status updated',
-            },
-          },
-        },
-      },
-      '/api/{session}/chats': {
-        get: {
-          tags: ['💬 Chats'],
-          summary: 'Get all chats',
-          operationId: 'getChats',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-            {
-              name: 'limit',
-              in: 'query',
-              schema: { type: 'integer', default: 50 },
-            },
-            {
-              name: 'offset',
-              in: 'query',
-              schema: { type: 'integer', default: 0 },
-            },
-          ],
-          responses: {
-            '200': {
-              description: 'List of chats',
-            },
-          },
-        },
-      },
-      '/api/{session}/chats/overview': {
-        get: {
-          tags: ['💬 Chats'],
-          summary: 'Get chats overview with last messages',
-          operationId: 'getChatsOverview',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-            {
-              name: 'limit',
-              in: 'query',
-              schema: { type: 'integer', default: 50 },
-            },
-            {
-              name: 'offset',
-              in: 'query',
-              schema: { type: 'integer', default: 0 },
-            },
-          ],
-          responses: {
-            '200': {
-              description: 'List of chats with last messages',
-            },
-          },
-        },
-      },
-      '/api/{session}/chats/{chatId}/messages': {
-        get: {
-          tags: ['💬 Chats'],
-          summary: 'Get messages from chat',
-          operationId: 'getChatMessages',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-            {
-              name: 'chatId',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-            {
-              name: 'limit',
-              in: 'query',
-              schema: { type: 'integer', default: 50 },
-            },
-            {
-              name: 'offset',
-              in: 'query',
-              schema: { type: 'integer', default: 0 },
-            },
-            {
-              name: 'downloadMedia',
-              in: 'query',
-              schema: { type: 'boolean', default: false },
-            },
-          ],
-          responses: {
-            '200': {
-              description: 'List of messages',
-            },
-          },
-        },
-      },
       '/api/contacts/': {
         get: {
           tags: ['👤 Contacts'],
@@ -661,522 +456,6 @@ export function buildOpenApiSpec(): any {
               description: 'List of contacts',
             },
           },
-        },
-      },
-      '/api/{session}/groups': {
-        get: {
-          tags: ['👥 Groups'],
-          summary: 'Get all groups',
-          operationId: 'getGroups',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-          ],
-          responses: {
-            '200': {
-              description: 'List of groups',
-            },
-          },
-        },
-        post: {
-          tags: ['👥 Groups'],
-          summary: 'Create a group',
-          operationId: 'createGroup',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-          ],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['name'],
-                  properties: {
-                    name: { type: 'string', example: 'My Group' },
-                    participants: {
-                      type: 'array',
-                      items: { type: 'string' },
-                      example: ['1234567890@c.us'],
-                    },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            '200': {
-              description: 'Group created',
-            },
-          },
-        },
-      },
-      '/api/{session}/groups/{id}': {
-        get: {
-          tags: ['👥 Groups'],
-          summary: 'Get group info',
-          operationId: 'getGroup',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-            {
-              name: 'id',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-          ],
-          responses: {
-            '200': {
-              description: 'Group info',
-            },
-          },
-        },
-      },
-      '/api/{session}/groups/{id}/leave': {
-        post: {
-          tags: ['👥 Groups'],
-          summary: 'Leave a group',
-          operationId: 'leaveGroup',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-            {
-              name: 'id',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-          ],
-          responses: {
-            '200': {
-              description: 'Left group',
-            },
-          },
-        },
-      },
-      '/api/{session}/groups/{id}/participants': {
-        get: {
-          tags: ['👥 Groups'],
-          summary: 'Get group participants',
-          operationId: 'getGroupParticipants',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-            {
-              name: 'id',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-          ],
-          responses: {
-            '200': {
-              description: 'List of participants',
-            },
-          },
-        },
-      },
-      '/api/{session}/groups/{id}/participants/add': {
-        post: {
-          tags: ['👥 Groups'],
-          summary: 'Add participants to group',
-          operationId: 'addParticipants',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-            {
-              name: 'id',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-          ],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['participants'],
-                  properties: {
-                    participants: {
-                      type: 'array',
-                      items: { type: 'string' },
-                    },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            '200': {
-              description: 'Participants added',
-            },
-          },
-        },
-      },
-      '/api/{session}/groups/{id}/participants/remove': {
-        post: {
-          tags: ['👥 Groups'],
-          summary: 'Remove participants from group',
-          operationId: 'removeParticipants',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-            {
-              name: 'id',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-          ],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['participants'],
-                  properties: {
-                    participants: {
-                      type: 'array',
-                      items: { type: 'string' },
-                    },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            '200': {
-              description: 'Participants removed',
-            },
-          },
-        },
-      },
-      '/api/{session}/groups/{id}/invite-code': {
-        get: {
-          tags: ['👥 Groups'],
-          summary: 'Get group invite code',
-          operationId: 'getInviteCode',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-            {
-              name: 'id',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-          ],
-          responses: {
-            '200': {
-              description: 'Invite code',
-              content: {
-                'application/json': {
-                  schema: {
-                    type: 'object',
-                    properties: {
-                      code: { type: 'string' },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-      '/api/{session}/groups/{id}/description': {
-        put: {
-          tags: ['👥 Groups'],
-          summary: 'Set group description',
-          operationId: 'setDescription',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-            {
-              name: 'id',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-          ],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['description'],
-                  properties: {
-                    description: { type: 'string' },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            '200': {
-              description: 'Description updated',
-            },
-          },
-        },
-      },
-      '/api/{session}/groups/{id}/subject': {
-        put: {
-          tags: ['👥 Groups'],
-          summary: 'Set group subject (name)',
-          operationId: 'setSubject',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-            {
-              name: 'id',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-          ],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['subject'],
-                  properties: {
-                    subject: { type: 'string' },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            '200': {
-              description: 'Subject updated',
-            },
-          },
-        },
-      },
-      '/api/{session}/channels': {
-        get: {
-          tags: ['📢 Channels'],
-          summary: 'Get all channels',
-          operationId: 'getChannels',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-          ],
-          responses: {
-            '200': {
-              description: 'List of channels',
-            },
-          },
-        },
-        post: {
-          tags: ['📢 Channels'],
-          summary: 'Create a channel',
-          operationId: 'createChannel',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-          ],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: {
-                    name: { type: 'string' },
-                    description: { type: 'string' },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            '200': {
-              description: 'Channel created',
-            },
-          },
-        },
-      },
-      '/api/{session}/channels/{id}': {
-        get: {
-          tags: ['📢 Channels'],
-          summary: 'Get channel info',
-          operationId: 'getChannel',
-          security: [{ apiKey: [] }],
-          parameters: [
-            { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
-            { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
-          ],
-          responses: { '200': { description: 'Channel info' } },
-        },
-        delete: {
-          tags: ['📢 Channels'],
-          summary: 'Delete a channel',
-          operationId: 'deleteChannel',
-          security: [{ apiKey: [] }],
-          parameters: [
-            { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
-            { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
-          ],
-          responses: { '200': { description: 'Channel deleted' } },
-        },
-      },
-      '/api/{session}/channels/{id}/follow': {
-        post: {
-          tags: ['📢 Channels'],
-          summary: 'Follow a channel',
-          operationId: 'followChannel',
-          security: [{ apiKey: [] }],
-          parameters: [
-            { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
-            { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
-          ],
-          responses: { '200': { description: 'Channel followed' } },
-        },
-      },
-      '/api/{session}/channels/{id}/unfollow': {
-        post: {
-          tags: ['📢 Channels'],
-          summary: 'Unfollow a channel',
-          operationId: 'unfollowChannel',
-          security: [{ apiKey: [] }],
-          parameters: [
-            { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
-            { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
-          ],
-          responses: { '200': { description: 'Channel unfollowed' } },
-        },
-      },
-      '/api/{session}/channels/{id}/mute': {
-        post: {
-          tags: ['📢 Channels'],
-          summary: 'Mute a channel',
-          operationId: 'muteChannel',
-          security: [{ apiKey: [] }],
-          parameters: [
-            { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
-            { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
-          ],
-          responses: { '200': { description: 'Channel muted' } },
-        },
-      },
-      '/api/{session}/channels/{id}/unmute': {
-        post: {
-          tags: ['📢 Channels'],
-          summary: 'Unmute a channel',
-          operationId: 'unmuteChannel',
-          security: [{ apiKey: [] }],
-          parameters: [
-            { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
-            { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
-          ],
-          responses: { '200': { description: 'Channel unmuted' } },
-        },
-      },
-      '/api/{session}/labels': {
-        get: {
-          tags: ['🏷️ Labels'],
-          summary: 'Get all labels',
-          operationId: 'getLabels',
-          security: [{ apiKey: [] }],
-          parameters: [
-            {
-              name: 'session',
-              in: 'path',
-              required: true,
-              schema: { type: 'string' },
-            },
-          ],
-          responses: {
-            '200': {
-              description: 'List of labels',
-            },
-          },
-        },
-        post: {
-          tags: ['🏷️ Labels'],
-          summary: 'Create a label',
-          operationId: 'createLabel',
-          security: [{ apiKey: [] }],
-          parameters: [
-            { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
-          ],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['name'],
-                  properties: {
-                    name: { type: 'string' },
-                    color: { type: 'number' },
-                  },
-                },
-              },
-            },
-          },
-          responses: { '200': { description: 'Label created' } },
         },
       },
       '/api/{session}/labels/{labelId}': {
@@ -2592,6 +1871,29 @@ export function buildOpenApiSpec(): any {
           ],
           responses: { '200': { description: 'List of channels' } },
         },
+        post: {
+          tags: ['📢 Channels'],
+          summary: 'Create a channel',
+          operationId: 'createChannel',
+          security: [{ apiKey: [] }],
+          parameters: [
+            { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
+          ],
+          requestBody: {
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    name: { type: 'string' },
+                    description: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          responses: { '200': { description: 'Channel created' } },
+        },
       },
       '/api/{session}/channels/{id}': {
         get: {
@@ -2604,6 +1906,17 @@ export function buildOpenApiSpec(): any {
             { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
           ],
           responses: { '200': { description: 'Channel details' } },
+        },
+        delete: {
+          tags: ['📢 Channels'],
+          summary: 'Delete a channel',
+          operationId: 'deleteChannel',
+          security: [{ apiKey: [] }],
+          parameters: [
+            { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
+            { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+          ],
+          responses: { '200': { description: 'Channel deleted' } },
         },
       },
       '/api/{session}/channels/{id}/follow': {
@@ -2670,31 +1983,29 @@ export function buildOpenApiSpec(): any {
           ],
           responses: { '200': { description: 'List of labels' } },
         },
-      },
-      '/api/{session}/labels/chats/{chatId}': {
-        put: {
+        post: {
           tags: ['🏷️ Labels'],
-          summary: 'Set labels on a chat',
-          operationId: 'putLabelsToChat',
+          summary: 'Create a label',
+          operationId: 'createLabel',
           security: [{ apiKey: [] }],
           parameters: [
             { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
-            { name: 'chatId', in: 'path', required: true, schema: { type: 'string' } },
           ],
-          responses: { '200': { description: 'Labels set' } },
-        },
-      },
-      '/api/{session}/labels/{labelId}/chats': {
-        get: {
-          tags: ['🏷️ Labels'],
-          summary: 'Get chats by label',
-          operationId: 'getChatsByLabelId',
-          security: [{ apiKey: [] }],
-          parameters: [
-            { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
-            { name: 'labelId', in: 'path', required: true, schema: { type: 'string' } },
-          ],
-          responses: { '200': { description: 'List of chats' } },
+          requestBody: {
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['name'],
+                  properties: {
+                    name: { type: 'string' },
+                    color: { type: 'number' },
+                  },
+                },
+              },
+            },
+          },
+          responses: { '200': { description: 'Label created' } },
         },
       },
       // Profile endpoints
@@ -2758,69 +2069,6 @@ export function buildOpenApiSpec(): any {
             },
           },
           responses: { '200': { description: 'Status set' } },
-        },
-      },
-      // Presence endpoints
-      '/api/{session}/presence': {
-        get: {
-          tags: ['✅ Presence'],
-          summary: 'Get all presences',
-          operationId: 'getPresences',
-          security: [{ apiKey: [] }],
-          parameters: [
-            { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
-          ],
-          responses: { '200': { description: 'List of presences' } },
-        },
-        post: {
-          tags: ['✅ Presence'],
-          summary: 'Set presence',
-          operationId: 'setPresence',
-          security: [{ apiKey: [] }],
-          parameters: [
-            { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
-          ],
-          requestBody: {
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['presence'],
-                  properties: {
-                    presence: { type: 'string', enum: ['ONLINE', 'OFFLINE', 'TYPING', 'RECORDING', 'PAUSED'] },
-                    chatId: { type: 'string' },
-                  },
-                },
-              },
-            },
-          },
-          responses: { '200': { description: 'Presence set' } },
-        },
-      },
-      '/api/{session}/presence/{chatId}': {
-        get: {
-          tags: ['✅ Presence'],
-          summary: 'Get presence for chat',
-          operationId: 'getPresence',
-          security: [{ apiKey: [] }],
-          parameters: [
-            { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
-            { name: 'chatId', in: 'path', required: true, schema: { type: 'string' } },
-          ],
-          responses: { '200': { description: 'Presence info' } },
-        },
-      },
-      '/api/{session}/presence/{chatId}/subscribe': {
-        post: {
-          tags: ['✅ Presence'],
-          summary: 'Subscribe to presence events',
-          operationId: 'subscribePresence',
-          security: [{ apiKey: [] }],
-          parameters: [
-            { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
-            { name: 'chatId', in: 'path', required: true, schema: { type: 'string' } },
-          ],
-          responses: { '200': { description: 'Subscribed' } },
         },
       },
       // Workers endpoint
