@@ -910,10 +910,10 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                       <p className="text-xs text-muted-foreground">
                         Legacy connection guides (with placeholder key):
                       </p>
-                      <div>
-                        <p className="text-xs font-medium mb-1">Claude Desktop</p>
-                        <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">
-{`{
+                      {[
+                        {
+                          label: "Claude Desktop",
+                          code: `{
   "mcpServers": {
     "bunwa": {
       "url": "${window.location.origin}/mcp",
@@ -922,14 +922,11 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
       }
     }
   }
-}`}
-                        </pre>
-                      </div>
-
-                      <div>
-                        <p className="text-xs font-medium mb-1">Cursor</p>
-                        <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">
-{`{
+}`,
+                        },
+                        {
+                          label: "Cursor",
+                          code: `{
   "mcpServers": {
     "bunwa": {
       "url": "${window.location.origin}/mcp",
@@ -938,31 +935,43 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
       }
     }
   }
-}`}
-                        </pre>
-                      </div>
-
-                      <div>
-                        <p className="text-xs font-medium mb-1">Windsurf / VS Code (Continue)</p>
-                        <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">
-{`{
+}`,
+                        },
+                        {
+                          label: "Windsurf / VS Code (Continue)",
+                          code: `{
   "mcpServers": {
     "bunwa": {
-      "command": "bunx",
-      "args": ["@openclaw/mcp-proxy", "${window.location.origin}/mcp"],
-      "env": {
+      "url": "${window.location.origin}/mcp",
+      "headers": {
         "X-Api-Key": "your-waha-api-key"
       }
     }
   }
-}`}
-                        </pre>
-                      </div>
-
-                      <div>
-                        <p className="text-xs font-medium mb-1">MCP Inspector (Test Tool)</p>
-                        <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">{`bunx @modelcontextprotocol/inspector ${window.location.origin}/mcp`}</pre>
-                      </div>
+}`,
+                        },
+                        {
+                          label: "MCP Inspector (Test Tool)",
+                          code: `bunx @modelcontextprotocol/inspector ${window.location.origin}/mcp`,
+                        },
+                      ].map(({ label, code }) => (
+                        <div key={label}>
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-xs font-medium">{label}</p>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                navigator.clipboard.writeText(code)
+                                toast.success(`${label} config copied`)
+                              }}
+                            >
+                              Copy
+                            </Button>
+                          </div>
+                          <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">{code}</pre>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
