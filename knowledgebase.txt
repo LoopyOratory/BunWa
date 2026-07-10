@@ -1,0 +1,879 @@
+================================================================================
+BUNWA — COMPREHENSIVE PROJECT KNOWLEDGE BASE
+================================================================================
+Generated: 2026-07-10
+Version: 2026.5.1 (tier: PLUS)
+Repository: https://github.com/LoopyOratory/BunWa
+Maintainer: LoopyOratory
+License: BunWa Community License (BCL) v1.0 — see LICENSE.md
+  - Free for personal, open-source, learning, research, non-profit/education use
+  - Commercial use: $200/month per organization
+  - Contributions to the repo are automatically licensed under BCL v1.0 (stay
+    free and open source for everyone)
+
+This file is a single, self-contained reference to everything about the
+BunWa project: what it is, how it's built, every configuration variable,
+every API surface, the MCP server, security model, known limitations, and
+the history of major fixes made to date. It is meant to be read by humans
+or ingested by an LLM/agent that needs full context on the codebase without
+re-deriving it from scratch.
+
+================================================================================
+1. WHAT IS BUNWA
+================================================================================
+
+BunWa is a WhatsApp HTTP API server built on the Bun runtime with the Hono
+web framework. It is a 1:1 API-compatible rewrite of WAHA (WhatsApp HTTP
+API, https://waha.devlike.pro) that delivers the same functionality at
+significantly lower resource usage — faster cold starts, less memory, no
+Node.js.
+
+Two WhatsApp engines are supported, selectable per session:
+
+  - NOWEB (default) — uses Baileys (@whiskeysockets/baileys), a pure
+    WebSocket implementation of the WhatsApp Web protocol (Signal protocol
+    E2E encryption). Lightweight, no browser required, fastest option.
+
+  - WEBJS — uses whatsapp-web.js + Puppeteer/Chrome. Runs an actual
+    headless Chrome instance that drives web.whatsapp.com. Heavier, but
+    gives full WhatsApp Web UI parity for edge-case features NOWEB doesn't
+    cover yet.
+
+Both engines can run simultaneously on the same server; each session picks
+its own engine.
+
+BunWa ships with:
+  - A full WAHA-compatible REST API (sessions, messaging, groups, channels,
+    labels, contacts, presence, profile, status/stories, webhooks).
+  - A React 19 + shadcn/ui + Tailwind CSS dashboard (frontend/).
+  - A WebSocket endpoint for real-time events (message received, ack,
+    reactions, session status changes).
+  - A Model Context Protocol (MCP) server so AI agents can drive WhatsApp
+    directly (send messages, manage sessions, check numbers) via a
+    standardized tool interface.
+  - An audit logging system (SQLite-backed) tracking session lifecycle,
+    message sends/failures, webhook delivery, and auth failures.
+  - Interactive OpenAPI/Scalar API docs at /api-docs.
+
+================================================================================
+2. ARCHITECTURE
+================================================================================
+
+  Clients                     BunWa Server (Bun Runtime)
+  ───────────                 ──────────────────────────────────────────
+  HTTP Clients   ──────────▶  Hono REST API (WAHA-compatible endpoints)
+  (curl, apps)                        │
+                                       ├──▶ Session Manager (lifecycle,
+                                       │     state, per-session config)
+  AI Agents      ──────────▶  MCP Server (POST /mcp, stdio)             │
+  (MCP clients)                       │                                │
+                                       ├──▶ Tool Registry / Permission   │
+                                       │     Checker (per-session policy)│
+                                       ▼                                ▼
+  Browser        ──────────▶  Dashboard (React) ──▶ WebSocket ──▶ Session
+  (Dashboard UI)               + MCP Config API              Events
+
+  Session Manager routes to:
+    - NOWEB Engine (Baileys)  ──▶ WhatsApp WebSocket (Signal Protocol)
+    - WEBJS Engine (Puppeteer)──▶ Chrome ──▶ WhatsApp Web
+
+  Data Layer:
+    - Database: SQLite (bun:sqlite, default) or PostgreSQL (via Knex)
+    - Storage: Local filesystem or S3-compatible (AWS S3, MinIO, R2)
+    - Session Index: .sessions-index.json (per-session config: webhooks,
+      proxy, MCP policy, ignore rules)
+    - Audit DB: SQLite, separate from session DB, in WAHA_STORAGE_DIR
+
+Key design principle: every layer (database, storage, engine) is swappable
+via environment variables alone — no code changes needed to go from SQLite
+to PostgreSQL, or local storage to S3, or NOWEB to WEBJS.
+
+The SessionManager (src/core/manager.core.ts) is the central orchestrator:
+  - Loads/persists session configs (.sessions-index.json)
+  - Starts/stops/restarts sessions, tracks status transitions
+    (STOPPED → STARTING → SCAN_QR_CODE → WORKING, or → FAILED)
+  - Merges WebSocket event streams per-session using RxJS, with a
+    "wildcard" subscription mechanism (events2: DefaultMap<WAHAEvents,
+    SwitchObservable<any>>) that re-subscribes whenever a session starts,
+    so the Event Monitor sees events from sessions started *after* the
+    WebSocket connection was already open (this was a real bug, fixed —
+    see Section 8, item 1).
+  - Emits audit log entries at every lifecycle transition (created,
+    started, qr_generated, connected, disconnected, stopped, deleted,
+    force_killed).
+
+================================================================================
+3. DIRECTORY STRUCTURE (backend, src/)
+================================================================================
+
+src/
+  main.ts                — Entry point: Hono app setup, middleware wiring,
+                            router mounting, dashboard static serving
+  config.ts               — Configuration constants
+  config.service.ts       — WhatsappConfigService: reads env vars
+                            (WAHA_API_KEY via getApiKey(), ports, CORS,
+                            excluded paths, etc.)
+  version.ts              — VERSION object (2026.5.1, tier PLUS/CORE)
+  helpers.ts               — Shared utility functions
+  swagger.ts               — buildOpenApiSpec(): hand-written OpenAPI 3
+                            spec object served at /api-docs (NOT
+                            auto-generated from decorators — every path
+                            is manually authored, which has historically
+                            led to duplicate-key bugs, see Section 8)
+
+  api/                     — Hono route handlers, one file per resource:
+    sessions.routes.ts        Session CRUD + start/stop/restart
+    chatting.routes.ts        sendText, sendImage, sendFile, sendVoice,
+                               sendVideo, sendLocation, sendPoll,
+                               sendPollVote, sendContactVcard,
+                               sendLinkPreview, sendButtons, sendList,
+                               forwardMessage, reply, reaction, star,
+                               sendSeen, startTyping, stopTyping,
+                               checkNumberStatus, edit/delete message
+    chats.routes.ts            Chat list, overview, messages, archive,
+                               unarchive, unread, delete
+    contacts.routes.ts         /api/contacts/all (all contacts, session
+                               via query param)
+    contacts.session.routes.ts /api/{session}/contacts (session in path)
+    groups.routes.ts            Group CRUD, participants, invite codes,
+                               description/subject
+    channels.routes.ts          Channel CRUD, follow/unfollow, mute/unmute,
+                               search
+    labels.routes.ts             Label CRUD, chat-label association
+    presence.routes.ts           Presence get/set, subscribe
+    profile.routes.ts            Get/set profile name & status
+    status.routes.ts             WhatsApp Status/Stories: text, image,
+                               voice, video, delete, new-message-id
+    webhooks.routes.ts           Per-session webhook CRUD
+    events.routes.ts             (WAHA-compat event subscription config)
+    audit.routes.ts              GET /api/audit — query audit log
+                               (filters: action, severity, session,
+                               limit/offset)
+    infra.routes.ts               Infrastructure/health config reporting
+                               (DB type, storage type — used by dashboard
+                               Infrastructure page)
+    mcp-config.routes.ts          MCP tool registry info + per-session MCP
+                               settings (enable/disable, allow/deny tools,
+                               destructiveOps, generate-key)
+    workers.routes.ts             Worker status listing
+    templates.routes.ts           Message templates (dashboard feature)
+    health.routes.ts              GET /health
+    version.routes.ts             GET /api/version
+    auth.routes.ts                 Dashboard login
+    server.routes.ts               Misc server endpoints
+    ping.routes.ts                 Simple ping
+    lids.routes.ts                  LID (linked ID) related endpoints
+    calls.routes.ts                 Call-related endpoints
+    screenshot.routes.ts            Session screenshot capture (WEBJS)
+    media.routes.ts                 Media upload/serve
+    websocket.ts                    WebSocket handler + event envelope
+                               ({ event, session, payload, timestamp })
+    index.ts                       Router aggregation, mounts every
+                               sub-router under /api
+
+  apps/                     — External app integrations
+    chatwoot/                  Chatwoot webhook forwarding integration
+    app_sdk/                   Generic app-integration interface
+    calls/                     Call app integration
+    mcp/                       App-level MCP glue
+
+  core/                     — Business logic
+    manager.core.ts             SessionManager (see Section 2)
+    exceptions.ts                Typed exceptions (NotFoundException, etc.)
+    session/                     Per-engine session interfaces
+    engines/
+      noweb/                     Baileys-backed NOWEB engine
+        session.noweb.core.ts      Main NOWEB session class (sendText,
+                                 sendButtons, sendList, sendPoll, etc.)
+        noweb.buttons.ts            buildButtonBinaryNodes() — constructs
+                                 the biz/interactive/native_flow/bot
+                                 binary nodes WhatsApp needs to actually
+                                 RENDER buttons/lists (protobuf alone is
+                                 not enough — see Section 8, item 2)
+      webjs/                      whatsapp-web.js-backed WEBJS engine
+    audit/
+      audit.service.ts             AuditService — logInfo/logWarn/logError,
+                                 SQLite-backed, configurable retention
+                                 (AUDIT_RETENTION_DAYS)
+    auth/                         API key + Basic Auth helpers
+    config/
+      DashboardConfigServiceCore.ts  Dashboard credentials
+      SwaggerConfigServiceCore.ts     API-docs auth config
+    health/                       Health check logic (media/session file
+                                 size thresholds, Mongo timeout)
+    hooks/                        Plugin lifecycle hooks
+    integrations/                 Third-party integration glue
+    media/                        Media download/processing
+    plugins/                      Plugin system
+    services/                     Misc core services
+    storage/                      Storage abstraction (local/S3)
+    templates/                    Message template storage
+    utils/                        Core-level utilities
+    abc/                          Abstract base classes/interfaces
+
+  di/
+    container.ts                  tsyringe DI container registration
+                                 (order matters — e.g. AuditService must
+                                 be registered before SessionManager can
+                                 lazily resolve it)
+
+  mcp/                       — Model Context Protocol server
+    mcp.server.ts                createMcpRouter(): mounts POST /mcp,
+                                 builds a fresh McpServer + transport per
+                                 request (stateless), validates API keys
+                                 (global WAHA_API_KEY or per-session
+                                 sk_mcp_... hash), auto-scopes session-
+                                 scoped tools, denies non-session-scoped
+                                 tools to scoped keys (see Section 8,
+                                 item 4 — security fix)
+    stdio.ts                       stdio transport entry point — spawned
+                                 as a subprocess by MCP clients (Claude
+                                 Desktop, Cursor). Reads BUNWA_SESSION +
+                                 BUNWA_MCP_KEY from env, validates against
+                                 the session's stored apiKeyHash.
+    tool-registry.service.ts        ToolRegistryService: holds all
+                                 ToolDescriptor objects, list()/get()
+    tool-descriptor.ts               ToolDescriptor interface: name,
+                                 description, inputSchema (zod), tier
+                                 (read/write), destructive?, sessionScoped?,
+                                 category, resultDisposition, handler
+    tool-result.ts                   Result formatting helpers
+                                 (jsonToolResult, smartToolResult,
+                                 handleToolError)
+    mcp-rate-limit.ts                KeyRateLimiter (per-key rate limiting
+                                 for MCP calls)
+    tools/
+      session.tools.ts               SessionList (NOT session-scoped —
+                                 lists ALL sessions), SessionGet,
+                                 SessionStart, SessionStop, SessionRestart,
+                                 SessionCheckNumber (all session-scoped)
+      message.tools.ts                16 session-scoped messaging tools
+                                 (MessageSendText, MessageSendImage, ...
+                                 MessageStartTyping, MessageStopTyping)
+      contact.tools.ts                ContactCheckNumber (session-scoped)
+
+  middleware/
+    api-key-auth.ts               apiKeyAuthMiddleware(): accepts X-Api-Key
+                                 header or Basic Auth; both grant admin.
+                                 Falls back to open access if no
+                                 WAHA_API_KEY is configured AND
+                                 WAHA_ALLOW_NO_AUTH is not "false". Logs
+                                 API_KEY_AUTH_FAILED to the audit log on
+                                 bad credentials.
+    basic-auth.ts                  Basic Auth for dashboard/API-docs
+    error-handler.ts                Global error handler
+    get-session-from-body.ts        Middleware: resolves session from
+                                 request body, attaches to context
+    policies.ts                     CASL-based policy middleware
+                                 (CanSession, Action enum: Read/Send/
+                                 Setting, FromBodySession/FromParam/
+                                 FromQuery helpers)
+    rate-limit.ts                   Global HTTP rate limiting
+
+  structures/                — DTOs, config schemas, enums
+    chatting.dto.ts                 MessageTextRequest, MessagePollRequest,
+                                 SendListRequest, etc.
+    chatting.buttons.dto.ts          Button, ButtonType, SendButtonsRequest
+                                 (id?, copyCode?, header?, headerImage?,
+                                 body?, footer? fields)
+    sessions.dto.ts                  SessionConfig, including
+                                 SessionConfig['mcp'] = { enabled?,
+                                 allowedTools?, deniedTools?,
+                                 destructiveOps?, apiKeyHash? }
+    enums.dto.ts, environment.dto.ts  WAHAEngine, WAHAEvents, etc.
+
+  common/
+    security/                       SSRF protection helpers (webhook URL
+                                 validation)
+
+  plus/                       — "PLUS" tier features (this repo currently
+                                 always resolves to PLUS tier — see
+                                 version.ts: plusExists check always
+                                 returns true because the plus/ directory
+                                 exists in this repo)
+    storage/                        Additional storage backends
+
+  utils/                      — Shared utilities
+    reactive/                       RxJS helper utilities (SwitchObservable
+                                 etc., used by manager.core.ts's wildcard
+                                 event fix)
+
+  __tests__/                  — bun test files
+
+================================================================================
+4. FRONTEND (frontend/)
+================================================================================
+
+React 19 + Vite + shadcn/ui + Tailwind CSS dashboard, served statically by
+the Bun server in production (built via scripts/build-frontend.sh into
+frontend-dist/, referenced by main.ts).
+
+Key pages (frontend/src/pages/):
+  dashboard-page.tsx       Overview: session/worker counts, quick actions
+  sessions-page.tsx        Session list, create/start/stop/restart/delete,
+                            settings gear (Cog icon) opens
+                            SessionSettingsDialog
+  chat-page.tsx             Real-time chat UI: message list, composer,
+                            reactions, poll/button/list sending, WebSocket-
+                            driven live updates with optimistic sends
+  session-settings-dialog (component) — Tabs: Webhooks, Proxy, Engine,
+                            Ignore, MCP Tools, Advanced, Integrations.
+                            MCP Tools tab: master enable switch,
+                            "Allow Destructive Ops" switch, per-tool /
+                            per-category toggles, "Generate MCP Key"
+                            button (reveals key + stdio/HTTP connection
+                            configs, each with a Copy button), and
+                            "Legacy connection guides" (Claude Desktop,
+                            Cursor, Windsurf/VS Code, MCP Inspector) also
+                            each with a Copy button.
+  event-monitor-page.tsx    Live WebSocket event stream viewer. Shows
+                            events AS THEY HAPPEN after the page opens —
+                            it has NO history/backlog. A green pulsing
+                            Wifi icon indicates active connection
+                            (uses CSS var(--primary) via inline style,
+                            NOT a Tailwind color class, because the Alert
+                            component's `*:[svg]:text-current` rule
+                            overrides Tailwind classes on nested SVGs).
+  audit-logs-page.tsx        Historical audit log viewer (paginated),
+                            unlike Event Monitor this DOES show history
+  infrastructure-page.tsx    DB/storage config display
+  workers-page.tsx           Worker status
+  apps-page.tsx               App integrations (Chatwoot)
+  templates-page.tsx          Message templates
+  message-tester-page.tsx      Ad-hoc message sending tool
+  logs-page.tsx                 Server log viewer
+  queue-page.tsx                 Queue status (cosmetic — no real backend
+                            queue is wired up currently)
+
+Design system: oklch-based CSS variable theme (frontend/src/index.css),
+PageLayout component (replaced old Topbar component, since removed),
+sidebar navigation with sections MAIN (Dashboard, Sessions, Chat,
+Templates, Message Tester, Audit Logs, Infrastructure, Queue) and TOOLS
+(Workers, Apps, Event Monitor, API Docs).
+
+================================================================================
+5. CONFIGURATION (environment variables)
+================================================================================
+
+All configuration is via environment variables (.env file, Bun auto-loads
+.env from the process's current working directory — NOT from
+elsewhere). See .env.example for the canonical, fully-commented list.
+Full reference is also in README.md → Configuration section. Highlights:
+
+SERVER
+  PORT (3000) — takes precedence over WHATSAPP_API_PORT
+  WHATSAPP_API_PORT (3000)
+  WHATSAPP_API_SCHEMA (http)
+  WHATSAPP_API_HOSTNAME (localhost)
+  WAHA_BASE_URL — override auto-generated base URL
+  TRUSTED_PROXIES — enables x-forwarded-for IP detection for rate limiter
+  WAHA_CORS_ORIGIN — comma-separated allowed origins (credentialed CORS)
+
+AUTHENTICATION (IMPORTANT — this is the ONLY variable that gates auth)
+  WAHA_API_KEY — the real API key variable read by
+    WhatsappConfigService.getApiKey() (config.service.ts). Sent via the
+    X-Api-Key header. *** NOTE: WHATSAPP_API_KEY does NOT exist as a
+    variable the code reads for auth — that was a real, confirmed
+    documentation bug in an earlier revision of CLAUDE.md, now fixed.
+    If WAHA_API_KEY is unset, the server falls back to open (no-auth)
+    access whenever WAHA_ALLOW_NO_AUTH is not explicitly "false". ***
+  WAHA_ALLOW_NO_AUTH (true) — set to "false" in production to reject all
+    unauthenticated requests when no API key is set (fail-closed).
+  WHATSAPP_API_KEY_EXCLUDE_PATH — comma-separated paths excluded from
+    API-key auth (e.g. /api/health,/api/version)
+
+DASHBOARD
+  WAHA_DASHBOARD_ENABLED (true)
+  WAHA_DASHBOARD_USERNAME (admin)
+  WAHA_DASHBOARD_PASSWORD (admin)
+
+API DOCS (Scalar, NOT Swagger UI)
+  WHATSAPP_SWAGGER_ENABLED (true) — serves at /api-docs
+  WHATSAPP_SWAGGER_USERNAME (admin) / WHATSAPP_SWAGGER_PASSWORD (empty =
+    no auth on docs)
+  WHATSAPP_SWAGGER_TITLE, _DESCRIPTION, _EXTERNAL_DOC_URL,
+    _CONFIG_ADVANCED
+
+LOGGING
+  WAHA_LOG_LEVEL (info), WAHA_HTTP_LOG_LEVEL (info), WAHA_LOG_FORMAT
+    (PRETTY|JSON), DEBUG (1 = verbose Baileys), WAHA_DEBUG_MODE (false)
+
+ENGINE
+  WHATSAPP_DEFAULT_ENGINE (NOWEB) — NOWEB or WEBJS
+  CHROME_PATH / PUPPETEER_EXECUTABLE_PATH — REQUIRED for WEBJS
+  WAHA_PRINT_QR (true)
+  WAHA_CLIENT_DEVICE_NAME, WAHA_CLIENT_BROWSER_NAME (NOWEB)
+
+SESSION MANAGEMENT
+  WHATSAPP_START_SESSION — comma-separated auto-start on boot
+  WHATSAPP_RESTART_ALL_SESSIONS (false)
+  WAHA_AUTO_START_DELAY_SECONDS (0)
+  WAHA_WORKER_ID, WAHA_WORKER_RESTART_SESSIONS (true)
+  WAHA_VERSION — override tier (CORE or PLUS; PLUS is effectively always
+    active in this repo, see version.ts note above)
+
+PRESENCE
+  WAHA_PRESENCE_AUTO_ONLINE (true), _DURATION_SECONDS (25)
+
+CHAT FILTERING (global defaults only — per-session ignore toggles in the
+dashboard are NOT yet applied by the engine, a known gap)
+  WAHA_SESSION_CONFIG_IGNORE_STATUS/GROUPS/CHANNELS/BROADCAST (false)
+
+DATABASE
+  WAHA_DATABASE_DRIVER (sqlite) — sqlite | postgres | mongo
+  WAHA_SQLITE_PATH (.sessions/waha.db)
+  WAHA_DATABASE_URL — Postgres connection string
+  WHATSAPP_SESSIONS_POSTGRESQL_URL — alias
+  WHATSAPP_SESSIONS_MONGO_URL
+  WAHA_DB_TYPE/_HOST/_PORT/_USERNAME/_NAME/_SSL — these are REPORTED-ONLY
+    values used by the Infrastructure dashboard page; they do not
+    themselves select the driver (that's WAHA_DATABASE_DRIVER)
+
+MEDIA
+  WHATSAPP_FILES_FOLDER (/tmp/whatsapp-files)
+  WHATSAPP_DOWNLOAD_MEDIA (true)
+  WHATSAPP_FILES_MIMETYPES — comma-separated allow-list
+  WHATSAPP_HEALTH_MEDIA_FILES_THRESHOLD_MB / _SESSION_FILES_ (100)
+
+STORAGE — Local
+  STORAGE_TYPE (local) — local | s3
+  STORAGE_LOCAL_PATH (./data/media)
+  WAHA_LOCAL_STORE_BASE_DIR (.sessions) — base dir for auth data
+  WAHA_STORAGE_DIR (./data) — internal DBs (audit, templates)
+  DATA_DIR (./data)
+  EXPORT_IMPORT_MAX_BACKUPS, STORAGE_IMPORT_MAX_BYTES (209715200),
+    STORAGE_IMPORT_MAX_ENTRIES (100000)
+  AUDIT_RETENTION_DAYS (90) — 0 or negative disables retention pruning
+  WAHA_STORAGE_TYPE / WAHA_STORAGE_LOCAL_PATH — legacy aliases
+
+STORAGE — S3 (set STORAGE_TYPE=s3)
+  S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY,
+    S3_ACCESS_KEY/S3_SECRET_KEY (legacy aliases), S3_BUCKET (waha-bun),
+    S3_REGION (us-east-1)
+  WAHA_S3_* — WAHA-prefixed aliases used by the infra endpoint
+
+WEBHOOK
+  WAHA_WEBHOOK_URL — default webhook for all sessions
+  WEBHOOK_SSRF_PROTECT (true) — SSRF protection on delivery
+  SSRF_ALLOWED_HOSTS — comma-separated allow-list when SSRF protect is on
+
+PROXY
+  WHATSAPP_PROXY_SERVER, WHATSAPP_PROXY_SERVER_LIST,
+    WHATSAPP_PROXY_SERVER_INDEX_PREFIX, WHATSAPP_PROXY_SERVER_USERNAME/
+    _PASSWORD
+
+QUEUE / REDIS (reported-only, NO active backend — queue dependencies were
+  removed from the codebase; setting these has no runtime effect)
+  WAHA_QUEUE_ENABLED (false), WAHA_REDIS_HOST (localhost),
+    WAHA_REDIS_PORT (6379), WAHA_REDIS_PASSWORD
+
+MCP
+  MCP_READONLY (false) — read-only tool mode
+  MCP_RATE_LIMIT_MAX (60), MCP_RATE_LIMIT_WINDOW_MS (60000)
+
+CHATWOOT INTEGRATION
+  MILO_API_URL (http://localhost:3003/api/webhooks/chatwoot/milo)
+
+HEALTH CHECK
+  WHATSAPP_HEALTH_MONGO_TIMEOUT_MS (3000)
+
+================================================================================
+6. API SURFACE (WAHA-compatible)
+================================================================================
+
+Base path: /api. Auth: X-Api-Key header (WAHA_API_KEY) or dashboard Basic
+Auth, both grant admin. Interactive docs at /api-docs (Scalar UI), raw
+OpenAPI JSON also served at /api-docs.
+
+Session management:
+  POST   /api/sessions                       Create session
+  GET    /api/sessions                        List sessions
+  GET    /api/sessions/:name                  Get session status
+  POST   /api/sessions/:name/start            Start
+  POST   /api/sessions/:name/stop             Stop
+  POST   /api/sessions/:name/restart          Restart (unpair/force kill)
+  DELETE /api/sessions/:name                  Delete (hard delete — no
+                                              undo, no soft-delete)
+
+Messaging (all require {session, chatId, ...} in body unless noted):
+  POST /api/sendText, /api/sendImage, /api/sendFile, /api/sendVoice,
+       /api/sendVideo, /api/sendLocation, /api/sendPoll (poll: {name,
+       options, multipleAnswers}), /api/sendPollVote, /api/sendContactVcard,
+       /api/sendLinkPreview, /api/send/link-custom-preview,
+       /api/sendButtons (buttons: [{type: reply|url|call|copy, text, id?,
+       url?, phoneNumber?, copyCode?}], header?, headerImage?, body?,
+       footer?), /api/sendList (title, description, button, sections:
+       [{title, rows: [{title, description, rowId?}]}]),
+       /api/forwardMessage, /api/reply ({session, chatId, text,
+       messageId}), /api/sendSeen, /api/startTyping, /api/stopTyping
+  PUT  /api/reaction ({session, chatId, messageId, reaction}),
+       /api/star ({session, chatId, messageId, star})
+  GET  /api/checkNumberStatus
+
+Chats: GET /api/{session}/chats, /chats/overview, /chats/{chatId}/messages,
+  /chats/{chatId}/picture; DELETE /chats/{chatId}, /chats/{chatId}
+  (messages); POST .../messages/read, .../{messageId}/pin, .../unpin,
+  .../archive, .../unarchive, .../unread
+
+Groups: GET/POST /api/{session}/groups, GET /groups/{id},
+  POST .../leave, GET .../participants, POST .../participants/add,
+  /participants/remove, GET .../invite-code, PUT .../description,
+  .../subject
+
+Channels: GET/POST /api/{session}/channels, GET/DELETE .../channels/{id},
+  POST .../follow, .../unfollow, .../mute, .../unmute, search endpoints
+
+Labels: GET/POST /api/{session}/labels, PUT/DELETE .../labels/{labelId},
+  GET/PUT .../labels/chats/{chatId}, GET .../labels/{labelId}/chats
+
+Contacts: GET /api/contacts/all (session via query), /api/contacts,
+  /api/contacts/check-exists, /api/contacts/about,
+  /api/contacts/profile-picture; POST /api/contacts/block, /unblock
+
+Presence: GET/POST /api/{session}/presence, GET /presence/{chatId},
+  POST .../subscribe
+
+Profile: GET /api/{session}/profile, PUT .../profile/name, .../profile/status
+
+Status/Stories: POST /api/{session}/status/text, /image, /voice, /video,
+  /delete; GET /status/new-message-id
+
+Webhooks: full CRUD per-session, HMAC-signed delivery, SSRF-protected
+
+Audit: GET /api/audit (filters: action, severity, session, limit, offset)
+
+MCP config: GET /api/mcp/tools (tool registry), GET/PUT
+  /api/sessions/:session/mcp (policy config), POST
+  /api/sessions/:session/mcp/generate-key (issue scoped key)
+
+Infra/health/version/workers: GET /api/infra, /health, /api/version,
+  /api/workers
+
+================================================================================
+7. MCP SERVER (Model Context Protocol) — FULL DETAIL
+================================================================================
+
+BunWa exposes an MCP server so AI agents (Claude Desktop, Claude Code,
+Cursor, custom MCP clients) can drive WhatsApp directly. Two transports:
+
+  1. Streamable HTTP — POST /mcp. Stateless: a fresh McpServer + transport
+     is built per request (no session map, no GET/DELETE reconnect
+     handshake). Auth via X-Api-Key header or Authorization: Bearer.
+
+  2. stdio — src/mcp/stdio.ts, spawned as a subprocess by the MCP client.
+     Reads BUNWA_SESSION and BUNWA_MCP_KEY from its environment. Requires
+     the BunWa source tree to be present locally (it runs `bun run
+     src/mcp/stdio.ts` from the repo root) — this only works when the MCP
+     client and the BunWa server/session-data are on the same machine; it
+     is NOT viable against a remote/hosted BunWa deployment (Docker,
+     Coolify) unless the stdio process has access to the same session
+     data store.
+
+23 tools total, in 3 categories:
+  Session (6): SessionList (NOT session-scoped — lists every session's
+    name+status server-wide), SessionGet, SessionStart, SessionStop,
+    SessionRestart, SessionCheckNumber (last 5 are session-scoped)
+  Messaging (16): MessageSendText, MessageSendImage, MessageSendFile,
+    MessageSendVoice, MessageSendVideo, MessageSendLocation,
+    MessageSendPoll, MessageSendContactVCard, MessageSendLinkPreview,
+    MessageReply, MessageForward, MessageReact, MessageStar,
+    MessageMarkRead, MessageStartTyping, MessageStopTyping (all
+    session-scoped)
+  Contact (1): ContactCheckNumber (session-scoped)
+
+Auth model:
+  - Global key: WAHA_API_KEY. Full admin access to all tools/sessions.
+  - Per-session key: sk_mcp_<hex>, generated via dashboard (Session
+    Settings → MCP → Generate Key) or POST /api/sessions/:session/mcp/
+    generate-key. Only a SHA-256 hash is stored server-side
+    (SessionConfig.mcp.apiKeyHash) — the plaintext key is shown exactly
+    once at generation time and never persisted. Regenerating invalidates
+    the previous key immediately.
+
+Session scoping (auto-scoping):
+  - When a request authenticates with a per-session key, the server looks
+    up which session that key's hash belongs to (scopedSession).
+  - For any tool marked sessionScoped: true, input.sessionId is FORCIBLY
+    overwritten to scopedSession, regardless of what the caller passed —
+    so a session-a key can never act on session-b's data even if it tries
+    to pass sessionId: "session-b" in the tool call.
+  - For non-sessionScoped tools (currently only SessionList), the server
+    DENIES the call outright when authenticated with a scoped key. This
+    was a real, confirmed security fix: SessionList used to be reachable
+    by any per-session key and would leak the names/status of every
+    other session on the server. Verified via live testing (see Section
+    8, item 4). Global keys are unaffected — SessionList still works
+    normally for admin access.
+
+Per-session tool policies (SessionConfig.mcp):
+  - enabled: boolean — master on/off switch for MCP on that session
+  - allowedTools: string[] — allow-list mode; if set and non-empty, ONLY
+    these tools/categories are permitted
+  - deniedTools: string[] — deny-list; explicit deny always wins
+  - destructiveOps: boolean — gate for tools marked destructive: true;
+    must be explicitly true to permit irreversible operations
+  - apiKeyHash: string — SHA-256 of the per-session key (see above)
+
+Rate limiting: KeyRateLimiter, configurable via MCP_RATE_LIMIT_MAX /
+  MCP_RATE_LIMIT_WINDOW_MS, keyed by the raw API key (or "anonymous").
+
+Testing the MCP server:
+  curl http://localhost:3000/api/mcp/tools | jq '.byCategory'
+  bunx @modelcontextprotocol/inspector http://localhost:3000/mcp
+
+Connection config formats (both shown with real values by the dashboard's
+"Generate MCP Key" flow, each with a Copy button):
+
+  stdio:
+    {
+      "mcpServers": {
+        "bunwa-<session>": {
+          "command": "bun",
+          "args": ["run", "src/mcp/stdio.ts"],
+          "env": { "BUNWA_SESSION": "<session>", "BUNWA_MCP_KEY": "sk_mcp_..." }
+        }
+      }
+    }
+
+  HTTP/SSE (works for Claude Desktop, Cursor, Windsurf, VS Code — all
+  support the same url+headers remote-MCP config shape):
+    {
+      "mcpServers": {
+        "bunwa": {
+          "url": "http://<host>:<port>/mcp",
+          "headers": { "X-Api-Key": "sk_mcp_..." }
+        }
+      }
+    }
+
+  NOTE: an earlier version of the dashboard's "legacy" Windsurf/VS Code
+  guide referenced a package called "@openclaw/mcp-proxy" — this package
+  does NOT exist on npm (confirmed 404) and was a documentation bug. It
+  has been fixed to use the same url+headers format as the other clients.
+
+================================================================================
+8. HISTORY OF MAJOR FIXES (chronological, this development cycle)
+================================================================================
+
+1. Event Monitor wildcard WebSocket subscription fix (manager.core.ts)
+   Bug: SessionManager.getSessionEvents() built a static merge() of event
+   streams once, at WebSocket-connect time. Any session started AFTER
+   the WS connection was already open was invisible to the Event
+   Monitor — 0 events shown even though the session was actively running.
+   Fix: events2: DefaultMap<WAHAEvents, SwitchObservable<any>> +
+   refreshWildcardEvent()/refreshAllWildcardEvents(), called at every
+   session lifecycle point (start, start-failure, stop). Verified live:
+   went from 0 events received to full STARTING→WORKING→STOPPED coverage
+   for a session started after the monitor page was already open.
+
+2. Audit logging instrumentation (was fully built, zero call sites)
+   AuditService (SQLite-backed, retention, query filters) existed but was
+   never called anywhere except its own read endpoint. Instrumented:
+   SessionManager (session_created/started/stopped/deleted/qr_generated/
+   connected/disconnected/force_killed), api-key-auth.ts
+   (api_key_auth_failed), chatting.routes.ts (message_sent/message_failed
+   via a shared sendAndAudit() wrapper — later extended to also cover
+   reaction and star, which had been missed), webhooks.routes.ts +
+   webhook-delivery.ts (webhook_created/deleted/triggered/failed,
+   including the SSRF-blocked case).
+
+3. WhatsApp buttons/lists were completely non-functional
+   Root cause (found via researching the actual WhatsApp binary protocol
+   and a third-party button-helper npm package's source): Baileys'
+   relayMessage() does not automatically attach the biz/interactive/
+   native_flow/bot binary nodes that WhatsApp's server requires to
+   actually RENDER interactive buttons/lists client-side — the protobuf
+   interactiveMessage alone is not sufficient. A secondary bug: the code
+   unconditionally wrapped every button message in viewOnceMessage, which
+   no correct reference implementation does. Fix: noweb.buttons.ts now
+   builds the binary nodes via buildButtonBinaryNodes() and passes them
+   as additionalNodes to relayMessage(); the viewOnceMessage wrap was
+   removed; sendList() in session.noweb.core.ts received the identical
+   fix. Also found and removed a dead duplicate SendButtonsRequest DTO
+   (only the one in chatting.buttons.dto.ts was actually imported/used).
+   Verified: unit-tested node construction, live-tested against a real
+   WhatsApp connection (correctly progressed to the "socket not
+   authenticated" boundary, proving the code path itself was sound).
+   NOTE: buttons/lists do not render inside a self-chat ("Message
+   Yourself") — that's an inherent WhatsApp client-side limitation, not a
+   bug — this caused a false-alarm bug report during development that was
+   later self-corrected by the reporter.
+
+4. MCP session-scoping leak (SessionList cross-session info disclosure)
+   Every MCP tool except SessionList is sessionScoped: true. Session-
+   scoped tools were already safe (auto-scoping forcibly overwrites
+   sessionId), but SessionList had no scoping check at all — a key
+   generated for one session could call SessionList and see the names
+   and live status of every other session on the server. Verified live:
+   a session-a-scoped key returned all sessions including session-b.
+   Fixed by denying any non-sessionScoped tool call outright when
+   authenticated via a per-session key. Verified: scoped key now gets
+   PermissionDenied on SessionList, still works fine on its own
+   SessionGet, global key's SessionList is unaffected.
+
+5. WebSocket event envelope was missing entirely
+   getSessionEvents() emitted raw payloads (WAMessage, WAMessageAckBody,
+   WAMessageReaction) with no `.event` field, so the frontend's
+   `if (!event) return` guard in the WS message handler always exited —
+   live chat updates had literally never worked. Fixed by wrapping every
+   emitted payload in { event, session, payload, timestamp }.
+
+6. Chat UI: no live updates + sidebar flicker
+   Two compounding bugs on top of #5: (a) once the envelope existed, the
+   frontend needed a rewrite to incrementally patch messages/reactions/
+   acks instead of doing nothing; (b) loadChats() unconditionally set
+   loadingChats=true on every 5-second poll AND every WS-triggered
+   refresh, blanking the entire sidebar to a loading skeleton constantly.
+   Fixed via incremental WS handler + a "first load per session" ref flag
+   that only shows the loading state once. Also added optimistic sending
+   (a temp message appears instantly, reconciled with the real API
+   response, rolled back on failure).
+
+7. sendPoll used the wrong field name in the frontend
+   Frontend sent { poll: { values: [...] } }; backend/DTO expects
+   { poll: { options: [...] } }. Root-caused partly to a documentation
+   bug: /api/sendPoll was defined TWICE in swagger.ts's object literal
+   (a JS/TS duplicate-key situation — the earlier, detailed, CORRECT
+   definition was silently shadowed by a later, vague, undocumented
+   duplicate that never got fixed because nobody could see the good one
+   was dead). Fixed the frontend field name and cleaned up the swagger
+   duplicate. This surfaced a broader pattern (see #8).
+
+8. Swagger/OpenAPI duplicate-path-key sweep (~37 total occurrences)
+   swagger.ts is a single large object literal; JS/TS silently lets a
+   later duplicate key overwrite an earlier one with no runtime error
+   (though `tsc` DOES flag it as TS1117). Across two passes, ~37 paths
+   were found duplicated: sendPoll, sendButtons, sendList, reaction,
+   star, reply, sendLocation, sendContactVcard, sendLinkPreview,
+   forwardMessage, startTyping, stopTyping, contacts/all, and the entire
+   chats/groups/channels/labels/profile/presence groups. In several cases
+   the winning (surviving) definition was actually WRONG relative to the
+   real route handler — e.g. /api/reaction and /api/star were missing
+   `chatId` as a required field even though the handler reads it; /api/
+   reply documented a `reply_to` field that doesn't exist (the handler
+   reads `messageId`). Two cases were worse: the winning /channels and
+   /labels definitions were missing entire HTTP methods (POST create for
+   both, DELETE for channels/{id}, GET for labels/chats/{chatId}) because
+   only the dead duplicate had them — meaning real, working endpoints had
+   ZERO live documentation. All duplicates removed, correct/missing
+   details merged into the surviving definitions, verified by diffing
+   the live-built OpenAPI JSON spec against the actual route handlers.
+
+9. Docker/Coolify deployment fixes
+   Missing bun.lock (was gitignored) broke reproducible installs — fixed
+   .gitignore. Container crash-loop from a missing tsconfig.json in the
+   production image (needed at runtime for Bun's decorator metadata) —
+   added to the Dockerfile COPY step. Healthcheck was broken (used `curl`,
+   not present in the slim image, against the wrong path) — switched to
+   a `bun -e` fetch against /health.
+
+10. Documentation bug: WHATSAPP_API_KEY vs WAHA_API_KEY
+   CLAUDE.md (and, by extension, anyone following it) documented
+   WHATSAPP_API_KEY as the auth variable. The code
+   (config.service.ts:getApiKey()) only ever reads WAHA_API_KEY. Setting
+   only WHATSAPP_API_KEY silently leaves the server in open/no-auth mode
+   (since WAHA_API_KEY is then unset and WAHA_ALLOW_NO_AUTH defaults to
+   allowing unauthenticated access) — confirmed live: with the wrong var
+   set, every request succeeded regardless of the X-Api-Key header sent.
+   Fixed the documentation; the code and .env.example were already
+   correct.
+
+================================================================================
+9. KNOWN LIMITATIONS / NOT-YET-IMPLEMENTED
+================================================================================
+
+- Redis/BullMQ queue: environment variables exist and are reported by the
+  Infrastructure dashboard page, but there is NO active queue backend
+  wired up — the dependencies were removed. Setting WAHA_QUEUE_ENABLED
+  etc. has no runtime effect.
+- Per-session chat-filtering ignore toggles (ignore groups/channels/
+  broadcast/status) shown in the dashboard's session settings are not
+  yet applied by the engine — only the global WAHA_SESSION_CONFIG_IGNORE_*
+  env vars take effect server-wide.
+- MCP stdio transport requires the BunWa source tree and session data to
+  be locally accessible to the process spawning it — not viable against
+  a remote-only deployment unless session storage is shared/networked.
+- Session deletion via the API (DELETE /api/sessions/:name) is a hard,
+  immediate delete with no confirmation step, no soft-delete, and no
+  undo — the auth state is gone from disk immediately. (This bit a real
+  user during development: a stray UI test click deleted a live session;
+  it had to be manually recreated and re-paired via QR.)
+- WEBJS engine requires Chrome/Chromium to be present on the host via
+  CHROME_PATH or PUPPETEER_EXECUTABLE_PATH; it fails with a clear error
+  (not a raw module-not-found crash) if missing, but there's no bundled
+  Chrome — you must provide one.
+
+================================================================================
+10. TECHNOLOGY STACK
+================================================================================
+
+  Runtime            Bun 1.3+
+  API Framework       Hono
+  Database            SQLite (bun:sqlite) or PostgreSQL (via Knex)
+  Storage             Local filesystem or S3-compatible (MinIO, R2, AWS S3)
+  Frontend            React 19 + Vite + shadcn/ui + Tailwind CSS
+  NOWEB engine        Baileys (@whiskeysockets/baileys ^7.0.0-rc13)
+  WEBJS engine        whatsapp-web.js + Puppeteer/Chrome
+  WebSockets          Hono WS helper + RxJS (event stream composition)
+  MCP SDK             @modelcontextprotocol/sdk (^1.29.0)
+  Auth                API key + dashboard Basic Auth + per-session MCP
+                      keys (SHA-256 hashed), CASL-based policy middleware
+  DI                  tsyringe
+  Validation          class-validator + class-transformer
+  Logging             Pino
+  Container           Docker (multi-stage, ~200MB runtime image),
+                      Coolify-ready (Dockerfile.coolify target)
+  CI                  GitHub Actions: bun test, oxlint, TypeScript error
+                      ratchet on every push; Docker Build & Push workflow
+                      publishes multi-arch images (linux/amd64,
+                      linux/arm64) to Docker Hub on push to main / v* tags
+
+================================================================================
+11. QUICK START (copy-paste)
+================================================================================
+
+  git clone https://github.com/LoopyOratory/BunWa.git bunwa
+  cd bunwa
+  PUPPETEER_SKIP_DOWNLOAD=true bun install
+  cp .env.example .env
+  # edit .env — at minimum set WAHA_API_KEY for production use
+  bun run src/main.ts
+  # dashboard + API at http://localhost:3000 (default login admin/admin)
+
+  Docker:
+    docker pull loopyoratory/bunwa:latest
+    # or build locally: docker build -t bunwa:latest .
+    docker volume create bunwa-sessions
+    docker volume create bunwa-media
+    docker run -d --name bunwa -p 3000:3000 \
+      -v bunwa-sessions:/app/.sessions -v bunwa-media:/app/.media \
+      -v $(pwd)/.env:/app/.env bunwa:latest
+
+  Coolify: New Resource → Application → Build Pack: Dockerfile →
+    Dockerfile Target: Dockerfile.coolify → port 3000 → add persistent
+    volumes for /app/.sessions and /app/.media → set WAHA_API_KEY and
+    WAHA_ALLOW_NO_AUTH=false in Environment.
+
+================================================================================
+12. LICENSING SUMMARY
+================================================================================
+
+BunWa Community License (BCL) v1.0 — see LICENSE.md at the repo root for
+full binding terms.
+
+  Free:  personal use, open-source projects, learning/research,
+         non-profit/education use, self-hosting for any of the above.
+  Paid:  commercial use (running BunWa as part of a product/service you
+         charge for) requires a commercial license at $200/month per
+         organization, covering unlimited internal deployments.
+  Contributions: any code merged into this repository is automatically
+         licensed under BCL v1.0 too — it stays free and open source.
+         Public forks may not add proprietary/closed-source features on
+         top of BunWa; that use case is exactly what the commercial
+         license exists for.
+  Contributors welcome: PRs, bug reports, docs improvements, translations
+         all encouraged — see README.md's contributing section.
+
+================================================================================
+END OF KNOWLEDGE BASE
+================================================================================

@@ -5,7 +5,7 @@
 
   <!-- Badges -->
   <img src="https://img.shields.io/badge/Bun-1.3%2B-14151a?style=flat-square&logo=bun" alt="Bun" />
-  <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="License" />
+  <img src="https://img.shields.io/badge/License-BCL%20v1.0%20(Free%20OSS%20%2F%20%24200%2Fmo%20Commercial)-blue?style=flat-square" alt="License" />
   <img src="https://img.shields.io/badge/WhatsApp%20API-1%3A1%20WAHA%20Compatible-25D366?style=flat-square&logo=whatsapp" alt="WAHA Compatible" />
   <img src="https://img.shields.io/badge/PRs-Welcome-brightgreen?style=flat-square" alt="PRs Welcome" />
   <br />
@@ -656,15 +656,31 @@ If BunWa helps you, consider supporting the project:
 
 ## 📄 License
 
-### Project License (MIT)
+### Project License — BunWa Community License (BCL) v1.0
 
-Copyright © 2026
+BunWa is **free and open source** for personal use, open-source projects, learning,
+research, and non-profit/educational use — no fee, no registration, no catch.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+**Commercial use** (running BunWa as part of a product or service you charge for) requires
+a commercial license: **US $200/month per organization**, covering unlimited internal
+deployments. Open an issue tagged `commercial-license` on GitHub or reach out to
+[@LoopyOratory](https://github.com/LoopyOratory) to arrange one.
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+Any code contributed back to this repository is automatically licensed under the same
+terms — **contributions stay free and open source for everyone**. Forks are welcome, but a
+public fork may not bolt on proprietary, closed-source features; that's exactly what the
+commercial license exists for instead.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
+Full terms: [**LICENSE.md**](./LICENSE.md)
+
+| Use case | Cost |
+|---|---|
+| Personal / hobby projects | Free |
+| Open-source projects | Free |
+| Learning, research, evaluation | Free |
+| Non-profit / education | Free |
+| Commercial / revenue-generating use | $200/month per organization |
+| Contributing code back | Free — and it stays free for everyone |
 
 ### Third-Party Licenses & Attributions
 
