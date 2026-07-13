@@ -36,7 +36,7 @@ export function createSessionsRouter(): Hono {
           name: sessionName,
           status: (session as any).status || 'STOPPED',
           config: (session as any).sessionConfig || {},
-          me: (session as any).me || null,
+          me: (session as any).getSessionMeInfo?.() || null,
         });
       } catch (error: any) {
         routeLogger.error({ err: error.stack || error.message }, `GET /:session error for ${sessionName}`);

@@ -39,7 +39,7 @@ export function sessionTools(manager: SessionManager): ToolDescriptor[] {
             name: input.sessionId,
             status: (session as any).status || 'UNKNOWN',
             config: (session as any).sessionConfig || {},
-            me: (session as any).me || null,
+            me: (session as any).getSessionMeInfo?.() || null,
           };
         } catch {
           return { name: input.sessionId, status: 'STOPPED', config: {}, me: null };
