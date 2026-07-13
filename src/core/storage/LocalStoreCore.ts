@@ -1,7 +1,7 @@
 import { DataStore } from './DataStore';
 import { LocalStore } from './LocalStore';
 import { existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 
 const BASE_DIR = process.env.WAHA_LOCAL_STORE_BASE_DIR || '.sessions';
 
@@ -12,7 +12,7 @@ export class LocalStoreCore extends LocalStore {
 
   constructor(namespace: string = 'noweb') {
     super();
-    this.baseDir = join(process.cwd(), BASE_DIR);
+    this.baseDir = resolve(process.cwd(), BASE_DIR);
     this.engineDir = join(this.baseDir, namespace);
     this.sessionDir = this.engineDir;
   }
