@@ -196,6 +196,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
   const [mcpLoading, setMcpLoading] = useState(false)
   const [mcpToolSearch, setMcpToolSearch] = useState("")
   const [mcpExpandedCategories, setMcpExpandedCategories] = useState<Record<string, boolean>>({})
+  const [mcpShowManual, setMcpShowManual] = useState(false)
   const [mcpKey, setMcpKey] = useState<string | null>(null)
   const [mcpConnection, setMcpConnection] = useState<any>(null)
   const [mcpKeyRevealed, setMcpKeyRevealed] = useState(false)
@@ -959,14 +960,20 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                   )}
 
                   {!mcpKeyRevealed && (
-                    <div className="space-y-4 pt-2">
-                      <p className="text-xs text-muted-foreground">
-                        Legacy connection guides (with placeholder key):
-                      </p>
-                      {[
-                        {
-                          label: "Claude Desktop",
-                          code: `{
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() => setMcpShowManual(v => !v)}
+                      >
+                        {mcpShowManual
+                          ? <ChevronDown className="size-3.5" />
+                          : <ChevronRight className="size-3.5" />}
+                        Manual setup (placeholder key)
+                      </button>
+
+                      {mcpShowManual && (() => {
+                        const httpCode = `{
   "mcpServers": {
     "bunwa": {
       "url": "${window.location.origin}/mcp",
@@ -975,56 +982,46 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
       }
     }
   }
-}`,
-                        },
-                        {
-                          label: "Cursor",
-                          code: `{
-  "mcpServers": {
-    "bunwa": {
-      "url": "${window.location.origin}/mcp",
-      "headers": {
-        "X-Api-Key": "your-waha-api-key"
-      }
-    }
-  }
-}`,
-                        },
-                        {
-                          label: "Windsurf / VS Code (Continue)",
-                          code: `{
-  "mcpServers": {
-    "bunwa": {
-      "url": "${window.location.origin}/mcp",
-      "headers": {
-        "X-Api-Key": "your-waha-api-key"
-      }
-    }
-  }
-}`,
-                        },
-                        {
-                          label: "MCP Inspector (Test Tool)",
-                          code: `bunx @modelcontextprotocol/inspector ${window.location.origin}/mcp`,
-                        },
-                      ].map(({ label, code }) => (
-                        <div key={label}>
-                          <div className="flex items-center justify-between mb-1">
-                            <p className="text-xs font-medium">{label}</p>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                navigator.clipboard.writeText(code)
-                                toast.success(`${label} config copied`)
-                              }}
-                            >
-                              Copy
-                            </Button>
+}`
+                        const inspectorCode = `bunx @modelcontextprotocol/inspector ${window.location.origin}/mcp`
+                        return (
+                          <div className="space-y-4 pt-3">
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <p className="text-xs font-medium">HTTP clients <span className="text-muted-foreground font-normal">— Claude Desktop, Cursor, Windsurf, VS Code</span></p>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(httpCode)
+                                    toast.success("Config copied")
+                                  }}
+                                >
+                                  Copy
+                                </Button>
+                              </div>
+                              <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">{httpCode}</pre>
+                              <p className="text-[11px] text-muted-foreground mt-1">Replace <code>your-waha-api-key</code>, or generate a scoped key above.</p>
+                            </div>
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <p className="text-xs font-medium">Test with MCP Inspector</p>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(inspectorCode)
+                                    toast.success("Command copied")
+                                  }}
+                                >
+                                  Copy
+                                </Button>
+                              </div>
+                              <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">{inspectorCode}</pre>
+                            </div>
                           </div>
-                          <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">{code}</pre>
-                        </div>
-                      ))}
+                        )
+                      })()}
                     </div>
                   )}
                 </div>
