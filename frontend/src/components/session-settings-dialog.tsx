@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select"
 import { toast } from "sonner"
 import { api, type Session } from "@/lib/api"
-import { Plus, Trash2, X, ChevronDown, Check, MessageCircle } from "lucide-react"
+import { Plus, Trash2, X, ChevronDown, ChevronRight, Check, MessageCircle, Search } from "lucide-react"
 
 const WEBHOOK_EVENTS = [
   { value: "*", label: "All Events" },
@@ -185,6 +185,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
   const [ignoreBroadcast, setIgnoreBroadcast] = useState(false)
   const [ignoreDm, setIgnoreDm] = useState(false)
   const [debugMode, setDebugMode] = useState(false)
+  const [autoStart, setAutoStart] = useState(false)
   const [metadata, setMetadata] = useState<{ key: string; value: string }[]>([])
 
   // MCP settings
@@ -193,6 +194,8 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
   const [mcpDeniedTools, setMcpDeniedTools] = useState<string[]>([])
   const [mcpTools, setMcpTools] = useState<{ tools: any[]; byCategory: Record<string, any[]> } | null>(null)
   const [mcpLoading, setMcpLoading] = useState(false)
+  const [mcpToolSearch, setMcpToolSearch] = useState("")
+  const [mcpExpandedCategories, setMcpExpandedCategories] = useState<Record<string, boolean>>({})
   const [mcpKey, setMcpKey] = useState<string | null>(null)
   const [mcpConnection, setMcpConnection] = useState<any>(null)
   const [mcpKeyRevealed, setMcpKeyRevealed] = useState(false)
@@ -235,6 +238,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
       setIgnoreBroadcast(c?.ignore?.broadcast ?? false)
       setIgnoreDm(c?.ignore?.dm ?? false)
       setDebugMode(c?.debug?.mode ?? false)
+      setAutoStart(c?.autoStart ?? false)
       setMetadata(c.metadata ? Object.entries(c.metadata).map(([k, v]) => ({ key: k, value: String(v) })) : [])
       // MCP config (from session config; the dedicated endpoint overrides on mount)
       if (c?.mcp) {
@@ -333,6 +337,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
       if (Object.keys(client).length) config.client = client
       config.ignore = { status: ignoreStatus, groups: ignoreGroups, channels: ignoreChannels, broadcast: ignoreBroadcast, dm: ignoreDm }
       config.debug = { mode: debugMode }
+      config.autoStart = autoStart
       if (metadata.length > 0) {
         config.metadata = {}
         metadata.forEach(m => { if (m.key) config.metadata[m.key] = m.value })
@@ -672,6 +677,10 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
             {activeTab === "advanced" && (
               <div className="space-y-6">
                 <div className="space-y-4">
+                  <h4 className="text-sm font-medium">Startup</h4>
+                  <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Auto-start</Label><p className="text-xs text-muted-foreground">Automatically start this session when the server boots</p></div><Switch checked={autoStart} onCheckedChange={setAutoStart} /></div>
+                </div>
+                <div className="space-y-4">
                   <h4 className="text-sm font-medium">Debug</h4>
                   <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Debug Mode</Label><p className="text-xs text-muted-foreground">Verbose logging</p></div><Switch checked={debugMode} onCheckedChange={setDebugMode} /></div>
                 </div>
@@ -731,73 +740,117 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                     <Separator />
 
                     <div className="space-y-3">
-                      <h4 className="text-sm font-medium">Tool Toggles</h4>
-                      <p className="text-xs text-muted-foreground">
-                        Disable specific tools or entire categories by name
-                      </p>
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <h4 className="text-sm font-medium">Tool Toggles</h4>
+                          <p className="text-xs text-muted-foreground">
+                            Disable specific tools or whole categories
+                          </p>
+                        </div>
+                        {mcpTools && (
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {mcpTools.tools.length - mcpDeniedTools.length}/{mcpTools.tools.length} on
+                          </span>
+                        )}
+                      </div>
 
                       {mcpLoading ? (
                         <p className="text-sm text-muted-foreground py-4">Loading tools...</p>
                       ) : mcpTools ? (
-                        <div className="space-y-4">
-                          {Object.entries(mcpTools.byCategory).map(([category, tools]) => (
-                            <div key={category} className="space-y-2">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="secondary" className="uppercase text-[10px] tracking-wider">
-                                  {category}
-                                </Badge>
-                                <button
-                                  type="button"
-                                  className="text-[10px] text-muted-foreground hover:text-foreground underline"
-                                  onClick={() => {
-                                    const allInCategory = tools.map((t: any) => t.name)
-                                    const allDenied = allInCategory.every((n: string) => mcpDeniedTools.includes(n))
-                                    if (allDenied) {
-                                      setMcpDeniedTools(mcpDeniedTools.filter(n => !allInCategory.includes(n)))
-                                    } else {
-                                      setMcpDeniedTools([...new Set([...mcpDeniedTools, ...allInCategory])])
-                                    }
-                                  }}
-                                >
-                                  {tools.every((t: any) => mcpDeniedTools.includes(t.name)) ? "Enable all" : "Disable all"}
-                                </button>
-                              </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                                {tools.map((tool: any) => {
-                                  const denied = mcpDeniedTools.includes(tool.name)
-                                  return (
-                                    <div
-                                      key={tool.name}
-                                      className={`flex items-center justify-between rounded-md border px-3 py-2 ${
-                                        denied ? "opacity-50" : ""
-                                      } ${tool.destructive ? "border-red-500/20" : ""}`}
+                        <>
+                          <div className="relative">
+                            <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              placeholder="Search tools..."
+                              value={mcpToolSearch}
+                              onChange={(e) => setMcpToolSearch(e.target.value)}
+                              className="h-8 pl-8 text-xs"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            {Object.entries(mcpTools.byCategory).map(([category, allTools]) => {
+                              const q = mcpToolSearch.trim().toLowerCase()
+                              const tools = q
+                                ? allTools.filter((t: any) => t.name.toLowerCase().includes(q))
+                                : allTools
+                              if (tools.length === 0) return null
+                              // Auto-expand while searching; otherwise honor per-category state (collapsed by default)
+                              const expanded = q ? true : (mcpExpandedCategories[category] ?? false)
+                              const enabledCount = allTools.filter((t: any) => !mcpDeniedTools.includes(t.name)).length
+                              const allDenied = allTools.every((t: any) => mcpDeniedTools.includes(t.name))
+                              return (
+                                <div key={category} className="rounded-md border">
+                                  <div className="flex items-center gap-2 px-2.5 py-2">
+                                    <button
+                                      type="button"
+                                      className="flex flex-1 items-center gap-2 min-w-0 text-left"
+                                      onClick={() => setMcpExpandedCategories(prev => ({ ...prev, [category]: !expanded }))}
                                     >
-                                      <div className="flex items-center gap-2 min-w-0">
-                                        <span className="text-xs font-medium truncate">{tool.name}</span>
-                                        {tool.destructive && (
-                                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 text-red-500 border-red-500/30 shrink-0">
-                                            destructive
-                                          </Badge>
-                                        )}
-                                      </div>
-                                      <Switch
-                                        checked={!denied}
-                                        onCheckedChange={(checked) => {
-                                          if (checked) {
-                                            setMcpDeniedTools(mcpDeniedTools.filter(n => n !== tool.name))
-                                          } else {
-                                            setMcpDeniedTools([...mcpDeniedTools, tool.name])
-                                          }
-                                        }}
-                                        className="shrink-0 ml-2"
-                                      />
+                                      {expanded
+                                        ? <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+                                        : <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />}
+                                      <Badge variant="secondary" className="uppercase text-[10px] tracking-wider">
+                                        {category}
+                                      </Badge>
+                                      <span className="text-[11px] text-muted-foreground">
+                                        {enabledCount}/{allTools.length}
+                                      </span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="text-[10px] text-muted-foreground hover:text-foreground underline shrink-0"
+                                      onClick={() => {
+                                        const allInCategory = allTools.map((t: any) => t.name)
+                                        if (allDenied) {
+                                          setMcpDeniedTools(mcpDeniedTools.filter(n => !allInCategory.includes(n)))
+                                        } else {
+                                          setMcpDeniedTools([...new Set([...mcpDeniedTools, ...allInCategory])])
+                                        }
+                                      }}
+                                    >
+                                      {allDenied ? "Enable all" : "Disable all"}
+                                    </button>
+                                  </div>
+                                  {expanded && (
+                                    <div className="border-t p-1.5 grid grid-cols-1 sm:grid-cols-2 gap-1">
+                                      {tools.map((tool: any) => {
+                                        const denied = mcpDeniedTools.includes(tool.name)
+                                        return (
+                                          <div
+                                            key={tool.name}
+                                            className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 hover:bg-muted/50 ${
+                                              denied ? "opacity-50" : ""
+                                            }`}
+                                          >
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                              <span className="text-xs font-medium truncate">{tool.name}</span>
+                                              {tool.destructive && (
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 text-red-500 border-red-500/30 shrink-0">
+                                                  destructive
+                                                </Badge>
+                                              )}
+                                            </div>
+                                            <Switch
+                                              checked={!denied}
+                                              onCheckedChange={(checked) => {
+                                                if (checked) {
+                                                  setMcpDeniedTools(mcpDeniedTools.filter(n => n !== tool.name))
+                                                } else {
+                                                  setMcpDeniedTools([...mcpDeniedTools, tool.name])
+                                                }
+                                              }}
+                                              className="shrink-0"
+                                            />
+                                          </div>
+                                        )
+                                      })}
                                     </div>
-                                  )
-                                })}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </>
                       ) : (
                         <p className="text-sm text-muted-foreground py-4">Could not load tool list.</p>
                       )}

@@ -396,19 +396,23 @@ export class SessionManager {
       }
     }
     this.logger.info(`Restored ${Object.keys(index).length} sessions from disk`);
-    if (shouldRestart) {
-      for (const [name] of Object.entries(index)) {
-        if (this.sessions.get(name) !== null) {
-          continue;
-        }
-        this.logger.info(`Auto-starting session: ${name}`);
-        try {
-          await this.start(name);
-        } catch (err) {
-          this.logger.error(
-            `Failed to auto-start session ${name}: ${err.message}`,
-          );
-        }
+    for (const [name, config] of Object.entries(index)) {
+      // Start on boot when the global flag is set (restart all) or the
+      // session has per-session auto-start enabled in its config.
+      const autoStart = shouldRestart || (config as SessionConfig)?.autoStart === true;
+      if (!autoStart) {
+        continue;
+      }
+      if (this.sessions.get(name) !== null) {
+        continue;
+      }
+      this.logger.info(`Auto-starting session: ${name}`);
+      try {
+        await this.start(name);
+      } catch (err) {
+        this.logger.error(
+          `Failed to auto-start session ${name}: ${err.message}`,
+        );
       }
     }
   }

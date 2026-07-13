@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 import {
   Table,
   TableBody,
@@ -87,6 +88,24 @@ export function SessionsPage(_props?: SessionsPageProps) {
       loadSessions()
     } catch {
       toast.error(`Session ${label} failed`)
+    }
+  }
+
+  const toggleAutoStart = async (session: Session, next: boolean) => {
+    // Optimistically reflect the change; the PUT replaces the whole config,
+    // so send the existing config with only autoStart overridden.
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.name === session.name ? { ...s, config: { ...s.config, autoStart: next } } : s
+      )
+    )
+    try {
+      await api.updateSession(session.name, { ...session.config, autoStart: next })
+      toast.success(`Auto-start ${next ? "enabled" : "disabled"} for ${session.name}`)
+      loadSessions()
+    } catch {
+      toast.error("Failed to update auto-start")
+      loadSessions()
     }
   }
 
@@ -203,17 +222,18 @@ export function SessionsPage(_props?: SessionsPageProps) {
                       <TableHead className="hidden lg:table-cell">Account</TableHead>
                       <TableHead className="w-24 sm:w-28">Status</TableHead>
                       <TableHead className="hidden sm:table-cell">Engine</TableHead>
+                      <TableHead className="hidden md:table-cell w-24">Auto-start</TableHead>
                       <TableHead className="w-16 sm:w-80">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="h-24 text-center text-base text-muted-foreground">Loading sessions...</TableCell>
+                        <TableCell colSpan={7} className="h-24 text-center text-base text-muted-foreground">Loading sessions...</TableCell>
                       </TableRow>
                     ) : filteredSessions.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="h-24 text-center text-base text-muted-foreground">No sessions found</TableCell>
+                        <TableCell colSpan={7} className="h-24 text-center text-base text-muted-foreground">No sessions found</TableCell>
                       </TableRow>
                     ) : (
                       filteredSessions.map((session) => (
@@ -248,6 +268,19 @@ export function SessionsPage(_props?: SessionsPageProps) {
                             }>
                               {session.config?.engine || "NOWEB"}
                             </Badge>
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex">
+                                  <Switch
+                                    checked={session.config?.autoStart === true}
+                                    onCheckedChange={(v) => toggleAutoStart(session, v)}
+                                  />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>Start automatically when the server boots</TooltipContent>
+                            </Tooltip>
                           </TableCell>
                           <TableCell>
                             {/* Desktop */}

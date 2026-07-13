@@ -73,6 +73,8 @@ export class SessionConfig {
   webhooks?: WebhookConfig[];
   metadata?: Record<string, any>;
   engine?: string;
+  /** Auto-start this session when the server boots. */
+  autoStart?: boolean;
   proxy?: ProxyConfig;
   debug?: {
     mode?: boolean;

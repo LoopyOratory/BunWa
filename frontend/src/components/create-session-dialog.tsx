@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
 import {
   Dialog,
   DialogContent,
@@ -51,6 +52,7 @@ export function CreateSessionDialog({ open, onOpenChange, onCreated }: CreateSes
   const [step, setStep] = useState<Step>("create")
   const [sessionName, setSessionName] = useState("")
   const [engine, setEngine] = useState("noweb")
+  const [autoStart, setAutoStart] = useState(false)
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [qrCode, setQrCode] = useState<string | null>(null)
@@ -114,7 +116,8 @@ export function CreateSessionDialog({ open, onOpenChange, onCreated }: CreateSes
     if (!sessionName.trim()) return
     setLoading(true)
     try {
-      const config = engine === "webjs" ? { engine: "webjs" } : {}
+      const config: Record<string, any> = engine === "webjs" ? { engine: "webjs" } : {}
+      if (autoStart) config.autoStart = true
       await api.createSessionWithConfig(sessionName.trim(), config)
       await api.startSession(sessionName.trim())
       setCreatedSessionName(sessionName.trim())
@@ -201,6 +204,14 @@ export function CreateSessionDialog({ open, onOpenChange, onCreated }: CreateSes
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+              <div className="space-y-0.5">
+                <Label>Auto-start on boot</Label>
+                <p className="text-[11px] text-muted-foreground">Automatically start this session when the server restarts</p>
+              </div>
+              <Switch checked={autoStart} onCheckedChange={setAutoStart} />
             </div>
 
             <Button onClick={handleCreate} disabled={loading || !sessionName.trim()} className="w-full h-11 text-base">
