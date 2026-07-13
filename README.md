@@ -180,12 +180,14 @@ BunWa includes a Coolify-optimized Dockerfile. In Coolify:
 3. **Build Pack:** `Dockerfile`
 4. **Dockerfile Target:** `Dockerfile.coolify`
 5. Set the port to **3000**
-6. Go to **Volumes** tab → add two persistent volumes:
+6. Go to **Volumes** (Storages) tab → add two persistent volumes. **Source Path is a host path or named volume, not the container path** — do not set it to `/app/.sessions`, since that directory won't exist on the host and Coolify will create it fresh (often root-owned), which loses your session on every redeploy:
 
-   | Source Path | Destination Path | 
-   |-------------|-----------------|
-   | `/app/.sessions` | `/app/.sessions` |
-   | `/app/.media` | `/app/.media` |
+   | Source Path (host)      | Destination Path (container) |
+   |-------------------------|-------------------------------|
+   | `/data/bunwa/sessions`  | `/app/.sessions`               |
+   | `/data/bunwa/media`     | `/app/.media`                  |
+
+   The container runs as a non-root user (`waha`, UID/GID 1001) — if you use bind mounts to host paths (rather than letting Coolify manage a named volume), make sure those host directories are writable by UID 1001, e.g. `mkdir -p /data/bunwa/sessions /data/bunwa/media && chown -R 1001:1001 /data/bunwa`. Otherwise the app will fail to persist auth state (session shows as disconnected/needs re-scan after every redeploy) or, on stricter hosts, fail to start with an `EACCES: permission denied, mkdir` error.
 
 7. Go to **Environment** tab → add `WAHA_API_KEY` and `WAHA_ALLOW_NO_AUTH=false` (plus any others from [Configuration](#configuration))
 
