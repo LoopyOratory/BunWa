@@ -359,5 +359,110 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
         return { success: true };
       },
     },
+    {
+      name: 'MessageVotePoll',
+      description: 'Vote on a poll message.',
+      tier: 'write',
+      category: 'message',
+      sessionScoped: true,
+      inputSchema: z.object({
+        sessionId,
+        chatId: z.string().describe('Chat JID containing the poll'),
+        pollMessageId: z.string().describe('ID of the poll message'),
+        pollServerId: z.string().optional().describe('Poll server ID, if known'),
+        votes: z.array(z.string()).describe('Poll option values to vote for'),
+      }),
+      handler: async (input) => {
+        const session = await getSession(manager, input.sessionId);
+        return (session as any).sendPollVote({
+          session: input.sessionId,
+          chatId: input.chatId,
+          pollMessageId: input.pollMessageId,
+          pollServerId: input.pollServerId,
+          votes: input.votes,
+        });
+      },
+    },
+    {
+      name: 'MessageSendButtons',
+      description: 'Send an interactive message with reply/URL/call/copy buttons.',
+      tier: 'write',
+      category: 'message',
+      sessionScoped: true,
+      inputSchema: z.object({
+        sessionId,
+        chatId: z.string().describe('Chat JID'),
+        buttons: z.array(z.object({
+          type: z.enum(['reply', 'url', 'call', 'copy']),
+          text: z.string().describe('Button label'),
+          id: z.string().optional().describe('Button ID (for reply buttons)'),
+          url: z.string().optional().describe('URL (for url buttons)'),
+          phoneNumber: z.string().optional().describe('Phone number (for call buttons)'),
+          copyCode: z.string().optional().describe('Code to copy (for copy buttons)'),
+        })).min(1).describe('Buttons to display (1-3 typically)'),
+        header: z.string().optional().describe('Header text'),
+        body: z.string().optional().describe('Body text'),
+        footer: z.string().optional().describe('Footer text'),
+      }),
+      handler: async (input) => {
+        const session = await getSession(manager, input.sessionId);
+        return (session as any).sendButtons({
+          session: input.sessionId,
+          chatId: input.chatId,
+          buttons: input.buttons,
+          header: input.header,
+          body: input.body,
+          footer: input.footer,
+        });
+      },
+    },
+    {
+      name: 'MessageSendList',
+      description: 'Send an interactive list message with selectable sections.',
+      tier: 'write',
+      category: 'message',
+      sessionScoped: true,
+      inputSchema: z.object({
+        sessionId,
+        chatId: z.string().describe('Chat JID'),
+        title: z.string().describe('List message title'),
+        description: z.string().describe('List message description'),
+        button: z.string().describe('Label of the button that opens the list'),
+        sections: z.array(z.object({
+          title: z.string().describe('Section title'),
+          rows: z.array(z.object({
+            rowId: z.string().describe('Row ID returned when selected'),
+            title: z.string().describe('Row title'),
+            description: z.string().optional().describe('Row description'),
+          })),
+        })).min(1).describe('Sections of selectable rows'),
+      }),
+      handler: async (input) => {
+        const session = await getSession(manager, input.sessionId);
+        return (session as any).sendList({
+          session: input.sessionId,
+          chatId: input.chatId,
+          title: input.title,
+          description: input.description,
+          button: input.button,
+          sections: input.sections,
+        });
+      },
+    },
+    {
+      name: 'MessageGenerateId',
+      description: 'Generate a new WhatsApp message ID, e.g. to use for a scheduled/pre-signed send.',
+      tier: 'read',
+      category: 'message',
+      sessionScoped: true,
+      inputSchema: z.object({
+        sessionId,
+      }),
+      handler: async (input) => {
+        const session = await getSession(manager, input.sessionId);
+        const id = await (session as any).generateNewMessageId();
+        return { id };
+      },
+    },
   ];
 }

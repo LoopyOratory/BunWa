@@ -33,6 +33,8 @@ import { sessionTools } from './tools/session.tools';
 import { messageTools } from './tools/message.tools';
 import { contactTools } from './tools/contact.tools';
 import { chatTools } from './tools/chat.tools';
+import { statusTools } from './tools/status.tools';
+import { presenceTools } from './tools/presence.tools';
 import { isToolAllowed } from './mcp.server';
 
 const sessionName = process.env.BUNWA_SESSION;
@@ -69,6 +71,8 @@ const tools = [
   ...messageTools(manager),
   ...contactTools(manager),
   ...chatTools(manager),
+  ...statusTools(manager),
+  ...presenceTools(manager),
 ];
 const registry = new ToolRegistryService(tools);
 
@@ -78,11 +82,15 @@ const server = new McpServer(
 );
 
 for (const tool of registry.list()) {
-  server.registerTool(
+  (server.registerTool as (
+    name: string,
+    config: { description: string; inputSchema: unknown; annotations: Record<string, unknown> },
+    handler: (input: Record<string, unknown>) => Promise<unknown>,
+  ) => void)(
     tool.name,
     {
       description: tool.description,
-      inputSchema: tool.inputSchema as Parameters<typeof server.registerTool>[1]['inputSchema'],
+      inputSchema: tool.inputSchema,
       annotations: {
         readOnlyHint: tool.tier === 'read',
         destructiveHint: tool.destructive ?? false,

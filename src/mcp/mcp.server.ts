@@ -24,6 +24,8 @@ import { sessionTools } from './tools/session.tools';
 import { messageTools } from './tools/message.tools';
 import { contactTools } from './tools/contact.tools';
 import { chatTools } from './tools/chat.tools';
+import { statusTools } from './tools/status.tools';
+import { presenceTools } from './tools/presence.tools';
 
 const logger = pino({ name: 'McpServer' });
 
@@ -117,11 +119,15 @@ function buildServer(
 
   const tools = registry.list({ readOnly });
   for (const tool of tools) {
-    server.registerTool(
+    (server.registerTool as (
+      name: string,
+      config: { description: string; inputSchema: unknown; annotations: Record<string, unknown> },
+      handler: (input: Record<string, unknown>, extra: ToolExtra) => Promise<unknown>,
+    ) => void)(
       tool.name,
       {
         description: tool.description,
-        inputSchema: tool.inputSchema as Parameters<typeof server.registerTool>[1]['inputSchema'],
+        inputSchema: tool.inputSchema,
         annotations: {
           readOnlyHint: tool.tier === 'read',
           destructiveHint: tool.destructive ?? false,
@@ -250,6 +256,8 @@ export function createMcpRouter(
     ...messageTools(sessionManager),
     ...contactTools(sessionManager),
     ...chatTools(sessionManager),
+    ...statusTools(sessionManager),
+    ...presenceTools(sessionManager),
   ];
   const registry = new ToolRegistryService(allTools);
 
