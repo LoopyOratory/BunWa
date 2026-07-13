@@ -194,6 +194,22 @@ BunWa includes a Coolify-optimized Dockerfile. In Coolify:
 The Coolify image is smaller (pre-built frontend, no dev deps) and includes a health check.
 Coolify uses the health check to know when the container is ready.
 
+**Verify persistence after deploying** — a successful build/deploy in the Coolify logs does *not* confirm the volume is mounted correctly, since that's a host/compose setting outside the build. On the Coolify host, check:
+
+```bash
+# 1. Confirm the mount points at your real host path, not an anonymous volume
+docker inspect <container-name> --format '{{json .Mounts}}' | python3 -m json.tool
+# Look for Source: /data/bunwa/sessions (not a random volume ID) and Destination: /app/.sessions
+
+# 2. Confirm the host directory is owned by UID/GID 1001 (the `waha` user)
+ls -ld /data/bunwa/sessions /data/bunwa/media
+
+# 3. Confirm the container can actually write to it
+docker exec <container-name> touch /app/.sessions/.write-test && echo OK
+```
+
+If step 1 shows the wrong source, fix the volume's Source Path in Coolify and redeploy. If step 2 shows `root` instead of `1001`, run `chown -R 1001:1001 /data/bunwa` on the host. If step 3 fails, the ownership/permissions still don't match — re-check step 2.
+
 <a id="dashboard"></a>
 ## 📸 Dashboard
 
