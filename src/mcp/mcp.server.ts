@@ -23,6 +23,7 @@ import { KeyRateLimiter, RateLimitError, readRateLimitConfig } from './mcp-rate-
 import { sessionTools } from './tools/session.tools';
 import { messageTools } from './tools/message.tools';
 import { contactTools } from './tools/contact.tools';
+import { chatTools } from './tools/chat.tools';
 
 const logger = pino({ name: 'McpServer' });
 
@@ -248,6 +249,7 @@ export function createMcpRouter(
     ...sessionTools(sessionManager),
     ...messageTools(sessionManager),
     ...contactTools(sessionManager),
+    ...chatTools(sessionManager),
   ];
   const registry = new ToolRegistryService(allTools);
 

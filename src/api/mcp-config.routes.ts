@@ -11,6 +11,7 @@ import { createHash, randomBytes } from 'crypto';
 import { sessionTools } from '../mcp/tools/session.tools';
 import { messageTools } from '../mcp/tools/message.tools';
 import { contactTools } from '../mcp/tools/contact.tools';
+import { chatTools } from '../mcp/tools/chat.tools';
 import { ToolRegistryService } from '../mcp/tool-registry.service';
 import type { ToolCategory } from '../mcp/tool-descriptor';
 
@@ -39,6 +40,7 @@ export function createMcpConfigRouter(): Hono {
       ...sessionTools(manager),
       ...messageTools(manager),
       ...contactTools(manager),
+      ...chatTools(manager),
     ];
     const registry = new ToolRegistryService(allTools);
 

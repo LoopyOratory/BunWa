@@ -4,3 +4,4 @@
 export { sessionTools } from './session.tools';
 export { messageTools } from './message.tools';
 export { contactTools } from './contact.tools';
+export { chatTools } from './chat.tools';

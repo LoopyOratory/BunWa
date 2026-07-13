@@ -32,6 +32,7 @@ import { ToolRegistryService } from './tool-registry.service';
 import { sessionTools } from './tools/session.tools';
 import { messageTools } from './tools/message.tools';
 import { contactTools } from './tools/contact.tools';
+import { chatTools } from './tools/chat.tools';
 import { isToolAllowed } from './mcp.server';
 
 const sessionName = process.env.BUNWA_SESSION;
@@ -67,6 +68,7 @@ const tools = [
   ...sessionTools(manager),
   ...messageTools(manager),
   ...contactTools(manager),
+  ...chatTools(manager),
 ];
 const registry = new ToolRegistryService(tools);
 
