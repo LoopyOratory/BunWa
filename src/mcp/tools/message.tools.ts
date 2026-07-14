@@ -81,20 +81,20 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
     {
       name: 'MessageSendVoice',
       description:
-        'Send a voice note (PTT) via URL or base64. IMPORTANT: the file MUST already be OGG/Opus — ' +
-        'WhatsApp rejects other formats (e.g. MP3) for voice notes and this server does NOT transcode. ' +
-        'Set ptt:false to send as a regular audio attachment instead (plays fine as any format).',
+        'Send a voice note (PTT) via URL or base64. WhatsApp voice notes must be OGG/Opus — ' +
+        'by default this server transcodes other formats (e.g. MP3, WAV) automatically via ffmpeg. ' +
+        'Set convert:false only if the file is already OGG/Opus, to skip the transcode step.',
       tier: 'write',
       category: 'message',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
         chatId: z.string().describe('Chat JID'),
-        file: z.string().describe('Audio URL or base64 data — must be OGG/Opus for a voice note'),
-        ptt: z
+        file: z.string().describe('Audio URL or base64 data (any common format)'),
+        convert: z
           .boolean()
           .optional()
-          .describe('Send as a push-to-talk voice note (default true). Set false to send as a regular audio attachment.'),
+          .describe('Transcode to OGG/Opus before sending (default true). Set false if the file is already OGG/Opus.'),
       }),
       handler: async (input) => {
         const session = await getSession(manager, input.sessionId);
@@ -102,7 +102,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
           session: input.sessionId,
           chatId: input.chatId,
           file: input.file,
-          convert: input.ptt ?? true,
+          convert: input.convert ?? true,
         });
       },
     },

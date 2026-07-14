@@ -72,6 +72,7 @@ import { createAgentProxy } from '../../helpers.proxy';
 import type { Agent } from 'https';
 import { IMediaEngineProcessor } from '../../media/IMediaEngineProcessor';
 import { LottieMediaProcessorWrapper } from '../../media/LottieMediaProcessorWrapper';
+import { materializeAudioBytes, isOggOpus } from '../../media/audio';
 import { QR } from '../../QR';
 import { AckToStatus, StatusToAck } from '../../utils/acks';
 import { pairs } from '../../../utils/pairs';
@@ -1198,10 +1199,20 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   async sendVoice(request: MessageVoiceRequest) {
     const chatId = toJID(this.ensureSuffix(request.chatId));
     const fileData = this.fileToBuffer(request.file);
-    const message: any = {
-      audio: typeof fileData === 'string' ? { url: fileData } : fileData,
-      ptt: request.convert !== false,
-    };
+    const convert = request.convert !== false; // default: transcode to OGG/Opus
+
+    let message: any;
+    if (convert) {
+      // WhatsApp voice notes must be OGG/Opus. Materialize the bytes, skip if
+      // already Opus, otherwise transcode via ffmpeg.
+      const input = await materializeAudioBytes(fileData);
+      const opus = isOggOpus(input) ? input : await this.mediaConverter.voice(input);
+      message = { audio: opus, mimetype: 'audio/ogg; codecs=opus', ptt: true };
+    } else {
+      // Caller opted out of conversion — send as-is (must already be OGG/Opus).
+      message = { audio: typeof fileData === 'string' ? { url: fileData } : fileData, ptt: true };
+    }
+
     const options: any = await this.getMessageOptions(request);
     return this.sock.sendMessage(chatId, message, options);
   }

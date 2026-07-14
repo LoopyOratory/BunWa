@@ -27,6 +27,12 @@ RUN bash scripts/build-frontend.sh
 FROM oven/bun:1-slim
 WORKDIR /app
 
+# ffmpeg — required for transcoding voice notes to OGG/Opus (WhatsApp voice
+# notes only accept Opus). Without it, sendVoice with convert=true fails.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ffmpeg && \
+    rm -rf /var/lib/apt/lists/*
+
 # Non-root user
 RUN groupadd --system --gid 1001 waha && \
     useradd --system --uid 1001 --gid waha waha

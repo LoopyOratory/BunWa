@@ -42,6 +42,12 @@ LABEL coolify.name="BunWa"
 LABEL coolify.description="WhatsApp HTTP API — Bun/Hono, dual-engine (NOWEB/WEBJS), MCP server, dashboard"
 LABEL coolify.port="3000"
 
+# ffmpeg — required for transcoding voice notes to OGG/Opus (WhatsApp voice
+# notes only accept Opus). Without it, sendVoice with convert=true fails.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ffmpeg && \
+    rm -rf /var/lib/apt/lists/*
+
 # Non-root user for security
 RUN groupadd --system --gid 1001 waha && \
     useradd --system --uid 1001 --gid waha waha

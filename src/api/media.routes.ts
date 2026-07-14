@@ -3,6 +3,7 @@ import { container } from 'tsyringe';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanSession, Action, FromParam } from '../middleware/policies';
 import { workingSessionResolver } from '../middleware/session-resolver';
+import { materializeAudioBytes, isOggOpus } from '../core/media/audio';
 
 export function createMediaRouter(): Hono {
   const router = new Hono();
@@ -13,7 +14,18 @@ export function createMediaRouter(): Hono {
     policiesMiddleware(CanSession(Action.Read, FromParam('session'))),
     workingSessionResolver(),
     async (c) => {
-      return c.json({ data: 'base64-audio-data' });
+      const session = c.get('session');
+      const body = await c.req.json();
+      if (!body?.file) {
+        return c.json({ statusCode: 400, message: 'file is required (URL, base64, or data URL)' }, 400);
+      }
+      try {
+        const input = await materializeAudioBytes(body.file);
+        const opus = isOggOpus(input) ? input : await (session as any).mediaConverter.voice(input);
+        return c.json({ data: opus.toString('base64'), mimetype: 'audio/ogg; codecs=opus' });
+      } catch (e: any) {
+        return c.json({ statusCode: 500, message: e?.message || 'Voice conversion failed' }, 500);
+      }
     }
   );
 
