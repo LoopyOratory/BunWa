@@ -867,7 +867,7 @@ export abstract class WhatsappSession {
     let fn: Promise<string | null | undefined>;
     if (isJidNewsletter(id)) {
       fn = this.channelsGetChannel(id).then(
-        (channel: Channel) => channel.picture || channel.preview,
+        (channel: Channel | null) => channel?.picture || channel?.preview,
       );
     } else {
       fn = this.fetchContactProfilePicture(id);
@@ -1077,15 +1077,15 @@ export abstract class WhatsappSession {
 
   public channelsCreateChannel(
     request: CreateChannelRequest,
-  ): Promise<Channel> {
+  ): Promise<Channel | null> {
     throw new NotImplementedByEngineError();
   }
 
-  public channelsGetChannel(id: string): Promise<Channel> {
+  public channelsGetChannel(id: string): Promise<Channel | null> {
     throw new NotImplementedByEngineError();
   }
 
-  public channelsGetChannelByInviteCode(inviteCode: string): Promise<Channel> {
+  public channelsGetChannelByInviteCode(inviteCode: string): Promise<Channel | null> {
     throw new NotImplementedByEngineError();
   }
 

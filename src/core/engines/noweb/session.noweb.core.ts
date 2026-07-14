@@ -2349,7 +2349,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     return this.generateMessageID();
   }
 
-  protected async prepareJidsForStatus(contacts: string[]) {
+  protected async prepareJidsForStatus(contacts: string[] | undefined) {
     let jids: string[];
     if (contacts?.length > 0) {
       jids = contacts.map(toJID);
@@ -2419,7 +2419,10 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     throw new AvailableInPlusVersion();
   }
 
-  protected toChannel(newsletter: NOWEBNewsletterMetadata): Channel {
+  protected toChannel(newsletter: NOWEBNewsletterMetadata | null): Channel | null {
+    if (!newsletter) {
+      return null;
+    }
     const role =
       newsletter.viewer_metadata?.role ||
       (newsletter.viewer_metadata?.view_role as ChannelRole) ||

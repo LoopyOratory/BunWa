@@ -52,9 +52,9 @@ export class PreviewChannelMessages {
   limit?: number;
 }
 
-export class ChannelRole {
-  OWNER!: string;
-  ADMIN!: string;
-  SUBSCRIBER!: string;
-  GUEST!: string;
+export enum ChannelRole {
+  OWNER = 'owner',
+  ADMIN = 'admin',
+  SUBSCRIBER = 'subscriber',
+  GUEST = 'guest',
 }
