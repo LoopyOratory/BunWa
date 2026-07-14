@@ -13,7 +13,7 @@ export function validateBody<T>(schema: ZodSchema<T>): MiddlewareHandler {
         return c.json({
           statusCode: 400,
           message: 'Validation failed',
-          errors: error.errors,
+          errors: error.issues,
         }, 400);
       }
       throw error;
@@ -33,7 +33,7 @@ export function validateQuery<T>(schema: ZodSchema<T>): MiddlewareHandler {
         return c.json({
           statusCode: 400,
           message: 'Validation failed',
-          errors: error.errors,
+          errors: error.issues,
         }, 400);
       }
       throw error;
