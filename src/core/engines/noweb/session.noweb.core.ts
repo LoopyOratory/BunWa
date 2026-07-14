@@ -508,10 +508,10 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   protected async getMessage(
     key: WAMessageKey,
   ): Promise<WAMessageContent | undefined> {
-    if (!this.store) {
+    if (!this.store || !key.id) {
       return proto.Message.create({});
     }
-    const msg = await this.store.loadMessage(key.remoteJid, key.id);
+    const msg = await this.store.loadMessage(key.remoteJid ?? '', key.id);
     return msg?.message || undefined;
   }
 
@@ -785,8 +785,8 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
         const participantIds = [
           jidNormalizedUser(key?.participantAlt),
           jidNormalizedUser(key?.remoteJidAlt),
-          jidNormalizedUser(key?.participant),
-          jidNormalizedUser(key?.remoteJid),
+          jidNormalizedUser(key?.participant ?? undefined),
+          jidNormalizedUser(key?.remoteJid ?? undefined),
         ];
         // creationMsgKey is guaranteed non-null here: pkey (spread from it)
         // is how pollMsg above was found, so !pollMsg would have continued.
@@ -805,7 +805,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
             const voteMsg = decryptPollVote(content.pollUpdateMessage.vote, {
               pollCreatorJid: pollCreatorJid,
               pollMsgId: creationMsgKey!.id,
-              pollEncKey: pollEncKey,
+              pollEncKey: pollEncKey!,
               voterJid: voterJid,
             });
             this.sock.ev.emit('messages.update', [
@@ -2351,7 +2351,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   protected async prepareJidsForStatus(contacts: string[] | undefined) {
     let jids: string[];
-    if (contacts?.length > 0) {
+    if ((contacts?.length ?? 0) > 0) {
       jids = contacts.map(toJID);
     } else {
       jids = await this.fetchMyContactsJids();
