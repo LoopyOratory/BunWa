@@ -1,3 +1,5 @@
+import { WAMessage } from './responses.dto';
+
 export class WAHAWebhook<Payload = any> {
   id!: string;
   timestamp!: number;
@@ -43,13 +45,14 @@ export class PollVotePayload {
 }
 
 export class WAMessageRevokedBody {
-  key: any;
-  message: any;
+  after: any;
+  before: any;
+  revokedMessageId?: string;
+  _data?: any;
 }
 
-export class WAMessageEditedBody {
-  key: any;
-  message: any;
+export class WAMessageEditedBody extends WAMessage {
+  editedMessageId?: string;
 }
 
 export class EnginePayload {

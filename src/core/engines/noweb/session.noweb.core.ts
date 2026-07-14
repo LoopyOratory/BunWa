@@ -590,7 +590,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
         // Reconnect if not logged out
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
         if (shouldReconnect) {
-          if (lastDisconnect.error) {
+          if (lastDisconnect?.error) {
             this.logger.info(
               `Connection closed due to '${lastDisconnect.error}', reconnecting...`,
             );
@@ -690,7 +690,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       } else {
         this.logger.warn('Session store is not LocalStore, cannot clear auth files');
       }
-    } catch (err) {
+    } catch (err: any) {
       this.logger.warn({ err }, 'Failed to clear auth files, continuing anyway');
     }
 
@@ -785,7 +785,9 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
           jidNormalizedUser(key?.participant),
           jidNormalizedUser(key?.remoteJid),
         ];
-        let creators: string[] = creationMsgKey.fromMe
+        // creationMsgKey is guaranteed non-null here: pkey (spread from it)
+        // is how pollMsg above was found, so !pollMsg would have continued.
+        let creators: string[] = creationMsgKey!.fromMe
           ? [...myIds, ...participantIds]
           : [...participantIds, ...myIds];
         let votes: string[] = key.fromMe
@@ -799,7 +801,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
             const pollEncKey = pollMsg.messageContextInfo?.messageSecret;
             const voteMsg = decryptPollVote(content.pollUpdateMessage.vote, {
               pollCreatorJid: pollCreatorJid,
-              pollMsgId: creationMsgKey.id,
+              pollMsgId: creationMsgKey!.id,
               pollEncKey: pollEncKey,
               voterJid: voterJid,
             });
@@ -821,7 +823,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
             ]);
             found = true;
             break;
-          } catch (err) {
+          } catch (err: any) {
             this.logger.trace(
               {
                 err: err.message,
@@ -1873,7 +1875,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     try {
       const url = await this.sock.profilePictureUrl(contact, 'image');
       return url;
-    } catch (err) {
+    } catch (err: any) {
       if (err.message == 'item-not-found') {
         return null;
       }
@@ -1902,7 +1904,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     try {
       const status = await this.sock.fetchStatus(jid);
       return { about: status?.status || '' };
-    } catch (err) {
+    } catch (err: any) {
       if (err.message === 'item-not-found' || err.message === 'not-authorized') {
         return { about: '' };
       }
@@ -2216,7 +2218,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       }, retryOptions);
       logger.info(`Sending status message (${index + 1} chunk) - success`);
       return resp;
-    } catch (err) {
+    } catch (err: any) {
       logger.error(`Sending status message (${index + 1} chunk - failed`);
       logger.error(err, err.stack);
       throw err;
@@ -2534,7 +2536,9 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       mergeMap(async (message): Promise<WAMessageRevokedBody> => {
         const afterMessage = this.toWAMessage(message);
         // Extract the revoked message ID from protocolMessage.key
-        const revokedMessageId = message.message.protocolMessage?.key?.id;
+        // Guaranteed non-null: the filter() above only lets through
+        // messages where message.message?.protocolMessage is present.
+        const revokedMessageId = message.message!.protocolMessage?.key?.id;
         return {
           after: afterMessage,
           before: null,
@@ -2561,7 +2565,9 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
           body = extractBody(content?.protocolMessage?.editedMessage) || '';
           editedMessageId = content?.protocolMessage?.key?.id;
         } else if (IsSecretEncryptedMessageEdit(message.message)) {
-          const sem = message.message.secretEncryptedMessage;
+          // Guaranteed non-null: IsSecretEncryptedMessageEdit() only returns
+          // true when message.secretEncryptedMessage is truthy.
+          const sem = message.message!.secretEncryptedMessage!;
           editedMessageId = sem.targetMessageKey?.id;
           body =
             (await this.tryDecryptNOWEBSecretMessageEdit(message, sem)) || '';
@@ -2999,7 +3005,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
         if (text) {
           return text;
         }
-      } catch (err) {
+      } catch (err: any) {
         lastErr = err;
       }
     }
@@ -3300,7 +3306,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   protected async downloadMediaSafe(message: any): Promise<WAMedia | null> {
     try {
       return await this.downloadMedia(message);
-    } catch (e) {
+    } catch (e: any) {
       this.logger.error('Failed when tried to download media for a message');
       this.logger.error(e, e.stack);
     }
