@@ -1,14 +1,19 @@
 export class SingleDelayedJobRunner {
   private timeout: any = null;
+  private job: (() => Promise<void>) | null = null;
 
-  constructor(private job: () => Promise<void>, private delayMs: number) {}
+  constructor(
+    private name: string,
+    private delayMs: number,
+    private logger?: { debug?: (msg: string) => void },
+  ) {}
 
-  async run(): Promise<void> {
+  private async run(): Promise<void> {
     if (this.timeout) {
       clearTimeout(this.timeout);
     }
     this.timeout = setTimeout(async () => {
-      await this.job();
+      await this.job?.();
       this.timeout = null;
     }, this.delayMs);
   }

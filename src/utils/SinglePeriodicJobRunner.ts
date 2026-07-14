@@ -1,10 +1,16 @@
 export class SinglePeriodicJobRunner {
   private interval: any = null;
   private running: boolean = false;
+  private job: (() => Promise<void>) | null = null;
 
-  constructor(private job: () => Promise<void>, private intervalMs: number) {}
+  constructor(
+    private name: string,
+    private intervalMs: number,
+    private logger?: { debug?: (msg: string) => void },
+  ) {}
 
-  async start(): Promise<void> {
+  async start(fn: () => Promise<void>): Promise<void> {
+    this.job = fn;
     if (this.interval) {
       return;
     }
@@ -14,7 +20,7 @@ export class SinglePeriodicJobRunner {
       }
       this.running = true;
       try {
-        await this.job();
+        await this.job?.();
       } finally {
         this.running = false;
       }
