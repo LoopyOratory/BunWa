@@ -110,6 +110,7 @@ import {
   ChatRequest,
   CheckNumberStatusQuery,
   EditMessageRequest,
+  MessageButtonReply,
   MessageContactVcardRequest,
   MessageDestination,
   MessageFileRequest,
@@ -119,6 +120,7 @@ import {
   MessageLinkPreviewRequest,
   MessageLocationRequest,
   MessagePollRequest,
+  MessagePollVoteRequest,
   MessageReactionRequest,
   MessageReplyRequest,
   MessageStarRequest,
@@ -129,6 +131,7 @@ import {
   WANumberExistResult,
 } from '../../../structures/chatting.dto';
 import { SendListRequest } from '../../../structures/chatting.list.dto';
+import { EventMessageRequest } from '../../../structures/events.dto';
 import {
   ContactQuery,
   ContactRequest,
@@ -997,13 +1000,21 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   ): Promise<WANumberExistResult> {
     let phone = request.phone.split('@')[0];
     phone = phone.replace(/\+/g, '');
-    const [result] = await this.sock.onWhatsApp(phone);
+    const results = await this.sock.onWhatsApp(phone);
+    const result = results?.[0];
     if (!result || !result.exists) {
-      return { numberExists: false };
+      return {
+        exists: false,
+        isBusiness: false,
+        canReceiveMessage: false,
+        number: phone,
+      };
     }
     return {
-      numberExists: true,
-      chatId: toCusFormat(result.jid),
+      exists: true,
+      isBusiness: false,
+      canReceiveMessage: true,
+      number: toCusFormat(result.jid),
     };
   }
 
@@ -1109,7 +1120,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     if (contacts.length === 0) {
       throw new UnprocessableEntityException('No contacts provided');
     }
-    const options = await this.getMessageOptions(request);
+    const options: any = await this.getMessageOptions(request);
     const msg = { contacts: { contacts: contacts } };
     return await this.sock.sendMessage(chatId, msg, options);
   }
@@ -1138,7 +1149,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     };
     const message = { poll: poll };
     const remoteJid = toJID(this.ensureSuffix(request.chatId));
-    const options = await this.getMessageOptions(request);
+    const options: any = await this.getMessageOptions(request);
     const result = await this.sock.sendMessage(remoteJid, message, options);
     return this.toWAMessage(result);
   }
@@ -1146,7 +1157,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   @Activity()
   async reply(request: MessageReplyRequest) {
     const chatId = toJID(this.ensureSuffix(request.chatId));
-    const options = await this.getMessageOptions(request);
+    const options: any = await this.getMessageOptions(request);
     const message = {
       text: request.text,
       mentions: request.mentions?.map(toJID),
@@ -1249,7 +1260,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
         } : undefined,
       },
     };
-    const options = await this.getMessageOptions(request);
+    const options: any = await this.getMessageOptions(request);
     return this.sock.sendMessage(chatId, message as any, options);
   }
 
@@ -1269,7 +1280,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
         selectedOptions: request.votes.map((v: any) => Buffer.from(v)),
       },
     };
-    const options = await this.getMessageOptions(request);
+    const options: any = await this.getMessageOptions(request);
     return this.sock.sendMessage(chatId, pollUpdate as any, options);
   }
 
@@ -1285,7 +1296,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
         isCanceled: false,
       },
     };
-    const options = await this.getMessageOptions(request);
+    const options: any = await this.getMessageOptions(request);
     return this.sock.sendMessage(chatId, message as any, options);
   }
 
@@ -1388,7 +1399,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
         degreesLongitude: request.longitude,
       },
     };
-    const options = await this.getMessageOptions(request);
+    const options: any = await this.getMessageOptions(request);
     return await this.sock.sendMessage(chatId, msg, options);
   }
 
@@ -1406,7 +1417,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       forward: forwardMessage,
       force: true,
     };
-    const options = await this.getMessageOptions(request);
+    const options: any = await this.getMessageOptions(request);
     const result = await this.sock.sendMessage(chatId, message as any, options);
     return this.toWAMessage(result);
   }
@@ -1419,7 +1430,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       text: text,
       linkPreview: true,
     };
-    const options = await this.getMessageOptions(request);
+    const options: any = await this.getMessageOptions(request);
     return this.sock.sendMessage(chatId, msg, options);
   }
 
@@ -3339,7 +3350,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     this.saveSentMessageId(messageId);
     return {
       quoted: quoted,
-      ephemeralExpiration: chat?.ephemeralExpiration,
+      ephemeralExpiration: chat?.ephemeralExpiration ?? undefined,
       messageId: messageId,
     };
   }
