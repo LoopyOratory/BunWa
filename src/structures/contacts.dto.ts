@@ -1,6 +1,6 @@
 export class ContactQuery {
   session?: string;
-  contactId: string;
+  contactId!: string;
 }
 
 export class ContactProfilePictureQuery extends ContactQuery {
@@ -9,7 +9,7 @@ export class ContactProfilePictureQuery extends ContactQuery {
 
 export class ContactRequest {
   session?: string;
-  contactId: string;
+  contactId!: string;
 }
 
 export class ContactUpdateBody {

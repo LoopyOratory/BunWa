@@ -14,7 +14,7 @@ export class SqlKVRepository<Entity> {
   protected UPSERT_BATCH_SIZE = 100;
   protected Paginator: typeof KnexPaginator = KnexPaginator;
 
-  protected jsonQuery: IJsonQuery;
+  protected jsonQuery!: IJsonQuery;
 
   get schema(): Schema {
     throw new Error('Not implemented');

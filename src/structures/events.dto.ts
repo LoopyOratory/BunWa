@@ -3,12 +3,12 @@ export class EventMessage {
 }
 
 export class EventMessageRequest {
-  chatId: string;
-  text: string;
+  chatId!: string;
+  text!: string;
 }
 
 export class EventCancelRequest {
-  eventId: string;
+  eventId!: string;
 }
 
 export class EventResponse {

@@ -39,11 +39,11 @@ import AsyncLock from 'async-lock';
 
 export abstract class SessionManager {
   public store: any;
-  public sessionAuthRepository: ISessionAuthRepository;
-  public sessionConfigRepository: ISessionConfigRepository;
-  protected sessionMeRepository: ISessionMeRepository;
-  protected sessionWorkerRepository: ISessionWorkerRepository;
-  public apiKeyRepository: IApiKeyRepository;
+  public sessionAuthRepository!: ISessionAuthRepository;
+  public sessionConfigRepository!: ISessionConfigRepository;
+  protected sessionMeRepository!: ISessionMeRepository;
+  protected sessionWorkerRepository!: ISessionWorkerRepository;
+  public apiKeyRepository!: IApiKeyRepository;
   private lock: any;
 
   WAIT_SESSION_RUNNING_INTERVAL = 500;

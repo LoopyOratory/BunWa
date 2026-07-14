@@ -3,10 +3,10 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { MediaData, MediaStorageData } from '../../../core/media/IMediaManager';
 
 export class S3Config {
-  bucket: string;
-  region: string;
-  accessKeyId: string;
-  secretAccessKey: string;
+  bucket!: string;
+  region!: string;
+  accessKeyId!: string;
+  secretAccessKey!: string;
   endpoint?: string;
   forcePathStyle?: boolean;
 }

@@ -3,7 +3,7 @@ import { SessionManager } from './manager.abc';
 import pino from 'pino';
 
 export class HealthCheckResult {
-  status: string;
+  status!: string;
   details?: Record<string, any>;
 }
 

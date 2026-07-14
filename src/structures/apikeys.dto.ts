@@ -7,10 +7,10 @@ export class ApiKeyRequest {
 }
 
 export class ApiKeyDTO {
-  id: string;
-  key: string;
-  isActive: boolean;
-  isAdmin: boolean;
+  id!: string;
+  key!: string;
+  isActive!: boolean;
+  isAdmin!: boolean;
   session?: string;
   actions?: Record<string, boolean>;
 }

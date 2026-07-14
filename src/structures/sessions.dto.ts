@@ -26,7 +26,7 @@ export class ClientSessionConfig {
 }
 
 export class ProxyConfig {
-  server: string;
+  server!: string;
   username?: string;
   password?: string;
 }
@@ -44,8 +44,8 @@ export class WebhookConfig {
   id?: string;
   enabled?: boolean;
   method?: string;
-  url: string;
-  events: string[];
+  url!: string;
+  events!: string[];
   hmac?: {
     key?: string;
   };
@@ -88,15 +88,15 @@ export class SessionConfig {
 }
 
 export class MeInfo {
-  id: string;
+  id!: string;
   lid?: string;
   jid?: string;
-  pushName: string;
+  pushName!: string;
 }
 
 export class SessionDTO {
-  name: string;
-  status: string;
+  name!: string;
+  status!: string;
   config?: SessionConfig;
 }
 
@@ -104,7 +104,7 @@ export class SessionInfo extends SessionDTO {
   me?: MeInfo;
   assignedWorker?: string;
   presence?: any;
-  timestamps: {
+  timestamps!: {
     activity: number;
   };
 }

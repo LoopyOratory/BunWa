@@ -1,12 +1,12 @@
 export class RejectCallRequest {
-  from: string;
-  callId: string;
+  from!: string;
+  callId!: string;
 }
 
 export class CallData {
-  id: string;
+  id!: string;
   from?: string;
-  timestamp: number;
-  isVideo: boolean;
-  isGroup: boolean;
+  timestamp!: number;
+  isVideo!: boolean;
+  isGroup!: boolean;
 }

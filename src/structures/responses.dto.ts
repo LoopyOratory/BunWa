@@ -4,12 +4,12 @@ export enum MessageSource {
 }
 
 export class WAMessageBase {
-  id: string;
-  timestamp: number;
-  from: string;
-  fromMe: boolean;
-  source: string;
-  to: string;
+  id!: string;
+  timestamp!: number;
+  from!: string;
+  fromMe!: boolean;
+  source!: string;
+  to!: string;
   participant?: string;
 }
 
@@ -28,17 +28,17 @@ export class WAMessage extends WAMessageBase {
 }
 
 export class WAReaction {
-  text: string;
-  messageId: string;
+  text!: string;
+  messageId!: string;
 }
 
 export class WAMessageReaction extends WAMessageBase {
-  reaction: WAReaction;
+  reaction!: WAReaction;
 }
 
 export class WALocation {
-  latitude: number;
-  longitude: number;
+  latitude!: number;
+  longitude!: number;
   live?: boolean;
   name?: string;
   address?: string;
@@ -48,7 +48,7 @@ export class WALocation {
 }
 
 export class ReplyToMessage {
-  id: string;
+  id!: string;
   participant?: string;
   body?: string;
   hasMedia?: boolean;

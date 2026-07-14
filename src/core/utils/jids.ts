@@ -96,10 +96,10 @@ export function toCusFormat(remoteJid) {
 
 export class IgnoreJidConfig {
   dm?: boolean;
-  status: boolean;
-  groups: boolean;
-  channels: boolean;
-  broadcast: boolean;
+  status!: boolean;
+  groups!: boolean;
+  channels!: boolean;
+  broadcast!: boolean;
 }
 
 export class JidFilter {

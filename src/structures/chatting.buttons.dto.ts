@@ -1,7 +1,7 @@
 export class SendButtonsRequest {
   session?: string;
-  chatId: string;
-  buttons: Button[];
+  chatId!: string;
+  buttons!: Button[];
   header?: string;
   headerImage?: any;
   body?: string;
@@ -16,8 +16,8 @@ export enum ButtonType {
 }
 
 export class Button {
-  type: ButtonType;
-  text: string;
+  type!: ButtonType;
+  text!: string;
   id?: string;
   url?: string;
   phoneNumber?: string;

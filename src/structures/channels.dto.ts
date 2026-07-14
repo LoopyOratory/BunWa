@@ -1,6 +1,6 @@
 export class Channel {
-  id: string;
-  name: string;
+  id!: string;
+  name!: string;
   description?: string;
   invite?: string;
   picture?: string;
@@ -10,7 +10,7 @@ export class Channel {
 }
 
 export class CreateChannelRequest {
-  name: string;
+  name!: string;
   description?: string;
   picture?: string;
 }
@@ -21,7 +21,7 @@ export class ListChannelsQuery {
 }
 
 export class ChannelListResult {
-  channels: Channel[];
+  channels!: Channel[];
   page: any;
 }
 
@@ -52,8 +52,8 @@ export class PreviewChannelMessages {
 }
 
 export class ChannelRole {
-  OWNER: string;
-  ADMIN: string;
-  SUBSCRIBER: string;
-  GUEST: string;
+  OWNER!: string;
+  ADMIN!: string;
+  SUBSCRIBER!: string;
+  GUEST!: string;
 }

@@ -147,21 +147,21 @@ export function ensureSuffix(phone) {
 }
 
 export class SessionParams {
-  name: string;
-  printQR: boolean;
-  mediaManager: IMediaManager;
-  loggerBuilder: LoggerBuilder;
-  sessionStore: DataStore;
+  name!: string;
+  printQR!: boolean;
+  mediaManager!: IMediaManager;
+  loggerBuilder!: LoggerBuilder;
+  sessionStore!: DataStore;
   proxyConfig?: ProxyConfig;
   // Raw unchanged SessionConfig
   sessionConfig?: SessionConfig;
   engineConfig?: any;
   // Ignore settings
-  ignore: IgnoreJidConfig;
+  ignore!: IgnoreJidConfig;
 }
 
 export abstract class WhatsappSession {
-  public engine: WAHAEngine;
+  public engine!: WAHAEngine;
 
   public name: string;
   protected mediaManager: IMediaManager;

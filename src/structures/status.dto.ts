@@ -1,7 +1,7 @@
 export const BROADCAST_ID = 'status@broadcast';
 
 export class TextStatus {
-  text: string;
+  text!: string;
   backgroundColor?: string;
   font?: string;
   linkPreview?: any;
@@ -26,7 +26,7 @@ export class VideoStatus {
 }
 
 export class DeleteStatusRequest {
-  id: string;
+  id!: string;
   contacts?: string[];
 }
 

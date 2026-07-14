@@ -1,12 +1,12 @@
 export class SessionStartDeprecatedRequest {
-  name: string;
+  name!: string;
   config?: any;
 }
 
 export class SessionStopDeprecatedRequest {
-  name: string;
+  name!: string;
 }
 
 export class SessionLogoutDeprecatedRequest {
-  name: string;
+  name!: string;
 }

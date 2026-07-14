@@ -1,6 +1,6 @@
 export class CreateGroupRequest {
-  name: string;
-  participants: string[];
+  name!: string;
+  participants!: string[];
 }
 
 export enum GroupField {
@@ -16,7 +16,7 @@ export enum GroupParticipantRole {
 }
 
 export class GroupParticipant {
-  id: string;
+  id!: string;
   pn?: string;
   role?: string;
 }
@@ -26,18 +26,18 @@ export class GroupsListFields {
 }
 
 export class ParticipantsRequest {
-  participants: string[];
+  participants!: string[];
 }
 
 export class SettingsSecurityChangeInfo {
-  adminsOnly: boolean;
+  adminsOnly!: boolean;
 }
 
 export class GroupInfo {
-  id: string;
-  subject: string;
+  id!: string;
+  subject!: string;
   description?: string;
-  participants: GroupParticipant[];
+  participants!: GroupParticipant[];
 }
 
 export class GroupsPaginationParams {

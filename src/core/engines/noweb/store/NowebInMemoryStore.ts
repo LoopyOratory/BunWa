@@ -20,7 +20,7 @@ import pino from 'pino';
 const logger = pino();
 
 export class NowebInMemoryStore implements INowebStore {
-  private socket: ReturnType<typeof makeWASocket>;
+  private socket!: ReturnType<typeof makeWASocket>;
 
   private store: ReturnType<typeof makeInMemoryStore>;
   errorMessage =

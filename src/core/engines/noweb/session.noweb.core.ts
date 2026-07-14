@@ -271,8 +271,8 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   private authNOWEBStore: any;
 
-  sock: ReturnType<typeof makeWASocket>;
-  store: INowebStore;
+  sock!: ReturnType<typeof makeWASocket>;
+  store!: INowebStore;
   private qr: QR;
 
   private statusTracker = new StatusTracker();

@@ -1,18 +1,18 @@
 export class Base64File {
-  mimetype: string;
-  data: string;
+  mimetype!: string;
+  data!: string;
 }
 
 export class RemoteFile {
-  mimetype: string;
+  mimetype!: string;
   filename?: string;
-  url: string;
+  url!: string;
 }
 
 export class BinaryFile {
-  mimetype: string;
+  mimetype!: string;
   filename?: string;
-  data: string;
+  data!: string;
 }
 
 export class VoiceBinaryFile extends BinaryFile {}

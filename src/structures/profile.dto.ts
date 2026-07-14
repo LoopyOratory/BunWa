@@ -1,15 +1,15 @@
 export class MyProfile {
-  id: string;
-  pushName: string;
+  id!: string;
+  pushName!: string;
   profilePicture?: string;
 }
 
 export class ProfileNameRequest {
-  name: string;
+  name!: string;
 }
 
 export class ProfileStatusRequest {
-  status: string;
+  status!: string;
 }
 
 export class ProfilePictureRequest {

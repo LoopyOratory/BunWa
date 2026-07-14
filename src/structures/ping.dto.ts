@@ -1,3 +1,3 @@
 export class PingResponse {
-  message: string;
+  message!: string;
 }

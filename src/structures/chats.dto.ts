@@ -1,5 +1,5 @@
 export class ChatSummary {
-  id: string;
+  id!: string;
   name?: string;
   picture?: string;
   lastMessage?: any;

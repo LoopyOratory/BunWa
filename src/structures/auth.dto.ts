@@ -8,7 +8,7 @@ export class QRCodeValue {
 }
 
 export class RequestCodeRequest {
-  phoneNumber: string;
+  phoneNumber!: string;
   method?: string;
 }
 

@@ -7,14 +7,14 @@ export class StopRequest {
 }
 
 export class StopResponse {
-  result: boolean;
+  result!: boolean;
 }
 
 export class ServerStatusResponse {
-  uptime: number;
+  uptime!: number;
   worker?: string;
 }
 
 export class WorkerInfo {
-  id: string;
+  id!: string;
 }

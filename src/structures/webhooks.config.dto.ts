@@ -51,13 +51,13 @@ export class CustomHeader {
     example: 'X-My-Custom-Header',
   })
   @IsString()
-  name: string;
+  name!: string;
 
   @ApiProperty({
     example: 'Value',
   })
   @IsString()
-  value: string;
+  value!: string;
 }
 
 export class HmacConfiguration {
@@ -72,14 +72,14 @@ export class HmacConfiguration {
 export class WebhookFilterCondition {
   @ApiProperty({ example: 'sender' })
   @IsString()
-  field: string;
+  field!: string;
 
   @ApiProperty({ example: 'is' })
   @IsString()
-  operator: string;
+  operator!: string;
 
   @ApiProperty({ example: '1234567890@c.us' })
-  value: string | string[] | boolean;
+  value!: string | string[] | boolean;
 
   @ApiProperty({ example: false })
   @IsOptional()
@@ -131,7 +131,7 @@ export class WebhookConfig {
     require_protocol: true,
     require_tld: false,
   })
-  url: string;
+  url!: string;
 
   @ApiProperty({
     example: ['message', 'session.status'],
@@ -139,7 +139,7 @@ export class WebhookConfig {
   })
   @IsIn(AllEvents, { each: true })
   @IsArray()
-  events: AllEventType[];
+  events!: AllEventType[];
 
   @ApiProperty({
     example: null,

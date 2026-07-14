@@ -4,11 +4,11 @@ export class WAHAPresenceData {
 }
 
 export class WAHAChatPresences {
-  chatId: string;
-  presences: Record<string, WAHAPresenceData>;
+  chatId!: string;
+  presences!: Record<string, WAHAPresenceData>;
 }
 
 export class WAHASessionPresence {
-  presence: string;
+  presence!: string;
   chatId?: string;
 }

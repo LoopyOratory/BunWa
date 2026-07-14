@@ -1,8 +1,8 @@
 import { LimitOffsetParams } from '../../../../structures/pagination.dto';
 
 export class LidToPN {
-  id: string;
-  pn: string;
+  id!: string;
+  pn!: string;
 }
 
 export interface INowebLidPNRepository {
