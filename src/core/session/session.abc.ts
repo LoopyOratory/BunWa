@@ -894,7 +894,7 @@ export abstract class WhatsappSession {
     throw new NotImplementedByEngineError();
   }
 
-  public joinGroup(code: string): Promise<string> {
+  public joinGroup(code: string): Promise<string | undefined> {
     throw new NotImplementedByEngineError();
   }
 

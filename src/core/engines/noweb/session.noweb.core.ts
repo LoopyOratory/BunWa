@@ -1502,9 +1502,8 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     for (const msg of messages) {
       promises.push(this.processIncomingMessage(msg, downloadMedia));
     }
-    let result = await Promise.all(promises);
-    result = result.filter(Boolean);
-    return result;
+    const result = await Promise.all(promises);
+    return result.filter((m): m is WAMessage => Boolean(m));
   }
 
   @Activity()
@@ -1881,11 +1880,11 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   }
 
   @Activity()
-  public async fetchContactProfilePicture(id: string) {
+  public async fetchContactProfilePicture(id: string): Promise<string | null> {
     const contact = this.ensureSuffix(id);
     try {
       const url = await this.sock.profilePictureUrl(contact, 'image');
-      return url;
+      return url ?? null;
     } catch (err: any) {
       if (err.message == 'item-not-found') {
         return null;
