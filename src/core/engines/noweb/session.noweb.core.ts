@@ -2272,10 +2272,21 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   public async sendVoiceStatus(status: VoiceStatus) {
-    const message = {
-      audio: { url: status.file },
-      ptt: status.convert !== false,
-    };
+    const fileData = this.fileToBuffer(status.file);
+    const convert = status.convert !== false; // default: transcode to OGG/Opus
+
+    let message: any;
+    if (convert) {
+      // WhatsApp voice notes must be OGG/Opus — same requirement for status
+      // voice clips as for chat voice notes.
+      const input = await materializeAudioBytes(fileData);
+      const opus = isOggOpus(input) ? input : await this.mediaConverter.voice(input);
+      message = { audio: opus, mimetype: 'audio/ogg; codecs=opus', ptt: true };
+    } else {
+      // Caller opted out of conversion — send as-is (must already be OGG/Opus).
+      message = { audio: typeof fileData === 'string' ? { url: fileData } : fileData, ptt: true };
+    }
+
     const jids = await this.prepareJidsForStatus(status.contacts);
     if (!status.id) {
       this.upsertMeInJIDs(jids);

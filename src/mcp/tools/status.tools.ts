@@ -69,14 +69,22 @@ export function statusTools(manager: SessionManager): ToolDescriptor[] {
     },
     {
       name: 'StatusSendVoice',
-      description: 'Send a voice status update (WhatsApp Story) via URL or base64.',
+      description:
+        'Send a voice status update (WhatsApp Story) via URL or base64. WhatsApp voice ' +
+        'notes must be OGG/Opus — by default this server transcodes other formats ' +
+        '(e.g. MP3, WAV) automatically via ffmpeg. Set convert:false only if the file is ' +
+        'already OGG/Opus, to skip the transcode step.',
       tier: 'write',
       category: 'status',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        file: z.string().describe('Audio URL or base64 data'),
+        file: z.string().describe('Audio URL or base64 data (any common format)'),
         backgroundColor: z.string().optional().describe('Background color hex, e.g. "#000000"'),
+        convert: z
+          .boolean()
+          .optional()
+          .describe('Transcode to OGG/Opus before sending (default true). Set false if the file is already OGG/Opus.'),
         id: statusId,
         contacts: statusContacts,
       }),
@@ -85,6 +93,7 @@ export function statusTools(manager: SessionManager): ToolDescriptor[] {
         return (session as any).sendVoiceStatus({
           file: input.file,
           backgroundColor: input.backgroundColor,
+          convert: input.convert ?? true,
           id: input.id,
           contacts: input.contacts,
         });
