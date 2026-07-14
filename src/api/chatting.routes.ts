@@ -36,8 +36,8 @@ async function sendAndAudit<T>(sessionName: string | undefined, action: string, 
   }
 }
 
-export function createChattingRouter(): Hono {
-  const router = new Hono();
+export function createChattingRouter(): Hono<{ Variables: { session: any; body: any } }> {
+  const router = new Hono<{ Variables: { session: any; body: any } }>();
 
   router.use('*', apiKeyAuthMiddleware());
 

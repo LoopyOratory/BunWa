@@ -4,8 +4,8 @@ import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanSession, Action, FromParam } from '../middleware/policies';
 import { workingSessionResolver } from '../middleware/session-resolver';
 
-export function createCallsRouter(): Hono {
-  const router = new Hono();
+export function createCallsRouter(): Hono<{ Variables: { session: any; body: any } }> {
+  const router = new Hono<{ Variables: { session: any; body: any } }>();
 
   router.use('*', apiKeyAuthMiddleware());
 

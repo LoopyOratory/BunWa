@@ -5,8 +5,8 @@ import { policiesMiddleware, CanSession, Action, FromParam } from '../middleware
 import { workingSessionResolver } from '../middleware/session-resolver';
 import { materializeAudioBytes, isOggOpus } from '../core/media/audio';
 
-export function createMediaRouter(): Hono {
-  const router = new Hono();
+export function createMediaRouter(): Hono<{ Variables: { session: any; body: any } }> {
+  const router = new Hono<{ Variables: { session: any; body: any } }>();
 
   router.use('*', apiKeyAuthMiddleware());
 
