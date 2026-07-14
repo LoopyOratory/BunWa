@@ -105,7 +105,7 @@ export class SessionInfo extends SessionDTO {
   assignedWorker?: string;
   presence?: any;
   timestamps!: {
-    activity: number;
+    activity?: number;
   };
 }
 

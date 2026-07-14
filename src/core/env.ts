@@ -12,7 +12,7 @@ export const PRESENCE_AUTO_ONLINE = process.env.WAHA_PRESENCE_AUTO_ONLINE
 // Duration (in seconds) to keep session ONLINE after activity
 // 25 seconds is default web timeout with no activity
 export const PRESENCE_AUTO_ONLINE_DURATION_SECONDS =
-  parseInt(process.env.WAHA_PRESENCE_AUTO_ONLINE_DURATION_SECONDS) || 25;
+  parseInt(process.env.WAHA_PRESENCE_AUTO_ONLINE_DURATION_SECONDS || '') || 25;
 
 //
 // Local - bun:sqlite engine (native, high-performance)

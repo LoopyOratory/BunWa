@@ -24,7 +24,7 @@ export function getGroupInviteLink(inviteCode: string): string {
 }
 
 export function ToGroupInfo(group: Partial<GroupMetadata>): GroupInfo {
-  let participants: GroupParticipant[] = undefined;
+  let participants: GroupParticipant[] | undefined = undefined;
   if (group.participants && group.participants.length > 0) {
     participants = group.participants.map(ToGroupParticipant);
   }
@@ -83,8 +83,10 @@ function getParticipantId(
 export function ToGroupV2Participants(
   update: GroupParticipantUpdate,
 ): GroupV2ParticipantsEvent {
-  let role: GroupParticipantRole;
-  let type: GroupParticipantType;
+  // ParticipantAction also includes 'modify', which isn't handled below —
+  // role/type stay undefined for that case (existing behavior, unchanged).
+  let role: GroupParticipantRole | undefined;
+  let type: GroupParticipantType | undefined;
   switch (update.action) {
     case 'add':
       role = GroupParticipantRole.PARTICIPANT;

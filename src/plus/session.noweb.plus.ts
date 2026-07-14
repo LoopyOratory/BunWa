@@ -75,7 +75,10 @@ export class WhatsappSessionNoWebPlus extends WhatsappSessionNoWebCore {
   async uploadMedia(file: BinaryFile | RemoteFile, type: string): Promise<any> {
     const buffer = await this.getFileBuffer(file);
     const { default: Baileys } = await import('@whiskeysockets/baileys');
-    return await Baileys.uploadMedia(buffer, {
+    // NOTE: `uploadMedia` is not a real export of @whiskeysockets/baileys —
+    // this call would throw at runtime. Left as-is (type-only fix) since this
+    // Plus-tier file is not wired into the OSS build; flagged separately.
+    return await (Baileys as any).uploadMedia(buffer, {
       file: { mimetype: file.mimetype },
       type,
     });

@@ -1,19 +1,32 @@
 export class GroupV2JoinEvent {
-  // placeholder
+  timestamp!: number;
+  group: any;
+  _data?: any;
 }
 
 export class GroupV2LeaveEvent {
-  // placeholder
+  timestamp!: number;
+  group: any;
+  _data?: any;
 }
 
 export class GroupV2UpdateEvent {
-  // placeholder
+  timestamp!: number;
+  group: any;
+  _data?: any;
 }
 
 export class GroupV2ParticipantsEvent {
-  // placeholder
+  group: any;
+  type?: GroupParticipantType;
+  timestamp!: number;
+  participants: any;
+  _data?: any;
 }
 
 export enum GroupParticipantType {
-  // placeholder
+  JOIN = 'join',
+  LEAVE = 'leave',
+  PROMOTE = 'promote',
+  DEMOTE = 'demote',
 }

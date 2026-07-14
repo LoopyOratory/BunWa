@@ -10,6 +10,7 @@ export class DefaultMap<K, T> extends Map<K, T> {
     if (!this.has(key)) {
       this.set(key, this.factory(key));
     }
-    return super.get(key);
+    // Guaranteed present: we just checked has(key) and set() a value if missing.
+    return super.get(key)!;
   }
 }

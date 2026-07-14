@@ -13,34 +13,34 @@ export function isJidNewsletter(jid: string): boolean {
 }
 
 export function IsHistorySyncNotification(message: proto.IMessage): boolean {
-  message = normalizeMessageContent(message);
-  if (!message) {
+  const normalized = normalizeMessageContent(message);
+  if (!normalized) {
     return false;
   }
   if (
-    message?.protocolMessage?.type !==
+    normalized?.protocolMessage?.type !==
     proto.Message.ProtocolMessage.Type.HISTORY_SYNC_NOTIFICATION
   ) {
     return false;
   }
-  if (message?.protocolMessage?.historySyncNotification == null) {
+  if (normalized?.protocolMessage?.historySyncNotification == null) {
     return false;
   }
   return true;
 }
 
 export function IsEditedMessage(message: proto.IMessage): boolean {
-  message = normalizeMessageContent(message);
-  if (!message) {
+  const normalized = normalizeMessageContent(message);
+  if (!normalized) {
     return false;
   }
   if (
-    message?.protocolMessage?.type !==
+    normalized?.protocolMessage?.type !==
     proto.Message.ProtocolMessage.Type.MESSAGE_EDIT
   ) {
     return false;
   }
-  if (message?.protocolMessage?.editedMessage == null) {
+  if (normalized?.protocolMessage?.editedMessage == null) {
     return false;
   }
   return true;

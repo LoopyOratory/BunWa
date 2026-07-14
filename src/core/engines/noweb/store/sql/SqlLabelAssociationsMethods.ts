@@ -1,9 +1,16 @@
 import type { LabelAssociation } from '@whiskeysockets/baileys/lib/Types/LabelAssociation';
-import { SqlKVRepository } from '../../../../storage/sql/SqlKVRepository';
 import { LabelAssociationType } from '../../labels/LabelAssociationType';
 
+// Structural interface: both SqlKVRepository (Postgres/knex) and
+// BunSqliteKVRepository (bun:sqlite) implement this shape, and either may be
+// passed in depending on the configured storage backend.
+interface KVRepositoryLike {
+  deleteBy(filters: any): Promise<any>;
+  getAllBy(filters: any): Promise<any>;
+}
+
 export class SqlLabelAssociationsMethods {
-  constructor(private repository: SqlKVRepository<any>) {}
+  constructor(private repository: KVRepositoryLike) {}
 
   async deleteOne(association: LabelAssociation): Promise<void> {
     await this.repository.deleteBy({

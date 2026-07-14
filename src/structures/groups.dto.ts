@@ -34,10 +34,14 @@ export class SettingsSecurityChangeInfo {
 }
 
 export class GroupInfo {
-  id!: string;
-  subject!: string;
+  id?: string;
+  subject?: string;
   description?: string;
-  participants!: GroupParticipant[];
+  invite?: string;
+  participants?: GroupParticipant[];
+  membersCanAddNewMember?: boolean;
+  membersCanSendMessages?: boolean;
+  newMembersApprovalRequired?: boolean;
 }
 
 export class GroupsPaginationParams {

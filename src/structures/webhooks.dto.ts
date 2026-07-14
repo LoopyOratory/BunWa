@@ -20,8 +20,15 @@ export class WASessionStatusBody {
 }
 
 export class WAMessageAckBody {
+  id!: string;
+  from?: any;
+  to?: any;
+  participant?: any;
+  fromMe?: boolean;
   ack!: number;
-  key: any;
+  ackName?: string;
+  key?: any;
+  _data?: any;
 }
 
 export class PollVote {

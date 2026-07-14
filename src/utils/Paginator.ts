@@ -18,7 +18,7 @@ export enum SortOrder {
 }
 
 export abstract class Paginator {
-  constructor(protected readonly pagination: PaginationParams) {}
+  constructor(protected readonly pagination: PaginationParams | undefined) {}
 
   apply<T>(data: T): T {
     if (lodash.isEmpty(this.pagination)) {
@@ -69,7 +69,7 @@ export class KnexPaginator extends Paginator {
   dataField: string = 'data';
 
   constructor(
-    pagination: PaginationParams,
+    pagination: PaginationParams | undefined,
     protected jsonQuery: IJsonQuery,
     protected tableName?: string,
   ) {
@@ -94,8 +94,8 @@ export class KnexPaginator extends Paginator {
   }
 
   protected limit(query: any) {
-    const limit = this.pagination.limit;
-    const offset = this.pagination.offset;
+    const limit = this.pagination?.limit;
+    const offset = this.pagination?.offset;
     if (limit != null) {
       query = query.limit(limit);
     }
