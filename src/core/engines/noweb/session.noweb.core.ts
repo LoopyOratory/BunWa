@@ -1725,7 +1725,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   public async clearMessages(chatId: string): Promise<any> {
     const jid = toJID(chatId);
     return await this.sock.chatModify(
-      { clear: 'all' },
+      { clear: true },
       jid,
     );
   }
@@ -2048,7 +2048,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   public async getInfoAdminsOnly(id: any): Promise<SettingsSecurityChangeInfo> {
     const group = await this.getGroup(id);
-    return { adminsOnly: group.restrict };
+    return { adminsOnly: group.restrict ?? false };
   }
 
   @Activity()
@@ -2059,7 +2059,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   public async getMessagesAdminsOnly(id: any): Promise<SettingsSecurityChangeInfo> {
     const group = await this.getGroup(id);
-    return { adminsOnly: group.announce };
+    return { adminsOnly: group.announce ?? false };
   }
 
   @Activity()
@@ -2885,53 +2885,53 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   shouldProcessIncomingMessage(message: any): boolean {
     // if there is no text or media message
-    if (!message) return;
+    if (!message) return false;
     // View-once (self-destructing) messages arrive with key.isViewOnce=true but
     // no message content (burned by sender). Allow them through so a webhook
     // is still fired with key/timestamp metadata.
-    if (!message.message && !message.key?.isViewOnce) return;
+    if (!message.message && !message.key?.isViewOnce) return false;
     // Ignore reactions, we have dedicated handler for that
-    if (message.message?.reactionMessage) return;
+    if (message.message?.reactionMessage) return false;
     // Ignore poll votes, we have dedicated handler for that
-    if (message.message?.pollUpdateMessage) return;
+    if (message.message?.pollUpdateMessage) return false;
     // Ignore calls, we have dedicated handler for that
-    if (message.message?.call?.callKey) return;
+    if (message.message?.call?.callKey) return false;
     // Ignore revoke, we have a dedicated event for that
     if (
       message.message?.protocolMessage?.type ===
       proto.Message.ProtocolMessage.Type.REVOKE
     )
-      return;
+      return false;
     // Ignore edit, we have a dedicated event for that
-    if (IsEditedMessage(message.message)) return;
+    if (IsEditedMessage(message.message)) return false;
     // Ignore secret-encrypted message edits (mobile app format), dedicated handler routes them
-    if (IsSecretEncryptedMessageEdit(message.message)) return;
+    if (IsSecretEncryptedMessageEdit(message.message)) return false;
 
     // Ignore history sync notifications
-    if (IsHistorySyncNotification(message.message)) return;
+    if (IsHistorySyncNotification(message.message)) return false;
 
     if (
       message.message?.protocolMessage?.type ===
       proto.Message.ProtocolMessage.Type.EPHEMERAL_SYNC_RESPONSE
     )
-      return;
+      return false;
     if (
       message.message?.protocolMessage?.type ===
       proto.Message.ProtocolMessage.Type
         .PEER_DATA_OPERATION_REQUEST_RESPONSE_MESSAGE
     )
-      return;
+      return false;
 
     const normalizedContent = normalizeMessageContent(message.message);
     const contentType = getContentType(normalizedContent);
     // Ignore device sent message
     if (contentType == 'deviceSentMessage') {
-      return;
+      return false;
     }
     const hasSomeContent = !!contentType;
     if (!hasSomeContent) {
       // Ignore key distribution messages
-      if (message?.message?.senderKeyDistributionMessage) return;
+      if (message?.message?.senderKeyDistributionMessage) return false;
     }
     return true;
   }
@@ -3031,7 +3031,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   protected async processIncomingMessage(
     message: any,
-    downloadMedia: boolean,
+    downloadMedia: boolean | undefined,
   ): Promise<WAMessage | null> {
     // Filter
     if (!this.shouldProcessIncomingMessage(message)) {
@@ -3286,8 +3286,8 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       id: call.id,
       from: toCusFormat(call.from),
       timestamp: timestamp,
-      isVideo: call.isVideo,
-      isGroup: call.isGroup,
+      isVideo: call.isVideo ?? false,
+      isGroup: call.isGroup ?? false,
       _data: call,
     };
   }
