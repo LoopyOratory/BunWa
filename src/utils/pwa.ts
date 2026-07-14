@@ -12,7 +12,7 @@ export function isJidNewsletter(jid: string): boolean {
   return jid?.includes('@newsletter') || false;
 }
 
-export function IsHistorySyncNotification(message: proto.IMessage): boolean {
+export function IsHistorySyncNotification(message: proto.IMessage | null | undefined): boolean {
   const normalized = normalizeMessageContent(message);
   if (!normalized) {
     return false;
@@ -29,7 +29,7 @@ export function IsHistorySyncNotification(message: proto.IMessage): boolean {
   return true;
 }
 
-export function IsEditedMessage(message: proto.IMessage): boolean {
+export function IsEditedMessage(message: proto.IMessage | null | undefined): boolean {
   const normalized = normalizeMessageContent(message);
   if (!normalized) {
     return false;
@@ -51,7 +51,7 @@ export function getContextInfo(
 ): any {
   const content = protoMessage as any;
   const type = Object.keys(content || {}).find(k => k !== 'conversation');
-  const message = content?.[type] as any;
+  const message = type ? (content?.[type] as any) : undefined;
   return message?.contextInfo;
 }
 

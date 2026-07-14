@@ -1382,7 +1382,9 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     });
     // WhatsApp requires the same biz/interactive/native_flow (+ bot for
     // private chats) binary nodes as sendButtons for the list to render.
-    await this.sock.relayMessage(chatId, fullMessage.message, {
+    // fullMessage.message is guaranteed present: it was just built from
+    // the freshly-constructed `msg` content above.
+    await this.sock.relayMessage(chatId, fullMessage.message!, {
       messageId: fullMessage.key.id,
       additionalNodes: buildButtonBinaryNodes(chatId),
     });
@@ -1450,8 +1452,9 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       // Fetch recent unread messages from store
       const messages = await this.store.getMessagesByJid(
         chatId,
-        { 'filter.fromMe': false },
-        { limit: 30, offset: 0, downloadMedia: false, merge: true },
+        { fromMe: false },
+        { limit: 30, offset: 0 },
+        true,
       );
       messageKeys = messages.map((msg: any) => ({ key: msg.key }));
     }
