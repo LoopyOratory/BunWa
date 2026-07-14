@@ -478,6 +478,15 @@ export class SessionManager {
   async upsert(name: string, config?: SessionConfig): Promise<void> {
     this.validateSessionName(name);
     if (config) {
+      // Preserve the server-managed per-session MCP key hash across full
+      // config replacements. The dashboard settings form rebuilds `config`
+      // from scratch and never echoes back `mcp.apiKeyHash`, so without this
+      // guard any settings save (or a config-carrying restart) would silently
+      // wipe the generated MCP key and force the user to regenerate it.
+      const existingHash = this.sessionConfigs.get(name)?.mcp?.apiKeyHash;
+      if (existingHash && !config.mcp?.apiKeyHash) {
+        config = { ...config, mcp: { ...(config.mcp || {}), apiKeyHash: existingHash } };
+      }
       this.sessionConfigs.set(name, config);
     }
     if (!this.sessions.has(name)) {
