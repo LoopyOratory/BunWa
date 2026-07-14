@@ -185,7 +185,7 @@ export class SqlKVRepository<Entity> {
 
   public async all(query: Knex.QueryBuilder): Promise<Entity[]> {
     const rows = await query;
-    return rows.map((row) => this.parse(row));
+    return rows.map((row: any) => this.parse(row));
   }
 
   public getKnex(): Knex {

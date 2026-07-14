@@ -53,8 +53,8 @@ export class PaginatorInMemory extends Paginator {
     return data.slice(offset, offset + limit);
   }
 
-  NullLast(field) {
-    return (item) => {
+  NullLast(field: any) {
+    return (item: any) => {
       const value = item?.[field];
       if (value == null) {
         return -Infinity;

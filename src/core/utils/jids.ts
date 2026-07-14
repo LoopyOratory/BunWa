@@ -50,7 +50,7 @@ export function normalizeJid(jid: string): string {
   return jid.replace(/:\d+(?=@)/, '');
 }
 
-export function toJID(chatId) {
+export function toJID(chatId: any) {
   if (isJidGroup(chatId)) {
     return chatId;
   }
@@ -70,7 +70,7 @@ export function toJID(chatId) {
   return number + '@s.whatsapp.net';
 }
 
-export function toCusFormat(remoteJid) {
+export function toCusFormat(remoteJid: any) {
   if (!remoteJid) {
     return remoteJid;
   }

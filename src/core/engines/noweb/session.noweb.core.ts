@@ -277,7 +277,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   private statusTracker = new StatusTracker();
 
-  public constructor(config) {
+  public constructor(config: any) {
     super(config);
     this.shouldRestart = true;
 
@@ -340,7 +340,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     await this.sock?.logout();
   }
 
-  getSocketConfig(agents: Agents | undefined, state): Partial<SocketConfig> {
+  getSocketConfig(agents: Agents | undefined, state: any): Partial<SocketConfig> {
     // Detect browser — default to macOS Safari
     let browser = Browsers.macOS('Safari');
     let deviceName =
@@ -624,7 +624,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     const hasCreds = this.authNOWEBStore?.state?.creds;
     if (hasCreds && this.status == WAHASessionStatus.WORKING) {
       this.logger.info('Saving creds before stopping...');
-      await this.authNOWEBStore.saveCreds().catch((e) => {
+      await this.authNOWEBStore.saveCreds().catch((e: any) => {
         this.logger.error('Failed to save creds');
         this.logger.error(e, e.stack);
       });
@@ -636,7 +636,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     this.mediaManager?.close();
     await this.end();
     await this.store?.close();
-    this.authNOWEBStore?.close().catch((err) => {
+    this.authNOWEBStore?.close().catch((err: any) => {
       this.logger.error('Failed to close NOWEB auth store');
       this.logger.error(err, err.stack);
     });
@@ -1123,7 +1123,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
         'Poll requires name and at least one option',
       );
     }
-    const values = requestPoll.options.map((opt) =>
+    const values = requestPoll.options.map((opt: any) =>
       typeof opt === 'string' ? opt : opt.name,
     );
     const poll = {
@@ -1264,7 +1264,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     const pollUpdate = {
       pollUpdateMessage: {
         pollCreationMessageKey: key,
-        selectedOptions: request.votes.map((v) => Buffer.from(v)),
+        selectedOptions: request.votes.map((v: any) => Buffer.from(v)),
       },
     };
     const options = await this.getMessageOptions(request);
@@ -1304,7 +1304,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   protected async uploadMedia(
     file: RemoteFile | BinaryFile,
-    type,
+    type: any,
   ): Promise<any> {
     if (file && ('url' in file || 'data' in file)) {
       throw new AvailableInPlusVersion('Sending media (image, video, pdf)');
@@ -1440,7 +1440,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
         { 'filter.fromMe': false },
         { limit: 30, offset: 0, downloadMedia: false, merge: true },
       );
-      messageKeys = messages.map((msg) => ({ key: msg.key }));
+      messageKeys = messages.map((msg: any) => ({ key: msg.key }));
     }
 
     if (messageKeys.length === 0) {
@@ -1616,7 +1616,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     let jidFilter;
     if (filter?.ids && filter.ids.length > 0) {
       jidFilter = {
-        ids: filter.ids.map((id) => toJID(id)),
+        ids: filter.ids.map((id: any) => toJID(id)),
       };
     }
 
@@ -1984,7 +1984,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     return true;
   }
 
-  public async getGroup(id) {
+  public async getGroup(id: any) {
     // Try direct lookup first (O(1) instead of loading all groups)
     const group = await this.store.getGroupById(id);
     if (group) {
@@ -2031,79 +2031,79 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     return true;
   }
 
-  public async getInfoAdminsOnly(id): Promise<SettingsSecurityChangeInfo> {
+  public async getInfoAdminsOnly(id: any): Promise<SettingsSecurityChangeInfo> {
     const group = await this.getGroup(id);
     return { adminsOnly: group.restrict };
   }
 
   @Activity()
-  public async setInfoAdminsOnly(id, value) {
+  public async setInfoAdminsOnly(id: any, value: any) {
     const setting = value ? 'locked' : 'unlocked';
     return await this.sock.groupSettingUpdate(id, setting);
   }
 
-  public async getMessagesAdminsOnly(id): Promise<SettingsSecurityChangeInfo> {
+  public async getMessagesAdminsOnly(id: any): Promise<SettingsSecurityChangeInfo> {
     const group = await this.getGroup(id);
     return { adminsOnly: group.announce };
   }
 
   @Activity()
-  public async setMessagesAdminsOnly(id, value) {
+  public async setMessagesAdminsOnly(id: any, value: any) {
     const setting = value ? 'announcement' : 'not_announcement';
     return await this.sock.groupSettingUpdate(id, setting);
   }
 
   @Activity()
-  public async leaveGroup(id) {
+  public async leaveGroup(id: any) {
     return this.sock.groupLeave(id);
   }
 
   @Activity()
-  public async setDescription(id, description) {
+  public async setDescription(id: any, description: any) {
     return this.sock.groupUpdateDescription(id, description);
   }
 
   @Activity()
-  public async setSubject(id, subject) {
+  public async setSubject(id: any, subject: any) {
     return this.sock.groupUpdateSubject(id, subject);
   }
 
   @Activity()
-  public async getInviteCode(id): Promise<string> {
+  public async getInviteCode(id: any): Promise<string> {
     return this.sock.groupInviteCode(id);
   }
 
   @Activity()
-  public async revokeInviteCode(id): Promise<string> {
+  public async revokeInviteCode(id: any): Promise<string> {
     await this.sock.groupRevokeInvite(id);
     return this.sock.groupInviteCode(id);
   }
 
-  public async getParticipants(id) {
+  public async getParticipants(id: any) {
     const groups = await this.sock.groupFetchAllParticipating();
     return groups[id].participants;
   }
 
   @Activity()
-  public async addParticipants(id, request: ParticipantsRequest) {
+  public async addParticipants(id: any, request: ParticipantsRequest) {
     const participants = request.participants.map(getId);
     return this.sock.groupParticipantsUpdate(id, participants, 'add');
   }
 
   @Activity()
-  public async removeParticipants(id, request: ParticipantsRequest) {
+  public async removeParticipants(id: any, request: ParticipantsRequest) {
     const participants = request.participants.map(getId);
     return this.sock.groupParticipantsUpdate(id, participants, 'remove');
   }
 
   @Activity()
-  public async promoteParticipantsToAdmin(id, request: ParticipantsRequest) {
+  public async promoteParticipantsToAdmin(id: any, request: ParticipantsRequest) {
     const participants = request.participants.map(getId);
     return this.sock.groupParticipantsUpdate(id, participants, 'promote');
   }
 
   @Activity()
-  public async demoteParticipantsToUser(id, request: ParticipantsRequest) {
+  public async demoteParticipantsToUser(id: any, request: ParticipantsRequest) {
     const participants = request.participants.map(getId);
     return this.sock.groupParticipantsUpdate(id, participants, 'demote');
   }
@@ -2209,7 +2209,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       maxTimeout: 6000,
     };
     try {
-      const resp = await promiseRetry((retry, number) => {
+      const resp = await promiseRetry((retry: any, number: any) => {
         return this.sock
           .sendMessage(BROADCAST_ID, message, options)
           .catch(retry);
@@ -2838,7 +2838,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
    * END - Methods for API
    */
 
-  private processMessageReaction(message): WAMessageReaction | null {
+  private processMessageReaction(message: any): WAMessageReaction | null {
     if (!message) return null;
     if (!message.message) return null;
     if (!message.message.reactionMessage) return null;
@@ -2864,7 +2864,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     return reaction;
   }
 
-  shouldProcessIncomingMessage(message): boolean {
+  shouldProcessIncomingMessage(message: any): boolean {
     // if there is no text or media message
     if (!message) return;
     // View-once (self-destructing) messages arrive with key.isViewOnce=true but
@@ -3011,7 +3011,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   }
 
   protected async processIncomingMessage(
-    message,
+    message: any,
     downloadMedia: boolean,
   ): Promise<WAMessage | null> {
     // Filter
@@ -3046,7 +3046,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     return wamessage;
   }
 
-  protected toWAMessageSafe(message): WAMessage | null {
+  protected toWAMessageSafe(message: any): WAMessage | null {
     try {
       return this.toWAMessage(message);
     } catch (error) {
@@ -3056,7 +3056,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     }
   }
 
-  protected toWAMessage(message): WAMessage {
+  protected toWAMessage(message: any): WAMessage {
     const fromToParticipant = getFromToParticipant(message.key);
     const id = buildMessageId(message.key);
     const body = extractBody(message.message);
@@ -3090,7 +3090,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     };
   }
 
-  protected extractReplyTo(message): ReplyToMessage | null {
+  protected extractReplyTo(message: any): ReplyToMessage | null {
     if (!message) return null;
     const msgType = getContentType(message);
     const contextInfo = message[msgType]?.contextInfo;
@@ -3124,7 +3124,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     return contact;
   }
 
-  protected convertMessageUpdateToMessageAck(event): WAMessageAckBody {
+  protected convertMessageUpdateToMessageAck(event: any): WAMessageAckBody {
     const message = event;
     const fromToParticipant = getFromToParticipant(message.key);
     const id = buildMessageId(message.key);
@@ -3141,7 +3141,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     return body;
   }
 
-  protected convertMessageReceiptUpdateToMessageAck(event): WAMessageAckBody {
+  protected convertMessageReceiptUpdateToMessageAck(event: any): WAMessageAckBody {
     const fromToParticipant = getFromToParticipant(event.key);
 
     const receipt = event.receipt;
@@ -3175,7 +3175,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     return body;
   }
 
-  protected async handleMessagesUpdatePollVote(event) {
+  protected async handleMessagesUpdatePollVote(event: any) {
     const { key, update } = event;
     const pollUpdates = update?.pollUpdates;
     if (!pollUpdates) {
@@ -3225,7 +3225,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     }
   }
 
-  protected async handleMessageUpsertPollVoteFailed(message) {
+  protected async handleMessageUpsertPollVoteFailed(message: any) {
     const pollUpdateMessage = message.message?.pollUpdateMessage;
     if (!pollUpdateMessage) {
       return;
@@ -3297,7 +3297,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     return { id: chatId, presences: presences };
   }
 
-  protected async downloadMediaSafe(message): Promise<WAMedia | null> {
+  protected async downloadMediaSafe(message: any): Promise<WAMedia | null> {
     try {
       return await this.downloadMedia(message);
     } catch (e) {
@@ -3307,7 +3307,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     return null;
   }
 
-  protected async downloadMedia(message): Promise<WAMedia | null> {
+  protected async downloadMedia(message: any): Promise<WAMedia | null> {
     let processor: IMediaEngineProcessor<any> = new NOWEBEngineMediaProcessor(
       this,
       this.loggerBuilder,
@@ -3338,7 +3338,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     };
   }
 
-  protected getLinkPreview(request): any {
+  protected getLinkPreview(request: any): any {
     // NOWEB works this way
     // If it's undefined - it'll generate it
     // If it's false - it will not generate it
@@ -3466,23 +3466,23 @@ export function buildMessageId({
   return parts.join('_');
 }
 
-function getId(object) {
+function getId(object: any) {
   return object.id;
 }
 
-function isMine(message) {
+function isMine(message: any) {
   return message?.key?.fromMe;
 }
 
-function isNotMine(message) {
+function isNotMine(message: any) {
   return !message?.key?.fromMe;
 }
 
-function isAckUpdateMessageEvent(event) {
+function isAckUpdateMessageEvent(event: any) {
   return event?.update.status != null;
 }
 
-export function getFromToParticipant(key) {
+export function getFromToParticipant(key: any) {
   const isGroupMessage = Boolean(key.participant);
   let participant: string;
   let to: string;
@@ -3498,7 +3498,7 @@ export function getFromToParticipant(key) {
   };
 }
 
-function getTo(key, meId = undefined) {
+function getTo(key: any, meId = undefined) {
   // For group - always to group JID
   const isGroupMessage = Boolean(key.participant);
   if (isGroupMessage) {
@@ -3510,7 +3510,7 @@ function getTo(key, meId = undefined) {
   return meId || 'me';
 }
 
-function getFrom(key, meId) {
+function getFrom(key: any, meId: any) {
   // For group - always from participant
   const isGroupMessage = Boolean(key.participant);
   if (isGroupMessage) {
@@ -3522,7 +3522,7 @@ function getFrom(key, meId) {
   return key.remoteJid;
 }
 
-export function getDestination(key, meId = undefined): MessageDestination {
+export function getDestination(key: any, meId = undefined): MessageDestination {
   return {
     id: buildMessageId(key),
     to: toCusFormat(getTo(key, meId)),
@@ -3531,7 +3531,7 @@ export function getDestination(key, meId = undefined): MessageDestination {
   };
 }
 
-export function extractBody(message): string | null {
+export function extractBody(message: any): string | null {
   if (!message) {
     return null;
   }

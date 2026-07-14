@@ -57,7 +57,7 @@ export async function waitUntil(
 /**
  * Handle setTimeout 32-bit overflow
  */
-export function setLongTimeout(callback, delayMs) {
+export function setLongTimeout(callback: any, delayMs: any) {
   const MAX_DELAY = 2_147_483_647; // ~24.8 days
 
   if (delayMs > MAX_DELAY) {

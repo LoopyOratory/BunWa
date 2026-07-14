@@ -18,13 +18,13 @@ function parseBool(value: any): boolean {
   );
 }
 
-function flipObject(object) {
+function flipObject(object: any) {
   return Object.fromEntries(
     Object.entries(object).map(([key, value]) => [value, key]),
   );
 }
 
-function splitAt(str: string, index) {
+function splitAt(str: string, index: any) {
   const fst = [...str];
   const snd = fst.splice(index);
   return [fst.join(''), snd.join('')];

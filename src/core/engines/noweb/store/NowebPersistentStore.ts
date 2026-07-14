@@ -224,7 +224,7 @@ export class NowebPersistentStore implements INowebStore {
     return;
   }
 
-  private async onMessagingHistorySet(history) {
+  private async onMessagingHistorySet(history: any) {
     const { contacts, chats, messages } = history;
 
     await Promise.all([
@@ -243,9 +243,9 @@ export class NowebPersistentStore implements INowebStore {
     ]);
   }
 
-  private async syncMessagesHistory(messages) {
+  private async syncMessagesHistory(messages: any) {
     const realMessages = messages.filter(isRealMessage);
-    messages = messages.filter((msg) => this.jids.include(msg.key.remoteJid));
+    messages = messages.filter((msg: any) => this.jids.include(msg.key.remoteJid));
     for (const message of messages) {
       message.status = StatusStringToStatus(message.status);
     }
@@ -255,14 +255,14 @@ export class NowebPersistentStore implements INowebStore {
     );
   }
 
-  private async onMessagesUpsert(update) {
+  private async onMessagesUpsert(update: any) {
     const type = update.type;
     if (type !== 'notify' && type !== 'append') {
       this.logger.debug(`unexpected type for messages.upsert: '${type}'`);
       return;
     }
     let messages = update.messages;
-    messages = messages.filter((msg) => this.jids.include(msg.key.remoteJid));
+    messages = messages.filter((msg: any) => this.jids.include(msg.key.remoteJid));
     const realMessages = messages.filter(isRealMessage);
     await this.messagesRepo.upsert(realMessages);
     this.logger.debug(
@@ -270,7 +270,7 @@ export class NowebPersistentStore implements INowebStore {
     );
   }
 
-  private async onMessageUpdate(updates) {
+  private async onMessageUpdate(updates: any) {
     for (const update of updates) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const jid = jidNormalizedUser(update.key.remoteJid!);
@@ -328,13 +328,13 @@ export class NowebPersistentStore implements INowebStore {
     }
   }
 
-  private async onMessageDelete(item) {
+  private async onMessageDelete(item: any) {
     if ('all' in item) {
       await this.messagesRepo.deleteAllByJid(item.jid);
       return;
     }
     const jid = jidNormalizedUser(item.keys[0].remoteJid);
-    const ids = item.keys.map((key) => key.id);
+    const ids = item.keys.map((key: any) => key.id);
     await this.messagesRepo.deleteByJidByIds(jid, ids);
   }
 
@@ -371,7 +371,7 @@ export class NowebPersistentStore implements INowebStore {
     this.lastTimeGroupUpdate = new Date();
   }
 
-  private async onGroupParticipantsUpdate(data) {
+  private async onGroupParticipantsUpdate(data: any) {
     const id: string = data.id;
     if (!this.jids.include(id)) {
       return;
@@ -459,11 +459,11 @@ export class NowebPersistentStore implements INowebStore {
     }
   }
 
-  private withLock(key, fn) {
+  private withLock(key: any, fn: any) {
     return this.lock.acquire(key, fn);
   }
 
-  private withNoLock(key, fn) {
+  private withNoLock(key: any, fn: any) {
     return fn();
   }
 
@@ -522,7 +522,7 @@ export class NowebPersistentStore implements INowebStore {
     }
   }
 
-  private async onMessageReaction(reactions) {
+  private async onMessageReaction(reactions: any) {
     for (const { key, reaction } of reactions) {
       if (!this.jids.include(key.remoteJid)) {
         continue;
@@ -541,7 +541,7 @@ export class NowebPersistentStore implements INowebStore {
     }
   }
 
-  private async onMessageReceiptUpdate(updates) {
+  private async onMessageReceiptUpdate(updates: any) {
     for (const { key, receipt } of updates) {
       if (!this.jids.include(key.remoteJid)) {
         continue;
@@ -696,7 +696,7 @@ export class NowebPersistentStore implements INowebStore {
     await this.groupRepo.deleteById(id);
   }
 
-  getContactById(jid) {
+  getContactById(jid: any) {
     return this.contactRepo.getById(jid);
   }
 
@@ -798,7 +798,7 @@ export class NowebPersistentStore implements INowebStore {
       msg.reactions = [];
     }
     const existingIndex = msg.reactions.findIndex(
-      (r) => r.key?.fromMe === reaction.key?.fromMe,
+      (r: any) => r.key?.fromMe === reaction.key?.fromMe,
     );
     if (existingIndex >= 0) {
       if (reaction.text === '') {
@@ -816,7 +816,7 @@ export class NowebPersistentStore implements INowebStore {
       msg.userReceipt = [];
     }
     const existingIndex = msg.userReceipt.findIndex(
-      (r) => r.userJid === receipt.userJid,
+      (r: any) => r.userJid === receipt.userJid,
     );
     if (existingIndex >= 0) {
       Object.assign(msg.userReceipt[existingIndex], receipt);

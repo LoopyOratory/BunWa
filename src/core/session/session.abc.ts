@@ -138,7 +138,7 @@ import {
 import { Activity } from './activity';
 import qrcode from 'qrcode-terminal';
 
-export function ensureSuffix(phone) {
+export function ensureSuffix(phone: any) {
   const suffix = '@c.us';
   if (phone.includes('@')) {
     return phone;
@@ -671,7 +671,7 @@ export abstract class WhatsappSession {
     throw new NotImplementedByEngineError();
   }
 
-  public deleteChat(chatId) {
+  public deleteChat(chatId: any) {
     throw new NotImplementedByEngineError();
   }
 
@@ -740,7 +740,7 @@ export abstract class WhatsappSession {
     throw new NotImplementedByEngineError();
   }
 
-  public clearMessages(chatId) {
+  public clearMessages(chatId: any) {
     throw new NotImplementedByEngineError();
   }
 
@@ -922,7 +922,7 @@ export abstract class WhatsappSession {
     throw new NotImplementedByEngineError();
   }
 
-  public getGroup(id) {
+  public getGroup(id: any) {
     throw new NotImplementedByEngineError();
   }
 
@@ -930,31 +930,31 @@ export abstract class WhatsappSession {
     throw new NotImplementedByEngineError();
   }
 
-  public getInfoAdminsOnly(id): Promise<SettingsSecurityChangeInfo> {
+  public getInfoAdminsOnly(id: any): Promise<SettingsSecurityChangeInfo> {
     throw new NotImplementedByEngineError();
   }
 
-  public setInfoAdminsOnly(id, value) {
+  public setInfoAdminsOnly(id: any, value: any) {
     throw new NotImplementedByEngineError();
   }
 
-  public getMessagesAdminsOnly(id): Promise<SettingsSecurityChangeInfo> {
+  public getMessagesAdminsOnly(id: any): Promise<SettingsSecurityChangeInfo> {
     throw new NotImplementedByEngineError();
   }
 
-  public setMessagesAdminsOnly(id, value) {
+  public setMessagesAdminsOnly(id: any, value: any) {
     throw new NotImplementedByEngineError();
   }
 
-  public deleteGroup(id) {
+  public deleteGroup(id: any) {
     throw new NotImplementedByEngineError();
   }
 
-  public leaveGroup(id) {
+  public leaveGroup(id: any) {
     throw new NotImplementedByEngineError();
   }
 
-  public setDescription(id, description) {
+  public setDescription(id: any, description: any) {
     throw new NotImplementedByEngineError();
   }
 
@@ -995,35 +995,35 @@ export abstract class WhatsappSession {
     throw new NotImplementedByEngineError();
   }
 
-  public setSubject(id, description) {
+  public setSubject(id: any, description: any) {
     throw new NotImplementedByEngineError();
   }
 
-  public getInviteCode(id): Promise<string> {
+  public getInviteCode(id: any): Promise<string> {
     throw new NotImplementedByEngineError();
   }
 
-  public revokeInviteCode(id): Promise<string> {
+  public revokeInviteCode(id: any): Promise<string> {
     throw new NotImplementedByEngineError();
   }
 
-  public getParticipants(id) {
+  public getParticipants(id: any) {
     throw new NotImplementedByEngineError();
   }
 
-  public addParticipants(id, request: ParticipantsRequest) {
+  public addParticipants(id: any, request: ParticipantsRequest) {
     throw new NotImplementedByEngineError();
   }
 
-  public removeParticipants(id, request: ParticipantsRequest) {
+  public removeParticipants(id: any, request: ParticipantsRequest) {
     throw new NotImplementedByEngineError();
   }
 
-  public promoteParticipantsToAdmin(id, request: ParticipantsRequest) {
+  public promoteParticipantsToAdmin(id: any, request: ParticipantsRequest) {
     throw new NotImplementedByEngineError();
   }
 
-  public demoteParticipantsToUser(id, request: ParticipantsRequest) {
+  public demoteParticipantsToUser(id: any, request: ParticipantsRequest) {
     throw new NotImplementedByEngineError();
   }
 
@@ -1144,7 +1144,7 @@ export abstract class WhatsappSession {
    * Add WhatsApp suffix (@c.us) to the phone number if it doesn't have it yet
    * @param phone
    */
-  protected ensureSuffix(phone) {
+  protected ensureSuffix(phone: any) {
     return ensureSuffix(phone);
   }
 

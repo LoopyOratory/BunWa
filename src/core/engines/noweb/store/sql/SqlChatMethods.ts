@@ -26,7 +26,7 @@ export class SqlChatMethods {
       });
       const pagedQuery = this.repository.pagination(baseQuery, pagination);
       const rows = await pagedQuery;
-      return rows.map((row) => this.repository.parse(row));
+      return rows.map((row: any) => this.repository.parse(row));
     }
 
     const annotatedQuery = this.annotateWithPnJid(knex, baseQuery, {
@@ -53,7 +53,7 @@ export class SqlChatMethods {
     const pagedQuery = this.repository.pagination(dedupedQuery, pagination);
     const rows = await pagedQuery;
 
-    return rows.map((row) => {
+    return rows.map((row: any) => {
       const chat = this.repository.parse(row);
       if (merge && row.primary_jid) {
         chat.id = row.primary_jid;
