@@ -4,6 +4,7 @@ export class Channel {
   description?: string;
   invite?: string;
   picture?: string;
+  preview?: string;
   verified?: boolean;
   subscribersCount?: number;
   role?: string;

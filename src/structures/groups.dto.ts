@@ -23,6 +23,7 @@ export class GroupParticipant {
 
 export class GroupsListFields {
   participants?: boolean;
+  exclude?: GroupField[];
 }
 
 export class ParticipantsRequest {

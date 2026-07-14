@@ -414,7 +414,7 @@ export abstract class WhatsappSession {
   }
 
   /** Start the session */
-  abstract start();
+  abstract start(): Promise<any>;
 
   /** Stop the session */
   abstract stop(): Promise<void>;
@@ -492,6 +492,9 @@ export abstract class WhatsappSession {
 
   protected async refreshMyProfilePicture() {
     const me = this.getSessionMeInfo();
+    if (!me) {
+      return;
+    }
     await this.getContactProfilePicture(me.id, true);
   }
 
@@ -510,9 +513,9 @@ export abstract class WhatsappSession {
     throw new NotImplementedByEngineError();
   }
 
-  abstract checkNumberStatus(request: CheckNumberStatusQuery);
+  abstract checkNumberStatus(request: CheckNumberStatusQuery): Promise<any>;
 
-  abstract sendText(request: MessageTextRequest);
+  abstract sendText(request: MessageTextRequest): Promise<any>;
 
   sendContactVCard(request: MessageContactVcardRequest) {
     throw new NotImplementedByEngineError();
@@ -526,7 +529,7 @@ export abstract class WhatsappSession {
     throw new NotImplementedByEngineError();
   }
 
-  abstract sendLocation(request: MessageLocationRequest);
+  abstract sendLocation(request: MessageLocationRequest): Promise<any>;
 
   sendLinkPreview(request: MessageLinkPreviewRequest) {
     throw new NotImplementedByEngineError();
@@ -540,11 +543,11 @@ export abstract class WhatsappSession {
 
   abstract forwardMessage(request: MessageForwardRequest): Promise<WAMessage>;
 
-  abstract sendImage(request: MessageImageRequest);
+  abstract sendImage(request: MessageImageRequest): Promise<any>;
 
-  abstract sendFile(request: MessageFileRequest);
+  abstract sendFile(request: MessageFileRequest): Promise<any>;
 
-  abstract sendVoice(request: MessageVoiceRequest);
+  abstract sendVoice(request: MessageVoiceRequest): Promise<any>;
 
   sendVideo(request: MessageVideoRequest) {
     throw new NotImplementedByEngineError();
@@ -562,13 +565,13 @@ export abstract class WhatsappSession {
     throw new NotImplementedByEngineError();
   }
 
-  abstract reply(request: MessageReplyRequest);
+  abstract reply(request: MessageReplyRequest): Promise<any>;
 
-  abstract sendSeen(chat: SendSeenRequest);
+  abstract sendSeen(chat: SendSeenRequest): Promise<any>;
 
   abstract startTyping(chat: ChatRequest): Promise<void>;
 
-  abstract stopTyping(chat: ChatRequest);
+  abstract stopTyping(chat: ChatRequest): Promise<any>;
 
   /**
    * Activity tracking and presence management
@@ -603,7 +606,7 @@ export abstract class WhatsappSession {
         await this.setPresence(WAHAPresenceStatus.ONLINE);
         this.logger.debug('Set presence to ONLINE due to activity');
       } catch (error) {
-        this.logger.debug('Failed to set presence ONLINE', error);
+        this.logger.debug({ err: error }, 'Failed to set presence ONLINE');
         return;
       }
     }
@@ -625,7 +628,7 @@ export abstract class WhatsappSession {
         );
       } catch (error) {
         this.presence = WAHAPresenceStatus.OFFLINE;
-        this.logger.debug('Failed to set presence OFFLINE', error);
+        this.logger.debug({ err: error }, 'Failed to set presence OFFLINE');
       }
       this.cleanupPresenceTimeout();
     }, this.presenceAutoOnlineConfig.duration);
@@ -636,10 +639,10 @@ export abstract class WhatsappSession {
    */
   protected cleanupPresenceTimeout() {
     clearTimeout(this.presenceOfflineTimeout);
-    this.presenceOfflineTimeout = null;
+    this.presenceOfflineTimeout = undefined;
   }
 
-  abstract setReaction(request: MessageReactionRequest);
+  abstract setReaction(request: MessageReactionRequest): Promise<any>;
 
   setStar(request: MessageStarRequest): Promise<void> {
     throw new NotImplementedByEngineError();
@@ -861,7 +864,7 @@ export abstract class WhatsappSession {
     }
 
     // Find the right method
-    let fn: Promise<string>;
+    let fn: Promise<string | null | undefined>;
     if (isJidNewsletter(id)) {
       fn = this.channelsGetChannel(id).then(
         (channel: Channel) => channel.picture || channel.preview,
@@ -1198,6 +1201,9 @@ export abstract class WhatsappSession {
     let mentions = participants.map((p) => p.id);
     // Exclude my ids
     const me = this.getSessionMeInfo();
+    if (!me) {
+      return mentions;
+    }
     return mentions.filter((id) => id !== me.id && id !== me.lid);
   }
 }
@@ -1220,8 +1226,9 @@ export function getChannelInviteLink(code: string) {
 
 export function parseChannelInviteLink(link: string): string {
   // https://www.whatsapp.com/channel/123 => 123
+  // .pop() on a non-empty split() result is always a string.
   const code = link.split('/').pop();
-  return code;
+  return code!;
 }
 
 export function getPublicUrlFromDirectPath(directPath: string) {
