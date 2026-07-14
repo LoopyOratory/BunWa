@@ -80,7 +80,10 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
     },
     {
       name: 'MessageSendVoice',
-      description: 'Send a voice/audio message via URL or base64.',
+      description:
+        'Send a voice note (PTT) via URL or base64. WhatsApp voice notes must be OGG/Opus; ' +
+        'set convert:true (default) to have the server transcode other formats like MP3 — ' +
+        'requires ffmpeg in the server image. Set convert:false only if the file is already OGG/Opus.',
       tier: 'write',
       category: 'message',
       sessionScoped: true,
@@ -88,6 +91,10 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
         sessionId,
         chatId: z.string().describe('Chat JID'),
         file: z.string().describe('Audio URL or base64 data'),
+        convert: z
+          .boolean()
+          .optional()
+          .describe('Transcode to OGG/Opus before sending (default true). Needs ffmpeg on the server.'),
       }),
       handler: async (input) => {
         const session = await getSession(manager, input.sessionId);
@@ -95,6 +102,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
           session: input.sessionId,
           chatId: input.chatId,
           file: input.file,
+          convert: input.convert ?? true,
         });
       },
     },
