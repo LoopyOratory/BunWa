@@ -1,6 +1,11 @@
 export const BROADCAST_ID = 'status@broadcast';
 
-export class TextStatus {
+export class StatusRequest {
+  id?: string;
+  contacts?: string[];
+}
+
+export class TextStatus extends StatusRequest {
   text!: string;
   backgroundColor?: string;
   font?: string;
@@ -8,18 +13,18 @@ export class TextStatus {
   linkPreviewHighQuality?: boolean;
 }
 
-export class ImageStatus {
+export class ImageStatus extends StatusRequest {
   file: any;
   caption?: string;
 }
 
-export class VoiceStatus {
+export class VoiceStatus extends StatusRequest {
   file: any;
   backgroundColor?: string;
   convert?: boolean;
 }
 
-export class VideoStatus {
+export class VideoStatus extends StatusRequest {
   file: any;
   caption?: string;
   convert?: boolean;
@@ -27,10 +32,5 @@ export class VideoStatus {
 
 export class DeleteStatusRequest {
   id!: string;
-  contacts?: string[];
-}
-
-export class StatusRequest {
-  id?: string;
   contacts?: string[];
 }
