@@ -1,13 +1,13 @@
 export class Label {
   id!: string;
   name!: string;
-  color?: string;
+  color?: string | number;
   colorHex?: string;
 }
 
 export class LabelDTO {
   name!: string;
-  color?: string;
+  color?: string | number;
 }
 
 export class LabelID {

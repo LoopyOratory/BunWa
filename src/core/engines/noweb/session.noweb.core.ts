@@ -1724,8 +1724,9 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   @Activity()
   public async clearMessages(chatId: string): Promise<any> {
     const jid = toJID(chatId);
+    const messages = await this.store.getMessagesByJid(jid, {}, { limit: 1 });
     return await this.sock.chatModify(
-      { clear: true },
+      { clear: true, lastMessages: messages },
       jid,
     );
   }
@@ -1749,11 +1750,11 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     const labelAction: LabelActionBody = {
       id: labelId.toString(),
       name: label.name,
-      color: label.color,
+      color: label.color as any, // TODO: needs real hex-string <-> WhatsApp LabelColor (0-19) conversion
       deleted: false,
       predefinedId: undefined,
     };
-    await this.sock.addLabel(undefined, labelAction);
+    await this.sock.addLabel(undefined as any, labelAction);
 
     return {
       id: labelId.toString(),
@@ -1771,11 +1772,11 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     const labelAction: LabelActionBody = {
       id: label.id,
       name: label.name,
-      color: label.color,
+      color: label.color as any, // TODO: needs real hex-string <-> WhatsApp LabelColor (0-19) conversion
       deleted: false,
       predefinedId: undefined,
     };
-    await this.sock.addLabel(undefined, labelAction);
+    await this.sock.addLabel(undefined as any, labelAction);
     return label;
   }
 
@@ -1784,11 +1785,11 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     const labelAction: LabelActionBody = {
       id: label.id,
       name: label.name,
-      color: label.color,
+      color: label.color as any, // TODO: needs real hex-string <-> WhatsApp LabelColor (0-19) conversion
       deleted: true,
       predefinedId: undefined,
     };
-    await this.sock.addLabel(undefined, labelAction);
+    await this.sock.addLabel(undefined as any, labelAction);
   }
 
   public async getChatsByLabelId(labelId: string) {
