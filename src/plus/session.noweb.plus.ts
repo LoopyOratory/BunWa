@@ -1,87 +1,62 @@
 import { WhatsappSessionNoWebCore } from '../core/engines/noweb/session.noweb.core';
-import { MessageImageRequest, MessageFileRequest, MessageVoiceRequest } from '../structures/chatting.dto';
 import { BinaryFile, RemoteFile } from '../structures/files.dto';
-import { AvailableInPlusVersion } from '../core/exceptions';
 
+// NOTE: sendImage/sendFile/sendVoice/sendVideo used to be overridden here via
+// a broken pre-upload step (this.socket.sendMessage — `socket` doesn't exist
+// anywhere in the class hierarchy, the real property is `sock` — calling
+// Baileys.uploadMedia, which also isn't a real Baileys export). The inherited
+// Core implementations already send all of these correctly by passing the
+// file straight to sock.sendMessage(), which uploads media internally, so
+// those overrides were pure dead weight and have been removed.
 export class WhatsappSessionNoWebPlus extends WhatsappSessionNoWebCore {
-
-  async sendImage(request: MessageImageRequest): Promise<any> {
-    const media = await this.uploadMedia(request.file, 'image');
-    return this.socket.sendMessage(request.chatId, {
-      image: media,
-      caption: request.caption,
-      mentions: request.mentions,
-    }, {
-      quoted: request.reply_to ? { key: request.reply_to } : undefined,
-    });
-  }
-
-  async sendFile(request: MessageFileRequest): Promise<any> {
-    const media = await this.uploadMedia(request.file, 'document');
-    return this.socket.sendMessage(request.chatId, {
-      document: media,
-      fileName: request.file.filename || 'file',
-      mimetype: request.file.mimetype,
-      caption: request.caption,
-      mentions: request.mentions,
-    }, {
-      quoted: request.reply_to ? { key: request.reply_to } : undefined,
-    });
-  }
-
-  async sendVoice(request: MessageVoiceRequest): Promise<any> {
-    const media = await this.uploadMedia(request.file, 'audio');
-    return this.socket.sendMessage(request.chatId, {
-      audio: media,
-      mimetype: 'audio/ogg; codecs=opus',
-      ptt: true,
-    }, {
-      quoted: request.reply_to ? { key: request.reply_to } : undefined,
-    });
-  }
-
-  async sendVideo(request: any): Promise<any> {
-    const media = await this.uploadMedia(request.file, 'video');
-    return this.socket.sendMessage(request.chatId, {
-      video: media,
-      caption: request.caption,
-      mentions: request.mentions,
-    }, {
-      quoted: request.reply_to ? { key: request.reply_to } : undefined,
-    });
-  }
 
   async setProfilePicture(file: BinaryFile | RemoteFile): Promise<boolean> {
     try {
       const buffer = await this.getFileBuffer(file);
-      await this.socket.updateProfilePicture(buffer);
+      const jid = this.sock.user?.id;
+      if (!jid) {
+        throw new Error('Session has no authenticated user to set a profile picture for');
+      }
+      await this.sock.updateProfilePicture(jid, buffer);
       return true;
     } catch (error) {
-      this.logger.error('Failed to set profile picture:', error);
+      this.logger.error({ err: error }, 'Failed to set profile picture');
       return false;
     }
   }
 
   async deleteProfilePicture(): Promise<boolean> {
     try {
-      await this.socket.removeProfilePicture(this.socket.user.id);
+      const jid = this.sock.user?.id;
+      if (!jid) {
+        throw new Error('Session has no authenticated user to delete a profile picture for');
+      }
+      await this.sock.removeProfilePicture(jid);
       return true;
     } catch (error) {
-      this.logger.error('Failed to delete profile picture:', error);
+      this.logger.error({ err: error }, 'Failed to delete profile picture');
       return false;
     }
   }
 
+  /**
+   * Prepares a media file as button/interactive-message content (e.g.
+   * sendButtons' headerImage) using Baileys' real media pipeline —
+   * prepareWAMessageMedia() + the live socket's upload function — rather
+   * than a standalone "uploadMedia" call, which Baileys does not expose.
+   * Overrides Core.uploadMedia(), which throws AvailableInPlusVersion.
+   */
   async uploadMedia(file: BinaryFile | RemoteFile, type: string): Promise<any> {
     const buffer = await this.getFileBuffer(file);
-    const { default: Baileys } = await import('@whiskeysockets/baileys');
-    // NOTE: `uploadMedia` is not a real export of @whiskeysockets/baileys —
-    // this call would throw at runtime. Left as-is (type-only fix) since this
-    // Plus-tier file is not wired into the OSS build; flagged separately.
-    return await (Baileys as any).uploadMedia(buffer, {
-      file: { mimetype: file.mimetype },
-      type,
-    });
+    const { prepareWAMessageMedia } = await import('@whiskeysockets/baileys');
+    const prepared = await prepareWAMessageMedia(
+      { [type]: buffer } as any,
+      { upload: this.sock.waUploadToServer },
+    );
+    // prepareWAMessageMedia returns e.g. { imageMessage: {...} } for type
+    // 'image' — callers (like sendButtons' headerImage) expect that inner
+    // *Message object, not the wrapper.
+    return (prepared as any)[`${type}Message`];
   }
 
   private async getFileBuffer(file: BinaryFile | RemoteFile): Promise<Buffer> {
