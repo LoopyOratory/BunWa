@@ -11,7 +11,7 @@ import type {
 import type { GroupMetadata } from '@whiskeysockets/baileys/lib/Types/GroupMetadata';
 import type { Label } from '@whiskeysockets/baileys/lib/Types/Label';
 import type { LabelAssociation } from '@whiskeysockets/baileys/lib/Types/LabelAssociation';
-import { jidNormalizedUser, areJidsSameUser, isRealMessage, isPnUser, isLidUser } from '@whiskeysockets/baileys';
+import { jidNormalizedUser, areJidsSameUser, isRealMessage, isPnUser, isLidUser, proto } from '@whiskeysockets/baileys';
 import { IGroupRepository } from './IGroupRepository';
 import { ILabelAssociationRepository } from './ILabelAssociationsRepository';
 import { ILabelsRepository } from './ILabelsRepository';
@@ -49,7 +49,7 @@ type ms = number;
 const HOUR: ms = 60 * 60 * 1000;
 
 export class NowebPersistentStore implements INowebStore {
-  private socket: ReturnType<typeof makeWASocket>;
+  private socket: ReturnType<typeof makeWASocket> | null;
   private chatRepo: IChatRepository;
   private groupRepo: IGroupRepository;
   private contactRepo: IContactRepository;
@@ -105,7 +105,8 @@ export class NowebPersistentStore implements INowebStore {
         if (!messages) {
           return;
         }
-        const contacts: Partial<Contact>[] = messages
+        // Transient LID-extraction scratch objects (not real Contacts).
+        const contacts: any[] = messages
           .map((message) => {
             if (!message.key) {
               return null;
@@ -363,7 +364,7 @@ export class NowebPersistentStore implements INowebStore {
       if (!this.jids.include(update.id)) {
         continue;
       }
-      let group = await this.groupRepo.getById(update.id);
+      let group = await this.groupRepo.getById(update.id!);
       group = Object.assign(group || {}, update) as GroupMetadata;
       await this.groupRepo.save(group);
     }
@@ -393,7 +394,7 @@ export class NowebPersistentStore implements INowebStore {
 
     let group = await this.groupRepo.getById(id);
     if (!group) {
-      group = { id: id, participants: [] } as GroupMetadata;
+      group = { id: id, participants: [] } as unknown as GroupMetadata;
     }
     if (!group.participants) {
       group.participants = [];
@@ -442,7 +443,7 @@ export class NowebPersistentStore implements INowebStore {
       if (!this.jids.include(update.id)) {
         continue;
       }
-      const chat = (await this.chatRepo.getById(update.id)) || ({} as Chat);
+      const chat = (await this.chatRepo.getById(update.id!)) || ({} as Chat);
       Object.assign(chat, update);
       chat.conversationTimestamp = toNumber(chat.conversationTimestamp) || null;
       delete chat['messages'];
@@ -478,7 +479,7 @@ export class NowebPersistentStore implements INowebStore {
       const contact = contactById.get(update.id) || {};
       // remove undefined from data
       Object.keys(update).forEach(
-        (key) => update[key] === undefined && delete update[key],
+        (key) => (update as any)[key] === undefined && delete (update as any)[key],
       );
       const result = { ...contact, ...update };
       upserts.push(result);
@@ -491,7 +492,7 @@ export class NowebPersistentStore implements INowebStore {
       if (!this.jids.include(update.id)) {
         continue;
       }
-      let contact = await this.contactRepo.getById(update.id);
+      let contact = await this.contactRepo.getById(update.id!);
 
       if (!contact) {
         this.logger.warn(
@@ -582,7 +583,7 @@ export class NowebPersistentStore implements INowebStore {
     }
   }
 
-  private async onPresenceUpdate({ id, presences: update }) {
+  private async onPresenceUpdate({ id, presences: update }: any) {
     if (!this.jids.include(id)) {
       return;
     }
@@ -601,7 +602,7 @@ export class NowebPersistentStore implements INowebStore {
       }
     }
     if (!data) {
-      return null;
+      return undefined;
     }
     return proto.WebMessageInfo.create(data);
   }
@@ -700,7 +701,7 @@ export class NowebPersistentStore implements INowebStore {
     return this.contactRepo.getById(jid);
   }
 
-  async getContactsByIds(jids: string[]): Promise<Map<string, Contact>> {
+  async getContactsByIds(jids: string[]): Promise<Map<string, Contact | null>> {
     return this.contactRepo.getEntitiesByIds(jids);
   }
 
@@ -740,24 +741,25 @@ export class NowebPersistentStore implements INowebStore {
     let lids: LidToPN[] = [];
     for (const contact of contacts) {
       // contact.id = pn, contact.lid = lid
+      // (guards above rule out undefined, hence the non-null assertions)
       if (isPnUser(contact.id) && isLidUser(contact.lid)) {
         lids.push({
-          pn: contact.id,
-          id: contact.lid,
+          pn: contact.id!,
+          id: contact.lid!,
         });
       }
       // contact.phoneNumber = pn, contact.lid = lid
       else if (isPnUser(contact.phoneNumber) && isLidUser(contact.lid)) {
         lids.push({
-          pn: contact.phoneNumber,
-          id: contact.lid,
+          pn: contact.phoneNumber!,
+          id: contact.lid!,
         });
       }
       // contact.phoneNumber = pn, contact.id = lid
       else if (isPnUser(contact.phoneNumber) && isLidUser(contact.id)) {
         lids.push({
-          pn: contact.phoneNumber,
-          id: contact.id,
+          pn: contact.phoneNumber!,
+          id: contact.id!,
         });
       }
     }

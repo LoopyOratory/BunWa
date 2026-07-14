@@ -25,7 +25,7 @@ export interface INowebStore {
 
   bind(ev: BaileysEventEmitter, socket: any): void;
 
-  loadMessage(jid: string, id: string): Promise<proto.IWebMessageInfo>;
+  loadMessage(jid: string, id: string): Promise<proto.IWebMessageInfo | undefined>;
 
   getMessagesByJid(
     chatId: string,
@@ -57,9 +57,9 @@ export interface INowebStore {
 
   getContacts(pagination: PaginationParams): Promise<Contact[]>;
 
-  getContactById(jid: string): Promise<Contact>;
+  getContactById(jid: string): Promise<Contact | null>;
 
-  getContactsByIds(jids: string[]): Promise<Map<string, Contact>>;
+  getContactsByIds(jids: string[]): Promise<Map<string, Contact | null>>;
 
   getLabels(): Promise<Label[]>;
 

@@ -1,39 +1,39 @@
-export function isJidNewsletter(jid: string) {
+export function isJidNewsletter(jid: string | null | undefined) {
   return jid?.endsWith('@newsletter');
 }
 
-export function isJidCus(jid: string) {
+export function isJidCus(jid: string | null | undefined) {
   return jid?.endsWith('@c.us');
 }
 
-export function isJidGroup(jid: string) {
+export function isJidGroup(jid: string | null | undefined) {
   return typeof jid === 'string' && jid.endsWith('@g.us');
 }
 
-export function isJidStatusBroadcast(jid: string) {
+export function isJidStatusBroadcast(jid: string | null | undefined) {
   return jid === 'status@broadcast';
 }
 
-export function isJidBroadcast(jid: string) {
+export function isJidBroadcast(jid: string | null | undefined) {
   return typeof jid === 'string' && jid.endsWith('@broadcast');
 }
 
-export function isJidMetaAI(jid: string) {
+export function isJidMetaAI(jid: string | null | undefined) {
   return typeof jid === 'string' && jid.endsWith('@meta.ai');
 }
 
-export function isLidUser(jid: string) {
+export function isLidUser(jid: string | null | undefined) {
   return typeof jid === 'string' && jid.endsWith('@lid');
 }
 
-export function isNullJid(jid: string) {
+export function isNullJid(jid: string | null | undefined) {
   if (!jid) {
     return false;
   }
   return jid === '0@c.us' || jid === '0@s.whatsapp.net';
 }
 
-export function isPnUser(jid: string) {
+export function isPnUser(jid: string | null | undefined) {
   if (typeof jid !== 'string') {
     return false;
   }
@@ -105,7 +105,7 @@ export class IgnoreJidConfig {
 export class JidFilter {
   constructor(public ignore: IgnoreJidConfig) {}
 
-  include(jid: string): boolean {
+  include(jid: string | null | undefined): boolean {
     if (this.ignore.status && isJidStatusBroadcast(jid)) {
       return false;
     } else if (
