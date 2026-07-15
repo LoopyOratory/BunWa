@@ -28,4 +28,5 @@ export class LabelChatAssociation {
   chatId!: string;
   labelId!: string;
   type?: string;
+  label?: Label | null;
 }

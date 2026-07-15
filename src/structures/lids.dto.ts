@@ -1,6 +1,6 @@
 export class LidToPhoneNumber {
-  lid?: string;
-  pn?: string;
+  lid?: string | null;
+  pn?: string | null;
 }
 
 export class LidsListQueryParams {

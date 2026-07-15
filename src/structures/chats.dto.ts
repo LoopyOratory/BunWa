@@ -1,8 +1,9 @@
 export class ChatSummary {
   id!: string;
-  name?: string;
-  picture?: string;
+  name?: string | null;
+  picture?: string | null;
   lastMessage?: any;
+  _chat?: any;
 }
 
 export class GetChatMessagesFilter {

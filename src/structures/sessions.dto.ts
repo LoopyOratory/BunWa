@@ -91,7 +91,7 @@ export class MeInfo {
   id!: string;
   lid?: string;
   jid?: string;
-  pushName!: string;
+  pushName?: string;
 }
 
 export class SessionDTO {

@@ -136,7 +136,7 @@ export function ToGroupV2UpdateEvent(
 }
 
 export function ToGroupV2LeaveEvent(
-  me: Contact,
+  me: Contact | undefined,
   update: GroupParticipantUpdate,
 ): GroupV2LeaveEvent | null {
   if (update.action !== 'remove') {

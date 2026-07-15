@@ -1002,11 +1002,11 @@ export abstract class WhatsappSession {
     throw new NotImplementedByEngineError();
   }
 
-  public getInviteCode(id: any): Promise<string> {
+  public getInviteCode(id: any): Promise<string | undefined> {
     throw new NotImplementedByEngineError();
   }
 
-  public revokeInviteCode(id: any): Promise<string> {
+  public revokeInviteCode(id: any): Promise<string | undefined> {
     throw new NotImplementedByEngineError();
   }
 
