@@ -8,18 +8,29 @@ import Knex from 'knex';
 export class PostgresLabelAssociationsRepository implements ILabelAssociationRepository {
   constructor(private readonly knex: Knex.Knex) {}
 
+  private buildId(association: LabelAssociation): string {
+    return association.type === LabelAssociationType.Message
+      ? `${association.chatId}_${association.messageId}_${association.labelId}`
+      : `${association.chatId}_${association.labelId}`;
+  }
+
   async deleteOne(association: LabelAssociation): Promise<void> {
-    await this.knex('labelAssociations').where({ id: association.id }).del();
+    await this.knex('labelAssociations')
+      .where({ id: this.buildId(association) })
+      .del();
   }
 
   async save(association: LabelAssociation): Promise<void> {
     await this.knex('labelAssociations')
       .insert({
-        id: association.id,
+        id: this.buildId(association),
         type: association.type,
         labelId: association.labelId,
         chatId: association.chatId,
-        messageId: association.messageId,
+        messageId:
+          association.type === LabelAssociationType.Message
+            ? association.messageId
+            : null,
         data: JSON.stringify(association),
       })
       .onConflict('id')

@@ -138,7 +138,7 @@ export class Sqlite3MessagesRepository
     `;
     const rows = this.db.query(sql).all(...jids);
     const map = new Map<string, any>();
-    for (const row of rows) {
+    for (const row of rows as any[]) {
       map.set(row.jid, this.parse(row));
     }
     return map;

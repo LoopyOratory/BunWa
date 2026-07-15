@@ -87,11 +87,12 @@ export class SqlChatMethods {
         .andWhereNot(`${opts.tableName}.id`, 'like', '%@newsletter');
     }
 
-    if (opts.filter?.ids && opts.filter.ids.length > 0) {
+    const filterIds = opts.filter?.ids;
+    if (filterIds && filterIds.length > 0) {
       annotated = annotated.andWhere((builder) => {
         builder
-          .whereIn(`${opts.tableName}.id`, opts.filter.ids)
-          .orWhereIn('lid_map.pn', opts.filter.ids);
+          .whereIn(`${opts.tableName}.id`, filterIds)
+          .orWhereIn('lid_map.pn', filterIds);
       });
     }
 

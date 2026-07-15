@@ -1,5 +1,5 @@
-import { PaginationParams } from '../../../../../structures/pagination.dto';
-import { INowebLidPNRepository } from '../INowebLidPNRepository';
+import { PaginationParams, LimitOffsetParams } from '../../../../../structures/pagination.dto';
+import { INowebLidPNRepository, LidToPN } from '../INowebLidPNRepository';
 import Knex from 'knex';
 
 export class PostgresLidPNRepository implements INowebLidPNRepository {
@@ -41,5 +41,27 @@ export class PostgresLidPNRepository implements INowebLidPNRepository {
 
   async deleteById(id: string): Promise<void> {
     await this.knex('lid_map').where({ id }).del();
+  }
+
+  async saveLids(lids: LidToPN[]): Promise<void> {
+    for (const { id, pn } of lids) {
+      await this.save(id, pn);
+    }
+  }
+
+  async getAllLids(pagination?: LimitOffsetParams): Promise<LidToPN[]> {
+    return this.getAll(pagination);
+  }
+
+  async getLidsCount(): Promise<number> {
+    return this.getCount();
+  }
+
+  async findPNByLid(lid: string): Promise<string | null> {
+    return this.findByLid(lid);
+  }
+
+  async findLidByPN(pn: string): Promise<string | null> {
+    return this.findByPn(pn);
   }
 }

@@ -20,6 +20,12 @@ export class PostgresLabelsRepository implements ILabelsRepository {
     return row ? JSON.parse(row.data) : null;
   }
 
+  async getAllByIds(ids: string[]): Promise<Label[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.knex('labels').whereIn('id', ids).select('data');
+    return rows.map((row) => JSON.parse(row.data));
+  }
+
   async deleteAll(): Promise<void> {
     await this.knex('labels').del();
   }

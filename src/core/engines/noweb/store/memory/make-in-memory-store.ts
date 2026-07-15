@@ -74,7 +74,7 @@ export default (config: BaileysInMemoryStoreConfig) => {
     config.labelAssociationKey || waLabelAssociationKey;
   const logger: Logger = config.logger;
 
-  const chats = new KeyedDB(chatKey, (c) => c.id) as any;
+  const chats = new KeyedDB(chatKey, (c) => c.id || '') as any;
   const messages: { [_: string]: ReturnType<typeof makeMessagesDictionary> } =
     {};
   const contacts: { [_: string]: Contact } = {};
@@ -501,7 +501,9 @@ export default (config: BaileysInMemoryStoreConfig) => {
         .filter((la: MessageLabelAssociation) => la.messageId === messageId)
         .all();
 
-      return associations.map(({ labelId }) => labelId);
+      return associations.map(
+        ({ labelId }: MessageLabelAssociation) => labelId,
+      );
     },
     loadMessage: async (jid: string, id: string) => messages[jid]?.get(id),
     mostRecentMessage: async (jid: string) => {

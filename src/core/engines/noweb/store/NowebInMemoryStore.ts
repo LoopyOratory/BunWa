@@ -36,11 +36,11 @@ export class NowebInMemoryStore implements INowebStore {
   }
 
   init(): Promise<void> {
-    return;
+    return Promise.resolve();
   }
 
   close(): Promise<void> {
-    return;
+    return Promise.resolve();
   }
 
   get presences() {
@@ -52,7 +52,7 @@ export class NowebInMemoryStore implements INowebStore {
     this.socket = socket;
   }
 
-  loadMessage(jid: string, id: string): Promise<proto.IWebMessageInfo> {
+  loadMessage(jid: string, id: string): Promise<proto.IWebMessageInfo | undefined> {
     return this.store.loadMessage(jid, id);
   }
 
@@ -91,7 +91,7 @@ export class NowebInMemoryStore implements INowebStore {
   }
 
   getChat(jid: string): Promise<Chat | null> {
-    return null;
+    return Promise.resolve(null);
   }
 
   getContacts(pagination: PaginationParams): Promise<Contact[]> {

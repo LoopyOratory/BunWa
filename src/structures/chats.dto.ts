@@ -13,6 +13,10 @@ export class GetChatMessagesFilter {
   };
   fromMe?: boolean;
   ack?: number[];
+  'filter.timestamp.lte'?: number;
+  'filter.timestamp.gte'?: number;
+  'filter.fromMe'?: boolean;
+  'filter.ack'?: number;
 }
 
 export class GetChatMessagesQuery {

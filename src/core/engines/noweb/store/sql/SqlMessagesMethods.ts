@@ -105,6 +105,7 @@ export class SqlMessagesMethods {
     }
     Object.assign(entity, update);
     await this.repository.upsertOne(entity);
+    return true;
   }
 
   async deleteByJidByIds(jid: string, ids: string[]): Promise<void> {

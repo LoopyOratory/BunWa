@@ -222,8 +222,8 @@ export class SqlKVRepository<Entity> {
   }
 
   protected dump(entity: Entity) {
-    const data = {};
-    const raw = entity;
+    const data: Record<string, any> = {};
+    const raw: any = entity;
     for (const field of this.columns) {
       const fn = this.metadata.get(field.fieldName);
       if (fn) {
