@@ -2849,7 +2849,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   protected listenContactsUpdatePictureProfile() {
     this.sock.ev.on('contacts.update', async (updates) => {
       for (const update of updates) {
-        if (update.imgUrl !== 'changed') {
+        if (update.imgUrl !== 'changed' || !update.id) {
           continue;
         }
 
@@ -2959,7 +2959,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       return '';
     }
     const jidsToTry = [targetKey.remoteJid, editMessage.key?.remoteJid].filter(
-      Boolean,
+      (jid): jid is string => Boolean(jid),
     );
     let stored: proto.IWebMessageInfo | undefined;
     for (const jid of jidsToTry) {
@@ -2992,16 +2992,17 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       return '';
     }
     const editInfo = {
-      Chat: editMessage.key?.remoteJid,
+      Chat: editMessage.key?.remoteJid ?? undefined,
       Sender:
         editMessage.key?.participant ||
-        (editMessage.key?.fromMe ? undefined : editMessage.key?.remoteJid),
+        (editMessage.key?.fromMe ? undefined : editMessage.key?.remoteJid) ||
+        undefined,
     };
     const modificationSenderJid = jidToNonAD(editInfo.Sender || '');
     const primaryOrig = getOrigSenderJidForMsgSecret(editInfo, {
-      fromMe: targetKey.fromMe,
-      remoteJID: targetKey.remoteJid,
-      participant: targetKey.participant,
+      fromMe: targetKey.fromMe ?? undefined,
+      remoteJID: targetKey.remoteJid ?? undefined,
+      participant: targetKey.participant ?? undefined,
     });
     const candidates: string[] = [primaryOrig];
     const remoteNonAD = targetKey.remoteJid
@@ -3125,6 +3126,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   protected extractReplyTo(message: any): ReplyToMessage | null {
     if (!message) return null;
     const msgType = getContentType(message);
+    if (!msgType) return null;
     const contextInfo = message[msgType]?.contextInfo;
     if (!contextInfo) {
       return null;
@@ -3177,7 +3179,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     const fromToParticipant = getFromToParticipant(event.key);
 
     const receipt = event.receipt;
-    let ack;
+    let ack: WAMessageAck = WAMessageAck.DEVICE;
     if (receipt.receiptTimestamp) {
       ack = WAMessageAck.SERVER;
     } else if (receipt.playedTimestamp) {
@@ -3516,8 +3518,8 @@ function isAckUpdateMessageEvent(event: any) {
 
 export function getFromToParticipant(key: any) {
   const isGroupMessage = Boolean(key.participant);
-  let participant: string;
-  let to: string;
+  let participant: string | undefined;
+  let to: string | undefined;
   if (isGroupMessage) {
     participant = key.participant;
     to = key.remoteJid;
@@ -3575,7 +3577,7 @@ export function extractBody(message: any): string | null {
   if (!body) {
     // Some of the messages have no conversation, but instead have text in extendedTextMessage
     // https://github.com/devlikeapro/waha/issues/90
-    body = content.extendedTextMessage?.text;
+    body = content.extendedTextMessage?.text ?? null;
   }
   if (!body) {
     // Populate from caption
@@ -3591,10 +3593,10 @@ export function extractBody(message: any): string | null {
   }
   // Response for buttons
   if (!body) {
-    body = content.templateButtonReplyMessage?.selectedDisplayText;
+    body = content.templateButtonReplyMessage?.selectedDisplayText ?? null;
   }
   if (!body) {
-    body = content.buttonsResponseMessage?.selectedDisplayText;
+    body = content.buttonsResponseMessage?.selectedDisplayText ?? null;
   }
 
   // List message
@@ -3602,11 +3604,11 @@ export function extractBody(message: any): string | null {
     const type = getContentType(content);
     if (type == 'listMessage') {
       const list = content.listMessage;
-      const parts = [list.title, list.description, list.footerText];
+      const parts = [list?.title, list?.description, list?.footerText];
       body = parts.filter(Boolean).join('\n');
     } else if (type === 'listResponseMessage') {
       const response = content.listResponseMessage;
-      const parts = [response.title, response.description];
+      const parts = [response?.title, response?.description];
       body = parts.filter(Boolean).join('\n');
     }
   }

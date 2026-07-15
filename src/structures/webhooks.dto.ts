@@ -34,14 +34,21 @@ export class WAMessageAckBody {
 }
 
 export class PollVote {
-  chatId!: string;
-  messageId!: string;
-  pollServerId!: string;
-  votes!: string[];
+  chatId?: string;
+  messageId?: string;
+  pollServerId?: string;
+  votes?: string[];
+  id?: string;
+  to?: string | null;
+  from?: string | null;
+  fromMe?: boolean;
+  selectedOptions?: string[];
+  timestamp?: number;
 }
 
 export class PollVotePayload {
   vote!: PollVote;
+  poll?: any;
 }
 
 export class WAMessageRevokedBody {

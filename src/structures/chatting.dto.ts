@@ -166,6 +166,10 @@ export class WANumberExistResult {
 }
 
 export class MessageDestination {
+  id!: string;
+  to?: string | null;
+  from?: string | null;
+  fromMe?: boolean;
   session?: string;
-  chatId!: string;
+  chatId?: string;
 }

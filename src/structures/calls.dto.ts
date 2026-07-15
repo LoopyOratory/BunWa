@@ -9,4 +9,5 @@ export class CallData {
   timestamp!: number;
   isVideo!: boolean;
   isGroup!: boolean;
+  _data?: any;
 }

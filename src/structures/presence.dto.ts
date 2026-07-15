@@ -1,11 +1,14 @@
 export class WAHAPresenceData {
-  lastSeen?: number;
+  participant?: string;
+  lastKnownPresence?: string;
+  lastSeen?: number | null;
   status?: string;
 }
 
 export class WAHAChatPresences {
-  chatId!: string;
-  presences!: Record<string, WAHAPresenceData>;
+  id?: string;
+  chatId?: string;
+  presences!: WAHAPresenceData[] | Record<string, WAHAPresenceData>;
 }
 
 export class WAHASessionPresence {

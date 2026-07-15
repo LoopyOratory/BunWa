@@ -14,7 +14,7 @@ export class WAMessageBase {
 }
 
 export class WAMessage extends WAMessageBase {
-  body?: string;
+  body?: string | null;
   hasMedia?: boolean;
   media?: any;
   mediaUrl?: string;
@@ -22,8 +22,9 @@ export class WAMessage extends WAMessageBase {
   ackName?: string;
   author?: string;
   location?: any;
-  vCards?: string[];
+  vCards?: string[] | null;
   replyTo?: any;
+  reactions?: any[];
   _data?: any;
 }
 
@@ -50,7 +51,7 @@ export class WALocation {
 export class ReplyToMessage {
   id!: string;
   participant?: string;
-  body?: string;
+  body?: string | null;
   hasMedia?: boolean;
   media?: any;
   _data?: any;
