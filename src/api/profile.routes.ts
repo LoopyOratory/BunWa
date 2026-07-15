@@ -45,7 +45,10 @@ export function createProfileRouter(): Hono<{ Variables: { session: any; body: a
     policiesMiddleware(CanSession(Action.Send, FromParam('session'))),
     workingSessionResolver(),
     async (c) => {
-      return c.json({ statusCode: 500, message: 'Set profile picture not available in Core version' }, 500);
+      const session = c.get('session');
+      const file = await c.req.json();
+      const result = await (session as any).setProfilePicture(file);
+      return c.json({ result });
     }
   );
 
@@ -53,7 +56,9 @@ export function createProfileRouter(): Hono<{ Variables: { session: any; body: a
     policiesMiddleware(CanSession(Action.Send, FromParam('session'))),
     workingSessionResolver(),
     async (c) => {
-      return c.json({ statusCode: 500, message: 'Delete profile picture not available in Core version' }, 500);
+      const session = c.get('session');
+      const result = await (session as any).deleteProfilePicture();
+      return c.json({ result });
     }
   );
 

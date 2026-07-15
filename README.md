@@ -322,7 +322,13 @@ are optional and fall back to the defaults shown; booleans accept `true/false/1/
 | `WAHA_AUTO_START_DELAY_SECONDS` | `0` | Delay before auto-starting sessions. |
 | `WAHA_WORKER_ID` | — | Worker ID for multi-worker deployments. |
 | `WAHA_WORKER_RESTART_SESSIONS` | `true` | Worker restores sessions on start. |
-| `WAHA_VERSION` | auto | Version override: `CORE` or `PLUS`. |
+| `WAHA_VERSION` | auto | Version override: `CORE` or `PLUS`. Defaults to `PLUS` (the `src/plus` directory ships with this repo) unless explicitly set to `CORE`. |
+
+Plus tier (the default) unlocks setting/removing the account's profile picture and sending media
+(image, video, PDF) by URL or base64 instead of only through the message-send endpoints' own file
+handling. Set `WAHA_VERSION=CORE` to run without it — those calls will then return a
+`AvailableInPlusVersion` error, same as upstream WAHA's free tier. The dashboard's
+[Workers](#dashboard) page and `GET /api/version` report the active tier.
 
 ### Presence
 
@@ -361,9 +367,14 @@ are not yet applied by the engine — see [`plans/`](plans/).)
 
 ### Media
 
+Downloaded media (images, voice notes, videos, documents from incoming messages) is persisted via
+the backend selected by `WAHA_STORAGE_TYPE` (see [Storage — Local](#storage--local) /
+[Storage — S3](#storage--s3) below) and served back at `GET /api/files/:session/:filename`
+(requires the same `X-Api-Key` as the rest of the API).
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `WHATSAPP_FILES_FOLDER` | `/tmp/whatsapp-files` | Directory for downloaded media. |
+| `WHATSAPP_FILES_FOLDER` | `/tmp/whatsapp-files` | Directory for downloaded media when `WAHA_STORAGE_TYPE=local` and `WAHA_STORAGE_LOCAL_PATH` is unset. |
 | `WHATSAPP_DOWNLOAD_MEDIA` | `true` | Enable automatic media download. |
 | `WHATSAPP_FILES_MIMETYPES` | — | Comma-separated allowed MIME types (empty = all). |
 | `WHATSAPP_HEALTH_MEDIA_FILES_THRESHOLD_MB` | `100` | Media-files health threshold (MB). |
@@ -371,32 +382,34 @@ are not yet applied by the engine — see [`plans/`](plans/).)
 
 ### Storage — Local
 
+The dashboard's **Infrastructure** page writes these `WAHA_`-prefixed variables, and they're what
+the running server actually reads to decide where downloaded message media is persisted (`local`
+disk or S3 — see [Media](#media) above):
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `STORAGE_TYPE` | `local` | Storage backend: `local` or `s3`. |
-| `STORAGE_LOCAL_PATH` | `./data/media` | Local media storage path. |
+| `WAHA_STORAGE_TYPE` | `local` | Media storage backend: `local` or `s3`. |
+| `WAHA_STORAGE_LOCAL_PATH` | `/tmp/whatsapp-files` (falls back to `WHATSAPP_FILES_FOLDER`) | Local media storage path. |
 | `WAHA_LOCAL_STORE_BASE_DIR` | `.sessions` | Base directory for session auth data. |
 | `WAHA_STORAGE_DIR` | `./data` | Directory for internal databases (audit, templates). |
-| `DATA_DIR` | `./data` | General data directory (export/import). |
-| `EXPORT_IMPORT_MAX_BACKUPS` | — | Max backup files retained during export/import. |
-| `STORAGE_IMPORT_MAX_BYTES` | `209715200` | Per-entry import byte cap (default 200 MiB). |
-| `STORAGE_IMPORT_MAX_ENTRIES` | `100000` | Max entries per import. |
 | `AUDIT_RETENTION_DAYS` | `90` | Days to retain audit logs (`0` or negative disables). |
-| `WAHA_STORAGE_TYPE` / `WAHA_STORAGE_LOCAL_PATH` | — | Legacy aliases for `STORAGE_TYPE` / `STORAGE_LOCAL_PATH`. |
+
+The non-`WAHA_`-prefixed `STORAGE_TYPE` / `STORAGE_LOCAL_PATH` / `S3_*` / `DATA_DIR` /
+`EXPORT_IMPORT_MAX_BACKUPS` / `STORAGE_IMPORT_MAX_ENTRIES` / `STORAGE_IMPORT_MAX_BYTES` variables
+belong to a separate export/import backup service (`src/core/storage/storage.service.ts`) that
+isn't wired into any route yet — setting them currently has no effect.
 
 ### Storage — S3
 
-Set `STORAGE_TYPE=s3` and configure:
+Set `WAHA_STORAGE_TYPE=s3` (via the Infrastructure page or `.env`) and configure:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `S3_ENDPOINT` | — | S3-compatible endpoint URL (e.g. MinIO). |
-| `S3_ACCESS_KEY_ID` | — | Access key ID. |
-| `S3_SECRET_ACCESS_KEY` | — | Secret access key. |
-| `S3_ACCESS_KEY` / `S3_SECRET_KEY` | — | Legacy credential aliases (read as fallback). |
-| `S3_BUCKET` | `waha-bun` | Bucket name. |
-| `S3_REGION` | `us-east-1` | Region. |
-| `WAHA_S3_ENDPOINT` / `WAHA_S3_BUCKET` / `WAHA_S3_REGION` / `WAHA_S3_ACCESS_KEY` / `WAHA_S3_SECRET_KEY` | — | WAHA-prefixed vars used by the infrastructure endpoint. |
+| `WAHA_S3_ENDPOINT` | — | S3-compatible endpoint URL (e.g. MinIO). Leave unset for real AWS S3. |
+| `WAHA_S3_ACCESS_KEY` | — | Access key ID. |
+| `WAHA_S3_SECRET_KEY` | — | Secret access key. |
+| `WAHA_S3_BUCKET` | — | Bucket name. |
+| `WAHA_S3_REGION` | `us-east-1` | Region. |
 
 ### Webhook
 

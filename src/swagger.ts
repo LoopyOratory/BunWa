@@ -2071,6 +2071,64 @@ export function buildOpenApiSpec(): any {
           responses: { '200': { description: 'Status set' } },
         },
       },
+      '/api/{session}/profile/picture': {
+        put: {
+          tags: ['🆔 Profile'],
+          summary: 'Set profile picture (Plus)',
+          description: 'Requires PLUS tier (the default — set WAHA_VERSION=CORE to disable). Returns AvailableInPlusVersion on Core.',
+          operationId: 'setProfilePicture',
+          security: [{ apiKey: [] }],
+          parameters: [
+            { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
+          ],
+          requestBody: {
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['mimetype'],
+                  properties: {
+                    mimetype: { type: 'string', example: 'image/jpeg' },
+                    filename: { type: 'string' },
+                    data: { type: 'string', description: 'Base64-encoded file content (for a binary file)' },
+                    url: { type: 'string', description: 'Remote URL to fetch the file from (for a remote file)' },
+                  },
+                },
+              },
+            },
+          },
+          responses: { '200': { description: 'Profile picture set' } },
+        },
+        delete: {
+          tags: ['🆔 Profile'],
+          summary: 'Delete profile picture (Plus)',
+          description: 'Requires PLUS tier (the default — set WAHA_VERSION=CORE to disable). Returns AvailableInPlusVersion on Core.',
+          operationId: 'deleteProfilePicture',
+          security: [{ apiKey: [] }],
+          parameters: [
+            { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
+          ],
+          responses: { '200': { description: 'Profile picture deleted' } },
+        },
+      },
+      '/api/files/{session}/{filename}': {
+        get: {
+          tags: ['🖼️ Media'],
+          summary: 'Get downloaded media file',
+          description: 'Serves media previously downloaded from an incoming message, when WAHA_STORAGE_TYPE=local (the default). The URL is returned as the media.url field on message objects.',
+          operationId: 'getMediaFile',
+          security: [{ apiKey: [] }],
+          parameters: [
+            { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
+            { name: 'filename', in: 'path', required: true, schema: { type: 'string' } },
+          ],
+          responses: {
+            '200': { description: 'File contents' },
+            '400': { description: 'Invalid session or filename' },
+            '404': { description: 'File not found' },
+          },
+        },
+      },
       // Workers endpoint
       '/api/workers': {
         get: {
