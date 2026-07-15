@@ -87,7 +87,7 @@ Two WhatsApp engines are supported:
 - **🛡️ Auth** — API key + dashboard login + per-session MCP keys + policy-based access control
 - **☁️ Storage** — Local filesystem or S3-compatible object storage
 - **🗄️ Database** — SQLite (via `bun:sqlite`) or PostgreSQL with transaction support
-- **🧩 MCP Server** — Model Context Protocol with 23 tools, stdio + HTTP transports, per-session keys
+- **🧩 MCP Server** — Model Context Protocol with 40+ tools, stdio + HTTP transports, per-session keys
 - **📊 Dashboard** — React + shadcn/ui dashboard with real-time chat, MCP key management
 - **📱 Mobile-first** — Responsive UI built for mobile
 - **🐳 Docker** — Multi-stage builds, Coolify-ready, ~200MB runtime image
@@ -102,6 +102,11 @@ cd bunwa
 
 # Install dependencies (skips Puppeteer Chromium download — use system Chrome for WEBJS)
 PUPPETEER_SKIP_DOWNLOAD=true bun install
+
+# ffmpeg is required for transcoding voice notes to OGG/Opus (WhatsApp voice
+# message format) — install it via your system package manager if not already
+# present (e.g. `apt-get install ffmpeg`, `brew install ffmpeg`). Already
+# included in the Docker images.
 
 # Copy and configure environment
 cp .env.example .env
@@ -220,7 +225,7 @@ A full-featured web dashboard built with React 19, shadcn/ui, and Tailwind CSS:
 | **Dashboard** | Sessions overview, worker status, quick actions |
 | **Sessions** | Create, start, stop, restart, delete sessions |
 | **Chat** | Real-time messaging with reactions, status icons, file sharing |
-| **Session Settings** | Engine selection (NOWEB/WEBJS), proxy, webhooks, MCP tool policies, **MCP key generation** |
+| **Session Settings** | Engine selection (NOWEB/WEBJS), proxy, webhooks, MCP tool policies, **MCP key generation**, per-session auto-start on boot |
 | **Apps** | Webhook integrations with external services (Chatwoot) |
 | **Logs** | Live log streaming with filtering |
 | **Events** | Real-time WebSocket event monitor |
@@ -474,7 +479,7 @@ Full interactive API docs at **http://localhost:3000/api-docs/** when the server
 <a id="mcp-server-model-context-protocol"></a>
 ## 🧩 MCP Server (Model Context Protocol)
 
-BunWa exposes a [Model Context Protocol](https://modelcontextprotocol.io) server — AI assistants can send WhatsApp messages, manage sessions, query chats, and interact with groups through 23 standardized MCP tools. **Two transports are supported:** Streamable HTTP (`POST /mcp`) and stdio (subprocess, for local clients).
+BunWa exposes a [Model Context Protocol](https://modelcontextprotocol.io) server — AI assistants can send WhatsApp messages, manage sessions, query chats, and interact with groups through 40+ standardized MCP tools. **Two transports are supported:** Streamable HTTP (`POST /mcp`) and stdio (subprocess, for local clients).
 
 ### Per-Session MCP Keys 🔑
 
@@ -525,8 +530,11 @@ The dashboard generates both formats with your real key filled in — copy, past
 | Category | Tools |
 |----------|-------|
 | **Session** | `SessionList`, `SessionGet`, `SessionStart`, `SessionStop`, `SessionRestart`, `SessionCheckNumber` |
-| **Messaging** | `MessageSendText`, `MessageSendImage`, `MessageSendFile`, `MessageSendVoice`, `MessageSendVideo`, `MessageSendLocation`, `MessageSendPoll`, `MessageSendContactVCard`, `MessageSendLinkPreview`, `MessageReply`, `MessageForward`, `MessageReact`, `MessageStar`, `MessageMarkRead`, `MessageStartTyping`, `MessageStopTyping` |
-| **Contacts** | `ContactCheckNumber` |
+| **Messaging** | `MessageSendText`, `MessageSendImage`, `MessageSendFile`, `MessageSendVoice`, `MessageSendVideo`, `MessageSendLocation`, `MessageSendPoll`, `MessageSendContactVCard`, `MessageSendLinkPreview`, `MessageReply`, `MessageForward`, `MessageReact`, `MessageStar`, `MessageMarkRead`, `MessageStartTyping`, `MessageStopTyping`, `MessageVotePoll`, `MessageSendButtons`, `MessageSendList`, `MessageGenerateId` |
+| **Chats** | `ChatGetMessages`, `ChatGetMessage`, `ChatMarkMessagesRead`, `ChatPinMessage`, `ChatSetLabels` |
+| **Status (Stories)** | `StatusSendText`, `StatusSendImage`, `StatusSendVoice`, `StatusSendVideo`, `StatusDelete`, `StatusGenerateId` |
+| **Presence** | `PresenceGetAll`, `PresenceSet`, `PresenceGetForChat`, `PresenceSubscribe` |
+| **Contacts** | `ContactCheckNumber`, `ContactFindPhoneByLid` |
 
 ### Per-Session Tool Policies
 
