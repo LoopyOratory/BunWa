@@ -22,9 +22,9 @@ interface RateLimitOptions {
  * resolve the remote client IP from the TCP socket rather than
  * trusting spoofable headers.
  */
-let bunServer: Server | null = null;
+let bunServer: Server<any> | null = null;
 
-export function setBunServer(server: Server): void {
+export function setBunServer(server: Server<any>): void {
   bunServer = server;
 }
 

@@ -13,7 +13,7 @@ import { WAHAWebhook } from '../../structures/webhooks.dto';
 import { waitUntil } from '../../utils/promiseTimeout';
 import { VERSION } from '../../version';
 import * as lodash from 'lodash';
-import type { Logger as PinoLogger } from 'pino';
+type PinoLogger = any;
 import { merge, Observable, of } from 'rxjs';
 
 import {
@@ -218,10 +218,8 @@ export abstract class SessionManager {
   }
 
   protected getEngineBootstrap(engine: WAHAEngine): EngineBootstrap {
-    const logger = this.log.logger.child({ engine: engine.toLowerCase() });
     if (engine === WAHAEngine.GOWS) {
-      const config = this.gowsConfigService.getBootstrapConfig();
-      return new GowsBootstrap(logger, config);
+      return new GowsBootstrap();
     }
     return new NoopEngineBootstrap();
   }

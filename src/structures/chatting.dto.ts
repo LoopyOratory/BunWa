@@ -127,9 +127,7 @@ export class EditMessageRequest {
   linkPreviewHighQuality?: boolean;
 }
 
-export class MessageReplyRequest extends MessageTextRequest {
-  text!: string;
-}
+export class MessageReplyRequest extends MessageTextRequest {}
 
 export class SendSeenRequest {
   session?: string;

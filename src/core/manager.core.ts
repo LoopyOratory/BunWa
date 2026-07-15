@@ -81,7 +81,7 @@ export class SessionManager {
     return this.lock.acquire(name, fn);
   }
 
-  getEngine(engine: WAHAEngine): typeof WhatsappSession {
+  getEngine(engine: WAHAEngine): new (...args: any[]) => WhatsappSession {
     if (engine === WAHAEngine.WEBJS) {
       // Dynamic import so we don't load puppeteer/chrome at boot
       const { WhatsappSessionWebJs } = require('./engines/webjs/session.webjs.core');
@@ -90,7 +90,7 @@ export class SessionManager {
     return WhatsappSessionNoWebCore as any;
   }
 
-  get EngineClass(): typeof WhatsappSession {
+  get EngineClass(): new (...args: any[]) => WhatsappSession {
     // Default to NOWEB, session config overrides in start()
     return this.getEngine(WAHAEngine.NOWEB);
   }
@@ -409,7 +409,7 @@ export class SessionManager {
       this.logger.info(`Auto-starting session: ${name}`);
       try {
         await this.start(name);
-      } catch (err) {
+      } catch (err: any) {
         this.logger.error(
           `Failed to auto-start session ${name}: ${err.message}`,
         );

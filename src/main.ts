@@ -44,10 +44,10 @@ const log = pino({
 }).child({ name: 'Bootstrap' });
 
 process.on('uncaughtException', (err) => {
-  log.error('Uncaught Exception:', err);
+  log.error(err, 'Uncaught Exception');
 });
 process.on('unhandledRejection', (reason, promise) => {
-  log.error('Unhandled Rejection at:', promise);
+  log.error({ promise }, 'Unhandled Rejection');
   if (reason instanceof Error) {
     log.error(reason.stack);
   }

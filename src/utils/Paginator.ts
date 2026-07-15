@@ -27,9 +27,9 @@ export abstract class Paginator {
     return this.limit(this.sort(data));
   }
 
-  protected abstract sort(data: any);
+  protected abstract sort(data: any): any;
 
-  protected abstract limit(data: any);
+  protected abstract limit(data: any): any;
 }
 
 export class PaginatorInMemory extends Paginator {
@@ -40,7 +40,7 @@ export class PaginatorInMemory extends Paginator {
     return lodash.orderBy(
       data,
       [this.NullLast(this.pagination.sortBy)],
-      [this.pagination.sortOrder || 'asc'],
+      [(this.pagination.sortOrder as 'asc' | 'desc') || 'asc'],
     );
   }
 
