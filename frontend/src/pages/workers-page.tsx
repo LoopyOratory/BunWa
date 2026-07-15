@@ -159,8 +159,18 @@ export function WorkersPage() {
                           <TableCell>
                             <code className="rounded bg-muted px-1 py-0.5 text-xs">{worker.engine}</code>
                           </TableCell>
-                          <TableCell className="hidden md:table-cell text-xs text-base text-muted-foreground">
-                            {worker.version} {worker.tier}
+                          <TableCell className="hidden md:table-cell">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-muted-foreground">{worker.version}</span>
+                              {worker.tier && (
+                                <Badge
+                                  variant={worker.tier === "PLUS" ? "default" : "outline"}
+                                  className={worker.tier === "PLUS" ? "bg-amber-500 hover:bg-amber-500" : ""}
+                                >
+                                  {worker.tier}
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="hidden md:table-cell">
                             <Badge variant="secondary">{worker.sessions}</Badge>

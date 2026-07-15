@@ -254,7 +254,17 @@ export function DashboardPage(_props?: DashboardPageProps) {
                           </TableCell>
                           <TableCell>
                             <code className="rounded bg-muted px-1 py-0.5 text-xs">{worker.engine}</code>
-                            <div className="text-xs text-muted-foreground mt-0.5">{worker.version} {worker.tier}</div>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-xs text-muted-foreground">{worker.version}</span>
+                              {worker.tier && (
+                                <Badge
+                                  variant={worker.tier === "PLUS" ? "default" : "outline"}
+                                  className={worker.tier === "PLUS" ? "bg-amber-500 hover:bg-amber-500" : ""}
+                                >
+                                  {worker.tier}
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="hidden md:table-cell">
                             <Badge variant="secondary">{worker.sessions} sessions</Badge>

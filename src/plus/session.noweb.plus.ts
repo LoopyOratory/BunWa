@@ -64,8 +64,10 @@ export class WhatsappSessionNoWebPlus extends WhatsappSessionNoWebCore {
       return Buffer.from(file.data, 'base64');
     }
     if ('url' in file && file.url) {
-      const response = await fetch(file.url);
-      return Buffer.from(await response.arrayBuffer());
+      // Use the shared fetchBuffer helper (this.fetch) rather than a raw
+      // fetch() call, matching the RemoteFile-download convention already
+      // used by the inherited sendImage/sendFile/etc paths in Core.
+      return this.fetch(file.url);
     }
     throw new Error('Invalid file: must have data or url');
   }

@@ -27,6 +27,7 @@ import { createTemplatesRouter } from './templates.routes';
 import { createAuditRouter } from './audit.routes';
 import { createInfraRouter } from './infra.routes';
 import { createMcpConfigRouter } from './mcp-config.routes';
+import { createFilesRouter } from './files.routes';
 
 export function createApiRouter(): Hono {
   const router = new Hono();
@@ -58,6 +59,7 @@ export function createApiRouter(): Hono {
   router.route('/api', createAuditRouter());
   router.route('/api', createInfraRouter());
   router.route('/api', createMcpConfigRouter());
+  router.route('/api/files', createFilesRouter());
 
   return router;
 }

@@ -5,6 +5,7 @@ import { EMPTY, merge, Observable, map } from 'rxjs';
 import { WhatsappConfigService } from '../config.service';
 import { WhatsappSession } from './session/session.abc';
 import { WhatsappSessionNoWebCore } from './engines/noweb/session.noweb.core';
+import { VERSION, WAHAVersion } from '../version';
 import {
   WAHAEngine,
   WAHAEvents,
@@ -21,6 +22,8 @@ import { NotFoundException, BadRequestException } from './exceptions';
 import { LocalStoreCore } from './storage/LocalStoreCore';
 import { WebhookDelivery } from './webhook-delivery';
 import { AuditService, AuditAction } from './audit/audit.service';
+import { buildMediaStorage } from './media/MediaStorageFactory';
+import { MediaManager } from './media/MediaManager';
 import AsyncLock from 'async-lock';
 import pino from 'pino';
 
@@ -86,6 +89,11 @@ export class SessionManager {
       // Dynamic import so we don't load puppeteer/chrome at boot
       const { WhatsappSessionWebJs } = require('./engines/webjs/session.webjs.core');
       return WhatsappSessionWebJs;
+    }
+    if (VERSION.tier === WAHAVersion.PLUS) {
+      // Dynamic import so the free/CORE tier never pulls in src/plus at all
+      const { WhatsappSessionNoWebPlus } = require('../plus/session.noweb.plus');
+      return WhatsappSessionNoWebPlus;
     }
     return WhatsappSessionNoWebCore as any;
   }
@@ -202,10 +210,23 @@ export class SessionManager {
     const store = new LocalStoreCore();
     await store.init(name);
 
+    let mediaManager: any;
+    try {
+      const storage = await buildMediaStorage(this.config.baseUrl, logger);
+      mediaManager = new MediaManager(storage, this.config.mimetypes, logger);
+    } catch (err: any) {
+      logger.error(
+        { err },
+        `Failed to initialize media storage (WAHA_STORAGE_TYPE=${process.env.WAHA_STORAGE_TYPE || 'local'}); ` +
+          'downloaded media will not be persisted for this session (mimetype/filename metadata only)',
+      );
+      mediaManager = new MediaManager(null, this.config.mimetypes, logger);
+    }
+
     const session = new EngineClass({
       name,
       printQR: true,
-      mediaManager: null as any,
+      mediaManager,
       loggerBuilder: {
         child: (bindings: any) => logger.child(bindings),
       } as any,
