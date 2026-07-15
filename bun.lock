@@ -10,6 +10,7 @@
         "@aws-sdk/s3-request-presigner": "^3.633.0",
         "@casl/ability": "^6.8.0",
         "@figuro/chatwoot-sdk": "^1.1.17",
+        "@hapi/boom": "^9.1.4",
         "@modelcontextprotocol/sdk": "^1.29.0",
         "@scalar/hono-api-reference": "^0.11.3",
         "@whiskeysockets/baileys": "^7.0.0-rc13",

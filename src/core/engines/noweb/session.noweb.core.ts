@@ -59,6 +59,8 @@ import {
 import { randomId, sendButtonMessage, buildButtonBinaryNodes } from './noweb.buttons';
 import {
   NOWEBNewsletterMetadata,
+  searchNewsletterDirectoryByText,
+  searchNewsletterDirectoryByView,
   toNewsletterMetadata,
 } from './noweb.newsletter';
 import { NowebAuthFactoryCore } from './NowebAuthFactoryCore';
@@ -2409,22 +2411,39 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   /**
    * Channels methods
    */
-  public searchChannelsByView(
+  @Activity()
+  public async searchChannelsByView(
     query: ChannelSearchByView,
   ): Promise<ChannelListResult> {
-    throw new AvailableInPlusVersion();
+    const response = await searchNewsletterDirectoryByView(this.sock, query);
+    const channels = response.newsletters
+      .map((newsletter) => this.toChannel(newsletter))
+      .filter((channel): channel is Channel => channel !== null);
+    return { page: response.page, channels };
   }
 
-  public searchChannelsByText(
+  @Activity()
+  public async searchChannelsByText(
     query: ChannelSearchByText,
   ): Promise<ChannelListResult> {
-    throw new AvailableInPlusVersion();
+    const response = await searchNewsletterDirectoryByText(this.sock, query);
+    const channels = response.newsletters
+      .map((newsletter) => this.toChannel(newsletter))
+      .filter((channel): channel is Channel => channel !== null);
+    return { page: response.page, channels };
   }
 
   public async previewChannelMessages(
     inviteCode: string,
     query: PreviewChannelMessages,
   ): Promise<ChannelMessage[]> {
+    // Baileys' sock.newsletterFetchMessages() returns an undocumented raw binary
+    // node. Reference implementations (whatsmeow's parseNewsletterMessages) show the
+    // response is Argo-encoded, WhatsApp's compact GraphQL-response codec — not a
+    // plain binary-node/JSON payload like the other newsletter queries. No Argo
+    // decoder exists in Baileys or this repo's dependency tree, so there is no safe
+    // way to parse this without porting that codec; guessing the layout would return
+    // silently-wrong data.
     throw new AvailableInPlusVersion();
   }
 

@@ -1971,6 +1971,63 @@ export function buildOpenApiSpec(): any {
           responses: { '200': { description: 'Channel unmuted' } },
         },
       },
+      '/api/{session}/channels/search/by-view': {
+        post: {
+          tags: ['📢 Channels'],
+          summary: 'Search the channel directory by view (e.g. trending)',
+          description: 'Queries WhatsApp\'s newsletter directory via the w:mex protocol (not exposed by Baileys directly).',
+          operationId: 'searchChannelsByView',
+          security: [{ apiKey: [] }],
+          parameters: [
+            { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
+          ],
+          requestBody: {
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    view: { type: 'string', example: 'trending' },
+                    countries: { type: 'array', items: { type: 'string' } },
+                    categories: { type: 'array', items: { type: 'string' } },
+                    limit: { type: 'number' },
+                    startCursor: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          responses: { '200': { description: 'Matching channels' } },
+        },
+      },
+      '/api/{session}/channels/search/by-text': {
+        post: {
+          tags: ['📢 Channels'],
+          summary: 'Search the channel directory by text',
+          description: 'Queries WhatsApp\'s newsletter directory via the w:mex protocol (not exposed by Baileys directly).',
+          operationId: 'searchChannelsByText',
+          security: [{ apiKey: [] }],
+          parameters: [
+            { name: 'session', in: 'path', required: true, schema: { type: 'string' } },
+          ],
+          requestBody: {
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    text: { type: 'string' },
+                    categories: { type: 'array', items: { type: 'string' } },
+                    limit: { type: 'number' },
+                    startCursor: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          responses: { '200': { description: 'Matching channels' } },
+        },
+      },
       // Labels endpoints
       '/api/{session}/labels': {
         get: {
