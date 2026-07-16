@@ -26,12 +26,8 @@ export function createStatusRouter(): Hono<{ Variables: { session: any; body: an
     async (c) => {
       const session = c.get('session');
       const body = await c.req.json();
-      try {
-        const result = await (session as any).sendImageStatus(body);
-        return c.json(result);
-      } catch (e: any) {
-        return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
-      }
+      const result = await (session as any).sendImageStatus(body);
+      return c.json(result);
     }
   );
 
@@ -41,12 +37,8 @@ export function createStatusRouter(): Hono<{ Variables: { session: any; body: an
     async (c) => {
       const session = c.get('session');
       const body = await c.req.json();
-      try {
-        const result = await (session as any).sendVoiceStatus(body);
-        return c.json(result);
-      } catch (e: any) {
-        return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
-      }
+      const result = await (session as any).sendVoiceStatus(body);
+      return c.json(result);
     }
   );
 
@@ -56,12 +48,8 @@ export function createStatusRouter(): Hono<{ Variables: { session: any; body: an
     async (c) => {
       const session = c.get('session');
       const body = await c.req.json();
-      try {
-        const result = await (session as any).sendVideoStatus(body);
-        return c.json(result);
-      } catch (e: any) {
-        return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
-      }
+      const result = await (session as any).sendVideoStatus(body);
+      return c.json(result);
     }
   );
 
