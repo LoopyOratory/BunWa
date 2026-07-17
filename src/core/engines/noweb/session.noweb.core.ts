@@ -74,7 +74,7 @@ import { createAgentProxy } from '../../helpers.proxy';
 import type { Agent } from 'https';
 import { IMediaEngineProcessor } from '../../media/IMediaEngineProcessor';
 import { LottieMediaProcessorWrapper } from '../../media/LottieMediaProcessorWrapper';
-import { materializeAudioBytes, isOggOpus } from '../../media/audio';
+import { materializeAudioBytes, isOggOpus, getAudioDurationSeconds } from '../../media/audio';
 import { QR } from '../../QR';
 import { AckToStatus, StatusToAck } from '../../utils/acks';
 import { pairs } from '../../../utils/pairs';
@@ -1228,7 +1228,8 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       // already Opus, otherwise transcode via ffmpeg.
       const input = await materializeAudioBytes(fileData);
       const opus = isOggOpus(input) ? input : await this.mediaConverter.voice(input);
-      message = { audio: opus, mimetype: 'audio/ogg; codecs=opus', ptt: true };
+      const seconds = await getAudioDurationSeconds(opus);
+      message = { audio: opus, mimetype: 'audio/ogg; codecs=opus', ptt: true, seconds };
     } else {
       // Caller opted out of conversion — send as-is (must already be OGG/Opus).
       message = { audio: typeof fileData === 'string' ? { url: fileData } : fileData, ptt: true };
@@ -2308,7 +2309,13 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       // voice clips as for chat voice notes.
       const input = await materializeAudioBytes(fileData);
       const opus = isOggOpus(input) ? input : await this.mediaConverter.voice(input);
-      message = { audio: opus, mimetype: 'audio/ogg; codecs=opus', ptt: true };
+      // Explicitly computed rather than left for Baileys to auto-detect: its
+      // own detection is a best-effort, catch-and-warn step, and while a chat
+      // voice note still plays fine without a duration, WhatsApp's Status
+      // viewer needs one to render an audio status's progress bar at all —
+      // missing it can mean the send reports success but nothing appears.
+      const seconds = await getAudioDurationSeconds(opus);
+      message = { audio: opus, mimetype: 'audio/ogg; codecs=opus', ptt: true, seconds };
     } else {
       // Caller opted out of conversion — send as-is (must already be OGG/Opus).
       message = { audio: typeof fileData === 'string' ? { url: fileData } : fileData, ptt: true };
