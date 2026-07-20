@@ -3,3 +3,6 @@ saveTextLockfile = true
 
 [run]
 silent = false
+
+[test]
+preload = ["./src/__tests__/setup.ts"]

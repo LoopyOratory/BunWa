@@ -27,8 +27,21 @@ import { MediaManager } from './media/MediaManager';
 import AsyncLock from 'async-lock';
 import pino from 'pino';
 
-const SESSIONS_DIR = join(process.cwd(), '.sessions', 'noweb');
-const SESSIONS_INDEX = join(SESSIONS_DIR, '.sessions-index.json');
+// Lazily computed (not a top-level const) so WAHA_LOCAL_STORE_BASE_DIR can be
+// overridden — e.g. by tests, via bunfig.toml's [test] preload — to point at
+// an isolated temp directory instead of the real session storage location.
+// A test suite that resolves SessionManager directly (bypassing
+// restoreSessions(), so its in-memory sessionConfigs starts empty) will
+// overwrite .sessions-index.json with its own incomplete state on the first
+// upsert()/delete() call; without this override that clobbers real,
+// already-paired sessions' config every time `bun test` runs locally.
+function getSessionsDir(): string {
+  const base = process.env.WAHA_LOCAL_STORE_BASE_DIR || join(process.cwd(), '.sessions');
+  return join(base, 'noweb');
+}
+function getSessionsIndexPath(): string {
+  return join(getSessionsDir(), '.sessions-index.json');
+}
 
 @injectable()
 export class SessionManager {
@@ -420,18 +433,20 @@ export class SessionManager {
         index[name]._status = 'STOPPED';
       }
     }
-    if (!existsSync(SESSIONS_DIR)) {
-      mkdirSync(SESSIONS_DIR, { recursive: true });
+    const sessionsDir = getSessionsDir();
+    if (!existsSync(sessionsDir)) {
+      mkdirSync(sessionsDir, { recursive: true });
     }
-    await Bun.write(SESSIONS_INDEX, JSON.stringify(index, null, 2));
+    await Bun.write(getSessionsIndexPath(), JSON.stringify(index, null, 2));
   }
 
   private async loadSessionIndex(): Promise<Record<string, SessionConfig>> {
-    if (!existsSync(SESSIONS_INDEX)) {
+    const indexPath = getSessionsIndexPath();
+    if (!existsSync(indexPath)) {
       return {};
     }
     try {
-      const file = Bun.file(SESSIONS_INDEX);
+      const file = Bun.file(indexPath);
       const content = await file.text();
       return JSON.parse(content);
     } catch {
