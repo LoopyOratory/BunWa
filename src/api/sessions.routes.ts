@@ -75,6 +75,12 @@ export function createSessionsRouter(): Hono {
       const body = await c.req.json();
 
       await manager.upsert(sessionName, body.config || {});
+      // Re-wire webhook subscriptions so config changes (e.g. a webhook added
+      // or edited from the dashboard's Session Settings dialog, which saves
+      // through this generic endpoint rather than the dedicated webhook CRUD
+      // routes) take effect immediately on an already-running session instead
+      // of only after a restart.
+      await manager.resyncWebhooks(sessionName);
 
       return c.json({
         name: sessionName,

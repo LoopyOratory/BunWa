@@ -40,6 +40,11 @@ export class SessionManager {
 
   private webhook: WebhookDelivery | null = null;
   private subscriptions: Map<string, Array<{ unsubscribe: () => void }>> = new Map();
+  // Tracked separately from `subscriptions` (which also holds the
+  // audit status-tracking subscription) so resyncWebhooks() can tear down
+  // and rebuild just the webhook wiring without dropping session-status
+  // audit logging as a side effect.
+  private webhookSubscriptions: Map<string, Array<{ unsubscribe: () => void }>> = new Map();
   private auditService: AuditService | null = null;
 
   /** Lazily resolved: AuditService is registered in the DI container after
@@ -266,51 +271,11 @@ export class SessionManager {
       // Session doesn't support this event
     }
 
-    // Subscribe to session events for webhook delivery (global env-config webhook)
-    this.subscribeGlobalWebhooks(name, session, sessionSubs);
-
-    // Per-session webhooks (from session config)
-    const sessionWebhooks = sessionConfig.webhooks || [];
-    for (const wh of sessionWebhooks) {
-      if (wh.enabled === false || !wh.url) continue;
-
-      const deliveryConfig = {
-        url: wh.url,
-        method: wh.method,
-        secret: wh.hmac?.key,
-        retries: wh.retries?.attempts ?? 3,
-        retryDelayMs: (wh.retries?.delaySeconds ?? 2) * 1000,
-        customHeaders: wh.customHeaders?.reduce((acc: Record<string, string>, h: any) => {
-          acc[h.name] = h.value;
-          return acc;
-        }, {}),
-        filters: wh.filters,
-      };
-
-      // Determine which events to subscribe to from the webhook config
-      const allEvents = Object.values(WAHAEvents);
-      const webhookEvents = wh.events.includes('*')
-        ? allEvents
-        : allEvents.filter(e => wh.events.includes(e));
-
-      for (const event of webhookEvents) {
-        try {
-          const sub = session.getEventObservable(event).subscribe({
-            next: (data: any) => {
-              this.webhook!.deliver({
-                event,
-                session: name,
-                timestamp: Date.now(),
-                data,
-              }, deliveryConfig);
-            },
-          });
-          sessionSubs.push(sub);
-        } catch {
-          // Session doesn't support this event
-        }
-      }
-    }
+    // Webhook subscriptions are tracked separately (see webhookSubscriptions)
+    // so a settings-triggered resync doesn't disturb the subscription above.
+    const webhookSubs: Array<{ unsubscribe: () => void }> = [];
+    this.subscribeAllWebhooks(name, session, sessionConfig, webhookSubs);
+    this.webhookSubscriptions.set(name, webhookSubs);
 
     // Store subscriptions for later resync/cleanup
     this.subscriptions.set(name, sessionSubs);
@@ -548,16 +513,10 @@ export class SessionManager {
   }
 
   /**
-   * Resubscribe all webhook subscriptions for a session.
-   * Unsubscribes existing ones first, then re-creates based on current config.
-   * Called from webhook CRUD routes after create/update/delete.
-   */
-  /**
    * Subscribe to the common events delivered to the global env-configured
    * webhook (WEBHOOK_URL). Pushes the created subscriptions onto `sink` so the
    * caller can track them for later resync/cleanup. No-op when no global
-   * webhook is configured. Shared by _start and resyncWebhooks so a resync
-   * restores the global subscriptions it tears down.
+   * webhook is configured.
    */
   private subscribeGlobalWebhooks(
     name: string,
@@ -590,28 +549,21 @@ export class SessionManager {
     }
   }
 
-  async resyncWebhooks(name: string): Promise<void> {
-    // Unsubscribe all existing subscriptions for this session
-    const existing = this.subscriptions.get(name);
-    if (existing) {
-      for (const sub of existing) {
-        try { sub.unsubscribe(); } catch { /* ignore */ }
-      }
-    }
-    this.subscriptions.delete(name);
+  /**
+   * Subscribe both the global env-config webhook and every per-session
+   * webhook in `sessionConfig.webhooks` to their configured events, pushing
+   * all created subscriptions onto `sink`. Shared by _start() and
+   * resyncWebhooks() so both wire up webhooks identically.
+   */
+  private subscribeAllWebhooks(
+    name: string,
+    session: WhatsappSession,
+    sessionConfig: SessionConfig,
+    sink: Array<{ unsubscribe: () => void }>,
+  ): void {
+    this.subscribeGlobalWebhooks(name, session, sink);
 
-    // Re-subscribe only if the session is still active
-    const session = this.sessions.get(name);
-    if (!session || !this.webhook) return;
-
-    const sessionSubs: Array<{ unsubscribe: () => void }> = [];
-
-    // Restore the global env-config webhook subscriptions we just tore down
-    this.subscribeGlobalWebhooks(name, session, sessionSubs);
-
-    const sessionConfig = this.sessionConfigs.get(name) || {};
     const sessionWebhooks = sessionConfig.webhooks || [];
-
     for (const wh of sessionWebhooks) {
       if (wh.enabled === false || !wh.url) continue;
 
@@ -645,15 +597,38 @@ export class SessionManager {
               }, deliveryConfig);
             },
           });
-          sessionSubs.push(sub);
+          sink.push(sub);
         } catch {
           // Session doesn't support this event
         }
       }
     }
+  }
 
-    if (sessionSubs.length > 0) {
-      this.subscriptions.set(name, sessionSubs);
+  /**
+   * Resubscribe all webhook subscriptions for a session — unsubscribes the
+   * existing webhook subscriptions (and only those; the audit status-tracking
+   * subscription in `subscriptions` is untouched) then re-creates them from
+   * the current config. Called after any session-config change that could
+   * affect webhooks, so a webhook added/edited while the session is already
+   * running takes effect immediately instead of only on the next restart.
+   */
+  async resyncWebhooks(name: string): Promise<void> {
+    const existing = this.webhookSubscriptions.get(name);
+    if (existing) {
+      for (const sub of existing) {
+        try { sub.unsubscribe(); } catch { /* ignore */ }
+      }
     }
+    this.webhookSubscriptions.delete(name);
+
+    // Re-subscribe only if the session is still active
+    const session = this.sessions.get(name);
+    if (!session || !this.webhook) return;
+
+    const sessionConfig = this.sessionConfigs.get(name) || {};
+    const webhookSubs: Array<{ unsubscribe: () => void }> = [];
+    this.subscribeAllWebhooks(name, session, sessionConfig, webhookSubs);
+    this.webhookSubscriptions.set(name, webhookSubs);
   }
 }
