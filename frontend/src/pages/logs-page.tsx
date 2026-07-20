@@ -4,6 +4,13 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
 import { Search, Download, AlertTriangle, Info, AlertCircle } from "lucide-react"
 import { PageLayout } from "@/components/page-layout"
 import { toast } from "sonner"
@@ -13,10 +20,17 @@ interface AuditLog {
   id: string
   action: string
   severity: string
-  message: string
-  sessionId?: string
-  apiKeyId?: string
-  ipAddress?: string
+  apiKeyId: string | null
+  apiKeyName: string | null
+  sessionId: string | null
+  sessionName: string | null
+  ipAddress: string | null
+  userAgent: string | null
+  method: string | null
+  path: string | null
+  statusCode: number | null
+  metadata: string | null
+  errorMessage: string | null
   createdAt: string
 }
 
@@ -32,12 +46,29 @@ const SEVERITY_COLORS: Record<string, string> = {
   ERROR: "bg-red-500/10 text-red-500",
 }
 
+// Turns "webhook_triggered" into "Webhook triggered" for a readable summary
+// line, since the audit API doesn't send a pre-formatted message field.
+function describeAction(action: string): string {
+  const words = action.split("_")
+  return words[0].charAt(0).toUpperCase() + words[0].slice(1) + " " + words.slice(1).join(" ")
+}
+
+function formatMetadata(metadata: string | null): string | null {
+  if (!metadata) return null
+  try {
+    return JSON.stringify(JSON.parse(metadata), null, 2)
+  } catch {
+    return metadata
+  }
+}
+
 export function LogsPage() {
   const [logs, setLogs] = useState<AuditLog[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [severityFilter, setSeverityFilter] = useState<string>("all")
   const [page, setPage] = useState(0)
+  const [detailLog, setDetailLog] = useState<AuditLog | null>(null)
   const limit = 50
 
   useEffect(() => { loadLogs() }, [page, severityFilter])
@@ -57,8 +88,11 @@ export function LogsPage() {
   }
 
   function exportLogs() {
-    const csv = ["ID,Action,Severity,Message,Session,IP,Created"].concat(
-      logs.map(l => `${l.id},${l.action},${l.severity},"${l.message}",${l.sessionId || ""},${l.ipAddress || ""},${l.createdAt}`)
+    const csv = ["ID,Action,Severity,Session,API Key,IP,Status,Error,Created"].concat(
+      logs.map(l => [
+        l.id, l.action, l.severity, l.sessionName || "", l.apiKeyName || "",
+        l.ipAddress || "", l.statusCode ?? "", `"${(l.errorMessage || "").replace(/"/g, '""')}"`, l.createdAt,
+      ].join(","))
     ).join("\n")
     const blob = new Blob([csv], { type: "text/csv" })
     const url = URL.createObjectURL(blob)
@@ -68,7 +102,11 @@ export function LogsPage() {
     toast.success("Logs exported")
   }
 
-  const filtered = logs.filter(l => !search || l.message.toLowerCase().includes(search.toLowerCase()) || l.action.toLowerCase().includes(search.toLowerCase()))
+  const filtered = logs.filter(l => !search ||
+    l.action.toLowerCase().includes(search.toLowerCase()) ||
+    (l.sessionName || "").toLowerCase().includes(search.toLowerCase()) ||
+    (l.errorMessage || "").toLowerCase().includes(search.toLowerCase())
+  )
 
   return (
     <PageLayout title="Audit Logs" description="Track all system events and API activity" actions={<Button variant="outline" onClick={exportLogs}><Download />Export CSV</Button>}>
@@ -101,14 +139,21 @@ export function LogsPage() {
                 {filtered.map(log => {
                   const Icon = SEVERITY_ICONS[log.severity] || Info
                   return (
-                    <div key={log.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50">
+                    <button
+                      key={log.id}
+                      onClick={() => setDetailLog(log)}
+                      className="flex w-full items-center gap-3 p-2 rounded-lg hover:bg-muted/50 text-left cursor-pointer"
+                    >
                       <Icon className="h-4 w-4 shrink-0" />
                       <Badge className={`${SEVERITY_COLORS[log.severity] || ""} text-xs`}>{log.severity}</Badge>
-                      <span className="text-xs font-mono text-muted-foreground w-[120px] shrink-0">{log.action}</span>
-                      <span className="text-sm flex-1 truncate">{log.message}</span>
-                      {log.sessionId && <Badge variant="outline" className="text-xs shrink-0">{log.sessionId}</Badge>}
+                      <span className="text-xs font-mono text-muted-foreground w-[160px] shrink-0">{log.action}</span>
+                      <span className="text-sm flex-1 truncate">
+                        {describeAction(log.action)}
+                        {log.errorMessage && <span className="text-red-500"> — {log.errorMessage}</span>}
+                      </span>
+                      {log.sessionName && <Badge variant="outline" className="text-xs shrink-0">{log.sessionName}</Badge>}
                       <span className="text-xs text-muted-foreground shrink-0">{new Date(log.createdAt).toLocaleTimeString()}</span>
-                    </div>
+                    </button>
                   )
                 })}
               </div>
@@ -122,6 +167,76 @@ export function LogsPage() {
           <Button variant="outline" disabled={logs.length < limit} onClick={() => setPage(p => p + 1)}>Next</Button>
         </div>
       </div>
+
+      <Dialog open={!!detailLog} onOpenChange={(open) => !open && setDetailLog(null)}>
+        <DialogContent className="max-w-lg">
+          {detailLog && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Badge className={`${SEVERITY_COLORS[detailLog.severity] || ""} text-xs`}>{detailLog.severity}</Badge>
+                  {describeAction(detailLog.action)}
+                </DialogTitle>
+                <DialogDescription className="font-mono text-xs">{detailLog.action}</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 text-sm">
+                <div className="grid grid-cols-[100px_1fr] gap-x-3 gap-y-1.5">
+                  <span className="text-muted-foreground">Time</span>
+                  <span>{new Date(detailLog.createdAt).toLocaleString()}</span>
+                  {detailLog.sessionName && (
+                    <>
+                      <span className="text-muted-foreground">Session</span>
+                      <span>{detailLog.sessionName}</span>
+                    </>
+                  )}
+                  {detailLog.apiKeyName && (
+                    <>
+                      <span className="text-muted-foreground">API Key</span>
+                      <span>{detailLog.apiKeyName}</span>
+                    </>
+                  )}
+                  {detailLog.ipAddress && (
+                    <>
+                      <span className="text-muted-foreground">IP Address</span>
+                      <span className="font-mono">{detailLog.ipAddress}</span>
+                    </>
+                  )}
+                  {detailLog.userAgent && (
+                    <>
+                      <span className="text-muted-foreground">User Agent</span>
+                      <span className="break-all text-xs">{detailLog.userAgent}</span>
+                    </>
+                  )}
+                  {(detailLog.method || detailLog.path) && (
+                    <>
+                      <span className="text-muted-foreground">Request</span>
+                      <span className="font-mono text-xs">{detailLog.method} {detailLog.path}</span>
+                    </>
+                  )}
+                  {detailLog.statusCode != null && (
+                    <>
+                      <span className="text-muted-foreground">Status</span>
+                      <span>{detailLog.statusCode}</span>
+                    </>
+                  )}
+                </div>
+                {detailLog.errorMessage && (
+                  <div>
+                    <p className="text-muted-foreground mb-1">Error</p>
+                    <p className="rounded-md bg-red-500/10 text-red-500 p-2 text-xs">{detailLog.errorMessage}</p>
+                  </div>
+                )}
+                {detailLog.metadata && (
+                  <div>
+                    <p className="text-muted-foreground mb-1">Metadata</p>
+                    <pre className="rounded-md bg-muted p-2 text-xs overflow-auto max-h-64">{formatMetadata(detailLog.metadata)}</pre>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </PageLayout>
   )
 }
