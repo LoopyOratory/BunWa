@@ -175,3 +175,32 @@ bun run typecheck && bun run lint
 
 Env essentials: `WAHA_API_KEY` (auth), `WAHA_STORAGE_DIR` (data dir, default ./data),
 `AUDIT_RETENTION_DAYS`, S3 creds for media, Chatwoot config for integration.
+
+---
+
+## 🔁 OpenWA Parity (2026-08-22)
+
+Audited upstream [rmyndharis/OpenWA](https://github.com/rmyndharis/OpenWA) — **195 endpoints across 31 modules** — against BunWa's 279 routes. BunWa already covered ~90% of the user-facing surface (sessions, messages, chats, groups, channels, labels, presence, profile, status, webhooks, media convert, infra, audit, apps/Chatwoot, MCP).
+
+### Added this pass (Bun/Hono implementations)
+| Endpoint | Notes |
+|---|---|
+| `POST /:session/chats/:chatId/mute` · `/unmute` | engine-capability guarded |
+| `GET /:session/chats/:chatId/messages/:messageId/media` | downloads via store + downloadMedia pipeline |
+| `GET /:session/chats/:chatId/messages/:messageId/reactions` | from message payload |
+| `POST /sendSticker` | image/webp through media pipeline (`sendMediaAsSticker`) |
+| `POST /:session/messages/send-bulk` | wraps existing BulkMessageService; per-session batch registry |
+| `GET /:session/messages/batch/:batchId` · `POST .../cancel` | batch status/cancel |
+| `GET/PATCH /:session/config` | session config inspect/update |
+| `POST /:session/force-kill` | hard kill without graceful drain |
+
+### Deliberately NOT ported (upstream-only infrastructure)
+- **Redis/BullMQ queue processors** (ingress/webhook) — BunWa delivers webhooks inline with SSRF guard + retries instead
+- **Plugin marketplace/installer** (14 endpoints) — BunWa has its own plugin loader + hook manager
+- **Integration instances/ingress/redrive** (~7k LOC) — tied to upstream's plugin runtime
+- **Docker module** — Coolify handles this on our VPS
+- **Metrics/Prometheus** — can add later if needed
+
+### Verified
+typecheck clean · 97/97 tests · live boot smoke on :3210 — all new routes mounted,
+auth-gated, session-resolver working (404 "session not found" for unknown sessions = correct).
