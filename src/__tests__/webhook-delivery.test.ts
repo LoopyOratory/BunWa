@@ -64,6 +64,15 @@ mock.module('../common/security/ssrf-guard', () => ({
 // ----- Test imports (after mock.module) -----
 import { WebhookDelivery } from '../core/webhook-delivery';
 import { WhatsappConfigService } from '../config.service';
+import { container as tsyringeContainer } from 'tsyringe';
+import { AuditService } from '../core/audit/audit.service';
+import { mkdtempSync } from 'fs';
+
+// Register a real AuditService bound to an isolated temp dir so container.resolve()
+// inside WebhookDelivery doesn't hit tsyringe auto-injection ("TypeInfo not known for Object")
+if (!tsyringeContainer.isRegistered(AuditService)) {
+  tsyringeContainer.registerInstance(AuditService, new AuditService(mkdtempSync('bunwa-audit-')));
+}
 
 const mockConfigService = {
   getWebhookUrl: () => 'https://example.com/webhook',
