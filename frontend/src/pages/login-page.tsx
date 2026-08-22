@@ -32,7 +32,22 @@ export function LoginPage() {
 
   return (
     <div className="login-container">
-      <Card className="w-full max-w-sm animate-scale-in shadow-xl">
+      <div className="hidden md:flex flex-col justify-between absolute inset-y-0 left-0 w-1/2 p-10 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent">
+        <div className="flex items-center gap-3">
+          <img src="/logo.jpg" alt="BunWa" className="size-10 rounded-xl object-cover shadow-md" />
+          <span className="font-heading text-lg font-bold tracking-tight">BunWa</span>
+        </div>
+        <div>
+          <h2 className="font-heading text-3xl font-bold tracking-tight leading-tight text-balance">
+            WhatsApp automation,<br />the Bun way.
+          </h2>
+          <p className="mt-3 text-muted-foreground max-w-sm">
+            Multi-session messaging, webhooks, and an MCP server. Fast, self-hosted, yours.
+          </p>
+        </div>
+        <p className="text-xs text-muted-foreground">BunWa &middot; Bun + Hono edition</p>
+      </div>
+      <Card className="w-full max-w-sm animate-scale-in shadow-xl md:ml-auto relative z-10">
         <CardHeader className="text-center space-y-3">
           <div className="mx-auto flex size-16 items-center justify-center rounded-2xl">
             <img src="/logo.jpg" alt="BunWa" className="size-14 rounded-xl object-cover" />

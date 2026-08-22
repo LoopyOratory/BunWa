@@ -483,3 +483,17 @@ tbody tr:hover {
   @apply inline-flex size-8 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity;
 }
 tr:hover .row-actions-btn, .row-actions-btn:focus-visible { @apply opacity-100; }
+
+/* Login split-screen */
+.login-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: 1.5rem;
+  overflow: hidden;
+}
+@media (max-width: 767px) {
+  .login-container { justify-content: center; }
+}

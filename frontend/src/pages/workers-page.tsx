@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { api, type Worker } from "@/lib/api"
 import { PageLayout } from "@/components/page-layout"
+import { StatusBadge } from "@/components/primitives"
 
 let workersFailedOnce = false
 
@@ -176,17 +177,7 @@ export function WorkersPage() {
                             <Badge variant="secondary">{worker.sessions}</Badge>
                           </TableCell>
                           <TableCell>
-                            {worker.connected ? (
-                              <Badge variant="default" className="bg-green-600">
-                                <CheckCircle className="mr-1 size-3" />
-                                Connected
-                              </Badge>
-                            ) : (
-                              <Badge variant="destructive">
-                                <XCircle className="mr-1 size-3" />
-                                Disconnected
-                              </Badge>
-                            )}
+                            <StatusBadge kind={worker.connected ? "working" : "failed"} />
                           </TableCell>
                         </TableRow>
                       ))

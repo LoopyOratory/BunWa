@@ -41,7 +41,7 @@ export function PageLayout({ title, description, actions, children }: PageLayout
       </header>
 
       {/* Content */}
-      <main className="flex-1 overflow-y-auto px-6 py-6">
+      <main className="flex-1 overflow-y-auto px-6 py-6 page-enter" key={title}>
         <div className="max-w-screen-2xl mx-auto w-full">
           {children}
         </div>
