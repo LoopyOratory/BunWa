@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
+import { BulkMessageService } from '../core/bulk-message.service';
 import { container } from 'tsyringe';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanSession, Action, FromParam } from '../middleware/policies';
+import { workingSessionResolver } from '../middleware/session-resolver';
 import { SessionManager } from '../core/manager.core';
 import { getSessionFromBody } from '../middleware/get-session-from-body';
 import { AuditService, AuditAction } from '../core/audit/audit.service';
@@ -424,6 +426,99 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
       } catch (e: any) {
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
+    }
+  );
+
+  // ===== OpenWA parity: sticker send (image/webp via sendFile) =====
+  router.post('/sendSticker',
+    policiesMiddleware(CanSession(Action.Send, FromParam('session'))),
+    workingSessionResolver(),
+    async (c) => {
+      const session = c.get('session');
+      const body = await c.req.json();
+      const chatId = body.chatId || body.to;
+      if (!chatId || !body.file || !body.file.data) {
+        return c.json({ error: 'chatId and file.data (base64 webp/png) required' }, 400);
+      }
+      try {
+        const buffer = Buffer.from(body.file.data, 'base64');
+        // Stickers ride the media pipeline as image/webp
+        const result = await (session as any).sendFile({
+          chatId,
+          file: { mimetype: 'image/webp', data: buffer },
+          caption: undefined,
+          sendMediaAsSticker: true,
+        });
+        return c.json({ success: true, id: result?.key?.id ?? result?._id ?? null });
+      } catch (e: any) {
+        return c.json({ error: String(e?.message || e) }, 500);
+      }
+    }
+  );
+
+  return router;
+}
+
+// ===== OpenWA parity: bulk messaging =====
+
+export function createBulkRouter(): Hono<{ Variables: { session: any; body: any } }> {
+  const router = new Hono<{ Variables: { session: any; body: any } }>();
+  router.use('*', apiKeyAuthMiddleware());
+  const batches = new Map<string, BulkMessageService>();
+
+  function getBulk(session: any): BulkMessageService {
+    const key = (session as any).sessionId ?? 'default';
+    if (!batches.has(key)) {
+      batches.set(key, new BulkMessageService(
+        (chatId: string, text: string) => (session as any).sendTextMessage(chatId, text),
+        (chatId: string, buffer: Buffer, caption?: string) => (session as any).sendImageMessage(chatId, buffer, caption),
+        (chatId: string, buffer: Buffer, caption?: string) => (session as any).sendVideoMessage(chatId, buffer, caption),
+        (chatId: string, buffer: Buffer) => (session as any).sendVoiceMessage(chatId, buffer),
+        (chatId: string, buffer: Buffer, filename?: string) => (session as any).sendDocumentMessage(chatId, buffer, filename),
+      ));
+    }
+    return batches.get(key)!;
+  }
+
+  router.post('/:session/messages/send-bulk',
+    policiesMiddleware(CanSession(Action.Send, FromParam('session'))),
+    workingSessionResolver(),
+    async (c) => {
+      const session = c.get('session');
+      const body = await c.req.json();
+      if (!Array.isArray(body.recipients)) return c.json({ error: 'recipients[] required' }, 400);
+      const bulk = getBulk(session);
+      const batch = bulk.createBatch(
+        (session as any).sessionId ?? 'default',
+        body.recipients,
+        body.content ?? {},
+        { delayMs: body.delayMs, randomizeDelay: body.randomizeDelay, stopOnError: body.stopOnError, template: body.template },
+      );
+      void bulk.processBatch(batch.id);
+      return c.json({ success: true, batchId: batch.id, total: batch.recipients.length }, 201);
+    }
+  );
+
+  router.get('/:session/messages/batch/:batchId',
+    policiesMiddleware(CanSession(Action.Read, FromParam('session'))),
+    workingSessionResolver(),
+    async (c) => {
+      const session = c.get('session');
+      const bulk = getBulk(session);
+      const batch = bulk.getBatch(c.req.param('batchId'));
+      if (!batch) return c.json({ error: 'batch not found' }, 404);
+      return c.json(batch);
+    }
+  );
+
+  router.post('/:session/messages/batch/:batchId/cancel',
+    policiesMiddleware(CanSession(Action.Send, FromParam('session'))),
+    workingSessionResolver(),
+    async (c) => {
+      const session = c.get('session');
+      const bulk = getBulk(session);
+      const ok = bulk.cancelBatch(c.req.param('batchId'));
+      return c.json({ success: ok }, ok ? 200 : 404);
     }
   );
 

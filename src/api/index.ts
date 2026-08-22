@@ -5,6 +5,7 @@ import { createVersionRouter } from './version.routes';
 import { createServerRouter } from './server.routes';
 import { createSessionsRouter } from './sessions.routes';
 import { createChattingRouter } from './chatting.routes';
+import { createBulkRouter } from './chatting.routes';
 import { createChatsRouter } from './chats.routes';
 import { createContactsRouter } from './contacts.routes';
 import { createContactsSessionRouter } from './contacts.session.routes';
@@ -38,6 +39,7 @@ export function createApiRouter(): Hono {
   router.route('/api/server', createServerRouter());
   router.route('/api/sessions', createSessionsRouter());
   router.route('/api', createChattingRouter());
+  router.route('/api', createBulkRouter());
   router.route('/api', createChatsRouter());
   router.route('/api', createContactsRouter());
   router.route('/api', createGroupsRouter());

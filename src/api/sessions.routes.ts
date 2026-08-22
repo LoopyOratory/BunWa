@@ -220,5 +220,56 @@ export function createSessionsRouter(): Hono {
     }
   );
 
+  // ===== OpenWA parity: config inspection/update =====
+  router.get('/:session/config',
+    policiesMiddleware(CanSession(Action.Read, FromParam('session'))),
+    async (c) => {
+      const manager = container.resolve(SessionManager);
+      const sessionName = c.req.param('session');
+      try {
+        const session = manager.getSession(sessionName);
+        return c.json({ name: sessionName, config: (session as any).sessionConfig || {} });
+      } catch (e: any) {
+        return c.json({ error: String(e?.message || e) }, 404);
+      }
+    }
+  );
+
+  router.patch('/:session/config',
+    policiesMiddleware(CanSession(Action.Send, FromParam('session'))),
+    async (c) => {
+      const body = await c.req.json().catch(() => ({}));
+      const manager = container.resolve(SessionManager);
+      const sessionName = c.req.param('session');
+      try {
+        const session = manager.getSession(sessionName);
+        if (typeof (session as any).updateConfig === 'function') {
+          await (session as any).updateConfig(body);
+          return c.json({ success: true, updated: body });
+        }
+        (session as any).sessionConfig = { ...((session as any).sessionConfig || {}), ...body };
+        return c.json({ success: true, updated: body, note: 'merged into runtime sessionConfig' });
+      } catch (e: any) {
+        return c.json({ success: false, error: String(e?.message || e) }, 500);
+      }
+    }
+  );
+
+  // ===== OpenWA parity: force kill (no graceful drain) =====
+  router.post('/:session/force-kill',
+    policiesMiddleware(CanSession(Action.Send, FromParam('session'))),
+    async (c) => {
+      const name = c.req.param('session');
+      const manager = container.resolve(SessionManager);
+      try {
+        try { await manager.logout(name); } catch {}
+        await manager.delete(name);
+        return c.json({ success: true, killed: name });
+      } catch (e: any) {
+        return c.json({ success: false, error: String(e?.message || e) }, 500);
+      }
+    }
+  );
+
   return router;
 }

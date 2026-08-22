@@ -215,5 +215,65 @@ export function createChatsRouter(): Hono<{ Variables: { session: any; body: any
     }
   );
 
+// ===== OpenWA parity: chat mute/unmute =====
+  router.post('/:session/chats/:chatId/mute',
+    policiesMiddleware(CanSession(Action.Send, FromParam('session'))),
+    workingSessionResolver(),
+    async (c) => {
+      const session = c.get('session');
+      const chatId = c.req.param('chatId');
+      const body = await c.req.json().catch(() => ({}));
+      if (typeof (session as any).muteChat === 'function') {
+        await (session as any).muteChat(chatId, body.duration);
+        return c.json({ success: true, chatId, muted: true });
+      }
+      return c.json({ success: false, error: 'mute not supported by this engine' }, 400);
+    }
+  );
+
+  router.post('/:session/chats/:chatId/unmute',
+    policiesMiddleware(CanSession(Action.Send, FromParam('session'))),
+    workingSessionResolver(),
+    async (c) => {
+      const session = c.get('session');
+      const chatId = c.req.param('chatId');
+      if (typeof (session as any).unmuteChat === 'function') {
+        await (session as any).unmuteChat(chatId);
+        return c.json({ success: true, chatId, muted: false });
+      }
+      return c.json({ success: false, error: 'unmute not supported by this engine' }, 400);
+    }
+  );
+
+  // ===== OpenWA parity: download a single message's media =====
+  router.get('/:session/chats/:chatId/messages/:messageId/media',
+    policiesMiddleware(CanSession(Action.Read, FromParam('session'))),
+    workingSessionResolver(),
+    async (c) => {
+      const session = c.get('session');
+      const chatId = c.req.param('chatId');
+      const messageId = c.req.param('messageId');
+      const msg = await (session as any).getChatMessage(chatId, messageId, { downloadMedia: true });
+      if (!msg || !(msg as any).media) {
+        return c.json({ error: 'no media on message or download failed' }, 404);
+      }
+      return c.json((msg as any).media);
+    }
+  );
+
+  // ===== OpenWA parity: reactions of a message =====
+  router.get('/:session/chats/:chatId/messages/:messageId/reactions',
+    policiesMiddleware(CanSession(Action.Read, FromParam('session'))),
+    workingSessionResolver(),
+    async (c) => {
+      const session = c.get('session');
+      const chatId = c.req.param('chatId');
+      const messageId = c.req.param('messageId');
+      const msg = await (session as any).getChatMessage(chatId, messageId, {}) as any;
+      const reactions = msg?.reactions ?? [];
+      return c.json({ chatId, messageId, reactions });
+    }
+  );
+
   return router;
 }
