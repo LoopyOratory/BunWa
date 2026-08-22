@@ -104,6 +104,10 @@ export class AuditService {
       this.db = dbOrPath;
     } else {
       const storageDir = process.env.WAHA_STORAGE_DIR ?? './data';
+      // Auto-create the storage dir so fresh clones boot without a manual mkdir
+      // (fixes SQLITE_CANTOPEN on first run when ./data does not exist yet).
+      const { mkdirSync } = require('fs');
+      mkdirSync(storageDir, { recursive: true });
       this.db = new Database(`${storageDir}/audit.db`);
     }
 

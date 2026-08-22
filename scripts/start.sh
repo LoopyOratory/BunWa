@@ -15,5 +15,6 @@ echo ""
   echo "  Server: http://localhost:3000"
 echo ""
 
+mkdir -p "$WAHA_DIR/data"
 cd "$WAHA_DIR"
 bun run src/main.ts
