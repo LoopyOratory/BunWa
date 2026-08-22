@@ -53,7 +53,7 @@ textarea,
     --chart-3: oklch(0.648 0.2 131.684);
     --chart-4: oklch(0.532 0.157 131.589);
     --chart-5: oklch(0.453 0.124 130.933);
-    --radius: 0.45rem;
+    --radius: 0.65rem;
     --sidebar: oklch(0.985 0 0);
     --sidebar-foreground: oklch(0.145 0 0);
     --sidebar-primary: oklch(0.648 0.2 131.684);
@@ -83,9 +83,9 @@ textarea,
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
+    --background: oklch(0.12 0 0);
     --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
+    --card: oklch(0.17 0 0);
     --card-foreground: oklch(0.985 0 0);
     --popover: oklch(0.205 0 0);
     --popover-foreground: oklch(0.985 0 0);
@@ -397,3 +397,89 @@ transition-duration: 150ms;
 #root {
     min-height: 100vh;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   BunWa UI v2 — Modern Ops Console design layer
+   Semantic status system, elevation, transitions (2026-08-22)
+   ═══════════════════════════════════════════════════════════ */
+
+/* Status badge system (consistent across all routes) */
+.status-badge {
+  @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium;
+}
+.status-working { @apply bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20; }
+.status-starting { @apply bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20; }
+.status-stopped { @apply bg-muted text-muted-foreground border border-border; }
+.status-failed { @apply bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20; }
+
+/* Status dot with live pulse */
+.status-dot {
+  @apply inline-block size-2 rounded-full;
+}
+.status-dot-working { @apply bg-emerald-500 shadow-[0_0_6px_oklch(0.7_0.15_160/0.6)]; animation: pulse-dot 2s ease-in-out infinite; }
+.status-dot-starting { @apply bg-amber-500; animation: pulse-dot 1.2s ease-in-out infinite; }
+.status-dot-stopped { @apply bg-zinc-400 dark:bg-zinc-600; }
+.status-dot-failed { @apply bg-red-500; }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.85); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-dot-working, .status-dot-starting { animation: none; }
+}
+
+/* Stat card: gradient icon chips + hover lift */
+.stat-card {
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms ease;
+}
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.icon-chip {
+  @apply flex size-9 items-center justify-center rounded-xl;
+  background: linear-gradient(135deg, color-mix(in oklab, var(--primary) 18%, transparent), color-mix(in oklab, var(--primary) 8%, transparent));
+}
+.icon-chip > svg { @apply size-5 text-primary; }
+
+/* Sticky table headers */
+[data-slot="table-header"] th, thead tr th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: color-mix(in oklab, var(--background) 88%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+/* Table row hover lift */
+tbody tr {
+  transition: background-color 150ms ease;
+}
+tbody tr:hover {
+  background: color-mix(in oklab, var(--muted) 45%, transparent);
+}
+
+/* Page transition */
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.page-enter { animation: page-in 220ms cubic-bezier(0.16, 1, 0.3, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter { animation: none; }
+}
+
+/* Empty state */
+.empty-state {
+  @apply flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-14 text-center;
+}
+
+/* Kebab menu button (row actions) */
+.row-actions-btn {
+  @apply inline-flex size-8 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity;
+}
+tr:hover .row-actions-btn, .row-actions-btn:focus-visible { @apply opacity-100; }

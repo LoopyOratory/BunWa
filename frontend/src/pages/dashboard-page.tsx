@@ -41,6 +41,7 @@ import {
 import { api, type Session, type Worker } from "@/lib/api"
 import { toast } from "sonner"
 import { PageLayout } from "@/components/page-layout"
+import { StatusBadge, EmptyState } from "@/components/primitives"
 import { SessionSettingsDialog } from "@/components/session-settings-dialog"
 import { CreateSessionDialog } from "@/components/create-session-dialog"
 import { SessionDetailDialog } from "@/pages/session-detail-dialog"
@@ -137,12 +138,12 @@ export function DashboardPage(_props?: DashboardPageProps) {
             <Card className="stat-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">Sessions</CardTitle>
-                <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
+                <div className="icon-chip">
                   <MessageSquare className="size-6 text-primary" />
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold tracking-tight tracking-tight">{sessions.length}</div>
+                <div className="text-3xl font-bold tracking-tight">{sessions.length}</div>
                 <p className="text-xs text-base text-muted-foreground">
                   <span className="font-medium text-emerald-600 dark:text-emerald-400">{workingCount} working</span>
                   {attentionCount > 0 && (
@@ -157,12 +158,12 @@ export function DashboardPage(_props?: DashboardPageProps) {
             <Card className="stat-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">Workers</CardTitle>
-                <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
+                <div className="icon-chip">
                   <Server className="size-6 text-primary" />
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold tracking-tight tracking-tight">{workers.length}</div>
+                <div className="text-3xl font-bold tracking-tight">{workers.length}</div>
                 <p className="text-xs text-base text-muted-foreground">
                   <span className="font-medium text-emerald-600 dark:text-emerald-400">{workers.filter((w) => w.connected).length} connected</span>
                 </p>
@@ -171,7 +172,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
             <Card className="col-span-2 sm:col-span-1 stat-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">Updates</CardTitle>
-                <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
+                <div className="icon-chip">
                   <CloudDownload className="size-6 text-primary" />
                 </div>
               </CardHeader>
@@ -181,10 +182,10 @@ export function DashboardPage(_props?: DashboardPageProps) {
                   <span className="font-medium text-emerald-600 dark:text-emerald-400">All workers up to date!</span>
                 </div>
                 <div className="mt-1 flex gap-3 text-xs text-base text-muted-foreground">
-                  <a href="https://waha.devlike.pro/docs/overview/changelog/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-foreground">
+                  <a href="/docs" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-foreground">
                     Changelog <ExternalLink className="size-3" />
                   </a>
-                  <a href="https://waha.devlike.pro/blog/waha-update/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-foreground">
+                  <a href="/docs" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-foreground">
                     How to Update <ExternalLink className="size-3" />
                   </a>
                 </div>
@@ -334,15 +335,13 @@ export function DashboardPage(_props?: DashboardPageProps) {
                   <TableBody>
                     {filteredSessions.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="h-24 text-center text-base text-muted-foreground">
-                          No sessions found
-                        </TableCell>
+                        <TableCell colSpan={6}><EmptyState icon={<MessageSquare />} title="No sessions yet" description="Create a session to get started." action={<Button onClick={() => setShowCreateDialog(true)}><Plus className="size-4 mr-1" />Create session</Button>} /></TableCell>
                       </TableRow>
                     ) : (
                       filteredSessions.map((session) => (
                         <TableRow key={session.name}>
                           <TableCell>
-                            <Badge variant={session.status === "WORKING" ? "default" : "secondary"} className="size-2 rounded-full p-0" />
+                            <StatusBadge status={session.status} />
                           </TableCell>
                           <TableCell className="font-medium">
                             <div className="truncate max-w-[120px] sm:max-w-none">{session.name}</div>

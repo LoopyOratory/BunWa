@@ -44,6 +44,7 @@ import {
 import { api, type Session } from "@/lib/api"
 import { toast } from "sonner"
 import { PageLayout } from "@/components/page-layout"
+import { StatusBadge, EmptyState } from "@/components/primitives"
 import { SessionSettingsDialog } from "@/components/session-settings-dialog"
 import { CreateSessionDialog } from "@/components/create-session-dialog"
 import { SessionDetailDialog } from "@/pages/session-detail-dialog"
@@ -233,13 +234,20 @@ export function SessionsPage(_props?: SessionsPageProps) {
                       </TableRow>
                     ) : filteredSessions.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="h-24 text-center text-base text-muted-foreground">No sessions found</TableCell>
+                        <TableCell colSpan={7}>
+                          <EmptyState
+                            icon={<MessageSquare />}
+                            title="No sessions yet"
+                            description="Create a session and scan the QR code with your phone to connect it."
+                            action={<Button onClick={() => setShowCreateDialog(true)}><Plus className="size-4 mr-1" />Create session</Button>}
+                          />
+                        </TableCell>
                       </TableRow>
                     ) : (
                       filteredSessions.map((session) => (
                         <TableRow key={session.name}>
                           <TableCell>
-                            <Badge variant={session.status === "WORKING" ? "default" : "secondary"} className="size-2 rounded-full p-0" />
+                            <StatusBadge status={session.status} />
                           </TableCell>
                           <TableCell className="font-medium text-base">
                             <div className="truncate max-w-[120px] sm:max-w-none">{session.name}</div>
