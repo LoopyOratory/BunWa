@@ -323,7 +323,8 @@ async function bootstrap() {
   // Create server with WebSocket support
   const server = Bun.serve({
     port,
-    fetch: async (req, server) => {
+    fetch: async (reqAny, server) => {
+      const req = reqAny as any; // bun-types Request variance across versions
       // Handle WebSocket upgrade for /ws path
       const url = new URL(req.url);
       if (url.pathname === '/ws') {

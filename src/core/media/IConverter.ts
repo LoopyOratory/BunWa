@@ -40,8 +40,8 @@ async function runFfmpeg(input: Buffer, argsAfterInput: string[]): Promise<Buffe
     }
 
     const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(proc.stdout as ReadableStream<Uint8Array>).arrayBuffer(),
-      new Response(proc.stderr as ReadableStream<Uint8Array>).text(),
+      (new Response(proc.stdout) as any).arrayBuffer(),
+      (new Response(proc.stderr) as any).text(),
       proc.exited,
     ]);
 

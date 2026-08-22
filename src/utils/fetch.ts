@@ -33,10 +33,11 @@ export async function fetchBuffer(url: string): Promise<Buffer> {
     tls: { rejectUnauthorized: false },
   });
 
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  const resAny = res as any; // bun-types/undici Response variance across versions
+  if (!resAny.ok) {
+    throw new Error(`HTTP ${resAny.status}: ${resAny.statusText ?? ''}`);
   }
 
-  const arrayBuffer = await res.arrayBuffer();
+  const arrayBuffer = await resAny.arrayBuffer();
   return Buffer.from(arrayBuffer);
 }

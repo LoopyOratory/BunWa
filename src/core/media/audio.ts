@@ -24,7 +24,7 @@ export async function materializeAudioBytes(file: Buffer | string): Promise<Buff
     throw new Error('Unsupported audio input: expected a URL, base64 string, or Buffer');
   }
   if (/^https?:\/\//i.test(file)) {
-    const res = await resolveAndPinFetch(file);
+    const res: any = await resolveAndPinFetch(file);
     if (!res.ok) {
       throw new Error(`Failed to fetch audio from URL (${res.status} ${res.statusText})`);
     }
@@ -83,7 +83,7 @@ export async function getAudioDurationSeconds(buf: Buffer): Promise<number | und
       { stdout: 'pipe', stderr: 'pipe', stdin: 'ignore' },
     );
     const [stdout, exitCode] = await Promise.all([
-      new Response(proc.stdout as ReadableStream<Uint8Array>).text(),
+      (new Response(proc.stdout) as any).text(),
       proc.exited,
     ]);
     if (exitCode !== 0) {

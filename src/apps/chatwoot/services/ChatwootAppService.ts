@@ -320,7 +320,7 @@ export class ChatwootAppService {
   ): Promise<void> {
     const miloUrl = process.env.MILO_API_URL || 'http://localhost:3003/api/webhooks/chatwoot/milo';
     try {
-      const resp = await fetch(miloUrl, {
+      const resp: any = await fetch(miloUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

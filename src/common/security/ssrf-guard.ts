@@ -199,7 +199,7 @@ export async function resolveAndPinFetch(rawUrl: string, init?: RequestInit): Pr
   try {
     let url = rawUrl;
     for (let hop = 0; hop < 5; hop++) {
-      const res = await fetch(url, {
+      const res: any = await fetch(url, {
         ...init,
         signal: controller.signal,
         redirect: 'manual',

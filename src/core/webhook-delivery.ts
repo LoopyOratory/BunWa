@@ -108,7 +108,7 @@ export class WebhookDelivery {
         const isGet = httpMethod === 'GET';
         const fetchUrl = isGet ? `${url}?payload=${encodeURIComponent(bodyStr)}` : url;
 
-        const res = await resolveAndPinFetch(fetchUrl, {
+        const res: any = await resolveAndPinFetch(fetchUrl, {
           method: httpMethod,
           headers: isGet ? {} : headers,
           body: isGet ? undefined : bodyStr,
