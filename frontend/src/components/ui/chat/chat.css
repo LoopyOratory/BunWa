@@ -23,13 +23,13 @@
   --chat-bg-header:           rgba(255, 255, 255, 0.75);
   --chat-bg-composer:         rgba(255, 255, 255, 0.82);
 
-  --chat-bubble-outgoing:     #6366F1;
+  --chat-bubble-outgoing:     #00A884;
   --chat-bubble-outgoing-text: #FFFFFF;
   --chat-bubble-incoming:     #F4F4F5;
   --chat-bubble-incoming-text: #18181B;
 
-  --chat-accent:              #6366F1;
-  --chat-accent-soft:         rgba(99, 102, 241, 0.08);
+  --chat-accent:              #00A884;
+  --chat-accent-soft:         rgba(0, 168, 132, 0.08);
   --chat-green:               #22C55E;
   --chat-orange:              #F59E0B;
   --chat-red:                 #EF4444;
@@ -65,7 +65,7 @@
   --chat-bg-header:           rgba(24, 24, 27, 0.75);
   --chat-bg-composer:         rgba(24, 24, 27, 0.82);
 
-  --chat-bubble-outgoing:     #818CF8;
+  --chat-bubble-outgoing:     #00B894;
   --chat-bubble-outgoing-text: #FFFFFF;
   --chat-bubble-incoming:     #27272A;
   --chat-bubble-incoming-text: #FAFAFA;
