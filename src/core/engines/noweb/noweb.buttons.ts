@@ -83,6 +83,29 @@ export function buildButtonBinaryNodes(chatId: string): BinaryNode[] {
   return nodes;
 }
 
+/**
+ * WhatsApp clients only treat an interactive payload as tappable when it
+ * arrives inside a view-once envelope; this is how WhatsApp's own business
+ * clients send interactive messages. Without an envelope the message renders
+ * but the buttons do nothing when tapped (verified live).
+ *
+ * BUNWA_INTERACTIVE_WRAPPER switches the envelope without a rebuild so the
+ * variants can be compared against a real client:
+ *   v2ext (default) | v2 | v1 | none
+ */
+export function wrapInteractiveMessage(inner: any): any {
+  switch ((process.env.BUNWA_INTERACTIVE_WRAPPER || 'v2ext').toLowerCase()) {
+    case 'none':
+      return inner;
+    case 'v1':
+      return { viewOnceMessage: { message: inner } };
+    case 'v2':
+      return { viewOnceMessageV2: { message: inner } };
+    default:
+      return { viewOnceMessageV2Extension: { message: inner } };
+  }
+}
+
 export async function sendButtonMessage(
   sock: any,
   chatId: string,
@@ -92,11 +115,7 @@ export async function sendButtonMessage(
   body?: string,
   footer?: string,
 ) {
-  // Send interactiveMessage directly at the top level — no viewOnceMessage
-  // wrapper. That wrapper is unrelated to making buttons work; it marks the
-  // message as view-once (disappears after one view), which is not what a
-  // persistent button message should do.
-  const data: any = {
+  const inner: any = {
     messageContextInfo: {
       deviceListMetadata: {},
       deviceListMetadataVersion: 2,
@@ -116,24 +135,24 @@ export async function sendButtonMessage(
   };
 
   if (header || headerImage) {
-    data.interactiveMessage.header = {
+    inner.interactiveMessage.header = {
       title: header,
       hasMediaAttachment: !!headerImage,
       imageMessage: headerImage,
     };
   }
   if (body) {
-    data.interactiveMessage.body = {
+    inner.interactiveMessage.body = {
       text: body,
     };
   }
   if (footer) {
-    data.interactiveMessage.footer = {
+    inner.interactiveMessage.footer = {
       text: footer,
     };
   }
 
-  const msg = proto.Message.create(data);
+  const msg = proto.Message.create(wrapInteractiveMessage(inner) as any);
   const fullMessage = generateWAMessageFromContent(chatId, msg, {
     userJid: sock?.user?.id,
   });

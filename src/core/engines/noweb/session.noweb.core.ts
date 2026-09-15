@@ -56,7 +56,7 @@ import {
   ToGroupV2Participants,
   ToGroupV2UpdateEvent,
 } from './groups.noweb';
-import { randomId, sendButtonMessage, buildButtonBinaryNodes } from './noweb.buttons';
+import { randomId, sendButtonMessage, buildButtonBinaryNodes, wrapInteractiveMessage } from './noweb.buttons';
 import {
   NOWEBNewsletterMetadata,
   searchNewsletterDirectoryByText,
@@ -1363,7 +1363,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     const options: any = await this.getMessageOptions(request);
     // Sent as interactiveMessage directly (no viewOnceMessage wrapper — that
     // marks the message view-once, unrelated to rendering the list/buttons).
-    const data = {
+    const inner: any = {
       messageContextInfo: {
         deviceListMetadata: {},
         deviceListMetadataVersion: 2,
@@ -1385,7 +1385,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
         },
       },
     };
-    const msg = proto.Message.create(data);
+    const msg = proto.Message.create(wrapInteractiveMessage(inner) as any);
     const fullMessage = generateWAMessageFromContent(chatId, msg, {
       userJid: this.sock?.user?.id ?? '',
     });
@@ -3636,6 +3636,26 @@ export function extractBody(message: any): string | null {
       const response = content.listResponseMessage;
       const parts = [response?.title, response?.description];
       body = parts.filter(Boolean).join('\n');
+    }
+  }
+
+  // Replies to interactive messages (buttons and single_select lists sent as
+  // native flow). WhatsApp answers with interactiveResponseMessage, carrying
+  // either body.text or a paramsJson payload naming the tapped button or row.
+  if (!body) {
+    const interactive = (content as any).interactiveResponseMessage;
+    if (interactive) {
+      let selected: string | undefined;
+      const params = interactive?.nativeFlowResponseMessage?.paramsJson;
+      if (typeof params === 'string') {
+        try {
+          const parsed = JSON.parse(params);
+          selected = parsed?.id ?? parsed?.selectedId ?? parsed?.title ?? parsed?.display_text;
+        } catch {
+          selected = undefined;
+        }
+      }
+      body = selected ?? interactive?.body?.text ?? params ?? null;
     }
   }
 

@@ -47,6 +47,13 @@ export class WhatsappSessionNoWebPlus extends WhatsappSessionNoWebCore {
    * Overrides Core.uploadMedia(), which throws AvailableInPlusVersion.
    */
   async uploadMedia(file: BinaryFile | RemoteFile, type: string): Promise<any> {
+    // sendButtons() calls this unconditionally, with no header image in the
+    // common case, so a missing file has to behave like Core.uploadMedia() does
+    // (a no-op) instead of reaching getFileBuffer() and throwing a TypeError on
+    // `'data' in undefined`.
+    if (!file || !('url' in file || 'data' in file)) {
+      return undefined;
+    }
     const buffer = await this.getFileBuffer(file);
     const { prepareWAMessageMedia } = await import('@whiskeysockets/baileys');
     const prepared = await prepareWAMessageMedia(
