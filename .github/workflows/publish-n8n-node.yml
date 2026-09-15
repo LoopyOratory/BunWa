@@ -1,0 +1,54 @@
+name: Publish n8n community node
+
+# Publishes integrations/n8n-nodes-bunwa to npm when a matching tag is pushed:
+#   git tag n8n-nodes-bunwa-v0.1.1 && git push origin n8n-nodes-bunwa-v0.1.1
+#
+# Required secret: NPM_TOKEN, an npm automation token with publish rights
+# (npmjs.com → Access Tokens → Generate New Token → Automation).
+# Manual runs are allowed so a release can be re-attempted without a new tag.
+
+on:
+  push:
+    tags: ['n8n-nodes-bunwa-v*']
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: integrations/n8n-nodes-bunwa
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build and test
+        run: npm test
+
+      - name: Check the tag matches the package version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag="${GITHUB_REF_NAME#n8n-nodes-bunwa-v}"
+          version="$(node -p "require('./package.json').version")"
+          echo "tag=$tag version=$version"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+
+      - name: Verify the tarball ships the licence
+        run: npm pack --dry-run 2>&1 | grep -qi 'LICENSE.md' || { echo "::error::LICENSE.md is not in the tarball"; exit 1; }
+
+      - name: Publish
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

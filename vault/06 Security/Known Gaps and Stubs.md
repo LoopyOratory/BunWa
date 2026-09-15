@@ -38,7 +38,7 @@ These are mounted and documented, but always fail:
 | GOWS engine | `GowsBootstrap` is an empty class commented "not supported in Bun version"; `getEngine()` maps `GOWS` → NOWEB, `GowsEngineConfigService` is empty |
 | WPP engine | enum value only, no directory, no implementation |
 | Auto-restart (historical) | was completely broken until commit `0eb3202`; treat staleness guards as recently-established behaviour |
-| Incoming native-flow responses | `extractBody()` handles legacy `buttonsResponseMessage`/`listResponseMessage`/`templateButtonReplyMessage` but **not `interactiveResponseMessage`** — which is what taps on the native-flow buttons/lists BunWa actually sends produce. User taps arrive with `body: null` (raw payload still in `_data`). See [[Interactive Messages and Commerce]] |
+| Incoming native-flow responses | **Corrected by live evidence:** tapping a native-flow `quick_reply` button comes back as `templateButtonReplyMessage` (with `selectedId` and `selectedDisplayText`), which `extractBody()` already parsed, so reply buttons round-trip correctly. `interactiveResponseMessage` parsing was added for the `single_select` list case and is still untested. Note the reply arrives from the chat LID, not the `@c.us` id it was sent to. See [[Interactive Messages and Commerce]] |
 
 ## 3. Implemented but never wired in
 

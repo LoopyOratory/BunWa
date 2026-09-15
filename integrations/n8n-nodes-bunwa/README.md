@@ -365,4 +365,4 @@ BUNWA_URL=http://localhost:3000 BUNWA_API_KEY=your-key npm test
 
 ## License
 
-This package lives inside the BunWa repository and is covered by the BunWa Community License (BCL) v1.0. It is free to use for personal projects, open-source projects, non-profit and educational use. Commercial use requires the BunWa commercial license. See [../../LICENSE.md](../../LICENSE.md) for the full terms.
+This package lives inside the BunWa repository and is covered by the BunWa Community License (BCL) v1.0. It is free to use for personal projects, open-source projects, non-profit and educational use. Commercial use requires the BunWa commercial license. See [LICENSE.md](LICENSE.md) for the full terms.
