@@ -339,6 +339,36 @@ These server endpoints are broken or stubbed, so the package does not build work
 3. Add a BunWa node with Message → Get Batch Status and the `batchId` from step 1.
 4. Add an IF node: while `{{ $json.status }}` is `pending` or `processing`, loop back to the Wait node; `completed`, `failed` and `cancelled` are terminal. For long lists, poll from a Schedule Trigger instead and store the `batchId`.
 
+## Reading button and list replies
+
+When a customer taps a button or a list row, the trigger item carries an
+`interactive` object. Only the reply button type sends anything back; url, call
+and copy buttons are handled inside the customer's app and produce no message.
+
+| Field | Meaning |
+|---|---|
+| `interactive.type` | `button`, `list` or `flow` |
+| `interactive.selectedId` | The id you set when sending, e.g. `order-cat-fashion`. This is what to route on. |
+| `interactive.selectedText` | The label the customer saw. Also available as `body`. |
+| `interactive.repliedToMessageId` | Message id the reply was given against, for threading |
+
+Route on the id, not the label: labels are for customers and may be reworded,
+ids are the contract. A Switch node on
+`{{ $json.interactive.selectedId }}` is all a guided flow needs:
+
+```text
+BunWa Trigger  →  Switch on {{ $json.interactive.selectedId }}
+                    order-cat-fashion  → Send List of products
+                    order-cat-skincare → Send List of products
+                    order-confirm      → create the order
+```
+
+The tapped id lives deep in the raw payload
+(`_data.message.templateButtonReplyMessage.selectedId`, or
+`listResponseMessage.singleSelectReply.selectedRowId`, or a native flow
+`paramsJson`). The trigger flattens all of those into `interactive`, so you do
+not have to know which shape WhatsApp chose.
+
 ## Development
 
 ```sh

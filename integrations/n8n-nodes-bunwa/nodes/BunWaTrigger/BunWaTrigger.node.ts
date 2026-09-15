@@ -8,6 +8,7 @@ import type {
 } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 import { bunwaApiRequest } from '../BunWa/GenericFunctions';
+import { extractInteractiveResponse } from './interactive';
 
 const EVENT_OPTIONS = [
 	{ name: 'All Events', value: '*' },
@@ -107,6 +108,9 @@ export class BunWaTrigger implements INodeType {
 		const body = this.getBodyData();
 		const headers = this.getHeaderData() as IDataObject;
 		const event = (headers['x-waha-event'] as string) ?? (body.event as string) ?? 'unknown';
+		// Surfaced as `interactive` so a workflow can switch on
+		// {{ $json.interactive.selectedId }} instead of digging into _data.
+		const interactive = extractInteractiveResponse(body);
 
 		return {
 			workflowData: [
@@ -118,6 +122,7 @@ export class BunWaTrigger implements INodeType {
 							deliveryId: headers['x-waha-delivery-id'] ?? undefined,
 							retryCount: headers['x-waha-retry-count'] ?? undefined,
 							idempotencyKey: headers['x-waha-idempotency-key'] ?? undefined,
+							...(interactive ? { interactive } : {}),
 						},
 					},
 				],
