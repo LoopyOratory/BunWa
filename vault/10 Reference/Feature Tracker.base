@@ -1,0 +1,70 @@
+filters:
+  and:
+    - 'type == "feature"'
+
+formulas:
+  engines: 'if(engine, engine.toString(), "shared")'
+  tier_label: 'if(tier, tier.toString(), "both")'
+  health: 'if(status == "shipped", "🟢", if(status == "partial", "🟣", if(status == "gap", "🔴", "🟡")))'
+
+properties:
+  status:
+    displayName: "Status"
+  engine:
+    displayName: "Engine"
+  tier:
+    displayName: "Tier"
+  endpoints:
+    displayName: "Endpoints"
+  formula.health:
+    displayName: ""
+  formula.engines:
+    displayName: "Engine(s)"
+
+views:
+  - type: table
+    name: "All features"
+    groupBy:
+      property: status
+      direction: ASC
+    order:
+      - formula.health
+      - file.name
+      - engines
+      - tier_label
+      - endpoints
+
+  - type: table
+    name: "Shipped"
+    filters:
+      and:
+        - 'status == "shipped"'
+    groupBy:
+      property: tier
+      direction: ASC
+    order:
+      - file.name
+      - engines
+      - endpoints
+
+  - type: table
+    name: "Needs work"
+    filters:
+      or:
+        - 'status == "partial"'
+        - 'status == "gap"'
+    groupBy:
+      property: engine
+      direction: ASC
+    order:
+      - formula.health
+      - file.name
+      - status
+      - endpoints
+
+  - type: cards
+    name: "Cards"
+    order:
+      - file.name
+      - status
+      - engines

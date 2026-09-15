@@ -4,6 +4,11 @@
 
 BunWa is a WhatsApp HTTP API server built on the Bun runtime with the Hono framework. It is a 1:1 API-compatible rewrite of WAHA (WhatsApp HTTP API) that delivers the same functionality at significantly lower resource usage. Two WhatsApp engines are supported: NOWEB (Baileys, lightweight) and WEBJS (whatsapp-web.js, Puppeteer).
 
+## Documentation
+
+- `vault/` — Obsidian vault with the engineering view: architecture, engines, API + endpoint reference, features, MCP tools, security and an honest gap list. Open `vault/Home.md` first.
+- `README.md` — user-facing setup/config; `docs/PROJECT.md` — legacy feature log.
+
 ## Commands
 
 - `bun install` — Install dependencies
@@ -81,3 +86,28 @@ Key env vars (see .env.example):
 - PINO logger throughout
 - tsyringe for dependency injection
 - Class-validator + class-transformer for request DTOs
+
+## Bun Runtime (1.4.x)
+
+Prefer Bun-native APIs over Node equivalents — they are faster and avoid extra dependencies:
+
+| Use | Instead of |
+|-----|-----------|
+| `Bun.CryptoHasher` (sha256/HMAC) | `node:crypto` `createHash`/`createHmac` |
+| `Bun.file()` / `Bun.write()` / `Bun.file().exists()` | `fs` `readFileSync`/`writeFileSync`/`existsSync` |
+| `fs/promises` in request paths | sync `fs` calls (they block the event loop) |
+| `Bun.gzipSync` / `Bun.gunzipSync` | `node:zlib` streams |
+| `Bun.S3Client` | `@aws-sdk/client-s3` (removed from the project) |
+| `Bun.randomUUIDv7()` | `crypto.randomUUID()` for time-ordered ids |
+| `Bun.sleep()` | `new Promise(r => setTimeout(r, ms))` |
+
+Conventions that matter here:
+
+- **Body size**: the 10 MB limit is enforced at the protocol level via
+  `Bun.serve({ maxRequestBodySize })`, with a fast `Content-Length` check on `/api/*`. Don't add
+  another body-size guard, and keep the 413 mapping in `src/middleware/error-handler.ts` intact.
+- **Static files**: serve through `serveStaticFile()` in `src/main.ts` (async stat, ETag/304,
+  immutable caching). Bun infers Content-Type and handles Range requests — don't hand-roll either.
+- **Verifying a Bun API**: probe the runtime (`bun -e 'console.log(typeof Bun.x)'`) before relying on
+  it, and verify behaviour, not just existence — see `vault/09 Development/Bun Runtime Adoption.md`.
+- **Dependencies**: keep the tree lean; add one only when no native Bun/Web API covers the need.

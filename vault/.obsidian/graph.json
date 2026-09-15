@@ -1,0 +1,67 @@
+{
+  "collapse-filter": false,
+  "search": "",
+  "showTags": true,
+  "showAttachments": false,
+  "hideUnresolved": false,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "tag:#architecture",
+      "color": { "a": 1, "rgb": 3900150 }
+    },
+    {
+      "query": "tag:#engine",
+      "color": { "a": 1, "rgb": 16096779 }
+    },
+    {
+      "query": "tag:#api",
+      "color": { "a": 1, "rgb": 9133302 }
+    },
+    {
+      "query": "tag:#feature",
+      "color": { "a": 1, "rgb": 2278750 }
+    },
+    {
+      "query": "tag:#mcp",
+      "color": { "a": 1, "rgb": 440020 }
+    },
+    {
+      "query": "tag:#security",
+      "color": { "a": 1, "rgb": 15680580 }
+    },
+    {
+      "query": "tag:#frontend",
+      "color": { "a": 1, "rgb": 15485065 }
+    },
+    {
+      "query": "tag:#ops",
+      "color": { "a": 1, "rgb": 1096065 }
+    },
+    {
+      "query": "tag:#dev",
+      "color": { "a": 1, "rgb": 6583435 }
+    },
+    {
+      "query": "tag:#gap",
+      "color": { "a": 1, "rgb": 16734003 }
+    },
+    {
+      "query": "tag:#reference",
+      "color": { "a": 1, "rgb": 9145088 }
+    }
+  ],
+  "collapse-display": true,
+  "showArrow": true,
+  "textFadeMultiplier": 0,
+  "nodeSizeMultiplier": 1,
+  "lineSizeMultiplier": 1,
+  "collapse-forces": true,
+  "centerStrength": 0.518713248970312,
+  "repelStrength": 10,
+  "linkStrength": 1,
+  "linkDistance": 250,
+  "scale": 0.7,
+  "close": false
+}

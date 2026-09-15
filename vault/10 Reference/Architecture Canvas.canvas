@@ -1,0 +1,322 @@
+{
+  "nodes": [
+    {
+      "id": "title",
+      "type": "text",
+      "text": "# 🟢 BunWa — Architecture\nWhatsApp HTTP API · Bun + Hono · WAHA-compatible",
+      "x": -560,
+      "y": -640,
+      "width": 620,
+      "height": 110,
+      "color": "4"
+    },
+    {
+      "id": "grp-clients",
+      "type": "group",
+      "label": "Clients",
+      "x": -600,
+      "y": -480,
+      "width": 480,
+      "height": 720
+    },
+    {
+      "id": "c-dash",
+      "type": "text",
+      "text": "🖥️ **React dashboard**\nserved from `frontend-dist/`",
+      "x": -570,
+      "y": -430,
+      "width": 420,
+      "height": 110
+    },
+    {
+      "id": "c-sdk",
+      "type": "text",
+      "text": "🔌 **WAHA clients / SDKs**\nREST · `X-Api-Key`",
+      "x": -570,
+      "y": -290,
+      "width": 420,
+      "height": 110
+    },
+    {
+      "id": "c-agent",
+      "type": "text",
+      "text": "🤖 **AI agents**\nMCP · 43 tools",
+      "x": -570,
+      "y": -150,
+      "width": 420,
+      "height": 110
+    },
+    {
+      "id": "c-chatwoot",
+      "type": "text",
+      "text": "💬 **Chatwoot**\nwebhook bridge (HMAC)",
+      "x": -570,
+      "y": -10,
+      "width": 420,
+      "height": 110
+    },
+    {
+      "id": "c-ws",
+      "type": "text",
+      "text": "📡 **WebSocket consumers**\n`/ws` · 26 event types",
+      "x": -570,
+      "y": 130,
+      "width": 420,
+      "height": 110
+    },
+    {
+      "id": "grp-edge",
+      "type": "group",
+      "label": "Bun process — edge",
+      "x": -80,
+      "y": -480,
+      "width": 460,
+      "height": 720
+    },
+    {
+      "id": "e-serve",
+      "type": "text",
+      "text": "**`Bun.serve`**\n`/ws` upgrade handled natively before Hono",
+      "x": -50,
+      "y": -430,
+      "width": 400,
+      "height": 110,
+      "color": "6"
+    },
+    {
+      "id": "e-hono",
+      "type": "text",
+      "text": "**Hono app** (`src/main.ts`)\n\nlogger → CORS → rate limit 200/min\n→ 10 MB body cap → error handler\n→ api-key auth → policies\n→ session resolver → handler",
+      "x": -50,
+      "y": -290,
+      "width": 400,
+      "height": 250,
+      "color": "6"
+    },
+    {
+      "id": "e-static",
+      "type": "text",
+      "text": "**Static + docs**\n`/` dashboard SPA · `/api-docs` Scalar",
+      "x": -50,
+      "y": -10,
+      "width": 400,
+      "height": 110
+    },
+    {
+      "id": "e-note",
+      "type": "file",
+      "file": "01 Architecture/Request Lifecycle.md",
+      "x": -50,
+      "y": 130,
+      "width": 400,
+      "height": 110,
+      "color": "1"
+    },
+    {
+      "id": "grp-api",
+      "type": "group",
+      "label": "API surface",
+      "x": 440,
+      "y": -480,
+      "width": 470,
+      "height": 720
+    },
+    {
+      "id": "a-rest",
+      "type": "text",
+      "text": "**REST API**\n29 modules · 175 route definitions",
+      "x": 470,
+      "y": -430,
+      "width": 410,
+      "height": 110,
+      "color": "5"
+    },
+    {
+      "id": "a-mcp",
+      "type": "text",
+      "text": "**MCP server**\n`POST /mcp` (streamable HTTP, stateless) + stdio",
+      "x": 470,
+      "y": -290,
+      "width": 410,
+      "height": 110,
+      "color": "5"
+    },
+    {
+      "id": "a-hooks",
+      "type": "text",
+      "text": "**Webhook engine**\nHMAC · retries · SSRF guard · filters",
+      "x": 470,
+      "y": -150,
+      "width": 410,
+      "height": 110,
+      "color": "5"
+    },
+    {
+      "id": "a-endpoints",
+      "type": "file",
+      "file": "03 API/Endpoints by Domain.md",
+      "x": 470,
+      "y": -10,
+      "width": 410,
+      "height": 110,
+      "color": "1"
+    },
+    {
+      "id": "a-tools",
+      "type": "file",
+      "file": "05 MCP/MCP Tools Reference.md",
+      "x": 470,
+      "y": 130,
+      "width": 410,
+      "height": 110,
+      "color": "1"
+    },
+    {
+      "id": "grp-core",
+      "type": "group",
+      "label": "core/",
+      "x": 960,
+      "y": -480,
+      "width": 470,
+      "height": 720
+    },
+    {
+      "id": "k-manager",
+      "type": "text",
+      "text": "**SessionManager**\nlifecycle · QR · configs · AsyncLock",
+      "x": 990,
+      "y": -430,
+      "width": 410,
+      "height": 110,
+      "color": "3"
+    },
+    {
+      "id": "k-audit",
+      "type": "text",
+      "text": "**AuditService**\n`bun:sqlite` → `data/audit.db` (WAL)",
+      "x": 990,
+      "y": -290,
+      "width": 410,
+      "height": 110,
+      "color": "3"
+    },
+    {
+      "id": "k-media",
+      "type": "text",
+      "text": "**MediaManager** + ffmpeg converter\nlocal (~180 s) or S3",
+      "x": 990,
+      "y": -150,
+      "width": 410,
+      "height": 110,
+      "color": "3"
+    },
+    {
+      "id": "k-templates",
+      "type": "text",
+      "text": "**TemplateService** + BulkMessageService\n`data/templates.db` · in-memory batches",
+      "x": 990,
+      "y": -10,
+      "width": 410,
+      "height": 110,
+      "color": "3"
+    },
+    {
+      "id": "k-overview",
+      "type": "file",
+      "file": "01 Architecture/System Overview.md",
+      "x": 990,
+      "y": 130,
+      "width": 410,
+      "height": 110,
+      "color": "1"
+    },
+    {
+      "id": "grp-engines",
+      "type": "group",
+      "label": "Engines & data",
+      "x": 1480,
+      "y": -480,
+      "width": 520,
+      "height": 720
+    },
+    {
+      "id": "g-noweb",
+      "type": "text",
+      "text": "**NOWEB** — Baileys `7.0.0-rc14`\nWhatsApp Web protocol · no browser\nfull surface + LID + channels",
+      "x": 1510,
+      "y": -430,
+      "width": 460,
+      "height": 130,
+      "color": "2"
+    },
+    {
+      "id": "g-webjs",
+      "type": "text",
+      "text": "**WEBJS** — whatsapp-web.js + Puppeteer\nheadless Chrome · narrower surface",
+      "x": 1510,
+      "y": -270,
+      "width": 460,
+      "height": 130,
+      "color": "2"
+    },
+    {
+      "id": "g-store",
+      "type": "text",
+      "text": "**Session store**\nper-session `store.sqlite3` (bun:sqlite)\nor Postgres (`WAHA_DATABASE_DRIVER`)",
+      "x": 1510,
+      "y": -110,
+      "width": 460,
+      "height": 130,
+      "color": "2"
+    },
+    {
+      "id": "g-disk",
+      "type": "text",
+      "text": "**On disk**\n`.sessions/` auth + index\n`data/` audit + templates\nmedia: `/tmp/whatsapp-files` or S3",
+      "x": 1510,
+      "y": 50,
+      "width": 460,
+      "height": 150,
+      "color": "2"
+    },
+    {
+      "id": "g-note",
+      "type": "file",
+      "file": "02 Engines/Engines Overview.md",
+      "x": 1510,
+      "y": 230,
+      "width": 220,
+      "height": 110,
+      "color": "1"
+    },
+    {
+      "id": "g-gaps",
+      "type": "file",
+      "file": "06 Security/Known Gaps and Stubs.md",
+      "x": 1750,
+      "y": 230,
+      "width": 220,
+      "height": 110,
+      "color": "1"
+    }
+  ],
+  "edges": [
+    { "id": "e1", "fromNode": "c-dash", "fromSide": "right", "toNode": "e-static", "toSide": "left", "label": "HTTP" },
+    { "id": "e2", "fromNode": "c-sdk", "fromSide": "right", "toNode": "e-hono", "toSide": "left", "label": "REST" },
+    { "id": "e3", "fromNode": "c-agent", "fromSide": "right", "toNode": "e-hono", "toSide": "left", "label": "MCP" },
+    { "id": "e4", "fromNode": "c-chatwoot", "fromSide": "right", "toNode": "e-hono", "toSide": "left", "label": "HMAC" },
+    { "id": "e5", "fromNode": "c-ws", "fromSide": "right", "toNode": "e-serve", "toSide": "left", "label": "/ws upgrade" },
+    { "id": "e6", "fromNode": "e-hono", "fromSide": "right", "toNode": "a-rest", "toSide": "left" },
+    { "id": "e7", "fromNode": "e-hono", "fromSide": "right", "toNode": "a-mcp", "toSide": "left" },
+    { "id": "e8", "fromNode": "a-rest", "fromSide": "right", "toNode": "k-manager", "toSide": "left", "label": "resolves session" },
+    { "id": "e9", "fromNode": "a-hooks", "fromSide": "right", "toNode": "k-manager", "toSide": "left", "label": "events" },
+    { "id": "e10", "fromNode": "k-manager", "fromSide": "right", "toNode": "g-noweb", "toSide": "left", "label": "engine" },
+    { "id": "e11", "fromNode": "k-manager", "fromSide": "right", "toNode": "g-webjs", "toSide": "left" },
+    { "id": "e12", "fromNode": "g-noweb", "fromSide": "bottom", "toNode": "g-store", "toSide": "top" },
+    { "id": "e13", "fromNode": "g-store", "fromSide": "bottom", "toNode": "g-disk", "toSide": "top" },
+    { "id": "e14", "fromNode": "k-audit", "fromSide": "bottom", "toNode": "g-disk", "toSide": "top", "label": "data/" },
+    { "id": "e15", "fromNode": "k-media", "fromSide": "bottom", "toNode": "g-disk", "toSide": "top", "label": "media" },
+    { "id": "e16", "fromNode": "a-mcp", "fromSide": "right", "toNode": "k-manager", "toSide": "left", "label": "43 tools" },
+    { "id": "e17", "fromNode": "e-static", "fromSide": "right", "toNode": "a-endpoints", "toSide": "left" }
+  ]
+}

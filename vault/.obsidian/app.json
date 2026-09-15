@@ -1,0 +1,12 @@
+{
+  "showLineNumber": true,
+  "strictLineBreaks": false,
+  "readableLineLength": true,
+  "defaultViewMode": "preview",
+  "livePreview": true,
+  "attachmentFolderPath": "Attachments",
+  "newFileLocation": "folder",
+  "newFileFolderPath": "Inbox",
+  "alwaysUpdateLinks": true,
+  "useMarkdownLinks": false
+}

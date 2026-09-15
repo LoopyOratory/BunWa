@@ -11,7 +11,10 @@ status: ACTIVE — 97/97 tests passing
 
 > LoopyOratory's implementation of [rmyndharis/OpenWA](https://github.com/rmyndharis/OpenWA) —
 > a WAHA-style WhatsApp HTTP API rebuilt on **Bun + Hono**, extended with "Plus" features.
-> This vault logs **every feature and addon** in the project.
+>
+> ⚠️ **Superseded:** the maintained vault now lives in [`vault/`](../vault/Home.md) — architecture,
+> engines, full endpoint reference, features, MCP tools, security model and a known-gaps list.
+> This file is kept as the original feature log.
 
 ---
 
