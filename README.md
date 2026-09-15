@@ -744,6 +744,26 @@ BunWa builds on several open-source projects. We are grateful for their work:
 
 This project originated as a fork of [WAHA](https://waha.devlike.pro/) (WhatsApp HTTP API) and has been independently developed and optimized for the Bun runtime.
 
+## 🔗 Integrations
+
+### n8n community node
+
+`integrations/n8n-nodes-bunwa` is an n8n community node package that wraps this API: **128 operations
+across 10 resources** (message, session, chat, group, contact, channel, label, presence, status,
+server) plus a **BunWa Trigger** node that registers its own webhook subscription on a session and
+removes it on deactivation.
+
+```bash
+cd integrations/n8n-nodes-bunwa
+npm install && npm run build && npm test
+```
+
+Install it in n8n from *Community nodes → Install → `n8n-nodes-bunwa`*, or point
+`N8N_CUSTOM_EXTENSIONS` at the folder. The credential takes the BunWa **Base URL** and the
+**`WAHA_API_KEY`** value. Operation tables, workflow examples, and the endpoints it deliberately does
+not expose (chat mute, contact block, sticker send and others that fail on the server today) are in
+[`integrations/n8n-nodes-bunwa/README.md`](integrations/n8n-nodes-bunwa/README.md).
+
 ---
 
 <div align="center">

@@ -1,0 +1,61 @@
+{
+  "name": "n8n-nodes-bunwa",
+  "version": "0.1.0",
+  "description": "n8n community nodes for the BunWa WhatsApp HTTP API: sessions, messages, chats, groups, channels, labels, presence, statuses, templates, audit and a webhook trigger.",
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "whatsapp",
+    "bunwa",
+    "messaging",
+    "automation"
+  ],
+  "license": "SEE LICENSE IN ../../LICENSE.md",
+  "homepage": "https://github.com/LoopyOratory/BunWa",
+  "author": {
+    "name": "LoopyOratory"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LoopyOratory/BunWa.git"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc && node scripts/copy-icons.mjs",
+    "dev": "tsc --watch",
+    "format": "prettier --write \"credentials/**/*.ts\" \"nodes/**/*.ts\" \"index.ts\"",
+    "lint": "eslint credentials nodes index.ts --ext .ts",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/BunWaApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/BunWa/BunWa.node.js",
+      "dist/nodes/BunWaTrigger/BunWaTrigger.node.js"
+    ]
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.65.0",
+    "@typescript-eslint/parser": "^8.65.0",
+    "eslint": "^8.56.0",
+    "n8n-workflow": "^1.22.0",
+    "prettier": "^3.2.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
