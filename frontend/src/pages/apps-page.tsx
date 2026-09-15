@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { Separator } from "@/components/ui/separator"
 import {
   Dialog,
   DialogContent,
@@ -19,7 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
 import {
   MessageCircle,
   Plus,
@@ -31,10 +31,22 @@ import {
   Bot,
   Globe,
   Activity,
+  Power,
 } from "lucide-react"
 import { api, type Session } from "@/lib/api"
 import { PageLayout } from "@/components/page-layout"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
+import {
+  StatusBadge,
+  Metric,
+  StatCard,
+  StatRowSkeleton,
+  CardGridSkeleton,
+  EmptyState,
+  ErrorState,
+  SectionHeading,
+} from "@/components/primitives"
 
 /* ── Types ── */
 
@@ -64,7 +76,7 @@ interface App {
   lastActivityAt?: string
 }
 
-type AppType = { value: string; label: string; icon: typeof Plug; color: string; description: string }
+type AppType = { value: string; label: string; icon: typeof Plug; description: string }
 
 /* ── App Type Registry ── */
 
@@ -73,21 +85,18 @@ const APP_TYPES: AppType[] = [
     value: "chatwoot",
     label: "Chatwoot Webhook",
     icon: MessageCircle,
-    color: "emerald",
     description: "Bridge WhatsApp conversations with Chatwoot CRM",
   },
   {
     value: "custom_webhook",
     label: "Custom Webhook",
     icon: Webhook,
-    color: "blue",
     description: "Forward events to any HTTP endpoint",
   },
   {
     value: "bot",
     label: "Chatbot",
     icon: Bot,
-    color: "purple",
     description: "Automated reply bot for WhatsApp messages",
   },
 ]
@@ -100,41 +109,22 @@ const FALLBACK_TYPE: AppType = {
   value: "unknown",
   label: "Integration",
   icon: Plug,
-  color: "slate",
   description: "Third-party integration",
 }
 
-/* ── Color / styling helpers ── */
+/* ── Helpers ── */
 
-const COLOR_ACCENT: Record<string, string> = {
-  emerald: "from-emerald-400 to-emerald-600",
-  blue: "from-blue-400 to-blue-600",
-  purple: "from-purple-400 to-purple-600",
-  slate: "from-slate-400 to-slate-600",
-}
-
-const COLOR_BG: Record<string, string> = {
-  emerald: "bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400",
-  blue: "bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400",
-  purple: "bg-purple-500/10 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400",
-  slate: "bg-muted text-muted-foreground",
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return "just now"
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  return `${Math.floor(hours / 24)}d ago`
 }
 
 /* ── Sub-components ── */
-
-function StatusBadge({ enabled }: { enabled: boolean }) {
-  return enabled ? (
-    <Badge variant="default" className="bg-emerald-600/90 hover:bg-emerald-600 text-white gap-1.5 px-3 py-1 text-xs font-medium">
-      <span className="size-1.5 rounded-full bg-white animate-pulse" />
-      Active
-    </Badge>
-  ) : (
-    <Badge variant="secondary" className="text-muted-foreground gap-1.5 px-3 py-1 text-xs font-medium">
-      <span className="size-1.5 rounded-full bg-muted-foreground/50" />
-      Inactive
-    </Badge>
-  )
-}
 
 function AppCard({
   app,
@@ -149,104 +139,74 @@ function AppCard({
 }) {
   const typeInfo = APP_TYPE_MAP[app.app] || FALLBACK_TYPE
   const Icon = typeInfo.icon
-  const color = typeInfo.color
-  const gradient = COLOR_ACCENT[color] || COLOR_ACCENT.slate
-  const iconBg = COLOR_BG[color] || COLOR_BG.slate
   const displayName = app.name || typeInfo.label
   const sessionLabel = app.session ? `Session: ${app.session}` : null
   const url = app.config?.url || app.config?.webhookUrl || null
 
   return (
-    <Card className="group relative overflow-hidden transition-all hover:shadow-lg hover:-translate-y-0.5">
-      {/* Gradient accent bar */}
-      <div
-        className={`absolute top-0 left-0 right-0 h-1 ${
-          app.enabled
-            ? `bg-gradient-to-r ${gradient}`
-            : "bg-gradient-to-r from-muted-foreground/30 to-muted-foreground/10"
-        }`}
-      />
-
-      <CardHeader className="pb-3 pt-5">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-4 min-w-0">
-            <div className={`p-3 rounded-xl ${app.enabled ? iconBg : "bg-muted text-muted-foreground"}`}>
-              <Icon className="size-6" />
+    <Card className="card-hover">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div
+              className={cn(
+                "flex size-11 shrink-0 items-center justify-center rounded-lg",
+                app.enabled ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
+              )}
+            >
+              <Icon className="size-5" strokeWidth={1.75} />
             </div>
             <div className="min-w-0 space-y-1">
-              <CardTitle className="text-base font-semibold capitalize leading-tight truncate max-w-[200px]">
-                {displayName}
-              </CardTitle>
+              <CardTitle className="truncate text-base font-medium leading-tight">{displayName}</CardTitle>
               {sessionLabel && (
-                <CardDescription className="text-xs flex items-center gap-1">
-                  <Cpu className="size-3 shrink-0" />
+                <CardDescription className="flex items-center gap-1 truncate text-xs">
+                  <Cpu className="size-3.5 shrink-0" strokeWidth={1.75} />
                   <span className="truncate">{sessionLabel}</span>
                 </CardDescription>
               )}
             </div>
           </div>
-          <StatusBadge enabled={app.enabled} />
+          <StatusBadge kind={app.enabled ? "working" : "stopped"} />
         </div>
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {/* Description / URL */}
         {url ? (
-          <p className="text-xs text-muted-foreground font-mono truncate" title={url}>
-            <Globe className="size-3 inline mr-1.5 -mt-0.5" />
+          <p className="truncate font-mono text-xs text-muted-foreground" title={url}>
+            <Globe className="mr-1.5 -mt-0.5 inline size-3.5" strokeWidth={1.75} />
             {url}
           </p>
         ) : (
           <p className="text-xs text-muted-foreground">{typeInfo.description}</p>
         )}
 
-        {/* Last activity */}
         {app.lastActivityAt && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Activity className="size-3.5" />
+            <Activity className="size-3.5" strokeWidth={1.75} />
             <span>
-              Last activity{" "}
-              {(() => {
-                const diff = Date.now() - new Date(app.lastActivityAt!).getTime()
-                const mins = Math.floor(diff / 60000)
-                if (mins < 1) return "just now"
-                if (mins < 60) return `${mins}m ago`
-                const hours = Math.floor(mins / 60)
-                if (hours < 24) return `${hours}h ago`
-                const days = Math.floor(hours / 24)
-                return `${days}d ago`
-              })()}
+              Last activity <Metric>{timeAgo(app.lastActivityAt)}</Metric>
             </span>
           </div>
         )}
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-2 pt-2 border-t">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 text-xs gap-1.5"
-            onClick={onEdit}
-          >
-            <Pencil className="size-3.5" />
+        <div className="flex items-center gap-2 border-t border-border pt-3">
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={onEdit}>
+            <Pencil className="size-4" strokeWidth={1.75} />
             Edit
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 text-xs gap-1.5"
-            onClick={() => onToggle(!app.enabled)}
-          >
-            <Activity className="size-3.5" />
+          <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => onToggle(!app.enabled)}>
+            <Power className="size-4" strokeWidth={1.75} />
             {app.enabled ? "Disable" : "Enable"}
           </Button>
           <Button
             size="sm"
             variant="ghost"
-            className="h-8 text-xs gap-1.5 ml-auto text-muted-foreground hover:text-destructive"
+            className="ml-auto text-muted-foreground hover:text-destructive"
             onClick={onDelete}
+            title="Delete app"
+            aria-label="Delete app"
           >
-            <Trash2 className="size-3.5" />
+            <Trash2 className="size-4" strokeWidth={1.75} />
           </Button>
         </div>
       </CardContent>
@@ -265,35 +225,25 @@ function StatsCards({ apps }: { apps: App[] }) {
   }))
 
   return (
-    <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium">Total Apps</CardTitle>
-          <Plug className="size-5 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold tracking-tight">{total}</div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium">Active</CardTitle>
-          <Activity className="size-5 text-emerald-500" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold tracking-tight text-emerald-500">{active}</div>
-        </CardContent>
-      </Card>
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <StatCard
+        label="Total apps"
+        value={<Metric>{total}</Metric>}
+        icon={<Plug strokeWidth={1.75} />}
+      />
+      <StatCard
+        label="Active"
+        value={<Metric>{active}</Metric>}
+        tone="success"
+        icon={<Activity strokeWidth={1.75} />}
+      />
       {byType.map((t) => (
-        <Card key={t.value}>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">{t.label}</CardTitle>
-            <t.icon className={`size-5 text-${t.color}-500`} />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold tracking-tight">{t.count}</div>
-          </CardContent>
-        </Card>
+        <StatCard
+          key={t.value}
+          label={t.label}
+          value={<Metric>{t.count}</Metric>}
+          icon={<t.icon strokeWidth={1.75} />}
+        />
       ))}
     </div>
   )
@@ -322,90 +272,101 @@ function AppConfigForm({
 
   return (
     <div className="space-y-5">
-      {/* App type selector */}
       <div className="space-y-2">
-        <Label>Integration Type</Label>
+        <Label htmlFor="app-type">Integration type</Label>
         <Select value={app} onValueChange={(v) => set({ app: v })}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select type..." />
+          <SelectTrigger id="app-type">
+            <SelectValue placeholder="Select type" />
           </SelectTrigger>
           <SelectContent>
             {APP_TYPES.map((t) => (
               <SelectItem key={t.value} value={t.value}>
-                <div className="flex items-center gap-2">
-                  <t.icon className="size-4" />
+                <span className="flex items-center gap-2">
+                  <t.icon className="size-4" strokeWidth={1.75} />
                   <span>{t.label}</span>
-                </div>
+                </span>
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
-      {/* Name */}
       <div className="space-y-2">
-        <Label>Display Name</Label>
+        <Label htmlFor="app-name">Display name</Label>
         <Input
+          id="app-name"
           placeholder="My integration"
           value={name || ""}
           onChange={(e) => set({ name: e.target.value })}
         />
-        <p className="text-[10px] text-base text-muted-foreground">Optional friendly name for this integration</p>
+        <p className="text-xs text-muted-foreground">Optional friendly name for this integration.</p>
       </div>
 
-      {/* Session and toggle */}
-      <div className="card-grid">
+      <Separator />
+
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label>WhatsApp Session</Label>
-          <Select
-            value={session || ""}
-            onValueChange={(v) => set({ session: v })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select session..." />
+          <Label htmlFor="app-session">WhatsApp session</Label>
+          <Select value={session || ""} onValueChange={(v) => set({ session: v })}>
+            <SelectTrigger id="app-session">
+              <SelectValue placeholder="Select session" />
             </SelectTrigger>
             <SelectContent>
-              {sessions.map((s) => (
-                <SelectItem key={s.name} value={s.name}>
-                  {s.name} ({s.status})
+              {sessions.length === 0 ? (
+                <SelectItem value="__none__" disabled>
+                  No sessions available
                 </SelectItem>
-              ))}
+              ) : (
+                sessions.map((s) => (
+                  <SelectItem key={s.name} value={s.name}>
+                    <Metric>{s.name}</Metric>
+                  </SelectItem>
+                ))
+              )}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-2">
-          <Label>Enabled</Label>
-          <div className="flex items-center gap-2 pt-2">
+          <Label htmlFor="app-enabled">Enabled</Label>
+          <div className="flex items-center gap-2 pt-1">
             <Switch
+              id="app-enabled"
               checked={enabled ?? true}
               onCheckedChange={(v) => set({ enabled: v })}
             />
-            <span className="text-sm text-base text-muted-foreground">
+            <span className="text-sm text-muted-foreground">
               {enabled !== false ? "Active" : "Disabled"}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Chatwoot-specific fields */}
       {app === "chatwoot" && (
         <>
+          <Separator />
+          <SectionHeading
+            title="Chatwoot connection"
+            description="Credentials for your Chatwoot installation."
+          />
           <div className="space-y-2">
-            <Label>Chatwoot URL *</Label>
+            <Label htmlFor="chatwoot-url">Chatwoot URL</Label>
             <Input
+              id="chatwoot-url"
               placeholder="http://chatwoot:3000"
               value={config?.url || ""}
               onChange={(e) => set({ config: { ...config, url: e.target.value } })}
             />
-            <p className="text-[10px] text-base text-muted-foreground">Full URL to your Chatwoot instance</p>
+            <p className="text-xs text-muted-foreground">Full URL to your Chatwoot instance.</p>
           </div>
 
-          <div className="card-grid">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Account ID *</Label>
+              <Label htmlFor="chatwoot-account-id">Account ID</Label>
               <Input
+                id="chatwoot-account-id"
                 type="number"
                 placeholder="1"
+                className="metric"
                 value={config?.accountId || ""}
                 onChange={(e) =>
                   set({ config: { ...config, accountId: parseInt(e.target.value) || 0 } })
@@ -413,8 +374,9 @@ function AppConfigForm({
               />
             </div>
             <div className="space-y-2">
-              <Label>Account Token *</Label>
+              <Label htmlFor="chatwoot-account-token">Account token</Label>
               <Input
+                id="chatwoot-account-token"
                 placeholder="CHATWOOT_ACCOUNT_TOKEN"
                 value={config?.accountToken || ""}
                 onChange={(e) =>
@@ -424,12 +386,14 @@ function AppConfigForm({
             </div>
           </div>
 
-          <div className="card-grid">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Inbox ID *</Label>
+              <Label htmlFor="chatwoot-inbox-id">Inbox ID</Label>
               <Input
+                id="chatwoot-inbox-id"
                 type="number"
                 placeholder="1"
+                className="metric"
                 value={config?.inboxId || ""}
                 onChange={(e) =>
                   set({ config: { ...config, inboxId: parseInt(e.target.value) || 0 } })
@@ -437,8 +401,9 @@ function AppConfigForm({
               />
             </div>
             <div className="space-y-2">
-              <Label>Inbox Identifier</Label>
+              <Label htmlFor="chatwoot-inbox-identifier">Inbox identifier</Label>
               <Input
+                id="chatwoot-inbox-identifier"
                 placeholder="Inbox UUID (optional)"
                 value={config?.inboxIdentifier || ""}
                 onChange={(e) =>
@@ -448,14 +413,14 @@ function AppConfigForm({
             </div>
           </div>
 
-          <div className="card-grid">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Locale</Label>
+              <Label htmlFor="chatwoot-locale">Locale</Label>
               <Select
                 value={config?.locale || "en-US"}
                 onValueChange={(v) => set({ config: { ...config, locale: v } })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="chatwoot-locale">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -471,7 +436,7 @@ function AppConfigForm({
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Conversation Sort</Label>
+              <Label htmlFor="chatwoot-sort">Conversation sort</Label>
               <Select
                 value={config?.conversations?.sort || "created_newest"}
                 onValueChange={(v) =>
@@ -483,12 +448,12 @@ function AppConfigForm({
                   })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id="chatwoot-sort">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="created_newest">Created: Newest</SelectItem>
-                  <SelectItem value="activity_newest">Activity: Newest</SelectItem>
+                  <SelectItem value="created_newest">Created: newest</SelectItem>
+                  <SelectItem value="activity_newest">Activity: newest</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -496,64 +461,51 @@ function AppConfigForm({
         </>
       )}
 
-      {/* Custom webhook fields */}
       {app === "custom_webhook" && (
-        <div className="space-y-2">
-          <Label>Webhook URL *</Label>
-          <Input
-            placeholder="https://your-server.com/webhook"
-            value={config?.webhookUrl || ""}
-            onChange={(e) => set({ config: { ...config, webhookUrl: e.target.value } })}
+        <>
+          <Separator />
+          <SectionHeading
+            title="Webhook endpoint"
+            description="Where BunWa delivers events."
           />
-          <p className="text-[10px] text-base text-muted-foreground">HTTP endpoint that will receive events</p>
-        </div>
+          <div className="space-y-2">
+            <Label htmlFor="webhook-url">Webhook URL</Label>
+            <Input
+              id="webhook-url"
+              placeholder="https://your-server.com/webhook"
+              value={config?.webhookUrl || ""}
+              onChange={(e) => set({ config: { ...config, webhookUrl: e.target.value } })}
+            />
+            <p className="text-xs text-muted-foreground">HTTP endpoint that will receive events.</p>
+          </div>
+        </>
       )}
 
-      {/* Bot fields */}
       {app === "bot" && (
-        <div className="space-y-3">
+        <>
+          <Separator />
+          <SectionHeading title="Bot endpoint" description="Where BunWa forwards incoming messages." />
           <div className="space-y-2">
-            <Label>Webhook URL *</Label>
+            <Label htmlFor="bot-webhook-url">Webhook URL</Label>
             <Input
+              id="bot-webhook-url"
               placeholder="https://your-bot-server.com/webhook"
               value={config?.webhookUrl || ""}
               onChange={(e) => set({ config: { ...config, webhookUrl: e.target.value } })}
             />
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Bot className="size-3.5" strokeWidth={1.75} />
+              The bot processes incoming messages and sends automated replies.
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-            <Bot className="size-3.5" />
-            Bot processes incoming messages and sends automated replies
-          </p>
-        </div>
+        </>
       )}
 
-      {/* Selected type hint */}
-      <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground flex items-start gap-2">
-        <selectedType.icon className="size-4 shrink-0 mt-0.5" />
+      <div className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+        <selectedType.icon className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} />
         <span>{selectedType.description}</span>
       </div>
     </div>
-  )
-}
-
-/* ── Empty state ── */
-
-function EmptyState({ onAdd }: { onAdd: () => void }) {
-  return (
-    <Card className="border-dashed">
-      <CardContent className="flex flex-col items-center justify-center py-8">
-        <div className="p-4 rounded-full bg-primary/10 mb-6">
-          <Plug className="size-12 text-primary" />
-        </div>
-        <p className="text-xl font-semibold">No apps configured</p>
-        <p className="text-base text-muted-foreground mt-1 mb-6">
-          Add an integration to connect BunWa with external services
-        </p>
-        <Button onClick={onAdd}>
-          <Plus />Create Your First App
-        </Button>
-      </CardContent>
-    </Card>
   )
 }
 
@@ -580,17 +532,20 @@ export function AppsPage() {
   const [apps, setApps] = useState<App[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<App | null>(null)
   const [form, setForm] = useState<typeof DEFAULT_FORM>({ ...DEFAULT_FORM, config: { ...DEFAULT_FORM.config } })
 
   const load = async () => {
+    setError(null)
+    if (apps.length === 0) setLoading(true)
     try {
       const [appList, sessionList] = await Promise.all([api.getApps(), api.getSessions()])
       setApps((appList || []) as App[])
       setSessions(sessionList)
     } catch (err: any) {
-      toast.error("Failed to load apps: " + (err.message || "Unknown error"))
+      setError(err?.message || "Could not load apps")
     } finally {
       setLoading(false)
     }
@@ -629,7 +584,7 @@ export function AppsPage() {
     }
     if (form.app === "chatwoot") {
       if (!form.config?.url || !form.config?.accountToken) {
-        toast.error("URL and Account Token are required for Chatwoot")
+        toast.error("URL and account token are required for Chatwoot")
         return
       }
     }
@@ -663,7 +618,7 @@ export function AppsPage() {
         enabled: form.enabled !== false,
         config: form.config,
       })
-      toast.success("Integration updated")
+      toast.success("App updated")
       setEditing(null)
       resetForm()
       load()
@@ -705,12 +660,10 @@ export function AppsPage() {
     >
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="text-xl">
-            {editing ? "Edit Integration" : "New Integration"}
-          </DialogTitle>
-          <DialogDescription className="text-base">
+          <DialogTitle>{editing ? "Edit app" : "New app"}</DialogTitle>
+          <DialogDescription>
             {editing
-              ? "Update the connection settings for this integration."
+              ? "Update the connection settings for this app."
               : "Configure a new app integration to connect BunWa with external services."}
           </DialogDescription>
         </DialogHeader>
@@ -731,7 +684,7 @@ export function AppsPage() {
             Cancel
           </Button>
           <Button onClick={editing ? handleUpdate : handleCreate}>
-            {editing ? "Save Changes" : "Create Integration"}
+            {editing ? "Save changes" : "Create app"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -746,28 +699,34 @@ export function AppsPage() {
         <>
           {appDialog}
           <Button onClick={openCreate}>
-            <Plus />Add App
+            <Plus strokeWidth={1.75} />
+            New app
           </Button>
         </>
       }
     >
-      <div className="space-y-6">
-        {/* Stats cards */}
-        {apps.length > 0 && <StatsCards apps={apps} />}
-
-        {/* Loading skeleton */}
-        {loading ? (
-          <div className="card-grid">
-            {[1, 2, 3].map((i) => (
-              <Card key={i} className="animate-pulse">
-                <CardHeader className="h-32" />
-                <CardContent className="h-24" />
-              </Card>
-            ))}
-          </div>
-        ) : apps.length === 0 ? (
-          <EmptyState onAdd={openCreate} />
-        ) : (
+      {loading ? (
+        <div className="space-y-6">
+          <StatRowSkeleton count={5} />
+          <CardGridSkeleton count={6} />
+        </div>
+      ) : error ? (
+        <ErrorState title="Could not load apps" description={error} onRetry={load} />
+      ) : apps.length === 0 ? (
+        <EmptyState
+          icon={<Plug strokeWidth={1.75} />}
+          title="No apps configured"
+          description="Add an integration to connect BunWa with external services."
+          action={
+            <Button onClick={openCreate}>
+              <Plus strokeWidth={1.75} />
+              New app
+            </Button>
+          }
+        />
+      ) : (
+        <div className="space-y-6">
+          <StatsCards apps={apps} />
           <div className="card-grid">
             {apps.map((app) => (
               <AppCard
@@ -779,8 +738,8 @@ export function AppsPage() {
               />
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </PageLayout>
   )
 }

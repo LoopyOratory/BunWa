@@ -21,40 +21,41 @@ import {
 } from "@/components/ui/select"
 import { toast } from "sonner"
 import { api, type Session } from "@/lib/api"
-import { Plus, Trash2, X, ChevronDown, ChevronRight, Check, MessageCircle, Search } from "lucide-react"
+import { EmptyState, ErrorState, Skeleton } from "@/components/primitives"
+import { Plus, Trash2, X, ChevronDown, ChevronRight, Check, MessageCircle, Search, Webhook } from "lucide-react"
 
 const WEBHOOK_EVENTS = [
-  { value: "*", label: "All Events" },
-  { value: "session.status", label: "Session Status" },
+  { value: "*", label: "All events" },
+  { value: "session.status", label: "Session status" },
   { value: "message", label: "Message" },
-  { value: "message.any", label: "Any Message" },
-  { value: "message.reaction", label: "Message Reaction" },
+  { value: "message.any", label: "Any message" },
+  { value: "message.reaction", label: "Message reaction" },
   { value: "message.ack", label: "Message ACK" },
-  { value: "message.ack.group", label: "Message ACK Group" },
-  { value: "message.waiting", label: "Message Waiting" },
-  { value: "message.revoked", label: "Message Revoked" },
-  { value: "message.edited", label: "Message Edited" },
-  { value: "state.change", label: "State Change" },
-  { value: "group.join", label: "Group Join" },
-  { value: "group.leave", label: "Group Leave" },
-  { value: "group.v2.join", label: "Group V2 Join" },
-  { value: "group.v2.leave", label: "Group V2 Leave" },
-  { value: "group.v2.update", label: "Group V2 Update" },
-  { value: "group.v2.participants", label: "Group V2 Participants" },
-  { value: "presence.update", label: "Presence Update" },
-  { value: "poll.vote", label: "Poll Vote" },
-  { value: "poll.vote.failed", label: "Poll Vote Failed" },
-  { value: "chat.archive", label: "Chat Archive" },
-  { value: "call.received", label: "Call Received" },
-  { value: "call.accepted", label: "Call Accepted" },
-  { value: "call.rejected", label: "Call Rejected" },
-  { value: "label.upsert", label: "Label Upsert" },
-  { value: "label.deleted", label: "Label Deleted" },
-  { value: "label.chat.added", label: "Label Chat Added" },
-  { value: "label.chat.deleted", label: "Label Chat Deleted" },
-  { value: "event.response", label: "Event Response" },
-  { value: "event.response.failed", label: "Event Response Failed" },
-  { value: "engine.event", label: "Engine Event" },
+  { value: "message.ack.group", label: "Message ACK group" },
+  { value: "message.waiting", label: "Message waiting" },
+  { value: "message.revoked", label: "Message revoked" },
+  { value: "message.edited", label: "Message edited" },
+  { value: "state.change", label: "State change" },
+  { value: "group.join", label: "Group join" },
+  { value: "group.leave", label: "Group leave" },
+  { value: "group.v2.join", label: "Group v2 join" },
+  { value: "group.v2.leave", label: "Group v2 leave" },
+  { value: "group.v2.update", label: "Group v2 update" },
+  { value: "group.v2.participants", label: "Group v2 participants" },
+  { value: "presence.update", label: "Presence update" },
+  { value: "poll.vote", label: "Poll vote" },
+  { value: "poll.vote.failed", label: "Poll vote failed" },
+  { value: "chat.archive", label: "Chat archive" },
+  { value: "call.received", label: "Call received" },
+  { value: "call.accepted", label: "Call accepted" },
+  { value: "call.rejected", label: "Call rejected" },
+  { value: "label.upsert", label: "Label upsert" },
+  { value: "label.deleted", label: "Label deleted" },
+  { value: "label.chat.added", label: "Label chat added" },
+  { value: "label.chat.deleted", label: "Label chat deleted" },
+  { value: "event.response", label: "Event response" },
+  { value: "event.response.failed", label: "Event response failed" },
+  { value: "engine.event", label: "Engine event" },
 ]
 
 const RETRY_POLICIES = [
@@ -141,22 +142,34 @@ function MultiSelect({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className="truncate">{value.length === 0 ? placeholder : `${labels.join(", ")}${extra > 0 ? ` +${extra}` : ""}`}</span>
-        <ChevronDown className="size-4 opacity-50 shrink-0 ml-2" />
+        <ChevronDown className="ml-2 size-4 shrink-0 opacity-50" strokeWidth={1.75} />
       </button>
       {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+        <div role="listbox" aria-multiselectable="true" className="absolute z-50 mt-1 w-full rounded-lg border bg-popover p-1 text-popover-foreground shadow-md">
           <ScrollArea className="h-56">
-            {options.map(opt => (
-              <div key={opt.value} className="flex cursor-pointer items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground" onClick={() => toggle(opt.value)}>
-                <div className="mr-2 flex size-4 items-center justify-center rounded-sm border border-primary">
-                  {value.includes(opt.value) && <Check className="size-3" />}
-                </div>
-                <span>{opt.label}</span>
-              </div>
-            ))}
+            {options.map(opt => {
+              const selected = value.includes(opt.value)
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  onClick={() => toggle(opt.value)}
+                  className="flex w-full items-center rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                >
+                  <span className="mr-2 flex size-4 items-center justify-center rounded-sm border border-primary">
+                    {selected && <Check className="size-3" strokeWidth={1.75} />}
+                  </span>
+                  <span>{opt.label}</span>
+                </button>
+              )
+            })}
           </ScrollArea>
         </div>
       )}
@@ -194,6 +207,8 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
   const [mcpDeniedTools, setMcpDeniedTools] = useState<string[]>([])
   const [mcpTools, setMcpTools] = useState<{ tools: any[]; byCategory: Record<string, any[]> } | null>(null)
   const [mcpLoading, setMcpLoading] = useState(false)
+  const [mcpLoadError, setMcpLoadError] = useState(false)
+  const [mcpReload, setMcpReload] = useState(0)
   const [mcpToolSearch, setMcpToolSearch] = useState("")
   const [mcpExpandedCategories, setMcpExpandedCategories] = useState<Record<string, boolean>>({})
   const [mcpShowManual, setMcpShowManual] = useState(false)
@@ -214,6 +229,8 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
   })
   const [chatwootAppId, setChatwootAppId] = useState<string | null>(null)
   const [chatwootLoaded, setChatwootLoaded] = useState(false)
+  const [chatwootError, setChatwootError] = useState(false)
+  const [chatwootReload, setChatwootReload] = useState(0)
 
   useEffect(() => {
     if (session?.config) {
@@ -254,6 +271,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
   useEffect(() => {
     if (!open || !session) return
     setChatwootLoaded(false)
+    setChatwootError(false)
     api.getApps().then((apps) => {
       const chatwoot = apps.find((a: any) => a.app === "chatwoot" && a.session === session.name)
       if (chatwoot) {
@@ -271,13 +289,14 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
         setChatwootAppId(null)
         setChatwootEnabled(false)
       }
-    }).catch(() => {}).finally(() => setChatwootLoaded(true))
-  }, [open, session])
+    }).catch(() => setChatwootError(true)).finally(() => setChatwootLoaded(true))
+  }, [open, session, chatwootReload])
 
   // Load MCP tools list + session config
   useEffect(() => {
     if (!open || !session) return
     setMcpLoading(true)
+    setMcpLoadError(false)
     Promise.all([
       api.getMcpTools(),
       api.getSessionMcp(session.name),
@@ -293,9 +312,9 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
       setMcpKey(null)
       setMcpConnection(null)
     }).catch(() => {
-      // MCP API not available — silently ignore
+      setMcpLoadError(true)
     }).finally(() => setMcpLoading(false))
-  }, [open, session])
+  }, [open, session, mcpReload])
 
   // Clear revealed key when dialog closes
   useEffect(() => {
@@ -440,7 +459,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
     { id: "proxy" as const, label: "Proxy" },
     { id: "engine" as const, label: "Engine" },
     { id: "ignore" as const, label: "Ignore" },
-    { id: "mcp" as const, label: "MCP Tools" },
+    { id: "mcp" as const, label: "MCP tools" },
     { id: "advanced" as const, label: "Advanced" },
     { id: "integrations" as const, label: "Integrations" },
   ]
@@ -451,16 +470,18 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-full h-full sm:h-auto sm:max-w-5xl sm:max-h-[85vh] flex flex-col p-0 gap-0 rounded-none sm:rounded-xl">
         <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 border-b shrink-0">
-          <DialogTitle className="text-base sm:text-sm">Session Settings — {session.name}</DialogTitle>
+          <DialogTitle className="text-base sm:text-sm">Session settings: {session.name}</DialogTitle>
         </DialogHeader>
 
         {/* Tab Bar — horizontal scroll on mobile */}
-        <div className="flex gap-0.5 border-b overflow-x-auto shrink-0 scrollbar-none">
+        <div role="tablist" className="flex gap-0.5 border-b overflow-x-auto shrink-0 scrollbar-none">
           {tabs.map(tab => (
             <button
               key={tab.id}
+              role="tab"
+              aria-selected={activeTab === tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-3 text-xs sm:text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
+              className={`px-4 py-3 text-xs sm:text-sm font-medium whitespace-nowrap transition-colors border-b-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
                 activeTab === tab.id
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground"
@@ -477,16 +498,23 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
             {activeTab === "webhooks" && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-medium">Webhook Endpoints</h4>
-                  <Button variant="outline" size="sm" onClick={addWebhook}><Plus />Add</Button>
+                  <h4 className="text-sm font-medium">Webhook endpoints</h4>
+                  <Button variant="outline" size="sm" onClick={addWebhook}><Plus strokeWidth={1.75} />Add</Button>
                 </div>
-                {webhooks.length === 0 && <p className="text-sm text-muted-foreground py-4">No webhooks configured.</p>}
+                {webhooks.length === 0 && (
+                  <EmptyState
+                    compact
+                    icon={<Webhook className="size-5" strokeWidth={1.75} />}
+                    title="No webhooks yet"
+                    description="Add an endpoint to receive session events on your server."
+                  />
+                )}
                 {webhooks.map((webhook, wi) => (
                   <div key={wi} className={`border rounded-lg p-3 sm:p-4 space-y-3 sm:space-y-4 ${webhook.enabled === false ? "opacity-60" : ""}`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Badge variant="secondary">Webhook {wi + 1}</Badge>
-                        {webhook.id && <span className="text-[10px] font-mono text-muted-foreground">{webhook.id}</span>}
+                        {webhook.id && <span className="metric text-[10px] font-mono text-muted-foreground">{webhook.id}</span>}
                       </div>
                       <div className="flex items-center gap-1">
                         <Button variant="ghost" size="sm" onClick={() => updateWebhook(wi, "enabled", webhook.enabled === false ? true : false)}
@@ -521,7 +549,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                       </div>
                       <div className="flex-1 space-y-2">
                         <Label>URL</Label>
-                        <Input placeholder="https://example.com/webhook" value={webhook.url} onChange={(e) => updateWebhook(wi, "url", e.target.value)} className="w-full" />
+                        <Input placeholder="https://your-server.com/webhooks/bunwa" value={webhook.url} onChange={(e) => updateWebhook(wi, "url", e.target.value)} className="w-full" />
                       </div>
                     </div>
                     <div className="space-y-2">
@@ -529,28 +557,28 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                       <MultiSelect value={webhook.events} onChange={(v) => updateWebhook(wi, "events", v)} options={WEBHOOK_EVENTS} placeholder="Select events..." />
                     </div>
                     <div className="space-y-2">
-                      <Label>HMAC Key</Label>
+                      <Label>HMAC key</Label>
                       <Input type="password" placeholder="Secret for X-WAHA-Signature" value={webhook.hmac?.key || ""} onChange={(e) => updateWebhook(wi, "hmac", { key: e.target.value })} className="w-full" />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="space-y-2">
-                        <Label>Retry Policy</Label>
+                        <Label>Retry policy</Label>
                         <Select value={webhook.retries?.policy || ""} onValueChange={(v) => updateWebhook(wi, "retries", { ...webhook.retries, policy: v })}>
                           <SelectTrigger className="w-full"><SelectValue placeholder="Policy" /></SelectTrigger>
                           <SelectContent>{RETRY_POLICIES.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label>Max Retries</Label>
+                        <Label>Max retries</Label>
                         <Input type="number" placeholder="3" value={webhook.retries?.attempts || ""} onChange={(e) => updateWebhook(wi, "retries", { ...webhook.retries, attempts: parseInt(e.target.value) || undefined })} className="w-full" />
                       </div>
                       <div className="space-y-2">
-                        <Label>Retry Delay (s)</Label>
+                        <Label>Retry delay (s)</Label>
                         <Input type="number" placeholder="2" value={webhook.retries?.delaySeconds || ""} onChange={(e) => updateWebhook(wi, "retries", { ...webhook.retries, delaySeconds: parseInt(e.target.value) || undefined })} className="w-full" />
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between"><Label>Custom Headers</Label><Button variant="ghost" size="sm" onClick={() => addHeader(wi)}><Plus />Add</Button></div>
+                      <div className="flex items-center justify-between"><Label>Custom headers</Label><Button variant="ghost" size="sm" onClick={() => addHeader(wi)}><Plus strokeWidth={1.75} />Add</Button></div>
                       {(webhook.customHeaders || []).map((h, hi) => (
                         <div key={hi} className="flex gap-2">
                           <Input placeholder="Name" value={h.name} onChange={(e) => updateHeader(wi, hi, "name", e.target.value)} className="flex-1" />
@@ -597,7 +625,8 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
 
             {activeTab === "proxy" && (
               <div className="space-y-4">
-                <h4 className="text-sm font-medium">Proxy Configuration</h4>
+                <h4 className="text-sm font-medium">Proxy configuration</h4>
+                <div className="h-px bg-border" />
                 <div className="space-y-2"><Label>Server URL</Label><Input placeholder="socks5://host:port or http://host:port" value={proxyServer} onChange={(e) => setProxyServer(e.target.value)} /></div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2"><Label>Username</Label><Input placeholder="Optional" value={proxyUsername} onChange={(e) => setProxyUsername(e.target.value)} /></div>
@@ -610,14 +639,14 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
               <div className="space-y-6">
                 {/* Engine Selector */}
                 <div className="space-y-3">
-                  <h4 className="text-sm font-medium">Engine Type</h4>
+                  <h4 className="text-sm font-medium">Engine type</h4>
                   <Select value={engineType} onValueChange={setEngineType}>
                     <SelectTrigger className="w-full sm:w-64">
                       <SelectValue placeholder="Select engine" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="noweb">NOWEB — Baileys (lightweight)</SelectItem>
-                      <SelectItem value="webjs">WEBJS — Chrome/Puppeteer (stable)</SelectItem>
+                      <SelectItem value="noweb">NOWEB (Baileys, lightweight)</SelectItem>
+                      <SelectItem value="webjs">WEBJS (Chrome via Puppeteer)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -625,19 +654,19 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                 {/* NOWEB Config */}
                 {engineType === "noweb" && (
                   <div className="space-y-4">
-                    <h4 className="text-sm font-medium">Baileys Engine Settings</h4>
-                    <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Enable Store</Label><p className="text-xs text-muted-foreground">Persist contacts, chats, messages</p></div><Switch checked={storeEnabled} onCheckedChange={setStoreEnabled} /></div>
-                    {storeEnabled && <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Full Sync</Label><p className="text-xs text-muted-foreground">1 year history vs 3 months</p></div><Switch checked={fullSync} onCheckedChange={setFullSync} /></div>}
-                    <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Mark Online</Label><p className="text-xs text-muted-foreground">Online presence on start</p></div><Switch checked={markOnline} onCheckedChange={setMarkOnline} /></div>
+                    <h4 className="text-sm font-medium">Baileys engine settings</h4>
+                    <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Enable store</Label><p className="text-xs text-muted-foreground">Persist contacts, chats, messages</p></div><Switch checked={storeEnabled} onCheckedChange={setStoreEnabled} /></div>
+                    {storeEnabled && <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Full sync</Label><p className="text-xs text-muted-foreground">1 year history vs 3 months</p></div><Switch checked={fullSync} onCheckedChange={setFullSync} /></div>}
+                    <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Mark online</Label><p className="text-xs text-muted-foreground">Online presence on start</p></div><Switch checked={markOnline} onCheckedChange={setMarkOnline} /></div>
                   </div>
                 )}
 
                 {/* WEBJS Config */}
                 {engineType === "webjs" && (
                   <div className="space-y-4">
-                    <h4 className="text-sm font-medium">WebJS Engine Settings</h4>
-                    <div className="space-y-2">
-                      <Label>Auth Timeout (ms)</Label>
+                    <h4 className="text-sm font-medium">WEBJS engine settings</h4>
+                      <div className="space-y-2">
+                      <Label>Auth timeout (ms)</Label>
                       <Input
                         type="number"
                         placeholder="30000"
@@ -652,7 +681,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
 
                 {/* Common: Client Identity */}
                 <div className="space-y-4">
-                  <h4 className="text-sm font-medium">Client Identity</h4>
+                  <h4 className="text-sm font-medium">Client identity</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md">
                     <div className="space-y-2"><Label>Device</Label><Select value={deviceName} onValueChange={setDeviceName}><SelectTrigger><SelectValue placeholder="Select device" /></SelectTrigger><SelectContent>{DEVICE_NAMES.map(d => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}</SelectContent></Select></div>
                     <div className="space-y-2"><Label>Browser</Label><Select value={browserName} onValueChange={setBrowserName}><SelectTrigger><SelectValue placeholder="Select browser" /></SelectTrigger><SelectContent>{BROWSER_NAMES.map(b => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>)}</SelectContent></Select></div>
@@ -663,14 +692,14 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
 
             {activeTab === "ignore" && (
               <div className="space-y-4">
-                <h4 className="text-sm font-medium">Ignore Messages</h4>
+                <h4 className="text-sm font-medium">Ignore messages</h4>
                 <p className="text-xs text-muted-foreground">Filter out specific message types</p>
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between py-1"><Label>Status Broadcasts</Label><Switch checked={ignoreStatus} onCheckedChange={setIgnoreStatus} /></div>
+                  <div className="flex items-center justify-between py-1"><Label>Status broadcasts</Label><Switch checked={ignoreStatus} onCheckedChange={setIgnoreStatus} /></div>
                   <div className="flex items-center justify-between py-1"><Label>Groups</Label><Switch checked={ignoreGroups} onCheckedChange={setIgnoreGroups} /></div>
                   <div className="flex items-center justify-between py-1"><Label>Channels</Label><Switch checked={ignoreChannels} onCheckedChange={setIgnoreChannels} /></div>
                   <div className="flex items-center justify-between py-1"><Label>Broadcasts</Label><Switch checked={ignoreBroadcast} onCheckedChange={setIgnoreBroadcast} /></div>
-                  <div className="flex items-center justify-between py-1"><Label>Direct Messages</Label><Switch checked={ignoreDm} onCheckedChange={setIgnoreDm} /></div>
+                  <div className="flex items-center justify-between py-1"><Label>Direct messages</Label><Switch checked={ignoreDm} onCheckedChange={setIgnoreDm} /></div>
                 </div>
               </div>
             )}
@@ -683,10 +712,10 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                 </div>
                 <div className="space-y-4">
                   <h4 className="text-sm font-medium">Debug</h4>
-                  <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Debug Mode</Label><p className="text-xs text-muted-foreground">Verbose logging</p></div><Switch checked={debugMode} onCheckedChange={setDebugMode} /></div>
+                  <div className="flex items-center justify-between gap-4"><div className="space-y-0.5"><Label>Debug mode</Label><p className="text-xs text-muted-foreground">Verbose logging</p></div><Switch checked={debugMode} onCheckedChange={setDebugMode} /></div>
                 </div>
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between"><h4 className="text-sm font-medium">Metadata</h4><Button variant="outline" size="sm" onClick={() => setMetadata([...metadata, { key: "", value: "" }])}><Plus />Add</Button></div>
+                  <div className="flex items-center justify-between"><h4 className="text-sm font-medium">Metadata</h4><Button variant="outline" size="sm" onClick={() => setMetadata([...metadata, { key: "", value: "" }])}><Plus strokeWidth={1.75} />Add</Button></div>
                   <p className="text-xs text-muted-foreground">Custom key-value data for webhook payloads</p>
                   {metadata.map((m, i) => (
                     <div key={i} className="flex gap-2">
@@ -703,9 +732,9 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
               <div className="space-y-6">
                 <div className="flex items-center justify-between gap-4">
                   <div className="space-y-0.5">
-                    <h4 className="text-sm font-medium">MCP Server</h4>
+                    <h4 className="text-sm font-medium">MCP server</h4>
                     <p className="text-xs text-muted-foreground">
-                      Model Context Protocol — AI assistants can call WhatsApp tools through MCP
+                      Model Context Protocol. AI assistants can call WhatsApp tools through MCP.
                     </p>
                   </div>
                   <Switch checked={mcpEnabled} onCheckedChange={setMcpEnabled} />
@@ -717,7 +746,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
 
                     <div className="flex items-center justify-between gap-4">
                       <div className="space-y-0.5">
-                        <Label>Allow Destructive Ops</Label>
+                        <Label>Allow destructive operations</Label>
                         <p className="text-xs text-muted-foreground">
                           Permit delete, clear, and other irreversible operations
                         </p>
@@ -729,8 +758,8 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                     </div>
 
                     {mcpDestructiveOps && (
-                      <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 px-4 py-3">
-                        <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                      <div className="rounded-lg border border-warning-border bg-warning-bg px-4 py-3">
+                        <p className="text-xs text-warning-foreground">
                           Destructive operations are enabled. AI assistants will be able to delete
                           messages, clear chats, remove group participants, and perform other
                           irreversible actions.
@@ -743,20 +772,28 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                     <div className="space-y-3">
                       <div className="flex items-center justify-between gap-2">
                         <div>
-                          <h4 className="text-sm font-medium">Tool Toggles</h4>
+                          <h4 className="text-sm font-medium">Tool toggles</h4>
                           <p className="text-xs text-muted-foreground">
                             Disable specific tools or whole categories
                           </p>
                         </div>
                         {mcpTools && (
-                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                          <span className="metric text-xs text-muted-foreground whitespace-nowrap">
                             {mcpTools.tools.length - mcpDeniedTools.length}/{mcpTools.tools.length} on
                           </span>
                         )}
                       </div>
 
                       {mcpLoading ? (
-                        <p className="text-sm text-muted-foreground py-4">Loading tools...</p>
+                        <div className="space-y-2" aria-hidden>
+                          {Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} className="flex items-center gap-2 rounded-md border px-2.5 py-2">
+                              <Skeleton className="size-3.5" />
+                              <Skeleton className="h-4 w-28" />
+                              <Skeleton className="ml-auto h-5 w-9 rounded-full" />
+                            </div>
+                          ))}
+                        </div>
                       ) : mcpTools ? (
                         <>
                           <div className="relative">
@@ -793,7 +830,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                                       <Badge variant="secondary" className="uppercase text-[10px] tracking-wider">
                                         {category}
                                       </Badge>
-                                      <span className="text-[11px] text-muted-foreground">
+                                      <span className="metric text-[11px] text-muted-foreground">
                                         {enabledCount}/{allTools.length}
                                       </span>
                                     </button>
@@ -826,7 +863,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                                             <div className="flex items-center gap-1.5 min-w-0">
                                               <span className="text-xs font-medium truncate">{tool.name}</span>
                                               {tool.destructive && (
-                                                <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 text-red-500 border-red-500/30 shrink-0">
+                                                <Badge variant="outline" className="h-4 shrink-0 border-error-border bg-error-bg px-1 py-0 text-[9px] text-error-foreground">
                                                   destructive
                                                 </Badge>
                                               )}
@@ -852,8 +889,15 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                             })}
                           </div>
                         </>
+                      ) : mcpLoadError ? (
+                        <ErrorState
+                          compact
+                          title="Could not load the tool list"
+                          description="The MCP API did not respond."
+                          onRetry={() => setMcpReload((n) => n + 1)}
+                        />
                       ) : (
-                        <p className="text-sm text-muted-foreground py-4">Could not load tool list.</p>
+                        <p className="text-sm text-muted-foreground py-4">No tools are available for this session.</p>
                       )}
                     </div>
                   </>
@@ -863,16 +907,16 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
 
                 {/* ── Per-Session MCP Key ──────────────────────────── */}
                 <div className="space-y-3">
-                  <h4 className="text-sm font-medium">MCP Connection Key</h4>
+                  <h4 className="text-sm font-medium">MCP connection key</h4>
                   <p className="text-xs text-muted-foreground">
-                    Generate a scoped API key for this session. The key is shown <strong>once</strong> —
-                    copy it before closing this dialog. Only a SHA-256 hash is stored.
+                    Generate a scoped API key for this session. The key is shown <strong>once</strong>.
+                    Copy it before closing this dialog. Only a SHA-256 hash is stored.
                   </p>
 
                   {mcpKeyExists && !mcpKeyRevealed && (
                     <p className="text-xs text-muted-foreground">
-                      A key is configured for this session. Click <strong>Regenerate</strong> to
-                      create a new one (invalidates the old key).
+                      A key is configured for this session. Click <strong>Regenerate key</strong> to
+                      create a new one. The old key stops working.
                     </p>
                   )}
 
@@ -892,7 +936,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                       }
                     }}
                   >
-                    {mcpKeyExists ? "Regenerate Key" : "Generate MCP Key"}
+                    {mcpKeyExists ? "Regenerate key" : "Generate MCP key"}
                   </Button>
 
                   {mcpKeyRevealed && mcpKey && mcpConnection && (
@@ -900,7 +944,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                       {/* Key display */}
                       <div>
                         <p className="text-xs font-medium mb-1 text-destructive">
-                          Copy this key now — it will not be shown again.
+                          Copy this key now. It will not be shown again.
                         </p>
                         <div className="flex items-center gap-2">
                           <pre className="flex-1 rounded-lg bg-muted p-2.5 text-[11px] font-mono overflow-x-auto select-all">{mcpKey}</pre>
@@ -978,7 +1022,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
     "bunwa": {
       "url": "${window.location.origin}/mcp",
       "headers": {
-        "X-Api-Key": "your-waha-api-key"
+        "X-Api-Key": "your BunWa API key"
       }
     }
   }
@@ -988,7 +1032,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                           <div className="space-y-4 pt-3">
                             <div>
                               <div className="flex items-center justify-between mb-1">
-                                <p className="text-xs font-medium">HTTP clients <span className="text-muted-foreground font-normal">— Claude Desktop, Cursor, Windsurf, VS Code</span></p>
+                                <p className="text-xs font-medium">HTTP clients <span className="text-muted-foreground font-normal">(Claude Desktop, Cursor, Windsurf, VS Code)</span></p>
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -1001,7 +1045,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                                 </Button>
                               </div>
                               <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">{httpCode}</pre>
-                              <p className="text-[11px] text-muted-foreground mt-1">Replace <code>your-waha-api-key</code>, or generate a scoped key above.</p>
+                              <p className="text-[11px] text-muted-foreground mt-1">Replace <code>your BunWa API key</code>, or generate a scoped key above.</p>
                             </div>
                             <div>
                               <div className="flex items-center justify-between mb-1">
@@ -1031,11 +1075,11 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
             {activeTab === "integrations" && (
               <div className="space-y-6">
                 <div className="flex items-center gap-3">
-                  <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
-                    <MessageCircle className="size-5" />
+                  <div className="flex size-10 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground">
+                    <MessageCircle className="size-5" strokeWidth={1.75} />
                   </div>
                   <div>
-                    <h4 className="text-sm font-medium">Chatwoot Integration</h4>
+                    <h4 className="text-sm font-medium">Chatwoot integration</h4>
                     <p className="text-xs text-muted-foreground">
                       Forward WhatsApp messages to Chatwoot and send agent replies back to WhatsApp
                     </p>
@@ -1043,7 +1087,21 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                 </div>
 
                 {!chatwootLoaded ? (
-                  <p className="text-sm text-muted-foreground py-4">Loading integration config...</p>
+                  <div className="space-y-4" aria-hidden>
+                    <Skeleton className="h-10 w-full" />
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <Skeleton className="h-10 w-full" />
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                    <Skeleton className="h-10 w-48" />
+                  </div>
+                ) : chatwootError ? (
+                  <ErrorState
+                    compact
+                    title="Could not load the Chatwoot config"
+                    description="The apps API did not respond. Saving will still try to write the values below."
+                    onRetry={() => setChatwootReload((n) => n + 1)}
+                  />
                 ) : (
                   <>
                     <div className="flex items-center justify-between gap-4">
@@ -1076,7 +1134,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label>Account Token *</Label>
+                          <Label>Account token *</Label>
                           <Input
                             placeholder="Chatwoot API token"
                             value={chatwootConfig.accountToken}
@@ -1095,7 +1153,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label>Inbox Identifier</Label>
+                          <Label>Inbox identifier</Label>
                           <Input
                             placeholder="Optional UUID"
                             value={chatwootConfig.inboxIdentifier}
@@ -1124,7 +1182,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                       </div>
                     </div>
 
-                    <div className="rounded-lg border border-emerald-500/20 bg-emerald-50 dark:bg-emerald-950/20 p-3">
+                    <div className="rounded-lg border border-border bg-muted/50 p-3">
                       <p className="text-xs text-muted-foreground">
                         <strong>Webhook URL:</strong> Configure Chatwoot to send{" "}
                         <code className="text-[10px] bg-muted px-1 rounded">message_created</code> events to{" "}

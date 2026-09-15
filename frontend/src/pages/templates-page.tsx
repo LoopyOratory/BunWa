@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -7,11 +7,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Plus, Trash2, FileText, Eye, Variable, ScrollText, MessageSquare } from "lucide-react"
+import { Plus, Trash2, FileText, Eye, Variable, ScrollText, MessageSquare, MousePointerClick } from "lucide-react"
 import { PageLayout } from "@/components/page-layout"
 import { toast } from "sonner"
-import { getDashboardAuthHeader } from "@/lib/auth"
-import { api, type Session } from "@/lib/api"
+import { api, getApiAuthHeaders, type Session } from "@/lib/api"
+import { cn } from "@/lib/utils"
+import {
+  CardGridSkeleton,
+  EmptyState,
+  ErrorState,
+  Metric,
+} from "@/components/primitives"
+import { mapSessionStatus, type StatusKind } from "@/lib/status"
 
 interface Template {
   id: string
@@ -24,9 +31,15 @@ interface Template {
   updatedAt: string
 }
 
+const SESSION_DOT: Record<StatusKind, string> = {
+  working: "bg-success",
+  starting: "bg-warning",
+  failed: "bg-error",
+  stopped: "bg-muted-foreground/60",
+}
+
 function authHeaders() {
-  const auth = getDashboardAuthHeader()
-  return { "x-api-key": "waha", ...(auth ? { Authorization: `Basic ${auth}` } : {}) }
+  return getApiAuthHeaders()
 }
 
 export function TemplatesPage() {
@@ -34,26 +47,53 @@ export function TemplatesPage() {
   const [selectedSession, setSelectedSession] = useState("")
   const [templates, setTemplates] = useState<Template[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [sessionsError, setSessionsError] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null)
   const [formData, setFormData] = useState({ name: "", body: "", header: "", footer: "" })
 
-  useEffect(() => {
-    api.getSessions().then(list => {
+  // Both loaders await before touching state, so the initial-load effects never
+  // trigger cascading renders.
+  const loadSessions = useCallback(async () => {
+    try {
+      const list = await api.getSessions()
       setSessions(list)
-      if (list.length > 0 && !selectedSession) setSelectedSession(list[0].name)
-    }).catch(() => {})
+      setSessionsError(null)
+      setSelectedSession((current) => current || list[0]?.name || "")
+      if (list.length === 0) setLoading(false)
+    } catch (err) {
+      setSessionsError(err instanceof Error ? err.message : "Could not load sessions")
+      setLoading(false)
+    }
   }, [])
 
-  useEffect(() => { if (selectedSession) loadTemplates() }, [selectedSession])
-
-  async function loadTemplates() {
-    setLoading(true)
+  const loadTemplates = useCallback(async (session: string) => {
     try {
-      const res = await fetch(`/api/sessions/${selectedSession}/templates`, { headers: authHeaders() })
-      if (res.ok) setTemplates(await res.json())
-    } catch { toast.error("Failed to load templates") }
+      const res = await fetch(`/api/sessions/${session}/templates`, { headers: authHeaders() })
+      if (!res.ok) throw new Error(`Request failed (${res.status})`)
+      setTemplates(await res.json())
+      setError(null)
+    } catch (err) {
+      setTemplates([])
+      setError(err instanceof Error ? err.message : "Could not load templates")
+    }
     setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    void loadSessions()
+  }, [loadSessions])
+
+  useEffect(() => {
+    if (!selectedSession) return
+    setLoading(true)
+    void loadTemplates(selectedSession)
+  }, [selectedSession, loadTemplates])
+
+  function openCreate() {
+    setFormData({ name: "", body: "", header: "", footer: "" })
+    setDialogOpen(true)
   }
 
   async function saveTemplate() {
@@ -63,16 +103,17 @@ export function TemplatesPage() {
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify(formData),
       })
-      if (res.ok) { toast.success("Template created"); setDialogOpen(false); loadTemplates() }
+      if (res.ok) { toast.success("Template created"); setDialogOpen(false); void loadTemplates(selectedSession) }
       else { const err = await res.json().catch(() => ({ error: "Save failed" })); toast.error(err.error) }
     } catch { toast.error("Failed to save template") }
   }
 
   async function deleteTemplate(id: string) {
     try {
-      await fetch(`/api/sessions/${selectedSession}/templates/${id}`, { method: "DELETE", headers: authHeaders() })
+      const res = await fetch(`/api/sessions/${selectedSession}/templates/${id}`, { method: "DELETE", headers: authHeaders() })
+      if (!res.ok) throw new Error(`Request failed (${res.status})`)
       toast.success("Template deleted")
-      loadTemplates()
+      void loadTemplates(selectedSession)
     } catch { toast.error("Failed to delete template") }
   }
 
@@ -94,47 +135,49 @@ export function TemplatesPage() {
   const newTemplateDialog = (
     <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
       <DialogTrigger asChild>
-        <Button disabled={!selectedSession} onClick={() => setFormData({ name: "", body: "", header: "", footer: "" })}>
-          <Plus />New Template
+        <Button disabled={!selectedSession} onClick={openCreate}>
+          <Plus strokeWidth={1.75} />
+          New template
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="text-xl">New Template</DialogTitle>
-          <DialogDescription className="text-base">Create a reusable message template with variables</DialogDescription>
+          <DialogTitle>New template</DialogTitle>
+          <DialogDescription>Create a reusable message template with variables.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <div>
-            <Label className="text-sm font-medium">Name</Label>
-            <Input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="welcome-message" className="mt-1.5 min-h-[44px]" />
+          <div className="space-y-2">
+            <Label htmlFor="template-name">Name</Label>
+            <Input id="template-name" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="welcome-message" />
           </div>
-          <div>
-            <Label className="text-sm font-medium">Header (optional)</Label>
-            <Input value={formData.header} onChange={e => setFormData({ ...formData, header: e.target.value })} placeholder="Hello {{name}}!" className="mt-1.5 min-h-[44px]" />
+          <div className="space-y-2">
+            <Label htmlFor="template-header">Header (optional)</Label>
+            <Input id="template-header" value={formData.header} onChange={e => setFormData({ ...formData, header: e.target.value })} placeholder="Hello {{name}}" />
           </div>
-          <div>
-            <Label className="text-sm font-medium">Body</Label>
-            <Textarea value={formData.body} onChange={e => setFormData({ ...formData, body: e.target.value })} placeholder="Welcome to our store! You ordered {{product}}." rows={6} className="mt-1.5 min-h-[120px] text-base" />
+          <div className="space-y-2">
+            <Label htmlFor="template-body">Body</Label>
+            <Textarea id="template-body" value={formData.body} onChange={e => setFormData({ ...formData, body: e.target.value })} placeholder="Welcome to our store. You ordered {{product}}." rows={6} className="min-h-[120px]" />
           </div>
-          <div>
-            <Label className="text-sm font-medium">Footer (optional)</Label>
-            <Input value={formData.footer} onChange={e => setFormData({ ...formData, footer: e.target.value })} placeholder="Reply STOP to unsubscribe" className="mt-1.5 min-h-[44px]" />
+          <div className="space-y-2">
+            <Label htmlFor="template-footer">Footer (optional)</Label>
+            <Input id="template-footer" value={formData.footer} onChange={e => setFormData({ ...formData, footer: e.target.value })} placeholder="Reply STOP to unsubscribe" />
           </div>
           {formData.body && extractVariables(formData.body).length > 0 && (
-            <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
-              <div className="flex items-center gap-2 text-sm font-medium text-primary mb-2">
-                <Variable className="size-4" />
+            <div className="rounded-lg border border-primary/10 bg-primary/5 p-3">
+              <div className="mb-2 flex items-center gap-2 text-sm font-medium text-primary">
+                <Variable className="size-4" strokeWidth={1.75} />
                 Variables detected
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {extractVariables(formData.body).map(v => (
-                  <span key={v} className="inline-flex items-center gap-1 text-xs font-mono bg-primary/10 text-primary px-2.5 py-1 rounded-md">{'{{'}{v}{'}}'}</span>
+                  <Badge key={v} variant="outline" className="font-mono text-xs">{'{{'}{v}{'}}'}</Badge>
                 ))}
               </div>
             </div>
           )}
-          <Button onClick={saveTemplate} className="w-full h-11 text-base">
-            <ScrollText className="size-5" />Save Template
+          <Button onClick={saveTemplate} className="w-full">
+            <ScrollText strokeWidth={1.75} />
+            Create template
           </Button>
         </div>
       </DialogContent>
@@ -148,10 +191,10 @@ export function TemplatesPage() {
       actions={newTemplateDialog}
     >
       <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <Label className="text-sm font-medium shrink-0">Session</Label>
+        <div className="flex flex-wrap items-center gap-3">
+          <Label htmlFor="template-session" className="shrink-0 text-muted-foreground">Session</Label>
           <Select value={selectedSession} onValueChange={setSelectedSession}>
-            <SelectTrigger className="w-64">
+            <SelectTrigger id="template-session" className="w-full sm:w-72">
               <SelectValue placeholder="Select a session" />
             </SelectTrigger>
             <SelectContent>
@@ -160,7 +203,7 @@ export function TemplatesPage() {
               ) : sessions.map(s => (
                 <SelectItem key={s.name} value={s.name}>
                   <span className="flex items-center gap-2">
-                    <span className={`size-2 rounded-full ${s.status === "WORKING" ? "bg-emerald-500" : "bg-zinc-400"}`} />
+                    <span className={cn("size-2 shrink-0 rounded-full", SESSION_DOT[mapSessionStatus(s.status)])} />
                     {s.name}
                   </span>
                 </SelectItem>
@@ -169,75 +212,91 @@ export function TemplatesPage() {
           </Select>
         </div>
 
-        {loading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3].map(i => (
-              <Card key={i} className="animate-pulse">
-                <CardHeader className="h-28" />
-                <CardContent className="h-20" />
-              </Card>
-            ))}
-          </div>
+        {sessionsError ? (
+          <ErrorState title="Could not load sessions" description={sessionsError} onRetry={loadSessions} />
+        ) : loading ? (
+          <CardGridSkeleton count={6} />
+        ) : error ? (
+          <ErrorState
+            title="Could not load templates"
+            description={error}
+            onRetry={() => void loadTemplates(selectedSession)}
+          />
+        ) : sessions.length === 0 ? (
+          <EmptyState
+            icon={<FileText strokeWidth={1.75} />}
+            title="No sessions available"
+            description="Create a WhatsApp session before adding templates."
+          />
         ) : !selectedSession ? (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-16">
-              <p className="text-xl font-semibold text-muted-foreground">Select a session to get started</p>
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={<MousePointerClick strokeWidth={1.75} />}
+            title="Select a session to get started"
+            description="Templates belong to a WhatsApp session."
+          />
         ) : templates.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-16">
-              <div className="p-4 rounded-full bg-primary/10 mb-6">
-                <FileText className="size-12 text-primary" />
-              </div>
-              <p className="text-xl font-semibold">No templates yet</p>
-              <p className="text-base text-muted-foreground mt-1 mb-6">
-                Create reusable message templates with dynamic variables
-              </p>
-              <Button onClick={() => { setFormData({ name: "", body: "", header: "", footer: "" }); setDialogOpen(true) }}>
-                <Plus />Create Your First Template
+          <EmptyState
+            icon={<FileText strokeWidth={1.75} />}
+            title="No templates yet"
+            description="Create a reusable message template with dynamic variables."
+            action={
+              <Button onClick={openCreate}>
+                <Plus strokeWidth={1.75} />
+                New template
               </Button>
-            </CardContent>
-          </Card>
+            }
+          />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="card-grid">
             {templates.map(template => {
               const vars = extractVariables(template.body)
               return (
                 <Card key={template.id} className="card-hover">
                   <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="p-2.5 rounded-xl bg-primary/10 text-primary shrink-0">
-                          <MessageSquare className="size-5" />
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                          <MessageSquare className="size-5" strokeWidth={1.75} />
                         </div>
                         <div className="min-w-0">
-                          <CardTitle className="text-base font-semibold truncate">{template.name}</CardTitle>
-                          <CardDescription className="text-xs mt-0.5">
-                            {vars.length} variable{vars.length !== 1 ? "s" : ""}{template.header ? " — with header" : ""}{template.footer ? " — with footer" : ""}
+                          <CardTitle className="truncate text-base font-medium">{template.name}</CardTitle>
+                          <CardDescription className="mt-0.5 text-xs">
+                            <Metric>{vars.length}</Metric> variable{vars.length !== 1 ? "s" : ""}
+                            {template.header ? ". With header" : ""}
+                            {template.footer ? ". With footer" : ""}
                           </CardDescription>
                         </div>
                       </div>
-                      <Badge variant="secondary" className="text-xs shrink-0">{vars.length} vars</Badge>
+                      <Badge variant="secondary" className="shrink-0 text-xs">
+                        <Metric>{vars.length}</Metric> vars
+                      </Badge>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <div className="text-sm font-mono text-muted-foreground line-clamp-3 bg-muted/30 p-3 rounded-lg whitespace-pre-wrap">{template.body}</div>
+                    <div className="whitespace-pre-wrap rounded-lg bg-muted/40 p-3 font-mono text-sm text-muted-foreground line-clamp-3">{template.body}</div>
                     {vars.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
                         {vars.map(v => (
-                          <Badge key={v} variant="outline" className="text-xs font-mono border-violet-500/20 text-violet-600 dark:text-violet-400">
-                            <Variable className="size-3 mr-1" />{v}
+                          <Badge key={v} variant="outline" className="font-mono text-xs">
+                            <Variable className="size-3" strokeWidth={1.75} />{v}
                           </Badge>
                         ))}
                       </div>
                     )}
-                    <div className="flex items-center gap-2 pt-1 border-t">
-                      <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => setPreviewTemplate(template)}>
-                        <Eye className="size-3.5" />Preview
+                    <div className="flex items-center gap-2 border-t border-border pt-3">
+                      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setPreviewTemplate(template)}>
+                        <Eye className="size-4" strokeWidth={1.75} />
+                        Preview
                       </Button>
-                      <Button size="sm" variant="ghost" className="h-8 text-xs gap-1.5 ml-auto text-muted-foreground hover:text-destructive" onClick={() => deleteTemplate(template.id)}>
-                        <Trash2 className="size-3.5" />
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="ml-auto text-muted-foreground hover:text-destructive"
+                        onClick={() => deleteTemplate(template.id)}
+                        title="Delete template"
+                        aria-label="Delete template"
+                      >
+                        <Trash2 className="size-4" strokeWidth={1.75} />
                       </Button>
                     </div>
                   </CardContent>
@@ -250,21 +309,23 @@ export function TemplatesPage() {
         <Dialog open={!!previewTemplate} onOpenChange={() => setPreviewTemplate(null)}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle className="text-xl">Preview: {previewTemplate?.name}</DialogTitle>
-              <DialogDescription className="text-base">Sample rendering with placeholder values</DialogDescription>
+              <DialogTitle>Preview: {previewTemplate?.name}</DialogTitle>
+              <DialogDescription>Sample rendering with placeholder values.</DialogDescription>
             </DialogHeader>
-            <div className="min-h-[200px] bg-gradient-to-br from-muted/50 to-muted p-5 rounded-xl border">
-              <div className="max-w-[85%] ml-auto">
-                <div className="bg-primary text-primary-foreground p-4 rounded-2xl rounded-br-md shadow-sm">
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{previewTemplate && renderPreview(previewTemplate)}</p>
+            <div className="min-h-[200px] rounded-lg border border-border bg-muted/40 p-5">
+              <div className="ml-auto max-w-[85%]">
+                <div className="rounded-2xl rounded-br-md bg-primary p-4 text-primary-foreground shadow-sm">
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{previewTemplate && renderPreview(previewTemplate)}</p>
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-1 text-right">just now</p>
+                <p className="mt-1 text-right text-xs text-muted-foreground">just now</p>
               </div>
             </div>
             {previewTemplate && extractVariables(previewTemplate.body).length > 0 && (
-              <div className="flex flex-wrap gap-1.5 justify-center">
+              <div className="flex flex-wrap justify-center gap-1.5">
                 {extractVariables(previewTemplate.body).map(v => (
-                  <Badge key={v} variant="secondary" className="text-xs font-mono"><Variable className="size-3 mr-1" />{v}</Badge>
+                  <Badge key={v} variant="secondary" className="font-mono text-xs">
+                    <Variable className="size-3" strokeWidth={1.75} />{v}
+                  </Badge>
                 ))}
               </div>
             )}

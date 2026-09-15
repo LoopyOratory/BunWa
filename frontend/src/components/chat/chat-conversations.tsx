@@ -3,6 +3,7 @@ import { Search, CircleDot, MessageSquarePlus, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { EmptyState, ErrorState, Skeleton } from "@/components/primitives"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { SidebarTrigger } from "@/components/ui/sidebar"
@@ -53,6 +54,8 @@ export function ChatConversations({
 }: ChatConversationsProps) {
   const [chatSearch, setChatSearch] = useState("")
   const [picturesCache, setPicturesCache] = useState<Map<string, string>>(new Map())
+  const [picturesError, setPicturesError] = useState(false)
+  const [picturesRetry, setPicturesRetry] = useState(0)
   const cacheRef = useRef(picturesCache)
   cacheRef.current = picturesCache
   useEffect(() => () => {
@@ -72,6 +75,7 @@ export function ChatConversations({
     let cancelled = false
     const fetchPics = async () => {
       const newCache = new Map(picturesCache)
+      let failed = false
       for (const id of ids) {
         if (newCache.has(id)) continue
         const contact = contacts.get(id)
@@ -82,16 +86,19 @@ export function ChatConversations({
             const blobUrl = await fetchImageBlobUrl(res.profilePictureURL)
             if (blobUrl && !cancelled) newCache.set(id, blobUrl)
           }
-        } catch {}
+        } catch { failed = true }
       }
-      if (!cancelled) setPicturesCache(newCache)
+      if (!cancelled) {
+        setPicturesCache(newCache)
+        setPicturesError(failed)
+      }
     }
     fetchPics()
     return () => { cancelled = true }
-  }, [filteredChats, selectedSession, contacts])
+  }, [filteredChats, selectedSession, contacts, picturesRetry])
 
   return (
-    <aside className="flex h-full w-80 shrink-0 flex-col border-r border-[var(--chat-border-strong)] bg-[var(--chat-bg-sidebar)]">
+    <aside className="flex h-full w-full shrink-0 flex-col border-r border-[var(--chat-border-strong)] bg-[var(--chat-bg-sidebar)] sm:w-80">
       <div className="flex items-center gap-1 px-3 pt-3 pb-1.5">
         <SidebarTrigger className="md:hidden shrink-0" />
         <div className="min-w-0 flex-1">
@@ -109,22 +116,22 @@ export function ChatConversations({
         <div className="flex items-center gap-2">
           <span className="text-[14px] font-bold tracking-tight text-[var(--chat-text-primary)]">Messages</span>
           {chats.reduce((sum, c) => sum + (c.unreadCount ?? 0), 0) > 0 && (
-            <span className="flex size-[18px] items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
+            <span className="metric flex size-[18px] items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
               {chats.reduce((sum, c) => sum + (c.unreadCount ?? 0), 0) > 99 ? "99+" : chats.reduce((sum, c) => sum + (c.unreadCount ?? 0), 0)}
             </span>
           )}
         </div>
         <div className="flex gap-0.5">
           <Tooltip><TooltipTrigger asChild>
-            <Button aria-label="Post Status" variant="ghost" size="icon" className="size-7 text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)] hover:bg-[var(--chat-accent-soft)]" onClick={onOpenStatus}>
-              <CircleDot className="size-3.5" />
+            <Button aria-label="Post status" variant="ghost" size="icon" className="size-7 text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)] hover:bg-[var(--chat-accent-soft)]" onClick={onOpenStatus}>
+              <CircleDot className="size-3.5" strokeWidth={1.75} />
             </Button>
-          </TooltipTrigger><TooltipContent>Post Status</TooltipContent></Tooltip>
+          </TooltipTrigger><TooltipContent>Post status</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild>
-            <Button aria-label="New Chat" variant="ghost" size="icon" className="size-7 text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)] hover:bg-[var(--chat-accent-soft)]" onClick={onOpenNewChat}>
-              <MessageSquarePlus className="size-3.5" />
+            <Button aria-label="New chat" variant="ghost" size="icon" className="size-7 text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)] hover:bg-[var(--chat-accent-soft)]" onClick={onOpenNewChat}>
+              <MessageSquarePlus className="size-3.5" strokeWidth={1.75} />
             </Button>
-          </TooltipTrigger><TooltipContent>New Chat</TooltipContent></Tooltip>
+          </TooltipTrigger><TooltipContent>New chat</TooltipContent></Tooltip>
         </div>
       </div>
 
@@ -143,22 +150,45 @@ export function ChatConversations({
 
       <ScrollArea className="min-h-0 flex-1">
         {!isWorking ? (
-          <div className="py-12 text-center px-4">
-            <Play className="mx-auto mb-2 size-6 text-[var(--chat-text-tertiary)]" />
-            <p className="text-[12px] text-[var(--chat-text-secondary)]">Session not connected</p>
-            <p className="mt-1 text-[11px] text-[var(--chat-text-tertiary)]">
-              Start the session above to view conversations
-            </p>
-          </div>
+          <EmptyState
+            compact
+            icon={<Play className="size-5" strokeWidth={1.75} />}
+            title="Session not connected"
+            description="Start the session above to view conversations."
+          />
         ) : loadingChats ? (
-          <div className="py-12 text-center text-[12px] text-[var(--chat-text-tertiary)]">Loading conversations...</div>
-        ) : filteredChats.length === 0 ? (
-          <div className="py-12 text-center">
-            <p className="text-[12px] text-[var(--chat-text-secondary)]">No conversations yet</p>
-            <p className="mt-1 text-[11px] text-[var(--chat-text-tertiary)]">Start a new chat or wait for incoming messages</p>
+          <div className="space-y-3 p-3" aria-hidden>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <Skeleton className="size-11 shrink-0 rounded-full" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-3.5 w-2/3" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+              </div>
+            ))}
           </div>
+        ) : filteredChats.length === 0 ? (
+          <EmptyState
+            compact
+            icon={<MessageSquarePlus className="size-5" strokeWidth={1.75} />}
+            title={chatSearch ? "No matching conversations" : "No conversations yet"}
+            description={chatSearch ? "Try a different search term." : "Start a new chat or wait for incoming messages."}
+          />
         ) : (
-          <div className="py-1">
+          <div className="px-1 py-1">
+            {picturesError && (
+              <div className="px-2 pb-2">
+                <ErrorState
+                  compact
+                  title="Some profile pictures could not be loaded"
+                  onRetry={() => {
+                    setPicturesError(false)
+                    setPicturesRetry((n) => n + 1)
+                  }}
+                />
+              </div>
+            )}
             {filteredChats.map((chat) => {
               const active = chat.id === selectedChatId
               const name = chatName(chat, contacts)
@@ -168,7 +198,8 @@ export function ChatConversations({
                 <button
                   key={chat.id}
                   onClick={() => onSelectChat(chat.id)}
-                  className={`mx-1 flex w-[calc(100%-8px)] items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${
+                  aria-current={active ? "true" : undefined}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
                     active ? "bg-[var(--chat-accent-soft)]" : "hover:bg-[var(--chat-accent-soft)]"
                   }`}
                 >
@@ -186,7 +217,7 @@ export function ChatConversations({
                         {name}
                       </span>
                       {chat.lastMessage && (
-                        <span className="ml-2 shrink-0 text-[11px] text-[var(--chat-text-tertiary)]">
+                        <span className="metric ml-2 shrink-0 text-[11px] text-[var(--chat-text-tertiary)]">
                           {formatTime(chat.lastMessage.timestamp)}
                         </span>
                       )}
@@ -196,7 +227,7 @@ export function ChatConversations({
                         {chat.lastMessage?.body || ""}
                       </span>
                       {(chat.unreadCount ?? 0) > 0 && (
-                        <span className="ml-2 flex size-[18px] shrink-0 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
+                        <span className="metric ml-2 flex size-[18px] shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
                           {chat.unreadCount! > 99 ? "99+" : chat.unreadCount}
                         </span>
                       )}

@@ -1,14 +1,14 @@
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, type ReactNode } from "react"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
+import { EngineBadge, Metric, Skeleton, StatusBadge } from "@/components/primitives"
 import { api, type Session } from "@/lib/api"
 import { Smartphone, QrCode, Loader2, Copy, Phone } from "lucide-react"
 import { QRCodeDisplay } from "@/components/qr-code"
@@ -21,19 +21,33 @@ interface Props {
   onOpenChange: (open: boolean) => void
 }
 
+function DetailRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-right text-sm font-medium">{children}</span>
+    </div>
+  )
+}
+
 export function SessionDetailDialog({ session, open, onOpenChange }: Props) {
   const [screenshot, setScreenshot] = useState<string | null>(null)
   const [qrCode, setQrCode] = useState<string | null>(null)
+  const [qrError, setQrError] = useState<string | null>(null)
   const [loadingScreenshot, setLoadingScreenshot] = useState(false)
   const [loadingQr, setLoadingQr] = useState(false)
   const [pairingPhone, setPairingPhone] = useState("")
   const [pairingCode, setPairingCode] = useState<string | null>(null)
+  const [pairingError, setPairingError] = useState<string | null>(null)
   const [pairingLoading, setPairingLoading] = useState(false)
 
   useEffect(() => {
     if (!open || !session) return
     setScreenshot(null)
     setQrCode(null)
+    setQrError(null)
+    setPairingCode(null)
+    setPairingError(null)
   }, [open, session])
 
   const fetchQr = useCallback(async (sessionName: string) => {
@@ -41,9 +55,10 @@ export function SessionDetailDialog({ session, open, onOpenChange }: Props) {
       const data = await api.getQRCode(sessionName)
       if (data.qr?.raw) {
         setQrCode(data.qr.raw)
+        setQrError(null)
       }
     } catch {
-      // silent
+      setQrError("Could not refresh the QR code. Retrying automatically.")
     }
   }, [])
 
@@ -86,10 +101,12 @@ export function SessionDetailDialog({ session, open, onOpenChange }: Props) {
       return
     }
     setLoadingQr(true)
+    setQrError(null)
     try {
       const data = await api.getQRCode(session.name)
       setQrCode(data.qr?.raw || null)
     } catch {
+      setQrError("Could not load the QR code.")
       toast.error("Failed to load QR code")
     } finally {
       setLoadingQr(false)
@@ -105,22 +122,24 @@ export function SessionDetailDialog({ session, open, onOpenChange }: Props) {
       return
     }
     setPairingLoading(true)
+    setPairingError(null)
     try {
       const res = await api.requestPairingCode(session.name, cleanPhone)
-      setPairingCode(res.code || "Code sent")
-      toast.success("Pairing code received")
+      if (res.code) {
+        setPairingCode(res.code)
+        toast.success("Pairing code received")
+      } else {
+        setPairingCode(null)
+        setPairingError("The server did not return a pairing code. Try again.")
+      }
     } catch {
+      setPairingCode(null)
+      setPairingError("Could not get a pairing code. Check the phone number and try again.")
       toast.error("Failed to get pairing code")
     } finally {
       setPairingLoading(false)
     }
   }
-
-  const statusVariant =
-    session.status === "WORKING" ? "default" as const
-      : session.status === "SCAN_QR_CODE" ? "secondary" as const
-      : session.status === "FAILED" ? "destructive" as const
-      : "outline" as const
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -133,58 +152,47 @@ export function SessionDetailDialog({ session, open, onOpenChange }: Props) {
             {session.name}
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-base text-muted-foreground">Status</span>
-            <Badge variant={statusVariant}>{session.status}</Badge>
-          </div>
+        <div className="max-h-[70vh] space-y-4 overflow-y-auto">
+          <DetailRow label="Status">
+            <StatusBadge status={session.status} />
+          </DetailRow>
           <Separator />
           {session.me && (
             <>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-base text-muted-foreground">Push Name</span>
-                <span className="text-xs font-medium">{session.me.pushName || "-"}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-base text-muted-foreground">Phone Number</span>
-                <span className="text-xs font-medium">{session.me.id || "-"}</span>
-              </div>
+              <DetailRow label="Push name">
+                <span className="text-sm">{session.me.pushName || "-"}</span>
+              </DetailRow>
+              <DetailRow label="Phone number">
+                <Metric className="font-mono text-xs">{session.me.id || "-"}</Metric>
+              </DetailRow>
               <Separator />
             </>
           )}
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-base text-muted-foreground">Engine</span>
-            <Badge variant="outline" className={
-              session.config?.engine === "WEBJS"
-                ? "bg-purple-500/10 text-purple-500 border-purple-500/20"
-                : "bg-blue-500/10 text-blue-500 border-blue-500/20"
-            }>
-              {session.config?.engine || "NOWEB"}
-            </Badge>
-          </div>
+          <DetailRow label="Engine">
+            <EngineBadge engine={session.config?.engine} />
+          </DetailRow>
           {session.timestamps?.activity && (
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-base text-muted-foreground">Last Activity</span>
-              <span className="text-xs">
+            <DetailRow label="Last activity">
+              <span className="text-xs text-muted-foreground">
                 {new Date(session.timestamps.activity * 1000).toLocaleString()}
               </span>
-            </div>
+            </DetailRow>
           )}
 
           <Separator />
 
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="flex-1"
+            <Button variant="outline" size="sm" className="flex-1 rounded-md"
               onClick={handleScreenshot}
               disabled={loadingScreenshot || session.status !== "WORKING" || session.config?.engine !== "WEBJS"}>
-              {loadingScreenshot ? <Loader2 className="mr-1 size-3 animate-spin" /> : <Smartphone className="mr-1 size-3" />}
+              {loadingScreenshot ? <Loader2 className="mr-1 size-3 animate-spin" strokeWidth={1.75} /> : <Smartphone className="mr-1 size-3" strokeWidth={1.75} />}
               Screenshot
             </Button>
-            <Button variant="outline" size="sm" className="flex-1"
+            <Button variant="outline" size="sm" className="flex-1 rounded-md"
               onClick={handleQrCode}
               disabled={loadingQr || session.status === "STOPPED"}>
-              {loadingQr ? <Loader2 className="mr-1 size-3 animate-spin" /> : <QrCode className="mr-1 size-3" />}
-              QR Code
+              {loadingQr ? <Loader2 className="mr-1 size-3 animate-spin" strokeWidth={1.75} /> : <QrCode className="mr-1 size-3" strokeWidth={1.75} />}
+              QR code
             </Button>
           </div>
 
@@ -192,30 +200,39 @@ export function SessionDetailDialog({ session, open, onOpenChange }: Props) {
           {session.status === "SCAN_QR_CODE" && (
             <div className="space-y-3 rounded-lg border p-4">
               <div className="flex items-center gap-2">
-                <Phone className="size-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Phone Pairing</span>
+                <Phone className="size-4 text-muted-foreground" strokeWidth={1.75} />
+                <span className="text-sm font-medium">Phone pairing</span>
               </div>
               <div className="flex gap-2">
                 <Input
-                  placeholder="+233****4567"
+                  placeholder="+233 50 123 4567"
                   value={pairingPhone}
                   onChange={(e) => setPairingPhone(e.target.value)}
                   className="min-h-[44px] flex-1"
                   onKeyDown={(e) => e.key === "Enter" && !pairingLoading && handlePairingCode()}
                 />
-                <Button onClick={handlePairingCode} disabled={pairingLoading || !pairingPhone.trim()} className="min-h-[44px]">
-                  {pairingLoading ? <Loader2 className="size-4 animate-spin" /> : "Get Code"}
+                <Button onClick={handlePairingCode} disabled={pairingLoading || !pairingPhone.trim()} className="min-h-[44px] rounded-md">
+                  {pairingLoading ? <Loader2 className="size-4 animate-spin" strokeWidth={1.75} /> : "Get code"}
                 </Button>
               </div>
+              {pairingError && (
+                <p role="alert" className="rounded-md border border-error-border bg-error-bg px-3 py-2 text-xs text-error-foreground">
+                  {pairingError}
+                </p>
+              )}
               {pairingCode && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-muted">
-                  <code className="text-sm font-mono font-bold flex-1">{pairingCode}</code>
-                  <Button variant="ghost" size="icon-sm" onClick={() => navigator.clipboard.writeText(pairingCode || "")}>
-                    <Copy className="size-4" />
+                <div className="flex items-center gap-2 rounded-lg bg-muted p-3">
+                  <Metric className="flex-1 font-mono text-sm font-bold">{pairingCode}</Metric>
+                  <Button variant="ghost" size="icon-sm" aria-label="Copy pairing code" onClick={() => navigator.clipboard.writeText(pairingCode || "")}>
+                    <Copy className="size-4" strokeWidth={1.75} />
                   </Button>
                 </div>
               )}
             </div>
+          )}
+
+          {loadingScreenshot && !screenshot && (
+            <Skeleton className="h-48 w-full" />
           )}
 
           {screenshot && (
@@ -224,11 +241,21 @@ export function SessionDetailDialog({ session, open, onOpenChange }: Props) {
             </div>
           )}
 
+          {loadingQr && !qrCode && (
+            <Skeleton className="mx-auto size-48 rounded-lg" />
+          )}
+
           {qrCode && (
             <div className="flex flex-col items-center gap-2 rounded-lg border p-4">
-              <p className="text-xs text-base text-muted-foreground">Scan this QR code with WhatsApp</p>
+              <p className="text-xs text-muted-foreground">Scan this QR code with WhatsApp</p>
               <QRCodeDisplay data={qrCode} size={192} />
             </div>
+          )}
+
+          {qrError && (
+            <p role="alert" className="rounded-md border border-error-border bg-error-bg px-3 py-2 text-xs text-error-foreground">
+              {qrError}
+            </p>
           )}
         </div>
       </DialogContent>

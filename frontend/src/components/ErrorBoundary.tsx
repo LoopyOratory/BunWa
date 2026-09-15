@@ -1,7 +1,7 @@
 import React from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { RotateCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { AlertTriangle } from "lucide-react"
+import { ErrorState } from "@/components/primitives"
 
 interface Props {
   children: React.ReactNode
@@ -11,6 +11,11 @@ interface Props {
 interface State {
   hasError: boolean
   error: Error | null
+}
+
+/** React 19 server errors carry a digest that also appears in server logs. */
+function errorDigest(error: Error | null): string | undefined {
+  return (error as (Error & { digest?: string }) | null)?.digest
 }
 
 export class ErrorBoundary extends React.Component<Props, State> {
@@ -31,21 +36,30 @@ export class ErrorBoundary extends React.Component<Props, State> {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback
 
+      const digest = errorDigest(this.state.error)
+
       return (
-        <Card className="m-4">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-              Something went wrong
-            </CardTitle>
-            <CardDescription>{this.state.error?.message || "An unexpected error occurred"}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => this.setState({ hasError: false, error: null })}>
-              Try again
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="m-4">
+          <ErrorState
+            title="Something went wrong"
+            description={
+              <>
+                <span>{this.state.error?.message || "An unexpected error occurred."}</span>
+                {digest && (
+                  <span className="metric mt-1 block font-mono text-xs text-muted-foreground">
+                    Error ID: {digest}
+                  </span>
+                )}
+              </>
+            }
+            action={
+              <Button onClick={() => window.location.reload()}>
+                <RotateCw className="size-4" strokeWidth={1.75} />
+                Reload page
+              </Button>
+            }
+          />
+        </div>
       )
     }
 

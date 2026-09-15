@@ -11,10 +11,17 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
-import { Search, Download, AlertTriangle, Info, AlertCircle } from "lucide-react"
+import { Download, Search, ScrollText } from "lucide-react"
 import { PageLayout } from "@/components/page-layout"
 import { toast } from "sonner"
-import { getDashboardAuthHeader } from "@/lib/auth"
+import { getApiAuthHeaders } from "@/lib/api"
+import {
+  EmptyState,
+  ErrorState,
+  Metric,
+  SeverityBadge,
+  TableSkeleton,
+} from "@/components/primitives"
 
 interface AuditLog {
   id: string
@@ -32,18 +39,6 @@ interface AuditLog {
   metadata: string | null
   errorMessage: string | null
   createdAt: string
-}
-
-const SEVERITY_ICONS: Record<string, any> = {
-  INFO: Info,
-  WARN: AlertTriangle,
-  ERROR: AlertCircle,
-}
-
-const SEVERITY_COLORS: Record<string, string> = {
-  INFO: "bg-blue-500/10 text-blue-500",
-  WARN: "bg-yellow-500/10 text-yellow-500",
-  ERROR: "bg-red-500/10 text-red-500",
 }
 
 // Turns "webhook_triggered" into "Webhook triggered" for a readable summary
@@ -65,6 +60,7 @@ function formatMetadata(metadata: string | null): string | null {
 export function LogsPage() {
   const [logs, setLogs] = useState<AuditLog[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [severityFilter, setSeverityFilter] = useState<string>("all")
   const [page, setPage] = useState(0)
@@ -78,13 +74,15 @@ export function LogsPage() {
     try {
       const params = new URLSearchParams({ limit: String(limit), offset: String(page * limit) })
       if (severityFilter !== "all") params.set("severity", severityFilter)
-      const auth = getDashboardAuthHeader()
-      const res = await fetch(`/api/audit?${params}`, {
-        headers: { "x-api-key": "waha", ...(auth ? { Authorization: `Basic ${auth}` } : {}) },
-      })
-      if (res.ok) setLogs(await res.json())
-    } catch (err) { toast.error("Failed to load logs") }
-    setLoading(false)
+      const res = await fetch(`/api/audit?${params}`, { headers: getApiAuthHeaders() })
+      if (!res.ok) throw new Error(`The audit API answered with status ${res.status}.`)
+      setLogs(await res.json())
+      setError(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load audit logs.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   function exportLogs() {
@@ -109,17 +107,37 @@ export function LogsPage() {
   )
 
   return (
-    <PageLayout title="Audit Logs" description="Track all system events and API activity" actions={<Button variant="outline" onClick={exportLogs}><Download />Export CSV</Button>}>
+    <PageLayout
+      title="Audit logs"
+      description="Track all system events and API activity"
+      actions={
+        <Button variant="outline" onClick={exportLogs}>
+          <Download strokeWidth={1.75} />
+          Export CSV
+        </Button>
+      }
+    >
       <div className="space-y-6">
         <div className="flex gap-3">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input className="pl-9" placeholder="Search logs..." value={search} onChange={e => setSearch(e.target.value)} />
+            <Search
+              className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              strokeWidth={1.75}
+            />
+            <Input
+              className="pl-9"
+              placeholder="Search logs"
+              aria-label="Search logs"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
           </div>
           <Select value={severityFilter} onValueChange={setSeverityFilter}>
-            <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[140px]" aria-label="Filter by severity">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Severities</SelectItem>
+              <SelectItem value="all">All severities</SelectItem>
               <SelectItem value="INFO">Info</SelectItem>
               <SelectItem value="WARN">Warning</SelectItem>
               <SelectItem value="ERROR">Error</SelectItem>
@@ -127,45 +145,87 @@ export function LogsPage() {
           </Select>
         </div>
 
-        <Card>
-          <CardHeader className="pb-4"><CardTitle className="text-sm">Events ({filtered.length})</CardTitle></CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="space-y-2">{[1,2,3,4,5].map(i => <div key={i} className="h-12 bg-muted rounded animate-pulse" />)}</div>
-            ) : filtered.length === 0 ? (
-              <div className="text-center py-8 text-base text-muted-foreground">No logs found</div>
-            ) : (
-              <div className="space-y-1">
-                {filtered.map(log => {
-                  const Icon = SEVERITY_ICONS[log.severity] || Info
-                  return (
+        {error ? (
+          <ErrorState
+            title="Could not load audit logs"
+            description={error}
+            onRetry={loadLogs}
+          />
+        ) : loading ? (
+          <TableSkeleton rows={6} columns={4} />
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            icon={<ScrollText strokeWidth={1.75} />}
+            title="No logs found"
+            description={
+              search || severityFilter !== "all"
+                ? "No audit events match the current search and severity filter."
+                : "The audit trail is empty. Events appear here as soon as the API is used."
+            }
+            action={
+              (search || severityFilter !== "all") ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSearch("")
+                    setSeverityFilter("all")
+                  }}
+                >
+                  Clear filters
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <>
+            <Card className="rounded-lg">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-sm">
+                  Events (<Metric>{filtered.length}</Metric>)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-1">
+                  {filtered.map(log => (
                     <button
                       key={log.id}
                       onClick={() => setDetailLog(log)}
-                      className="flex w-full items-center gap-3 p-2 rounded-lg hover:bg-muted/50 text-left cursor-pointer"
+                      className="flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-muted/50"
                     >
-                      <Icon className="h-4 w-4 shrink-0" />
-                      <Badge className={`${SEVERITY_COLORS[log.severity] || ""} text-xs`}>{log.severity}</Badge>
-                      <span className="text-xs font-mono text-muted-foreground w-[160px] shrink-0">{log.action}</span>
-                      <span className="text-sm flex-1 truncate">
-                        {describeAction(log.action)}
-                        {log.errorMessage && <span className="text-red-500"> — {log.errorMessage}</span>}
+                      <SeverityBadge severity={log.severity} />
+                      <span className="hidden w-[160px] shrink-0 font-mono text-xs text-muted-foreground sm:block">
+                        {log.action}
                       </span>
-                      {log.sessionName && <Badge variant="outline" className="text-xs shrink-0">{log.sessionName}</Badge>}
-                      <span className="text-xs text-muted-foreground shrink-0">{new Date(log.createdAt).toLocaleTimeString()}</span>
+                      <span className="flex-1 truncate text-sm">
+                        {describeAction(log.action)}
+                        {log.errorMessage && <span className="text-error-foreground">: {log.errorMessage}</span>}
+                      </span>
+                      {log.sessionName && (
+                        <Badge variant="outline" className="shrink-0">{log.sessionName}</Badge>
+                      )}
+                      <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+                        <Metric>{new Date(log.createdAt).toLocaleTimeString()}</Metric>
+                      </span>
                     </button>
-                  )
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
 
-        <div className="flex justify-between">
-          <Button variant="outline" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Previous</Button>
-          <span className="text-sm text-base text-muted-foreground">Page {page + 1}</span>
-          <Button variant="outline" disabled={logs.length < limit} onClick={() => setPage(p => p + 1)}>Next</Button>
-        </div>
+            <div className="flex items-center justify-between">
+              <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+                Previous
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Page <Metric>{page + 1}</Metric>
+              </span>
+              <Button variant="outline" size="sm" disabled={logs.length < limit} onClick={() => setPage(p => p + 1)}>
+                Next
+              </Button>
+            </div>
+          </>
+        )}
       </div>
 
       <Dialog open={!!detailLog} onOpenChange={(open) => !open && setDetailLog(null)}>
@@ -174,7 +234,7 @@ export function LogsPage() {
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <Badge className={`${SEVERITY_COLORS[detailLog.severity] || ""} text-xs`}>{detailLog.severity}</Badge>
+                  <SeverityBadge severity={detailLog.severity} />
                   {describeAction(detailLog.action)}
                 </DialogTitle>
                 <DialogDescription className="font-mono text-xs">{detailLog.action}</DialogDescription>
@@ -182,7 +242,7 @@ export function LogsPage() {
               <div className="space-y-3 text-sm">
                 <div className="grid grid-cols-[100px_1fr] gap-x-3 gap-y-1.5">
                   <span className="text-muted-foreground">Time</span>
-                  <span>{new Date(detailLog.createdAt).toLocaleString()}</span>
+                  <span><Metric>{new Date(detailLog.createdAt).toLocaleString()}</Metric></span>
                   {detailLog.sessionName && (
                     <>
                       <span className="text-muted-foreground">Session</span>
@@ -191,19 +251,19 @@ export function LogsPage() {
                   )}
                   {detailLog.apiKeyName && (
                     <>
-                      <span className="text-muted-foreground">API Key</span>
+                      <span className="text-muted-foreground">API key</span>
                       <span>{detailLog.apiKeyName}</span>
                     </>
                   )}
                   {detailLog.ipAddress && (
                     <>
-                      <span className="text-muted-foreground">IP Address</span>
-                      <span className="font-mono">{detailLog.ipAddress}</span>
+                      <span className="text-muted-foreground">IP address</span>
+                      <span className="font-mono"><Metric>{detailLog.ipAddress}</Metric></span>
                     </>
                   )}
                   {detailLog.userAgent && (
                     <>
-                      <span className="text-muted-foreground">User Agent</span>
+                      <span className="text-muted-foreground">User agent</span>
                       <span className="break-all text-xs">{detailLog.userAgent}</span>
                     </>
                   )}
@@ -216,20 +276,22 @@ export function LogsPage() {
                   {detailLog.statusCode != null && (
                     <>
                       <span className="text-muted-foreground">Status</span>
-                      <span>{detailLog.statusCode}</span>
+                      <span><Metric>{detailLog.statusCode}</Metric></span>
                     </>
                   )}
                 </div>
                 {detailLog.errorMessage && (
                   <div>
-                    <p className="text-muted-foreground mb-1">Error</p>
-                    <p className="rounded-md bg-red-500/10 text-red-500 p-2 text-xs">{detailLog.errorMessage}</p>
+                    <p className="mb-1 text-muted-foreground">Error</p>
+                    <p className="rounded-md border border-error-border bg-error-bg p-2 text-xs text-error-foreground">
+                      {detailLog.errorMessage}
+                    </p>
                   </div>
                 )}
                 {detailLog.metadata && (
                   <div>
-                    <p className="text-muted-foreground mb-1">Metadata</p>
-                    <pre className="rounded-md bg-muted p-2 text-xs overflow-auto max-h-64">{formatMetadata(detailLog.metadata)}</pre>
+                    <p className="mb-1 text-muted-foreground">Metadata</p>
+                    <pre className="max-h-64 overflow-auto rounded-md bg-muted p-2 text-xs">{formatMetadata(detailLog.metadata)}</pre>
                   </div>
                 )}
               </div>

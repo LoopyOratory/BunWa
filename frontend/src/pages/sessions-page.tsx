@@ -1,12 +1,9 @@
 import { useEffect, useState, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
@@ -18,6 +15,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Select,
   SelectContent,
@@ -38,13 +42,24 @@ import {
   Cog,
   Search,
   MessageSquare,
-  Loader2,
   RefreshCw,
+  MoreHorizontal,
 } from "lucide-react"
 import { api, type Session } from "@/lib/api"
 import { toast } from "sonner"
 import { PageLayout } from "@/components/page-layout"
-import { StatusBadge, EmptyState } from "@/components/primitives"
+import {
+  DataTable,
+  EmptyState,
+  EngineBadge,
+  ErrorState,
+  Metric,
+  SectionHeading,
+  StatCard,
+  StatRowSkeleton,
+  StatusBadge,
+  TableSkeleton,
+} from "@/components/primitives"
 import { SessionSettingsDialog } from "@/components/session-settings-dialog"
 import { CreateSessionDialog } from "@/components/create-session-dialog"
 import { SessionDetailDialog } from "@/pages/session-detail-dialog"
@@ -57,6 +72,7 @@ export function SessionsPage(_props?: SessionsPageProps) {
   const navigate = useNavigate()
   const [sessions, setSessions] = useState<Session[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
@@ -69,8 +85,9 @@ export function SessionsPage(_props?: SessionsPageProps) {
     try {
       const data = await api.getSessions()
       setSessions(data)
+      setError(null)
     } catch {
-      toast.error("Failed to load sessions")
+      setError("Could not load sessions from the API.")
     } finally {
       setLoading(false)
     }
@@ -131,314 +148,292 @@ export function SessionsPage(_props?: SessionsPageProps) {
       title="Sessions"
       description="Manage your WhatsApp session connections"
       actions={
-        <Button variant="ghost" size="icon" onClick={loadSessions} title="Refresh">
-          <RefreshCw />
+        <Button variant="ghost" size="icon" onClick={loadSessions} title="Refresh" aria-label="Refresh">
+          <RefreshCw className="size-4" strokeWidth={1.75} />
         </Button>
       }
     >
-      <div className="space-y-6">
+      {loading ? (
+        <div className="space-y-6">
+          <StatRowSkeleton />
+          <TableSkeleton rows={5} columns={6} />
+        </div>
+      ) : error ? (
+        <ErrorState
+          title="Could not load sessions"
+          description={error}
+          onRetry={loadSessions}
+        />
+      ) : (
+        <div className="space-y-6">
           {/* Stats */}
-          <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">Total</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold tracking-tight">{totalSessions}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">Working</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold tracking-tight text-green-500">{workingSessions}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">Scanning QR</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold tracking-tight text-yellow-500">{scanningSessions}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">Stopped</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold tracking-tight text-base text-muted-foreground">{stoppedSessions}</div>
-              </CardContent>
-            </Card>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+            <StatCard
+              label="Total sessions"
+              value={String(totalSessions)}
+              icon={<MessageSquare strokeWidth={1.75} />}
+            />
+            <StatCard
+              label="Working"
+              value={String(workingSessions)}
+              tone="success"
+              icon={<Play strokeWidth={1.75} />}
+            />
+            <StatCard
+              label="Scanning QR"
+              value={String(scanningSessions)}
+              tone="warning"
+              icon={<QrCode strokeWidth={1.75} />}
+            />
+            <StatCard
+              label="Stopped"
+              value={String(stoppedSessions)}
+              icon={<Square strokeWidth={1.75} />}
+            />
           </div>
 
-          {/* Sessions Table */}
-          <Card>
-            <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <CardTitle className="flex items-center gap-2">
-                <MessageSquare className="size-5" />
-                All Sessions
-              </CardTitle>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-8 w-full sm:w-32 text-xs">
-                    <SelectValue placeholder="All Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="WORKING">Working</SelectItem>
-                    <SelectItem value="SCAN_QR_CODE">Scan QR</SelectItem>
-                    <SelectItem value="STOPPED">Stopped</SelectItem>
-                    <SelectItem value="FAILED">Failed</SelectItem>
-                  </SelectContent>
-                </Select>
-                <div className="relative flex-1 sm:flex-none">
-                  <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Search sessions"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="h-8 w-full sm:w-60 pl-8 text-xs"
+          {/* Sessions table */}
+          <section className="space-y-3">
+            <SectionHeading
+              title="All sessions"
+              description="Start, stop and configure each connection"
+              action={
+                <div className="flex flex-wrap items-center gap-2">
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="h-8 w-full text-xs sm:w-32" aria-label="Filter by status">
+                      <SelectValue placeholder="All statuses" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All statuses</SelectItem>
+                      <SelectItem value="WORKING">Working</SelectItem>
+                      <SelectItem value="SCAN_QR_CODE">Scan QR</SelectItem>
+                      <SelectItem value="STOPPED">Stopped</SelectItem>
+                      <SelectItem value="FAILED">Failed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="relative flex-1 sm:flex-none">
+                    <Search
+                      className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                      strokeWidth={1.75}
+                    />
+                    <Input
+                      placeholder="Search sessions"
+                      aria-label="Search sessions"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="h-8 w-full pl-8 text-xs sm:w-60"
+                    />
+                  </div>
+                  <Button size="sm" onClick={() => setShowCreateDialog(true)}>
+                    <Plus className="size-4" strokeWidth={1.75} />
+                    Create session
+                  </Button>
+                  <CreateSessionDialog
+                    open={showCreateDialog}
+                    onOpenChange={setShowCreateDialog}
+                    onCreated={loadSessions}
                   />
                 </div>
-                <Button size="sm" onClick={() => setShowCreateDialog(true)}>
-                  <Plus className="size-5" />
-                  <span className="hidden sm:inline ml-1">Start New</span>
-                </Button>
-                <CreateSessionDialog
-                  open={showCreateDialog}
-                  onOpenChange={setShowCreateDialog}
-                  onCreated={loadSessions}
-                />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-md border overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-8" />
-                      <TableHead>Name</TableHead>
-                      <TableHead className="hidden lg:table-cell">Account</TableHead>
-                      <TableHead className="w-24 sm:w-28">Status</TableHead>
-                      <TableHead className="hidden sm:table-cell">Engine</TableHead>
-                      <TableHead className="hidden md:table-cell w-24">Auto-start</TableHead>
-                      <TableHead className="w-16 sm:w-80">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {loading ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="h-24 text-center text-base text-muted-foreground">Loading sessions...</TableCell>
-                      </TableRow>
-                    ) : filteredSessions.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={7}>
-                          <EmptyState
-                            icon={<MessageSquare />}
-                            title="No sessions yet"
-                            description="Create a session and scan the QR code with your phone to connect it."
-                            action={<Button onClick={() => setShowCreateDialog(true)}><Plus className="size-4 mr-1" />Create session</Button>}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredSessions.map((session) => (
-                        <TableRow key={session.name}>
-                          <TableCell>
-                            <StatusBadge status={session.status} />
-                          </TableCell>
-                          <TableCell className="font-medium text-base">
-                            <div className="truncate max-w-[120px] sm:max-w-none">{session.name}</div>
-                            <div className="sm:hidden text-xs text-muted-foreground truncate max-w-[120px]">{session.me?.pushName || ""}</div>
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell">
-                            {session.me?.pushName || session.me?.id || <span className="text-base text-muted-foreground">-</span>}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={
-                              session.status === "WORKING" ? "default"
-                              : session.status === "SCAN_QR_CODE" ? "secondary"
-                              : session.status === "FAILED" ? "destructive"
-                              : session.status === "STARTING" ? "secondary"
-                              : "outline"
-                            } className="inline-flex items-center gap-1">
-                              {session.status === "STARTING" && <Loader2 className="size-3 animate-spin" />}
-                              {session.status === "SCAN_QR_CODE" ? "SCAN_QR" : session.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="hidden sm:table-cell">
-                            <Badge variant="outline" className={
-                              session.config?.engine === "WEBJS"
-                                ? "bg-purple-500/10 text-purple-500 border-purple-500/20"
-                                : "bg-blue-500/10 text-blue-500 border-blue-500/20"
-                            }>
-                              {session.config?.engine || "NOWEB"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="hidden md:table-cell">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="inline-flex">
-                                  <Switch
-                                    checked={session.config?.autoStart === true}
-                                    onCheckedChange={(v) => toggleAutoStart(session, v)}
-                                  />
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent>Start automatically when the server boots</TooltipContent>
-                            </Tooltip>
-                          </TableCell>
-                          <TableCell>
-                            {/* Desktop */}
-                            <div className={`hidden sm:flex justify-end gap-1 session-actions ${session.status === "WORKING" ? "session-active" : ""}`}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status !== "STOPPED"} onClick={() => handleAction("start", () => api.startSession(session.name))}>
-                                    <Play />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Start</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status === "STOPPED"} onClick={() => handleAction("restart", () => api.restartSession(session.name))}>
-                                    <RotateCcw />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Restart</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status === "STOPPED"} onClick={() => handleAction("stop", () => api.stopSession(session.name))}>
-                                    <Square />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Stop</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status === "STOPPED"} onClick={() => handleAction("logout", () => api.logoutSession(session.name))}>
-                                    <LogOut />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Logout</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-10" onClick={() => handleAction("delete", () => api.deleteSession(session.name))}>
-                                    <Trash2 />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Delete</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status !== "SCAN_QR_CODE"} onClick={() => { setDetailSession(session); setShowDetailDialog(true) }}>
-                                    <QrCode />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>QR / Pairing</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status !== "WORKING" || session.config?.engine !== "WEBJS"} onClick={() => api.getScreenshot(session.name).then(() => toast.success("Screenshot taken")).catch(() => toast.error("Screenshot failed"))}>
-                                    <Smartphone />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Screenshot (WEBJS)</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status !== "WORKING"} onClick={() => navigate(`/sessions/${session.name}/chat`)}>
-                                    <MessageCircle />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Chat</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-10" onClick={() => { setSettingsSession(session); setShowSettingsDialog(true) }}>
-                                    <Cog />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Settings</TooltipContent>
-                              </Tooltip>
-                            </div>
-                            {/* Mobile */}
-                            <div className={`flex sm:hidden justify-end gap-1 ${session.status === "WORKING" ? "session-active" : ""}`}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status !== "STOPPED"} onClick={() => handleAction("start", () => api.startSession(session.name))}>
-                                    <Play />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Start</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status === "STOPPED"} onClick={() => handleAction("stop", () => api.stopSession(session.name))}>
-                                    <Square />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Stop</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status !== "SCAN_QR_CODE"} onClick={() => { setDetailSession(session); setShowDetailDialog(true) }}>
-                                    <QrCode />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>QR</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-10" disabled={session.status !== "WORKING"} onClick={() => navigate(`/sessions/${session.name}/chat`)}>
-                                    <MessageCircle />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Chat</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-10" onClick={() => { setSettingsSession(session); setShowSettingsDialog(true) }}>
-                                    <Cog />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Settings</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-10" onClick={() => handleAction("delete", () => api.deleteSession(session.name))}>
-                                    <Trash2 />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Delete</TooltipContent>
-                              </Tooltip>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+              }
+            />
 
-          <SessionSettingsDialog
-            open={showSettingsDialog}
-            onOpenChange={setShowSettingsDialog}
-            session={settingsSession}
-            onSaved={loadSessions}
-          />
-          <SessionDetailDialog
-            open={showDetailDialog}
-            onOpenChange={setShowDetailDialog}
-            session={detailSession}
-          />
+            {sessions.length === 0 ? (
+              <EmptyState
+                icon={<MessageSquare strokeWidth={1.75} />}
+                title="No sessions yet"
+                description="Create a session and scan the QR code with your phone to connect it."
+                action={
+                  <Button size="sm" onClick={() => setShowCreateDialog(true)}>
+                    <Plus className="size-4" strokeWidth={1.75} />
+                    Create session
+                  </Button>
+                }
+              />
+            ) : filteredSessions.length === 0 ? (
+              <EmptyState
+                icon={<Search strokeWidth={1.75} />}
+                title="No matching sessions"
+                description="Adjust the search text or status filter to see more."
+                action={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSearch("")
+                      setStatusFilter("all")
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                }
+              />
+            ) : (
+              <DataTable minWidthClassName="min-w-[840px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-28">Status</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead className="hidden lg:table-cell">Account</TableHead>
+                    <TableHead className="hidden sm:table-cell">Engine</TableHead>
+                    <TableHead className="hidden md:table-cell w-24">Auto-start</TableHead>
+                    <TableHead className="w-14" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredSessions.map((session) => (
+                    <TableRow key={session.name}>
+                      <TableCell>
+                        <StatusBadge status={session.status} />
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        <div className="max-w-[120px] truncate sm:max-w-none">{session.name}</div>
+                        <div className="max-w-[120px] truncate text-xs text-muted-foreground sm:hidden">
+                          {session.me?.pushName || ""}
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        {session.me?.pushName ||
+                          (session.me?.id ? (
+                            <Metric>{session.me.id}</Metric>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          ))}
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        <EngineBadge engine={session.config?.engine} />
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex">
+                              <Switch
+                                checked={session.config?.autoStart === true}
+                                onCheckedChange={(v) => toggleAutoStart(session, v)}
+                                aria-label={`Auto-start for ${session.name}`}
+                              />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>Start automatically when the server boots</TooltipContent>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell>
+                        <div className={`flex justify-end ${session.status === "WORKING" ? "session-active" : ""}`}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8"
+                                aria-label={`Session actions for ${session.name}`}
+                              >
+                                <MoreHorizontal className="size-4" strokeWidth={1.75} />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuItem
+                                disabled={session.status !== "STOPPED"}
+                                title={session.status !== "STOPPED" ? "Only a stopped session can be started" : undefined}
+                                onSelect={() => handleAction("start", () => api.startSession(session.name))}
+                              >
+                                <Play strokeWidth={1.75} />
+                                Start
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                disabled={session.status === "STOPPED"}
+                                title={session.status === "STOPPED" ? "The session is already stopped" : undefined}
+                                onSelect={() => handleAction("restart", () => api.restartSession(session.name))}
+                              >
+                                <RotateCcw strokeWidth={1.75} />
+                                Restart
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                disabled={session.status === "STOPPED"}
+                                title={session.status === "STOPPED" ? "The session is already stopped" : undefined}
+                                onSelect={() => handleAction("stop", () => api.stopSession(session.name))}
+                              >
+                                <Square strokeWidth={1.75} />
+                                Stop
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                disabled={session.status === "STOPPED"}
+                                title={session.status === "STOPPED" ? "The session is already stopped" : undefined}
+                                onSelect={() => handleAction("logout", () => api.logoutSession(session.name))}
+                              >
+                                <LogOut strokeWidth={1.75} />
+                                Logout
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                disabled={session.status !== "SCAN_QR_CODE"}
+                                title={session.status !== "SCAN_QR_CODE" ? "Available while the session is waiting for a QR scan" : undefined}
+                                onSelect={() => {
+                                  setDetailSession(session)
+                                  setShowDetailDialog(true)
+                                }}
+                              >
+                                <QrCode strokeWidth={1.75} />
+                                QR and pairing
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                disabled={session.status !== "WORKING" || session.config?.engine !== "WEBJS"}
+                                title={
+                                  session.status !== "WORKING" || session.config?.engine !== "WEBJS"
+                                    ? "Available for a working WEBJS session"
+                                    : undefined
+                                }
+                                onSelect={() => handleAction("screenshot", () => api.getScreenshot(session.name))}
+                              >
+                                <Smartphone strokeWidth={1.75} />
+                                Screenshot
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                disabled={session.status !== "WORKING"}
+                                title={session.status !== "WORKING" ? "Available for a working session" : undefined}
+                                onSelect={() => navigate(`/sessions/${session.name}/chat`)}
+                              >
+                                <MessageCircle strokeWidth={1.75} />
+                                Chat
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onSelect={() => {
+                                  setSettingsSession(session)
+                                  setShowSettingsDialog(true)
+                                }}
+                              >
+                                <Cog strokeWidth={1.75} />
+                                Settings
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onSelect={() => handleAction("delete", () => api.deleteSession(session.name))}
+                              >
+                                <Trash2 strokeWidth={1.75} />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </DataTable>
+            )}
+          </section>
         </div>
+      )}
+
+      <SessionSettingsDialog
+        open={showSettingsDialog}
+        onOpenChange={setShowSettingsDialog}
+        session={settingsSession}
+        onSaved={loadSessions}
+      />
+      <SessionDetailDialog
+        open={showDetailDialog}
+        onOpenChange={setShowDetailDialog}
+        session={detailSession}
+      />
     </PageLayout>
   )
 }

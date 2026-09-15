@@ -16,18 +16,22 @@ import { LogsPage } from "./pages/logs-page"
 import { MessageTesterPage } from "./pages/message-tester-page"
 import { InfrastructurePage } from "./pages/infrastructure-page"
 import { QueuePage } from "./pages/queue-page"
+import { DocsPage } from "./pages/docs-page"
 import { PageLayout } from "@/components/page-layout"
 import { Toaster } from "@/components/ui/sonner"
 import { ErrorBoundary } from "./components/ErrorBoundary"
 
 function GlobalBackground() {
   return (
-    <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden" style={{
-      background: `
-        radial-gradient(ellipse at 20% 0%, oklch(0.841 0.238 128.85 / 0.04) 0%, transparent 50%),
-        radial-gradient(ellipse at 80% 100%, oklch(0.841 0.238 128.85 / 0.03) 0%, transparent 50%)
-      `,
-    }} />
+    <div
+      className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
+      style={{
+        background: `
+          radial-gradient(ellipse at 20% 0%, color-mix(in oklab, var(--primary) 5%, transparent) 0%, transparent 50%),
+          radial-gradient(ellipse at 80% 100%, color-mix(in oklab, var(--primary) 4%, transparent) 0%, transparent 50%)
+        `,
+      }}
+    />
   )
 }
 
@@ -37,7 +41,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
       <AppSidebar />
       <SidebarInset className="relative overflow-hidden">
         <GlobalBackground />
-        <div className="relative z-10 flex flex-col h-full animate-fade-in">{children}</div>
+        <div className="relative z-10 flex min-h-dvh flex-col">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   )
@@ -66,9 +70,15 @@ function AppRoutes() {
         <Route path="/infrastructure" element={<InfrastructurePage />} />
         <Route path="/queue" element={<QueuePage />} />
         <Route path="/events" element={<EventMonitorPage />} />
-        <Route path="/docs" element={
-          <PageLayout title="API Documentation" description="Scalar API reference for BunWa">
-            <iframe src="/api-docs/" className="w-full min-h-[calc(100vh-14rem)] rounded-xl border" title="API Docs" />
+        {/* Written guide first; the raw Scalar reference stays one click away. */}
+        <Route path="/docs" element={<DocsPage />} />
+        <Route path="/docs/reference" element={
+          <PageLayout title="API reference" description="Scalar reference generated from the OpenAPI document">
+            <iframe
+              src="/api-docs/"
+              className="h-[calc(100dvh-9rem)] w-full rounded-lg border border-border"
+              title="API reference"
+            />
           </PageLayout>
         } />
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -12,6 +12,13 @@ import {
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import {
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
   Eye,
   Trash2,
   Pause,
@@ -20,20 +27,35 @@ import {
   Download,
   Wifi,
   WifiOff,
+  Radio,
 } from "lucide-react"
 import { PageLayout } from "@/components/page-layout"
 import { useWebSocket } from "@/lib/use-websocket"
+import { cn } from "@/lib/utils"
+import { DataTable, TableSkeleton, EmptyState, Metric } from "@/components/primitives"
 
-const EVENT_COLORS: Record<string, string> = {
-  message: "bg-blue-500",
-  "message.ack": "bg-green-500",
-  "message.reaction": "bg-purple-500",
-  "presence.update": "bg-yellow-500",
-  "poll.vote": "bg-orange-500",
-  "group.join": "bg-emerald-500",
-  "group.leave": "bg-red-500",
-  error: "bg-red-600",
-  warning: "bg-yellow-600",
+type EventTone = "info" | "success" | "warning" | "error" | "neutral"
+
+/* Event families collapse onto the five semantic tones instead of one hue per
+   event name, so the table stays legible at a glance. */
+function eventTone(event: string): EventTone {
+  if (event.startsWith("error")) return "error"
+  if (event.startsWith("warning")) return "warning"
+  if (event.startsWith("message.ack")) return "success"
+  if (event.startsWith("message")) return "info"
+  if (event.startsWith("group.join")) return "success"
+  if (event.startsWith("group.leave")) return "neutral"
+  if (event.startsWith("presence")) return "warning"
+  if (event.startsWith("poll") || event.startsWith("session")) return "info"
+  return "neutral"
+}
+
+const TONE_CLASS: Record<EventTone, string> = {
+  info: "border-info/30 bg-info/10 text-info",
+  success: "border-success-border bg-success-bg text-success-foreground",
+  warning: "border-warning-border bg-warning-bg text-warning-foreground",
+  error: "border-error-border bg-error-bg text-error-foreground",
+  neutral: "border-border bg-muted text-muted-foreground",
 }
 
 interface LogEntry {
@@ -49,7 +71,7 @@ export function EventMonitorPage() {
   const [paused, setPaused] = useState(false)
   const [eventFilter, setEventFilter] = useState("all")
   const [search, setSearch] = useState("")
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const idCounter = useRef(0)
   const pausedRef = useRef(false)
 
@@ -77,8 +99,10 @@ export function EventMonitorPage() {
   const { connected } = useWebSocket({ onMessage })
 
   useEffect(() => {
-    if (!paused) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+    if (!paused && scrollRef.current) {
+      // DataTable exposes its scroll element, so follow the newest row even
+      // though the table scrolls inside its own container.
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })
     }
   }, [events, paused])
 
@@ -87,6 +111,8 @@ export function EventMonitorPage() {
     if (search && !JSON.stringify(e).toLowerCase().includes(search.toLowerCase())) return false
     return true
   })
+
+  const loading = !connected && events.length === 0
 
   const clearEvents = () => setEvents([])
 
@@ -108,119 +134,129 @@ export function EventMonitorPage() {
   return (
     <PageLayout title="Event Monitor" description="Live WebSocket event stream from your WhatsApp sessions">
       <div className="space-y-6">
-          <Alert>
-            {connected ? (
-              <Wifi
-                className="size-5 drop-shadow-[0_0_6px_var(--primary)] animate-pulse-soft"
-                style={{ color: "var(--primary)" }}
+        <Alert>
+          {connected ? (
+            <Wifi className="size-4 animate-pulse-soft text-primary" strokeWidth={1.75} />
+          ) : (
+            <WifiOff className="size-4 text-error" strokeWidth={1.75} />
+          )}
+          <AlertDescription>
+            {connected
+              ? "Connected to WebSocket, receiving real-time events."
+              : "Disconnected from WebSocket. Retrying."}
+          </AlertDescription>
+        </Alert>
+
+        <Card>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="flex items-center gap-2 text-base font-medium">
+              <Eye className="size-4" strokeWidth={1.75} />
+              Real-time events
+              <Badge variant="secondary" className="ml-1">
+                <Metric>{filtered.length}</Metric>
+              </Badge>
+            </CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 sm:flex-none">
+                <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" strokeWidth={1.75} />
+                <Input
+                  placeholder="Search events"
+                  aria-label="Search events"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-8 w-full pl-8 text-xs sm:w-48"
+                />
+              </div>
+              <Select value={eventFilter} onValueChange={setEventFilter}>
+                <SelectTrigger className="h-8 w-full text-xs sm:w-36" aria-label="Filter by event type">
+                  <SelectValue placeholder="All events" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All events</SelectItem>
+                  {uniqueEvents.map((ev) => (
+                    <SelectItem key={ev} value={ev}>{ev}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" onClick={() => setPaused(!paused)}>
+                {paused ? <Play className="size-4" strokeWidth={1.75} /> : <Pause className="size-4" strokeWidth={1.75} />}
+                <span className="ml-1 hidden sm:inline">{paused ? "Resume" : "Pause"}</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={downloadLogs}
+                className="hidden sm:inline-flex"
+                title="Download visible events"
+                aria-label="Download visible events"
+              >
+                <Download className="size-4" strokeWidth={1.75} />
+              </Button>
+              <Button variant="outline" size="sm" onClick={clearEvents} title="Clear events" aria-label="Clear events">
+                <Trash2 className="size-4" strokeWidth={1.75} />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {loading ? (
+              <TableSkeleton rows={8} columns={4} />
+            ) : filtered.length === 0 ? (
+              <EmptyState
+                compact
+                icon={<Radio strokeWidth={1.75} />}
+                title={events.length === 0 ? "No events yet" : "No events match your filters"}
+                description={
+                  events.length === 0
+                    ? "Events from your sessions will appear here as they arrive."
+                    : "Try a different search term or event type."
+                }
               />
             ) : (
-              <WifiOff className="size-5 text-red-500" />
+              <DataTable
+                className="[&>div>div]:max-h-[600px] [&>div>div]:overflow-y-auto"
+                minWidthClassName="min-w-[640px]"
+                scrollRef={scrollRef}
+              >
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-24 text-xs text-muted-foreground">Time</TableHead>
+                    <TableHead className="hidden w-40 text-xs text-muted-foreground sm:table-cell">Session</TableHead>
+                    <TableHead className="w-44 text-xs text-muted-foreground">Event</TableHead>
+                    <TableHead className="text-xs text-muted-foreground">Payload</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((entry) => (
+                    <TableRow key={entry.id}>
+                      <TableCell className="whitespace-nowrap px-3 py-1.5">
+                        <Metric className="font-mono text-xs text-muted-foreground">
+                          {new Date(entry.timestamp).toLocaleTimeString()}
+                        </Metric>
+                      </TableCell>
+                      <TableCell className="hidden px-3 py-1.5 sm:table-cell">
+                        <Metric className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
+                          {entry.session || "-"}
+                        </Metric>
+                      </TableCell>
+                      <TableCell className="px-3 py-1.5">
+                        <Badge variant="outline" className={cn("text-xs", TONE_CLASS[eventTone(entry.event)])}>
+                          {entry.event}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[150px] truncate px-3 py-1.5 font-mono text-xs text-muted-foreground sm:max-w-md">
+                        {entry.payload}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </DataTable>
             )}
-            <AlertDescription>
-              {connected
-                ? "Connected to WebSocket — receiving real-time events."
-                : "Disconnected from WebSocket. Retrying..."}
-            </AlertDescription>
-          </Alert>
-
-          <Card>
-            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Eye className="size-5" />
-                Real-time Events
-                <Badge variant="secondary" className="ml-2">
-                  {filtered.length}
-                </Badge>
-              </CardTitle>
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="relative flex-1 sm:flex-none">
-                  <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Search events..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="h-8 w-full sm:w-48 pl-8 text-xs"
-                  />
-                </div>
-                <Select value={eventFilter} onValueChange={setEventFilter}>
-                  <SelectTrigger className="h-8 w-full sm:w-36 text-xs">
-                    <SelectValue placeholder="All Events" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Events</SelectItem>
-                    {uniqueEvents.map((ev) => (
-                      <SelectItem key={ev} value={ev}>{ev}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button variant="outline" size="sm" onClick={() => setPaused(!paused)}>
-                  {paused ? <Play className="size-5" /> : <Pause className="size-5" />}
-                  <span className="hidden sm:inline ml-1">{paused ? "Resume" : "Pause"}</span>
-                </Button>
-                <Button variant="outline" size="sm" onClick={downloadLogs} className="hidden sm:inline-flex">
-                  <Download className="size-5" />
-                </Button>
-                <Button variant="outline" size="sm" onClick={clearEvents}>
-                  <Trash2 className="size-5" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-md border">
-                <div className="max-h-[600px] overflow-auto">
-                  <table className="w-full text-xs">
-                    <thead className="sticky top-0 bg-muted">
-                      <tr>
-                        <th className="px-3 py-2 text-left font-medium text-base text-muted-foreground">Time</th>
-                        <th className="hidden sm:table-cell px-3 py-2 text-left font-medium text-base text-muted-foreground">Session</th>
-                        <th className="px-3 py-2 text-left font-medium text-base text-muted-foreground">Event</th>
-                        <th className="px-3 py-2 text-left font-medium text-base text-muted-foreground">Payload</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.length === 0 ? (
-                        <tr>
-                          <td colSpan={4} className="px-3 py-8 text-center text-base text-muted-foreground">
-                            No events yet. Events will appear here in real-time.
-                          </td>
-                        </tr>
-                      ) : (
-                        filtered.map((entry) => (
-                          <tr key={entry.id} className="border-t border-border hover:bg-muted/50">
-                            <td className="whitespace-nowrap px-3 py-1.5 font-mono text-[10px] text-base text-muted-foreground">
-                              {new Date(entry.timestamp).toLocaleTimeString()}
-                            </td>
-                            <td className="hidden sm:table-cell px-3 py-1.5">
-                              <code className="rounded bg-muted px-1 py-0.5 text-[10px]">
-                                {entry.session || "-"}
-                              </code>
-                            </td>
-                            <td className="px-3 py-1.5">
-                              <Badge
-                                variant="outline"
-                                className={`text-[10px] ${EVENT_COLORS[entry.event] || "bg-gray-500"} text-white border-0`}
-                              >
-                                {entry.event}
-                              </Badge>
-                            </td>
-                            <td className="max-w-[150px] sm:max-w-md truncate px-3 py-1.5 font-mono text-[10px] text-base text-muted-foreground">
-                              {entry.payload}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                  <div ref={bottomRef} />
-                </div>
-              </div>
-              <p className="mt-2 text-[10px] text-base text-muted-foreground">
-                {paused ? "Paused" : connected ? "Live (WebSocket)" : "Connecting..."} — Showing {filtered.length} events
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+            <p className="text-xs text-muted-foreground">
+              {paused ? "Paused" : connected ? "Live (WebSocket)" : "Connecting"}. Showing <Metric>{filtered.length}</Metric> events.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     </PageLayout>
   )
 }

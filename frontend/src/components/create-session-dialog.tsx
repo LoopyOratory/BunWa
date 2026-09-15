@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { Separator } from "@/components/ui/separator"
 import {
   Dialog,
   DialogContent,
@@ -11,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { QRCodeDisplay } from "@/components/qr-code"
+import { Skeleton } from "@/components/primitives"
 import { api } from "@/lib/api"
 import { toast } from "sonner"
 import {
@@ -18,7 +20,6 @@ import {
   Globe,
   Loader2,
   CheckCircle2,
-  RefreshCw,
   QrCode,
   Copy,
 } from "lucide-react"
@@ -27,7 +28,7 @@ const ENGINES = [
   {
     id: "noweb",
     name: "NOWEB",
-    subtitle: "Baileys — Lightweight",
+    subtitle: "Baileys (lightweight)",
     icon: Smartphone,
     description: "No browser required. Best for channels, newsletters, multi-session setups. Uses Baileys WhatsApp protocol implementation.",
   },
@@ -54,10 +55,12 @@ export function CreateSessionDialog({ open, onOpenChange, onCreated }: CreateSes
   const [engine, setEngine] = useState("noweb")
   const [autoStart, setAutoStart] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const [qrCode, setQrCode] = useState<string | null>(null)
   const [pairingPhone, setPairingPhone] = useState("")
   const [pairingCode, setPairingCode] = useState<string | null>(null)
+  const [pairingError, setPairingError] = useState<string | null>(null)
   const [pairingLoading, setPairingLoading] = useState(false)
   const [createdSessionName, setCreatedSessionName] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -69,10 +72,12 @@ export function CreateSessionDialog({ open, onOpenChange, onCreated }: CreateSes
       setSessionName("")
       setEngine("noweb")
       setLoading(false)
+      setCreateError(null)
       setStatus(null)
       setQrCode(null)
       setPairingPhone("")
       setPairingCode(null)
+      setPairingError(null)
       setCreatedSessionName(null)
       if (pollRef.current) clearInterval(pollRef.current)
     }
@@ -115,6 +120,7 @@ export function CreateSessionDialog({ open, onOpenChange, onCreated }: CreateSes
   const handleCreate = async () => {
     if (!sessionName.trim()) return
     setLoading(true)
+    setCreateError(null)
     try {
       const config: Record<string, any> = engine === "webjs" ? { engine: "webjs" } : {}
       if (autoStart) config.autoStart = true
@@ -122,9 +128,11 @@ export function CreateSessionDialog({ open, onOpenChange, onCreated }: CreateSes
       await api.startSession(sessionName.trim())
       setCreatedSessionName(sessionName.trim())
       setStatus("STARTING")
-      toast.success("Session created and starting...")
+      toast.success("Session created, starting now")
     } catch (e: any) {
-      toast.error(e.message || "Failed to create session")
+      const message = e.message || "Failed to create session"
+      setCreateError(message)
+      toast.error(message)
       setLoading(false)
     }
   }
@@ -132,11 +140,19 @@ export function CreateSessionDialog({ open, onOpenChange, onCreated }: CreateSes
   const handlePairing = async () => {
     if (!pairingPhone.trim() || !createdSessionName) return
     setPairingLoading(true)
+    setPairingError(null)
     try {
       const res = await api.requestPairingCode(createdSessionName, pairingPhone.trim())
-      setPairingCode(res.code || "Code sent")
-      toast.success("Pairing code received")
+      if (res.code) {
+        setPairingCode(res.code)
+        toast.success("Pairing code received")
+      } else {
+        setPairingCode(null)
+        setPairingError("The server did not return a pairing code. Try again.")
+      }
     } catch {
+      setPairingCode(null)
+      setPairingError("Could not get a pairing code. Check the phone number and try again.")
       toast.error("Failed to get pairing code")
     } finally {
       setPairingLoading(false)
@@ -157,77 +173,98 @@ export function CreateSessionDialog({ open, onOpenChange, onCreated }: CreateSes
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {step === "create" && "Create New Session"}
-            {step === "auth" && "Authenticate — " + createdSessionName}
-            {step === "ready" && "Session Ready"}
+            {step === "create" && "Create session"}
+            {step === "auth" && "Authenticate: " + createdSessionName}
+            {step === "ready" && "Session ready"}
           </DialogTitle>
         </DialogHeader>
 
         {/* STEP 1: Name + Engine */}
         {step === "create" && (
-          <div className="space-y-5 py-2">
+          <div className="max-h-[70vh] space-y-5 overflow-y-auto py-2">
             <div className="space-y-2">
-              <Label>Session Name</Label>
+              <Label>Session name</Label>
               <Input
                 value={sessionName}
                 onChange={(e) => setSessionName(e.target.value)}
-                placeholder="e.g., my-session"
+                placeholder="e.g. support-line"
                 className="min-h-[44px]"
                 onKeyDown={(e) => e.key === "Enter" && !loading && handleCreate()}
               />
             </div>
 
+            <Separator />
+
             <div className="space-y-3">
-              <Label>Engine</Label>
+              <p className="text-sm font-medium">Engine</p>
               <div className="grid grid-cols-2 gap-3">
-                {ENGINES.map((e) => (
-                  <div
-                    key={e.id}
-                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all hover:shadow-md ${
-                      engine === e.id
-                        ? "border-emerald-500 bg-emerald-500/5"
-                        : "border-border hover:border-muted-foreground/30"
-                    }`}
-                    onClick={() => setEngine(e.id)}
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className={`p-2 rounded-lg ${engine === e.id ? "bg-emerald-500/15" : "bg-muted"}`}>
-                        <e.icon className={`size-5 ${engine === e.id ? "text-emerald-600" : "text-muted-foreground"}`} />
+                {ENGINES.map((e) => {
+                  const selected = engine === e.id
+                  return (
+                    <button
+                      key={e.id}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setEngine(e.id)}
+                      className={`rounded-lg border-2 p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        selected
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-muted-foreground/30"
+                      }`}
+                    >
+                      <div className="mb-2 flex items-center gap-3">
+                        <div className={`rounded-md p-2 ${selected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                          <e.icon className="size-5" strokeWidth={1.75} />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-semibold">{e.name}</h4>
+                          <p className="text-[11px] text-muted-foreground">{e.subtitle}</p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="font-semibold text-sm">{e.name}</h4>
-                        <p className="text-[11px] text-muted-foreground">{e.subtitle}</p>
-                      </div>
-                    </div>
-                    {engine === e.id && <Badge variant="secondary" className="text-[10px]">Selected</Badge>}
-                    <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed">{e.description}</p>
-                  </div>
-                ))}
+                      {selected && <Badge variant="secondary" className="text-[10px]">Selected</Badge>}
+                      <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{e.description}</p>
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
+            <Separator />
+
             <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
               <div className="space-y-0.5">
-                <Label>Auto-start on boot</Label>
-                <p className="text-[11px] text-muted-foreground">Automatically start this session when the server restarts</p>
+                <Label>Start automatically</Label>
+                <p className="text-xs text-muted-foreground">Start this session when the server restarts.</p>
               </div>
               <Switch checked={autoStart} onCheckedChange={setAutoStart} />
             </div>
 
-            <Button onClick={handleCreate} disabled={loading || !sessionName.trim()} className="w-full h-11 text-base">
-              {loading ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
-              {loading ? "Creating..." : "Create & Start"}
+            {createError && (
+              <p role="alert" className="rounded-md border border-error-border bg-error-bg px-3 py-2 text-sm text-error-foreground">
+                {createError}
+              </p>
+            )}
+
+            <Button onClick={handleCreate} disabled={loading || !sessionName.trim()} className="h-11 w-full rounded-md text-base">
+              {loading ? <Loader2 className="mr-2 size-4 animate-spin" strokeWidth={1.75} /> : null}
+              {loading ? "Creating" : "Create and start"}
             </Button>
           </div>
         )}
 
         {/* STEP 2: Authenticate (QR + Pairing) */}
         {step === "auth" && (
-          <div className="space-y-5 py-2">
+          <div className="max-h-[70vh] space-y-5 overflow-y-auto py-2">
             {/* Status */}
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-              <RefreshCw className="size-4 animate-spin" />
-              Status: {status || "Connecting..."}
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground" aria-live="polite">
+              {status ? (
+                <span>Status: {status.toLowerCase().replace(/_/g, " ")}</span>
+              ) : (
+                <>
+                  <Skeleton className="size-4 rounded-full" />
+                  <Skeleton className="h-4 w-32" />
+                </>
+              )}
             </div>
 
             {/* QR Code */}
@@ -235,49 +272,56 @@ export function CreateSessionDialog({ open, onOpenChange, onCreated }: CreateSes
               {qrCode ? (
                 <>
                   <QRCodeDisplay data={qrCode} size={220} />
-                  <p className="text-xs text-muted-foreground text-center">
-                    Open WhatsApp → Settings → Linked Devices → Link a Device
-                  </p>
+                  <ol className="mx-auto w-fit list-inside list-decimal space-y-0.5 text-left text-xs text-muted-foreground">
+                    <li>Open WhatsApp</li>
+                    <li>Go to Settings, then Linked devices</li>
+                    <li>Tap Link a device</li>
+                  </ol>
                 </>
               ) : (
-                <div className="flex items-center justify-center size-[220px] rounded-xl border bg-muted/30">
-                  <QrCode className="size-10 text-muted-foreground/50" />
+                <div className="flex size-[220px] items-center justify-center rounded-lg border bg-muted/30">
+                  <QrCode className="size-10 text-muted-foreground/50" strokeWidth={1.75} />
                 </div>
               )}
             </div>
 
             {/* Divider */}
             <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-xs text-muted-foreground font-medium">OR</span>
-              <div className="flex-1 h-px bg-border" />
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-xs font-medium text-muted-foreground">OR</span>
+              <div className="h-px flex-1 bg-border" />
             </div>
 
             {/* Phone Pairing */}
             <div className="space-y-3">
-              <Label>Pair with Phone Number</Label>
+              <Label>Pair with a phone number</Label>
               <div className="flex gap-2">
                 <Input
-                  placeholder="+233501234567"
+                  placeholder="+233 50 123 4567"
                   value={pairingPhone}
                   onChange={(e) => setPairingPhone(e.target.value)}
                   className="min-h-[44px] flex-1"
                   onKeyDown={(e) => e.key === "Enter" && !pairingLoading && handlePairing()}
                 />
-                <Button onClick={handlePairing} disabled={pairingLoading || !pairingPhone.trim()} className="min-h-[44px]">
-                  {pairingLoading ? <Loader2 className="size-4 animate-spin" /> : "Get Code"}
+                <Button onClick={handlePairing} disabled={pairingLoading || !pairingPhone.trim()} className="min-h-[44px] rounded-md">
+                  {pairingLoading ? <Loader2 className="size-4 animate-spin" strokeWidth={1.75} /> : "Get code"}
                 </Button>
               </div>
+              {pairingError && (
+                <p role="alert" className="rounded-md border border-error-border bg-error-bg px-3 py-2 text-sm text-error-foreground">
+                  {pairingError}
+                </p>
+              )}
               {pairingCode && (
-                <div className="flex items-center gap-2 p-3 rounded-xl bg-muted">
-                  <code className="text-sm font-mono font-bold flex-1">{pairingCode}</code>
-                  <Button variant="ghost" size="icon-sm" onClick={handleCopyPairing}>
-                    <Copy className="size-4" />
+                <div className="flex items-center gap-2 rounded-md bg-muted p-3">
+                  <code className="metric flex-1 font-mono text-sm font-bold">{pairingCode}</code>
+                  <Button variant="ghost" size="icon-sm" onClick={handleCopyPairing} aria-label="Copy pairing code">
+                    <Copy className="size-4" strokeWidth={1.75} />
                   </Button>
                 </div>
               )}
               <p className="text-xs text-muted-foreground">
-                Enter your phone number to receive a pairing code instead of scanning QR
+                Enter your phone number to receive a pairing code instead of scanning the QR code.
               </p>
             </div>
           </div>
@@ -286,16 +330,16 @@ export function CreateSessionDialog({ open, onOpenChange, onCreated }: CreateSes
         {/* STEP 3: Ready */}
         {step === "ready" && (
           <div className="flex flex-col items-center gap-4 py-6">
-            <div className="size-16 rounded-full bg-emerald-500/10 flex items-center justify-center">
-              <CheckCircle2 className="size-8 text-emerald-500" />
+            <div className="flex size-16 items-center justify-center rounded-full border border-success-border bg-success-bg">
+              <CheckCircle2 className="size-8 text-success-foreground" strokeWidth={1.75} />
             </div>
             <div className="text-center">
-              <h3 className="text-lg font-semibold">Session Ready</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                {createdSessionName} is now connected and working
+              <h3 className="text-lg font-semibold">Session ready</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {createdSessionName} is connected and working.
               </p>
             </div>
-            <Button onClick={handleDone} className="mt-2">
+            <Button onClick={handleDone} className="mt-2 rounded-md">
               Done
             </Button>
           </div>

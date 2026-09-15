@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
+import type { RefObject } from "react"
 import { useParams } from "react-router-dom"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -13,6 +14,63 @@ import { Send, CheckCircle, XCircle, Phone, FileText, Image, Video, Music, File,
 import { PageLayout } from "@/components/page-layout"
 import { api, type Session } from "@/lib/api"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
+import { EmptyState, ErrorState, Metric } from "@/components/primitives"
+import { mapSessionStatus, type StatusKind } from "@/lib/status"
+
+const SESSION_DOT: Record<StatusKind, string> = {
+  working: "bg-success",
+  starting: "bg-warning",
+  failed: "bg-error",
+  stopped: "bg-muted-foreground/60",
+}
+
+function FileDropzone({
+  accept,
+  label,
+  fileName,
+  onFile,
+  inputRef,
+}: {
+  accept?: string
+  label: string
+  fileName: string | null
+  onFile: (file: File | null) => void
+  inputRef: RefObject<HTMLInputElement | null>
+}) {
+  const [dragging, setDragging] = useState(false)
+
+  return (
+    <div
+      className={cn(
+        "relative rounded-lg border-2 border-dashed p-6 text-center transition-colors",
+        dragging ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/50",
+      )}
+      onDragOver={(e) => {
+        e.preventDefault()
+        setDragging(true)
+      }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(e) => {
+        e.preventDefault()
+        setDragging(false)
+        onFile(e.dataTransfer.files?.[0] ?? null)
+      }}
+    >
+      <Upload className="mx-auto mb-2 size-6 text-muted-foreground" strokeWidth={1.75} />
+      <p className="text-sm font-medium">{fileName ?? `Upload ${label.toLowerCase()}`}</p>
+      <p className="mt-1 text-xs text-muted-foreground">Click to browse or drop a file here</p>
+      <Input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        aria-label={`Choose ${label.toLowerCase()} file`}
+        className="absolute inset-0 cursor-pointer opacity-0"
+        onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+      />
+    </div>
+  )
+}
 
 export function MessageTesterPage() {
   const { chatId: urlChatId } = useParams()
@@ -20,22 +78,38 @@ export function MessageTesterPage() {
   const [session, setSession] = useState("")
   const [chatId, setChatId] = useState(urlChatId || "")
   const [text, setText] = useState("")
-  useEffect(() => {
-    api.getSessions().then(list => {
-      setSessions(list)
-      if (list.length > 0 && !session) setSession(list[0].name)
-    }).catch(() => {})
-  }, [])
-
+  const [sessionsError, setSessionsError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [fileName, setFileName] = useState<string | null>(null)
   const [result, setResult] = useState<{ success: boolean; messageId?: string; error?: string } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const selectedFileRef = useRef<File | null>(null)
+
+  const loadSessions = () => {
+    setSessionsError(null)
+    api
+      .getSessions()
+      .then((list) => {
+        setSessions(list)
+        if (list.length > 0 && !session) setSession(list[0].name)
+      })
+      .catch((err: any) => setSessionsError(err?.message || "Could not load sessions"))
+  }
+
+  useEffect(() => {
+    loadSessions()
+  }, [])
+
+  function selectFile(file: File | null) {
+    selectedFileRef.current = file
+    setFileName(file?.name ?? null)
+  }
 
   async function fileToBase64(file: File): Promise<string> {
     return new Promise((resolve) => { const r = new FileReader(); r.onload = () => resolve(r.result as string); r.readAsDataURL(file) })
   }
 
-  function getMimeType(type: string, _name: string): string {
+  function getMimeType(type: string): string {
     if (type === "image") return "image/jpeg"
     if (type === "video") return "video/mp4"
     if (type === "audio") return "audio/ogg"
@@ -47,14 +121,13 @@ export function MessageTesterPage() {
     if (!session) { toast.error("No session selected"); return }
     setSending(true); setResult(null)
     try {
-      const fileEl = document.getElementById("media-file") as HTMLInputElement
-      const file = fileEl?.files?.[0]
+      const file = selectedFileRef.current ?? fileInputRef.current?.files?.[0]
       let res: any
       if (type === "text") {
         res = await api.sendText(session, chatId, text)
       } else if (file) {
         const base64 = await fileToBase64(file)
-        const fd = { mimetype: file.type || getMimeType(type, file.name), filename: file.name, data: base64 }
+        const fd = { mimetype: file.type || getMimeType(type), filename: file.name, data: base64 }
         if (type === "image") res = await api.sendImage(session, chatId, fd, text)
         else if (type === "video") res = await api.sendVideo(session, chatId, fd, text)
         else if (type === "audio") res = await api.sendVoice(session, chatId, fd)
@@ -63,7 +136,7 @@ export function MessageTesterPage() {
         toast.error("Please select a file"); setSending(false); return
       }
       setResult({ success: true, messageId: res?.id || "sent" })
-      toast.success("Message sent!")
+      toast.success("Message sent")
     } catch (err: any) {
       setResult({ success: false, error: err.message || "Request failed" })
     }
@@ -75,8 +148,8 @@ export function MessageTesterPage() {
     if (!session) { toast.error("No session selected"); return }
     try {
       const res = await api.checkNumberStatus(session, chatId)
-      toast[res.exists ? "success" : "info"](res.exists ? `${chatId} is on WhatsApp` : `${chatId} is NOT on WhatsApp`)
-    } catch (err) { toast.error("Check failed") }
+      toast[res.exists ? "success" : "info"](res.exists ? `${chatId} is on WhatsApp` : `${chatId} is not on WhatsApp`)
+    } catch { toast.error("Check failed") }
   }
 
   const mediaTabs = [
@@ -92,209 +165,189 @@ export function MessageTesterPage() {
       title="Message Tester"
       description="Send test messages to verify your WhatsApp setup"
     >
-      <div className="space-y-6">
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Left: Compose */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Send className="size-5 text-primary" />
-                Compose Message
-              </CardTitle>
-              <CardDescription className="text-base">
-                Configure and send a test message
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Session Select */}
-              <div>
-                <Label className="text-sm font-medium">Session</Label>
-                <Select value={session} onValueChange={setSession}>
-                  <SelectTrigger className="mt-1.5 min-h-[44px] text-base">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sessions.length === 0 ? (
-                      <SelectItem value="__no_sessions__" disabled>No sessions available</SelectItem>
-                    ) : sessions.map(s => (
-                      <SelectItem key={s.name} value={s.name}>
-                        <span className="flex items-center gap-2">
-                          <span className={`size-2 rounded-full ${s.status === "WORKING" ? "bg-emerald-500" : "bg-zinc-400"}`} />
-                          {s.name}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Chat ID */}
-              <div>
-                <Label className="text-sm font-medium">Chat ID / Phone Number</Label>
-                <div className="flex gap-2 mt-1.5">
-                  <Input
-                    value={chatId}
-                    onChange={e => setChatId(e.target.value)}
-                    placeholder="+1555555555@c.us"
-                    className="flex-1 min-h-[44px] text-base"
-                  />
-                  <Button
-                    variant="outline"
-                    onClick={checkNumber}
-                    className="min-h-[44px] min-w-[44px]"
-                    title="Check if number is on WhatsApp"
-                  >
-                    <Phone className="size-5" />
-                  </Button>
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Left: Compose */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base font-medium">
+              <Send className="size-4 text-primary" strokeWidth={1.75} />
+              Compose message
+            </CardTitle>
+            <CardDescription>Configure and send a test message.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {sessionsError ? (
+              <ErrorState compact title="Could not load sessions" description={sessionsError} onRetry={loadSessions} />
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="tester-session">Session</Label>
+                  <Select value={session} onValueChange={setSession}>
+                    <SelectTrigger id="tester-session">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sessions.length === 0 ? (
+                        <SelectItem value="__no_sessions__" disabled>No sessions available</SelectItem>
+                      ) : sessions.map(s => (
+                        <SelectItem key={s.name} value={s.name}>
+                          <span className="flex items-center gap-2">
+                            <span className={cn("size-2 shrink-0 rounded-full", SESSION_DOT[mapSessionStatus(s.status)])} />
+                            {s.name}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              </div>
 
-              {/* Media Type Tabs */}
-              <Tabs defaultValue="text">
-                <TabsList className="w-full justify-start overflow-x-auto">
-                  {mediaTabs.map(tab => {
-                    const Icon = tab.icon
-                    return (
-                      <TabsTrigger key={tab.value} value={tab.value} className="gap-1.5 text-sm">
-                        <Icon className="size-4" />
-                        {tab.label}
-                      </TabsTrigger>
-                    )
-                  })}
-                </TabsList>
-
-                {mediaTabs.map(tab => (
-                  <TabsContent key={tab.value} value={tab.value} className="space-y-3 pt-3">
-                    {tab.value !== "text" && (
-                      <div className="relative">
-                        <div className="border-2 border-dashed border-muted-foreground/25 rounded-xl p-6 text-center hover:border-primary/50 transition-colors cursor-pointer group">
-                          <Upload className="size-8 mx-auto mb-2 text-muted-foreground group-hover:text-primary transition-colors" />
-                          <p className="text-sm font-medium">{fileName || `Upload ${tab.label}`}</p>
-                          <p className="text-xs text-muted-foreground mt-1">Click to browse or drop file here</p>
-                          <Input
-                            id="media-file"
-                            type="file"
-                            accept={tab.accept}
-                            className="absolute inset-0 opacity-0 cursor-pointer"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0]
-                              setFileName(file?.name || null)
-                            }}
-                          />
-                        </div>
-                        {fileName && (
-                          <Badge variant="secondary" className="mt-2 text-xs">
-                            {fileName}
-                          </Badge>
-                        )}
-                      </div>
-                    )}
-                    {tab.value === "text" && (
-                      <Textarea
-                        placeholder="Type your message here..."
-                        value={text}
-                        onChange={e => setText(e.target.value)}
-                        rows={5}
-                        className="min-h-[120px] text-base resize-y"
-                      />
-                    )}
-                    {tab.value !== "text" && tab.value !== "audio" && (
-                      <Input
-                        placeholder={tab.value === "document" ? "Filename (optional)" : "Caption (optional)"}
-                        value={text}
-                        onChange={e => setText(e.target.value)}
-                        className="min-h-[44px] text-base"
-                      />
-                    )}
+                <div className="space-y-2">
+                  <Label htmlFor="tester-chat-id">Chat ID / phone number</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="tester-chat-id"
+                      value={chatId}
+                      onChange={e => setChatId(e.target.value)}
+                      placeholder="+1555555555@c.us"
+                      className="flex-1"
+                    />
                     <Button
-                      onClick={() => sendMessage(tab.value)}
-                      disabled={sending}
-                      className="w-full h-11 text-base"
+                      variant="outline"
+                      onClick={checkNumber}
+                      title="Check if the number is on WhatsApp"
+                      aria-label="Check if the number is on WhatsApp"
                     >
-                      {sending ? (
-                        <Loader2 className="size-5 animate-spin" />
-                      ) : (
-                        <Send className="size-5" />
-                      )}
-                      {sending ? "Sending..." : `Send ${tab.label}`}
+                      <Phone strokeWidth={1.75} />
                     </Button>
-                  </TabsContent>
-                ))}
-              </Tabs>
-            </CardContent>
-          </Card>
+                  </div>
+                </div>
 
-          {/* Right: Result */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <CheckCircle className="size-5 text-primary" />
-                Delivery Result
-              </CardTitle>
-              <CardDescription className="text-base">
-                See the status of your last message
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {result ? (
-                <div className={`p-6 rounded-xl border ${
-                  result.success
-                    ? "bg-emerald-500/5 border-emerald-500/20"
-                    : "bg-red-500/5 border-red-500/20"
-                }`}>
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className={`p-2.5 rounded-full ${
-                      result.success ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-500"
-                    }`}>
-                      {result.success ? <CheckCircle className="size-6" /> : <XCircle className="size-6" />}
-                    </div>
-                    <div>
-                      <p className="text-lg font-semibold">
-                        {result.success ? "Message Sent" : "Delivery Failed"}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {result.success ? "Your message was delivered successfully" : "There was an error sending your message"}
-                      </p>
-                    </div>
+                <Tabs defaultValue="text">
+                  <TabsList className="w-full justify-start overflow-x-auto">
+                    {mediaTabs.map(tab => {
+                      const Icon = tab.icon
+                      return (
+                        <TabsTrigger key={tab.value} value={tab.value} className="gap-1.5 text-sm">
+                          <Icon className="size-4" strokeWidth={1.75} />
+                          {tab.label}
+                        </TabsTrigger>
+                      )
+                    })}
+                  </TabsList>
+
+                  {mediaTabs.map(tab => (
+                    <TabsContent key={tab.value} value={tab.value} className="space-y-3 pt-3">
+                      {tab.value !== "text" && (
+                        <FileDropzone
+                          accept={tab.accept}
+                          label={tab.label}
+                          fileName={fileName}
+                          onFile={selectFile}
+                          inputRef={fileInputRef}
+                        />
+                      )}
+                      {tab.value === "text" && (
+                        <Textarea
+                          placeholder="Type your message here"
+                          value={text}
+                          onChange={e => setText(e.target.value)}
+                          rows={5}
+                          className="min-h-[120px] resize-y"
+                        />
+                      )}
+                      {tab.value !== "text" && tab.value !== "audio" && (
+                        <Input
+                          aria-label={tab.value === "document" ? "Filename (optional)" : "Caption (optional)"}
+                          placeholder={tab.value === "document" ? "Filename (optional)" : "Caption (optional)"}
+                          value={text}
+                          onChange={e => setText(e.target.value)}
+                        />
+                      )}
+                      <Button
+                        onClick={() => sendMessage(tab.value)}
+                        disabled={sending}
+                        className="w-full"
+                      >
+                        {sending ? (
+                          <Loader2 className="animate-spin" strokeWidth={1.75} />
+                        ) : (
+                          <Send strokeWidth={1.75} />
+                        )}
+                        {sending ? "Sending" : `Send ${tab.label.toLowerCase()}`}
+                      </Button>
+                    </TabsContent>
+                  ))}
+                </Tabs>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Right: Result */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base font-medium">
+              <CheckCircle className="size-4 text-primary" strokeWidth={1.75} />
+              Delivery result
+            </CardTitle>
+            <CardDescription>See the status of your last message.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {result ? (
+              <div className={cn(
+                "rounded-lg border p-5",
+                result.success
+                  ? "border-success-border bg-success-bg/60"
+                  : "border-error-border bg-error-bg/60",
+              )}>
+                <div className="mb-3 flex items-center gap-3">
+                  <div className={cn(
+                    "flex size-10 shrink-0 items-center justify-center rounded-full",
+                    result.success ? "bg-success/15 text-success-foreground" : "bg-error/15 text-error-foreground",
+                  )}>
+                    {result.success ? <CheckCircle className="size-5" strokeWidth={1.75} /> : <XCircle className="size-5" strokeWidth={1.75} />}
                   </div>
-                  <div className="space-y-2 pt-3 border-t border-border/50">
-                    {result.messageId && (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Message ID</span>
-                        <code className="text-xs font-mono bg-muted px-2 py-0.5 rounded">{result.messageId}</code>
-                      </div>
-                    )}
-                    {result.error && (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Error</span>
-                        <span className="text-red-500 font-medium">{result.error}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Session</span>
-                      <Badge variant="secondary" className="text-xs font-mono flex items-center gap-1.5">
-                        <span className={`size-1.5 rounded-full ${sessions.find(s => s.name === session)?.status === "WORKING" ? "bg-emerald-500" : "bg-zinc-400"}`} />
-                        {session}
-                      </Badge>
-                    </div>
+                  <div>
+                    <p className="text-base font-medium">
+                      {result.success ? "Message sent" : "Delivery failed"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {result.success ? "The message was accepted by the session" : "The message could not be sent"}
+                    </p>
                   </div>
                 </div>
-              ) : (
-                <div className="text-center py-16">
-                  <div className="p-4 rounded-full bg-muted mx-auto w-fit mb-4">
-                    <Send className="size-10 text-muted-foreground/50" />
+                <div className="space-y-2 border-t border-border/50 pt-3">
+                  {result.messageId && (
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="text-muted-foreground">Message ID</span>
+                      <Metric className="rounded bg-muted px-2 py-0.5 font-mono text-xs">{result.messageId}</Metric>
+                    </div>
+                  )}
+                  {result.error && (
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="text-muted-foreground">Error</span>
+                      <span className="text-right font-medium text-error-foreground">{result.error}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="text-muted-foreground">Session</span>
+                    <Badge variant="secondary" className="flex items-center gap-1.5 font-mono text-xs">
+                      <span className={cn("size-1.5 shrink-0 rounded-full", SESSION_DOT[mapSessionStatus(sessions.find(s => s.name === session)?.status)])} />
+                      {session}
+                    </Badge>
                   </div>
-                  <p className="text-base font-medium text-muted-foreground">
-                    No messages sent yet
-                  </p>
-                  <p className="text-sm text-muted-foreground/60 mt-1">
-                    Fill in the fields on the left and hit send
-                  </p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              </div>
+            ) : (
+              <EmptyState
+                compact
+                icon={<Send strokeWidth={1.75} />}
+                title="No messages sent yet"
+                description="Fill in the fields on the left, then send a message."
+              />
+            )}
+          </CardContent>
+        </Card>
       </div>
     </PageLayout>
   )

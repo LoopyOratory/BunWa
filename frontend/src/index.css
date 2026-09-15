@@ -4,6 +4,7 @@
 @import "./components/ui/chat/chat.css";
 @import "@fontsource-variable/noto-sans";
 @import "@fontsource-variable/oxanium";
+@import "@fontsource-variable/jetbrains-mono";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -17,17 +18,10 @@ body { -webkit-font-smoothing: antialiased; }
   gap: 1rem;
 }
 
-/* ── Taller inputs ── */
-input:not([type="checkbox"]):not([type="radio"]),
-textarea,
-[role="combobox"] button {
-  min-height: 44px !important;
-}
-
-/* ── Dialog body scaling ── */
-[data-state="open"] > .dialog-body {
-  font-size: 0.9375rem;  /* 15px */
-}
+/* ── Touch targets ──
+   Field heights live on the components (ui/input.tsx defaults to h-11, dense
+   forms opt down to h-9). A global `min-height: 44px !important` used to
+   override those on purpose-built compact inputs. */
 
 :root {
     --background: oklch(1 0 0);
@@ -47,7 +41,7 @@ textarea,
     --destructive: oklch(0.577 0.245 27.325);
     --border: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
+    --ring: oklch(0.55 0.15 131);
     --chart-1: oklch(0.897 0.196 126.665);
     --chart-2: oklch(0.768 0.233 130.85);
     --chart-3: oklch(0.648 0.2 131.684);
@@ -61,14 +55,20 @@ textarea,
     --sidebar-accent: oklch(0.97 0 0);
     --sidebar-accent-foreground: oklch(0.205 0 0);
     --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
-    /* Enhanced shadow system */
-    --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.04);
-    --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
-    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.07);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.08);
-    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-    --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.18);
+    --sidebar-ring: oklch(0.55 0.15 131);
+    /* Active nav item: tinted fill plus a higher-contrast foreground than the
+       raw primary, which is too light to read on a near-white sidebar. */
+    --sidebar-active-bg: color-mix(in oklab, var(--primary) 16%, transparent);
+    --sidebar-active-fg: oklch(0.38 0.11 131);
+    --sidebar-active-border: color-mix(in oklab, var(--primary) 26%, transparent);
+    /* Elevation — tinted with the surface hue rather than pure black, so
+       depth reads as light from one direction instead of grey mud. */
+    --shadow-xs: 0 1px 2px 0 oklch(0.25 0.03 150 / 0.05);
+    --shadow-sm: 0 1px 3px 0 oklch(0.25 0.03 150 / 0.07), 0 1px 2px -1px oklch(0.25 0.03 150 / 0.07);
+    --shadow-md: 0 4px 6px -1px oklch(0.25 0.03 150 / 0.08), 0 2px 4px -2px oklch(0.25 0.03 150 / 0.08);
+    --shadow-lg: 0 10px 15px -3px oklch(0.25 0.03 150 / 0.09), 0 4px 6px -4px oklch(0.25 0.03 150 / 0.09);
+    --shadow-xl: 0 20px 25px -5px oklch(0.25 0.03 150 / 0.11), 0 8px 10px -6px oklch(0.25 0.03 150 / 0.11);
+    --shadow-2xl: 0 25px 50px -12px oklch(0.25 0.03 150 / 0.2);
     --shadow-primary: 0 4px 14px -3px oklch(0.841 0.238 128.85 / 0.35);
     /* Success/warning/error card variants */
     --success-bg: oklch(0.95 0.05 155);
@@ -80,6 +80,18 @@ textarea,
     --error-bg: oklch(0.95 0.05 25);
     --error-border: oklch(0.88 0.1 25);
     --error-foreground: oklch(0.35 0.15 25);
+    /* Solid status fills for dots, icons and meters */
+    --success: oklch(0.72 0.19 150);
+    --warning: oklch(0.8 0.16 80);
+    --error: oklch(0.63 0.22 27);
+    --info: oklch(0.6 0.14 245);
+    /* Elevation scale */
+    --z-sticky: 5;
+    --z-header: 20;
+    --z-dropdown: 30;
+    --z-overlay: 40;
+    --z-modal: 50;
+    --z-toast: 60;
 }
 
 .dark {
@@ -100,7 +112,7 @@ textarea,
     --destructive: oklch(0.704 0.191 22.216);
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
+    --ring: oklch(0.7 0.16 131);
     --chart-1: oklch(0.897 0.196 126.665);
     --chart-2: oklch(0.768 0.233 130.85);
     --chart-3: oklch(0.648 0.2 131.684);
@@ -113,14 +125,17 @@ textarea,
     --sidebar-accent: oklch(0.269 0 0);
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
-    /* Enhanced shadow system for dark mode */
-    --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.2);
-    --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.25), 0 1px 2px -1px rgb(0 0 0 / 0.25);
-    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.35), 0 4px 6px -4px rgb(0 0 0 / 0.35);
-    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.4), 0 8px 10px -6px rgb(0 0 0 / 0.4);
-    --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.5);
+    --sidebar-ring: oklch(0.7 0.16 131);
+    --sidebar-active-bg: color-mix(in oklab, var(--primary) 20%, transparent);
+    --sidebar-active-fg: oklch(0.9 0.17 130);
+    --sidebar-active-border: color-mix(in oklab, var(--primary) 30%, transparent);
+    /* Elevation for dark surfaces — same hue as the light scale */
+    --shadow-xs: 0 1px 2px 0 oklch(0.08 0.02 150 / 0.5);
+    --shadow-sm: 0 1px 3px 0 oklch(0.08 0.02 150 / 0.55), 0 1px 2px -1px oklch(0.08 0.02 150 / 0.55);
+    --shadow-md: 0 4px 6px -1px oklch(0.08 0.02 150 / 0.6), 0 2px 4px -2px oklch(0.08 0.02 150 / 0.6);
+    --shadow-lg: 0 10px 15px -3px oklch(0.08 0.02 150 / 0.65), 0 4px 6px -4px oklch(0.08 0.02 150 / 0.65);
+    --shadow-xl: 0 20px 25px -5px oklch(0.08 0.02 150 / 0.7), 0 8px 10px -6px oklch(0.08 0.02 150 / 0.7);
+    --shadow-2xl: 0 25px 50px -12px oklch(0.05 0.02 150 / 0.8);
     --shadow-primary: 0 4px 14px -3px oklch(0.768 0.233 130.85 / 0.3);
     /* Success/warning/error card variants for dark */
     --success-bg: oklch(0.2 0.05 155);
@@ -132,12 +147,22 @@ textarea,
     --error-bg: oklch(0.2 0.05 25);
     --error-border: oklch(0.3 0.08 25);
     --error-foreground: oklch(0.85 0.12 25);
+    /* Solid status fills for dots, icons and meters */
+    --success: oklch(0.76 0.19 150);
+    --warning: oklch(0.82 0.16 80);
+    --error: oklch(0.7 0.19 25);
+    --info: oklch(0.7 0.13 245);
 }
 
 @theme inline {
+    /* Radius scale — one documented rule for the whole console:
+         containers (cards, dialogs, tables, alerts, panels)  → rounded-lg
+         controls   (buttons, inputs, selects, tabs)          → rounded-md
+         pills      (badges, status chips, dots)              → rounded-full
+       Anything else (rounded-xl on a card, arbitrary rounded-[10px]) is drift. */
     --font-sans: 'Noto Sans Variable', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --font-heading: 'Oxanium Variable', system-ui, sans-serif;
-    --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -155,6 +180,19 @@ textarea,
     --color-input: var(--input);
     --color-border: var(--border);
     --color-destructive: var(--destructive);
+    --color-success: var(--success);
+    --color-success-foreground: var(--success-foreground);
+    --color-success-bg: var(--success-bg);
+    --color-success-border: var(--success-border);
+    --color-warning: var(--warning);
+    --color-warning-foreground: var(--warning-foreground);
+    --color-warning-bg: var(--warning-bg);
+    --color-warning-border: var(--warning-border);
+    --color-error: var(--error);
+    --color-error-foreground: var(--error-foreground);
+    --color-error-bg: var(--error-bg);
+    --color-error-border: var(--error-border);
+    --color-info: var(--info);
     --color-accent-foreground: var(--accent-foreground);
     --color-accent: var(--accent);
     --color-muted-foreground: var(--muted-foreground);
@@ -215,9 +253,18 @@ textarea,
     }
     /* Focus ring styles */
     :focus-visible {
-        outline: 2px solid var(--primary);
+        outline: 2px solid var(--ring);
         outline-offset: 2px;
         border-radius: var(--radius);
+    }
+    h1, h2, h3 {
+        text-wrap: balance;
+    }
+    p {
+        text-wrap: pretty;
+    }
+    html {
+        scroll-behavior: smooth;
     }
     /* Selection colors */
     ::selection {
@@ -230,11 +277,6 @@ textarea,
 }
 
 /* ==================== Loading States ==================== */
-@keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-}
-
 @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
@@ -265,23 +307,7 @@ textarea,
     to { opacity: 1; transform: scale(1); }
 }
 
-@keyframes bounce-in {
-    0% { transform: scale(0.9); opacity: 0.5; }
-    50% { transform: scale(1.02); }
-    100% { transform: scale(1); opacity: 1; }
-}
-
 /* Utility animation classes */
-.animate-shimmer {
-    background: linear-gradient(90deg, transparent 0%, oklch(0.95 0.002 197.1 / 0.5) 50%, transparent 100%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s ease-in-out infinite;
-}
-.dark .animate-shimmer {
-    background: linear-gradient(90deg, transparent 0%, oklch(0.275 0.011 216.9 / 0.5) 50%, transparent 100%);
-    background-size: 200% 100%;
-}
-
 .animate-slide-up {
     animation: slide-up 0.3s ease-out;
 }
@@ -298,10 +324,6 @@ textarea,
     animation: scale-in 0.2s ease-out;
 }
 
-.animate-bounce-in {
-    animation: bounce-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
 .animate-pulse-soft {
     animation: pulse-soft 2s ease-in-out infinite;
 }
@@ -316,86 +338,14 @@ textarea,
         transform: translateY(-1px);
     }
 
-    /* Status indicator dots */
-    .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 999px;
-        flex-shrink: 0;
-    }
-    .status-dot-success {
-        background: oklch(0.7 0.18 155);
-        box-shadow: 0 0 0 3px oklch(0.7 0.18 155 / 0.2);
-    }
-    .status-dot-warning {
-        background: oklch(0.75 0.15 80);
-        box-shadow: 0 0 0 3px oklch(0.75 0.15 80 / 0.2);
-    }
-    .status-dot-error {
-        background: oklch(0.65 0.2 25);
-        box-shadow: 0 0 0 3px oklch(0.65 0.2 25 / 0.2);
-    }
-    .status-dot-offline {
-        background: oklch(0.6 0.02 214);
-        box-shadow: 0 0 0 3px oklch(0.6 0.02 214 / 0.15);
-    }
-
-    /* Loading spinner */
-    .loading-spinner {
-        width: 20px;
-        height: 20px;
-        border: 2px solid oklch(0.9 0.005 214);
-        border-top-color: var(--primary);
-        border-radius: 999px;
-        animation: spin 0.7s linear infinite;
-    }
-    .dark .loading-spinner {
-        border-color: oklch(0.3 0.005 214);
-    }
-
-    /* Loading overlay */
-    .loading-overlay {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.75rem;
-        padding: 3rem;
-        color: var(--muted-foreground);
-        font-size: 0.875rem;
-    }
-
-    /* Empty state */
-    .empty-state {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 1rem;
-        padding: 4rem 2rem;
-        text-align: center;
-        color: var(--muted-foreground);
-    }
-
-    /* Table row hover */
-    .table-row-hover {
-        transition: background-color 0.15s ease;
-    }
-    .table-row-hover:hover {
-        background-color: oklch(0.96 0.002 197.1);
-    }
-    .dark .table-row-hover:hover {
-        background-color: oklch(0.24 0.008 223.9);
-    }
+    /* Status dots, spinners, empty states and table-row hovers are defined in
+       the BunWa UI v2 section below. Duplicates used to live here and the
+       later definitions silently won. */
 }
-
-/* ==================== Global Transitions ==================== */
-transition-property: color, background-color, border-color, box-shadow, opacity, transform;
-transition-timing-function: ease;
-transition-duration: 150ms;
 
 /* Smooth page transitions */
 #root {
-    min-height: 100vh;
+    min-height: 100dvh;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -403,23 +353,25 @@ transition-duration: 150ms;
    Semantic status system, elevation, transitions (2026-08-22)
    ═══════════════════════════════════════════════════════════ */
 
-/* Status badge system (consistent across all routes) */
+/* Status badge system (consistent across all routes).
+   Colours resolve through the semantic tokens, so light and dark stay in step
+   and the palette has exactly one definition. */
 .status-badge {
   @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium;
 }
-.status-working { @apply bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20; }
-.status-starting { @apply bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20; }
-.status-stopped { @apply bg-muted text-muted-foreground border border-border; }
-.status-failed { @apply bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20; }
+.status-working { @apply border border-success-border bg-success-bg text-success-foreground; }
+.status-starting { @apply border border-warning-border bg-warning-bg text-warning-foreground; }
+.status-stopped { @apply border border-border bg-muted text-muted-foreground; }
+.status-failed { @apply border border-error-border bg-error-bg text-error-foreground; }
 
 /* Status dot with live pulse */
 .status-dot {
-  @apply inline-block size-2 rounded-full;
+  @apply inline-block size-2 shrink-0 rounded-full;
 }
-.status-dot-working { @apply bg-emerald-500 shadow-[0_0_6px_oklch(0.7_0.15_160/0.6)]; animation: pulse-dot 2s ease-in-out infinite; }
-.status-dot-starting { @apply bg-amber-500; animation: pulse-dot 1.2s ease-in-out infinite; }
-.status-dot-stopped { @apply bg-zinc-400 dark:bg-zinc-600; }
-.status-dot-failed { @apply bg-red-500; }
+.status-dot-working { @apply bg-success; animation: pulse-dot 2s ease-in-out infinite; }
+.status-dot-starting { @apply bg-warning; animation: pulse-dot 1.2s ease-in-out infinite; }
+.status-dot-stopped { @apply bg-muted-foreground/60; }
+.status-dot-failed { @apply bg-error; }
 
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; transform: scale(1); }
@@ -449,7 +401,7 @@ transition-duration: 150ms;
 [data-slot="table-header"] th, thead tr th {
   position: sticky;
   top: 0;
-  z-index: 5;
+  z-index: var(--z-sticky);
   background: color-mix(in oklab, var(--background) 88%, transparent);
   backdrop-filter: blur(8px);
 }
@@ -478,11 +430,34 @@ tbody tr:hover {
   @apply flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-14 text-center;
 }
 
-/* Kebab menu button (row actions) */
-.row-actions-btn {
-  @apply inline-flex size-8 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity;
+/* ── Numeric displays ──
+   Counters, IDs, timings and table figures use tabular digits so values do not
+   shift horizontally as they tick. */
+.metric {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.01em;
 }
-tr:hover .row-actions-btn, .row-actions-btn:focus-visible { @apply opacity-100; }
+
+/* ── Skip link ──
+   First focusable element on the page; visible only while focused. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 0.5rem 0.875rem;
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.skip-link:focus {
+  position: fixed;
+  left: 1rem;
+  top: 1rem;
+}
 
 /* Login split-screen */
 .login-container {
@@ -493,6 +468,24 @@ tr:hover .row-actions-btn, .row-actions-btn:focus-visible { @apply opacity-100; 
   min-height: 100dvh;
   padding: 1.5rem;
   overflow: hidden;
+}
+.login-container::before {
+  content: '';
+  position: absolute;
+  inset: -50%;
+  background:
+    radial-gradient(circle at 30% 20%, color-mix(in oklab, var(--primary) 7%, transparent) 0%, transparent 50%),
+    radial-gradient(circle at 70% 80%, color-mix(in oklab, var(--primary) 5%, transparent) 0%, transparent 50%);
+  animation: float-bg 20s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes float-bg {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  33% { transform: translate(2%, -2%) rotate(1deg); }
+  66% { transform: translate(-1%, 1%) rotate(-1deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .login-container::before { animation: none; }
 }
 @media (max-width: 767px) {
   .login-container { justify-content: center; }

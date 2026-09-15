@@ -1,294 +1,347 @@
 /**
- * BunWa Dashboard — Documentation Page
+ * BunWa Dashboard: Documentation Page
  * Shows feature descriptions, engine comparisons, and API usage examples.
  */
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
+import type { ReactNode } from "react"
 import {
-  MessageCircle,
-  Users,
-  Radio,
+  Braces,
   CircleDot,
-  Zap,
-  Shield,
-  Globe,
-  Database,
   Code,
-  Server,
+  Database,
+  Globe,
   Lock,
+  MessageCircle,
+  Radio,
+  Server,
+  Shield,
   Smartphone,
+  Users,
+  Zap,
+  type LucideIcon,
 } from "lucide-react"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataTable, EngineBadge, SectionHeading } from "@/components/primitives"
+
+/* ── Local building blocks ────────────────────────────────────────────── */
+
+function Pill({ icon: Icon, children }: { icon: LucideIcon; children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/60 px-3 py-1 text-xs font-medium text-muted-foreground">
+      <Icon className="size-3.5 text-primary" strokeWidth={1.75} />
+      {children}
+    </span>
+  )
+}
+
+function CodeBlock({ label, code }: { label?: string; code: string }) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border">
+      {label && (
+        <p className="border-b border-border bg-muted/50 px-4 py-2 text-xs font-medium text-muted-foreground">
+          {label}
+        </p>
+      )}
+      {/* `metric` keeps digits in tabular figures so long URLs stay aligned. */}
+      <pre className="metric overflow-x-auto px-4 py-3 font-mono text-xs leading-relaxed">
+        <code>{code}</code>
+      </pre>
+    </div>
+  )
+}
+
+function CommandStep({ step, code }: { step: string; code: string }) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border">
+      <dt className="border-b border-border bg-muted/50 px-4 py-2 text-xs font-medium text-muted-foreground">
+        {step}
+      </dt>
+      <dd>
+        <pre className="metric overflow-x-auto px-4 py-3 font-mono text-xs leading-relaxed">
+          <code>{code}</code>
+        </pre>
+      </dd>
+    </div>
+  )
+}
+
+const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
+  {
+    icon: MessageCircle,
+    title: "Messaging",
+    body: "Send text, images, videos, files, voice messages, locations, polls, contacts, buttons, lists, and link previews.",
+  },
+  {
+    icon: Users,
+    title: "Groups",
+    body: "Create groups, manage participants, set descriptions, get invite codes, and control admin permissions.",
+  },
+  {
+    icon: Radio,
+    title: "Channels",
+    body: "List channels, follow or unfollow, mute or unmute, search by text or view, and preview channel messages.",
+  },
+  {
+    icon: CircleDot,
+    title: "Status",
+    body: "Post text, image, video, and voice statuses. Delete statuses and get new message IDs.",
+  },
+  {
+    icon: Database,
+    title: "Storage",
+    body: "SQLite persistent store with bun:sqlite. In-memory store for development. File-based auth with multi-file state.",
+  },
+  {
+    icon: Lock,
+    title: "Security",
+    body: "API key authentication, session isolation, SSRF guard, HMAC webhook signing, and encrypted media.",
+  },
+]
+
+const STACK: { term: string; detail: string }[] = [
+  { term: "Runtime", detail: "Bun (drop-in Node.js replacement)" },
+  { term: "Framework", detail: "Hono (lightweight, ultrafast)" },
+  { term: "WhatsApp NOWEB", detail: "Baileys (@whiskeysockets/baileys)" },
+  { term: "WhatsApp WEBJS", detail: "whatsapp-web.js + Chrome/Puppeteer" },
+  { term: "Storage", detail: "bun:sqlite + file-based auth" },
+  { term: "DI", detail: "tsyringe for dependency injection" },
+  { term: "MCP", detail: "Model Context Protocol at POST /mcp" },
+]
+
+const PROXY_SCHEMES: { url: string; scheme: string }[] = [
+  { url: "http://proxy:8080", scheme: "HTTP CONNECT" },
+  { url: "https://proxy:8443", scheme: "HTTPS CONNECT" },
+  { url: "socks4://host:1080", scheme: "SOCKS4" },
+  { url: "socks5://user:pass@host:1080", scheme: "SOCKS5" },
+]
 
 export function DocsPage() {
   return (
     <div className="flex h-full flex-col overflow-auto">
-      <div className="sticky top-0 z-10 flex items-center px-6 py-3 border-b bg-background/80 backdrop-blur-sm">
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b bg-background/80 px-4 py-3 backdrop-blur-sm sm:px-6">
         <SidebarTrigger className="md:hidden" />
         <span className="text-sm font-medium text-muted-foreground">Documentation</span>
       </div>
-      <div className="mx-auto max-w-4xl px-6 py-12">
+
+      <div className="mx-auto w-full max-w-4xl space-y-14 px-4 py-10 sm:px-6">
         {/* Hero */}
-        <div className="flex flex-col items-center text-center mb-16">
-          <div className="mb-8">
-            <img src="/logo.jpg" alt="BunWa" className="size-28 rounded-2xl object-cover shadow-lg" />
-          </div>
-          <h1 className="text-4xl font-bold tracking-tight mb-4">
-            BunWa
-          </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl">
-            WhatsApp HTTP API powered by Bun runtime. A blazing-fast, 1:1 API-compatible
-            rewrite of WAHA Bun with Hono framework.
+        <header className="text-center">
+          <img
+            src="/logo.jpg"
+            alt=""
+            aria-hidden
+            className="mx-auto size-20 rounded-lg object-cover shadow-lg"
+          />
+          <h1 className="mt-6 font-heading text-3xl font-semibold tracking-tight">BunWa</h1>
+          <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">
+            A WhatsApp HTTP API on the Bun runtime, built with Hono, with the same REST surface as
+            WAHA Bun.
           </p>
-          <div className="flex gap-2 mt-6">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-500">
-              <Zap className="size-3" /> Bun Runtime
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-500">
-              <Server className="size-3" /> Hono Framework
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-500/10 px-3 py-1 text-xs font-medium text-purple-500">
-              <Shield className="size-3" /> 100% API Compatible
-            </span>
+          <div className="mt-6 flex flex-wrap justify-center gap-2">
+            <Pill icon={Zap}>Bun runtime</Pill>
+            <Pill icon={Server}>Hono framework</Pill>
+            <Pill icon={Shield}>Same REST surface as WAHA</Pill>
           </div>
-        </div>
+        </header>
 
         {/* Features */}
-        <h2 className="text-3xl font-bold tracking-tight mb-6">Features</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <MessageCircle className="size-5 text-emerald-500" /> Messaging
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Send text, images, videos, files, voice messages, locations, polls,
-                contacts, buttons, lists, and link previews.
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Users className="size-5 text-blue-500" /> Groups
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Create groups, manage participants, set descriptions,
-                get invite codes, and control admin permissions.
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Radio className="size-5 text-purple-500" /> Channels
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                List channels, follow/unfollow, mute/unmute,
-                search by text or view, and preview channel messages.
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <CircleDot className="size-5 text-amber-500" /> Status
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Post text, image, video, and voice statuses.
-                Delete statuses and get new message IDs.
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Database className="size-5 text-cyan-500" /> Storage
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                SQLite persistent store with bun:sqlite. In-memory store
-                for development. File-based auth with multi-file state.
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Lock className="size-5 text-red-500" /> Security
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                API key authentication, session isolation,
-                SSRF guard, HMAC webhook signing, and encrypted media.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Separator className="my-12" />
+        <section>
+          <SectionHeading title="Features" description="What the HTTP API covers." />
+          <div className="mt-5 grid gap-x-6 gap-y-7 sm:grid-cols-2 lg:grid-cols-3">
+            {FEATURES.map(({ icon: Icon, title, body }) => (
+              <div key={title}>
+                <div className="flex items-center gap-2.5">
+                  <Icon className="size-4 shrink-0 text-primary" strokeWidth={1.75} />
+                  <h3 className="font-heading text-sm font-semibold tracking-tight">{title}</h3>
+                </div>
+                <p className="mt-2 text-xs/relaxed text-muted-foreground">{body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
 
         {/* Architecture */}
-        <h2 className="text-3xl font-bold tracking-tight mb-6">Architecture</h2>
-        <div className="space-y-4 mb-12">
-          <div className="rounded-lg border p-4">
-            <h3 className="font-semibold mb-2 flex items-center gap-2">
-              <Code className="size-5 text-emerald-500" /> Stack
-            </h3>
-            <ul className="text-sm text-muted-foreground space-y-1 ml-6 list-disc">
-              <li><strong>Runtime:</strong> Bun (drop-in Node.js replacement)</li>
-              <li><strong>Framework:</strong> Hono (lightweight, ultrafast)</li>
-              <li><strong>WhatsApp NOWEB:</strong> Baileys (@whiskeysockets/baileys)</li>
-              <li><strong>WhatsApp WEBJS:</strong> whatsapp-web.js + Chrome/Puppeteer</li>
-              <li><strong>Storage:</strong> bun:sqlite + file-based auth</li>
-              <li><strong>DI:</strong> tsyringe for dependency injection</li>
-              <li><strong>MCP:</strong> Model Context Protocol at POST /mcp</li>
-            </ul>
+        <section>
+          <SectionHeading title="Architecture" description="The building blocks behind the server." />
+          <dl className="mt-5 divide-y divide-border overflow-hidden rounded-lg border border-border">
+            {STACK.map(({ term, detail }) => (
+              <div key={term} className="grid gap-1 px-4 py-3 sm:grid-cols-[11rem_1fr]">
+                <dt className="text-sm font-medium">{term}</dt>
+                <dd className="text-sm text-muted-foreground">{detail}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        {/* Engine support */}
+        <section>
+          <SectionHeading
+            title="Engine support"
+            description="Engine choice is per session; NOWEB is the default."
+            action={<Code className="size-4 text-primary" strokeWidth={1.75} />}
+          />
+          <DataTable className="mt-5" minWidthClassName="min-w-[620px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-40">Aspect</TableHead>
+                <TableHead>
+                  <span className="flex items-center gap-2">
+                    <EngineBadge engine="NOWEB" />
+                    <span className="text-xs font-normal text-primary">Default</span>
+                  </span>
+                </TableHead>
+                <TableHead>
+                  <EngineBadge engine="WEBJS" />
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell className="font-medium">Browser process</TableCell>
+                <TableCell className="whitespace-normal text-muted-foreground">Not required</TableCell>
+                <TableCell className="whitespace-normal text-muted-foreground">Chrome via Puppeteer</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Channels</TableCell>
+                <TableCell className="whitespace-normal text-muted-foreground">
+                  Fully supported, including newsletters
+                </TableCell>
+                <TableCell className="whitespace-normal text-muted-foreground">Limited support</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Chat history</TableCell>
+                <TableCell className="whitespace-normal text-muted-foreground">Limited backfill</TableCell>
+                <TableCell className="whitespace-normal text-muted-foreground">
+                  Full history through WhatsApp Web
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Proxy</TableCell>
+                <TableCell className="whitespace-normal text-muted-foreground">
+                  HTTP/SOCKS via HttpsProxyAgent or SocksProxyAgent
+                </TableCell>
+                <TableCell className="whitespace-normal text-muted-foreground">
+                  Passed to Chrome with --proxy-server
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Requirements</TableCell>
+                <TableCell className="whitespace-normal text-muted-foreground">No Chrome needed</TableCell>
+                <TableCell className="whitespace-normal font-mono text-xs text-muted-foreground">
+                  /usr/bin/google-chrome or CHROME_PATH
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Notes</TableCell>
+                <TableCell className="whitespace-normal text-muted-foreground">
+                  Reverse-engineered protocol, may break on WhatsApp updates
+                </TableCell>
+                <TableCell className="whitespace-normal text-muted-foreground">
+                  Stable path using real WhatsApp Web; can capture a browser screenshot
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </DataTable>
+        </section>
+
+        {/* Phone pairing */}
+        <section>
+          <SectionHeading
+            title="Phone pairing"
+            description="Pair without scanning a QR code."
+            action={<Smartphone className="size-4 text-primary" strokeWidth={1.75} />}
+          />
+          <p className="mt-5 text-sm text-muted-foreground">
+            Enter your phone number to receive a pairing code instead of scanning a QR code. Works
+            with both NOWEB and WEBJS engines. The session must be in SCAN_QR_CODE status.
+          </p>
+          <div className="mt-4">
+            <CodeBlock
+              label="Request a pairing code"
+              code={`curl -X POST http://localhost:3000/api/my-session/auth/request-code \\
+  -H "Content-Type: application/json" \\
+  -d '{"phoneNumber":"233501234567"}'`}
+            />
           </div>
-        </div>
+        </section>
 
-        <Separator className="my-12" />
+        {/* Proxy configuration */}
+        <section>
+          <SectionHeading
+            title="Proxy configuration"
+            description="Route WhatsApp traffic through a per-session proxy."
+            action={<Shield className="size-4 text-primary" strokeWidth={1.75} />}
+          />
+          <dl className="mt-5 divide-y divide-border overflow-hidden rounded-lg border border-border">
+            {PROXY_SCHEMES.map(({ url, scheme }) => (
+              <div key={url} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
+                <dt>
+                  <code className="metric rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs">{url}</code>
+                </dt>
+                <dd className="text-sm text-muted-foreground">{scheme}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-3 text-xs text-muted-foreground">
+            NOWEB uses HttpsProxyAgent/SocksProxyAgent. WEBJS passes --proxy-server to Chrome.
+          </p>
+        </section>
 
-        {/* Engine Support */}
-        <h2 className="text-3xl font-bold tracking-tight mb-6">Engine Support</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
-          <Card className="border-blue-500/30">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <MessageCircle className="size-5 text-blue-500" /> NOWEB (Baileys)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
-              <p>Lightweight — No browser required, ~100MB RAM per session</p>
-              <p>Channels and Newsletters fully supported</p>
-              <p>HTTP/SOCKS proxy via HttpsProxyAgent</p>
-              <p>Limited history backfill (3 months or 1 year)</p>
-              <p>Reverse-engineered protocol, may break on WA updates</p>
-              <p className="mt-2 text-xs">Default engine. No Chrome needed.</p>
-            </CardContent>
-          </Card>
-          <Card className="border-purple-500/30">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Globe className="size-5 text-purple-500" /> WEBJS (Chrome)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
-              <p>Stable — Uses real WhatsApp Web via Chrome/Puppeteer</p>
-              <p>Full chat history via Chrome</p>
-              <p>Browser screenshot available</p>
-              <p>Proxy via Chrome --proxy-server argument</p>
-              <p>~300MB per session (Chrome overhead)</p>
-              <p>Channels limited support</p>
-              <p className="mt-2 text-xs">Requires /usr/bin/google-chrome or CHROME_PATH</p>
-            </CardContent>
-          </Card>
-        </div>
+        {/* MCP server */}
+        <section>
+          <SectionHeading
+            title="MCP server"
+            description="Drive sessions from an AI agent over JSON-RPC."
+            action={<Braces className="size-4 text-primary" strokeWidth={1.75} />}
+          />
+          <p className="mt-5 text-sm text-muted-foreground">
+            BunWa exposes a Model Context Protocol server at{" "}
+            <code className="rounded-md bg-muted px-1 font-mono text-xs">POST /mcp</code>. AI agents
+            can send messages, manage sessions, and interact with WhatsApp programmatically using
+            JSON-RPC over HTTP.
+          </p>
+          <div className="mt-4">
+            <CodeBlock
+              label="Example MCP call (send_text tool)"
+              code={`curl -X POST http://localhost:3000/mcp \\
+  -H "Content-Type: application/json" \\
+  -H "x-api-key: ***" \\
+  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"send_text","arguments":{"session":"my-session","chatId":"233501234567@c.us","text":"Hello from MCP"}},"id":1}'`}
+            />
+          </div>
+        </section>
 
-        <Separator className="my-12" />
-
-        {/* Phone Pairing */}
-        <h2 className="text-3xl font-bold tracking-tight mb-6">Phone Pairing</h2>
-        <Card className="mb-12">
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Smartphone className="size-5 text-emerald-500" /> Pairing Code
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Instead of scanning a QR code, enter your phone number to receive a pairing code.
-              Works with both NOWEB and WEBJS engines. The session must be in SCAN_QR_CODE status.
-            </p>
-            <div className="rounded-lg bg-muted p-4 font-mono text-xs space-y-1">
-              <p className="text-muted-foreground text-xs">Request a pairing code:</p>
-              <p className="break-all">{'curl -X POST http://localhost:3000/api/my-session/auth/request-code'}</p>
-              <p>{'  -H "Content-Type: application/json"'}</p>
-              <p>{'  -d \'{"phoneNumber":"233501234567"}\''}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Separator className="my-12" />
-
-        {/* Proxy */}
-        <h2 className="text-3xl font-bold tracking-tight mb-6">Proxy Configuration</h2>
-        <Card className="mb-12">
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Shield className="size-5 text-amber-500" /> Session Proxy
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground space-y-3">
-            <p>Configure per-session proxy for routing WhatsApp traffic. Supported URL schemes:</p>
-            <ul className="list-disc ml-6 space-y-1">
-              <li><code className="rounded bg-muted px-1">http://proxy:8080</code> — HTTP CONNECT</li>
-              <li><code className="rounded bg-muted px-1">https://proxy:8443</code> — HTTPS CONNECT</li>
-              <li><code className="rounded bg-muted px-1">socks4://host:1080</code> — SOCKS4</li>
-              <li><code className="rounded bg-muted px-1">socks5://user:pass@host:1080</code> — SOCKS5</li>
-            </ul>
-            <p className="text-xs">NOWEB uses HttpsProxyAgent/SocksProxyAgent. WEBJS passes --proxy-server to Chrome.</p>
-          </CardContent>
-        </Card>
-
-        <Separator className="my-12" />
-
-        {/* MCP */}
-        <h2 className="text-3xl font-bold tracking-tight mb-6">MCP Server</h2>
-        <Card className="mb-12">
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Zap className="size-5 text-purple-500" /> Model Context Protocol
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <p>
-              BunWa exposes a Model Context Protocol server at <code className="rounded bg-muted px-1">POST /mcp</code>.
-              AI agents can send messages, manage sessions, and interact with WhatsApp programmatically
-              using JSON-RPC over HTTP.
-            </p>
-            <div className="rounded-lg bg-muted p-4 font-mono text-xs space-y-1">
-              <p className="text-muted-foreground text-xs">Example MCP call (send_text tool):</p>
-              <p className="break-all">{'curl -X POST http://localhost:3000/mcp -H "Content-Type: application/json" -H "x-api-key: *** -d \'{"jsonrpc":"2.0","method":"tools/call","params":{"name":"send_text","arguments":{"session":"my-session","chatId":"233501234567@c.us","text":"Hello from MCP"}},"id":1}\''}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Separator className="my-12" />
-
-        {/* Quick Start */}
-        <h2 className="text-3xl font-bold tracking-tight mb-6">Quick Start</h2>
-        <div className="rounded-lg bg-muted p-6 font-mono text-sm">
-          <p className="text-muted-foreground mb-2"># Install dependencies</p>
-          <p className="mb-4">bun install</p>
-          <p className="text-muted-foreground mb-2"># Start the server</p>
-          <p className="mb-4">bun run src/main.ts</p>
-          <p className="text-muted-foreground mb-2"># Create a NOWEB session</p>
-          <p className="mb-4">curl -X POST http://localhost:3000/api/sessions {'{'}"name": "my-session"{'}'}</p>
-          <p className="text-muted-foreground mb-2"># Create a WEBJS session</p>
-          <p className="mb-4">curl -X POST http://localhost:3000/api/sessions {'{'}"name": "my-webjs", "config": {'{'}"engine": "webjs"{'}'}{'}'}</p>
-          <p className="text-muted-foreground mb-2"># Start the session</p>
-          <p>curl -X POST http://localhost:3000/api/sessions/my-session/start</p>
-        </div>
-
-        <Separator className="my-12" />
+        {/* Quick start */}
+        <section>
+          <SectionHeading
+            title="Quick start"
+            description="From install to a running session."
+            action={<Globe className="size-4 text-primary" strokeWidth={1.75} />}
+          />
+          <dl className="mt-5 space-y-3">
+            <CommandStep step="Install dependencies" code="bun install" />
+            <CommandStep step="Start the server" code="bun run src/main.ts" />
+            <CommandStep
+              step="Create a NOWEB session"
+              code={`curl -X POST http://localhost:3000/api/sessions {"name": "my-session"}`}
+            />
+            <CommandStep
+              step="Create a WEBJS session"
+              code={`curl -X POST http://localhost:3000/api/sessions {"name": "my-webjs", "config": {"engine": "webjs"}}`}
+            />
+            <CommandStep
+              step="Start the session"
+              code="curl -X POST http://localhost:3000/api/sessions/my-session/start"
+            />
+          </dl>
+        </section>
 
         {/* Footer */}
-        <div className="text-center text-sm text-muted-foreground">
-          <p>BunWa — Built with Bun + Hono + Baileys + whatsapp-web.js</p>
-          <p className="mt-1">100% API compatible with WAHA Bun (WhatsApp HTTP API)</p>
-        </div>
+        <footer className="border-t border-border pt-6 text-center text-sm text-muted-foreground">
+          <p>BunWa, built with Bun, Hono, Baileys, and whatsapp-web.js.</p>
+          <p className="mt-1">Same REST surface as WAHA Bun (WhatsApp HTTP API).</p>
+        </footer>
       </div>
     </div>
   )

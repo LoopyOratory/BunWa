@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef, useCallback, useMemo } from "react"
-import { RefreshCw, CircleDot, Trash2 } from "lucide-react"
+import { useEffect, useState, useRef, useCallback, useMemo, type CSSProperties, type ReactNode, type RefObject } from "react"
+import { RefreshCw, CircleDot, Trash2, Mic, Square, Plus, Upload, MessageSquare, TriangleAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -7,14 +7,15 @@ import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog"
 import { toast } from "sonner"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { ChatProvider, ChatMessages } from "@/components/ui/chat"
 import type { ChatUser, ChatMessageData } from "@/components/ui/chat"
+import { EmptyState, ErrorState, Metric, Skeleton } from "@/components/primitives"
 import { api, type Session, type ChatOverview, type Message, type Contact } from "@/lib/api"
 import { useWebSocket } from "@/lib/use-websocket"
 import { ChatConversations } from "@/components/chat/chat-conversations"
@@ -26,38 +27,149 @@ import { mapMessage, resolveUserJid } from "@/components/chat/helpers"
 /*  DIALOGS (ported from old chat-page)                                */
 /* ================================================================== */
 
+/* ── Shared dialog shell: one header/footer/scroll shape for all three ── */
+function ComposerDialog({ open, onOpenChange, title, children, footer }: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  title: string
+  children: ReactNode
+  footer: ReactNode
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
+        <div className="max-h-[70vh] space-y-3 overflow-y-auto py-2">{children}</div>
+        <DialogFooter>{footer}</DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/* ── Shared file picker: click or drag and drop ── */
+function FileDropzone({ inputRef, accept, label, onSelect }: {
+  inputRef: RefObject<HTMLInputElement | null>
+  accept: string
+  label: string
+  onSelect: (file: File) => void
+}) {
+  const [dragOver, setDragOver] = useState(false)
+  const pick = (files: FileList | null) => { const f = files?.[0]; if (f) onSelect(f) }
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        className="hidden"
+        onChange={(e) => { pick(e.target.files); e.target.value = "" }}
+      />
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => { e.preventDefault(); setDragOver(false); pick(e.dataTransfer.files) }}
+        className={`flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed py-10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+          dragOver ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
+        }`}
+      >
+        <Upload className="size-6 text-muted-foreground" strokeWidth={1.75} />
+        <p className="text-sm font-medium">Click to select {label}</p>
+        <p className="text-xs text-muted-foreground">or drag and drop a file here</p>
+      </button>
+    </>
+  )
+}
+
+/* ── Shared picked-file row ── */
+function FileRow({ name, onRemove }: { name: string; onRemove: () => void }) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg bg-muted p-3">
+      <span className="min-w-0 flex-1 truncate text-sm">{name}</span>
+      <Button variant="ghost" size="icon" className="size-7 shrink-0 rounded-md" onClick={onRemove} aria-label="Remove file">
+        <Trash2 className="size-4" strokeWidth={1.75} />
+      </Button>
+    </div>
+  )
+}
+
+/* ── Shared segmented control ── */
+function Segmented({ value, onChange, options }: {
+  value: string
+  onChange: (v: string) => void
+  options: { value: string; label: string }[]
+}) {
+  return (
+    <div className="flex gap-2" role="group">
+      {options.map((opt) => (
+        <Button
+          key={opt.value}
+          type="button"
+          size="sm"
+          variant={value === opt.value ? "default" : "secondary"}
+          aria-pressed={value === opt.value}
+          onClick={() => onChange(opt.value)}
+          className="flex-1 rounded-md"
+        >
+          {opt.label}
+        </Button>
+      ))}
+    </div>
+  )
+}
+
 /* ── New Chat Dialog ── */
 function NewChatDialog({ open, onOpenChange, session, onOpenChat }: {
   open: boolean; onOpenChange: (v: boolean) => void; session: string; onOpenChat: (chatId: string) => void
 }) {
   const [phone, setPhone] = useState("")
   const [checking, setChecking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const handleCheck = async () => {
     if (!phone.trim()) return
     setChecking(true)
+    setError(null)
     try {
       const res = await api.checkNumberStatus(session, phone.replace(/\D/g, ""))
       if (res.exists && res.number) { onOpenChat(`${res.number}@c.us`); onOpenChange(false); setPhone("") }
-      else toast.error("Number not found on WhatsApp")
-    } catch { toast.error("Failed to check number") }
+      else setError("That number is not registered on WhatsApp.")
+    } catch {
+      setError("Could not check the number. Try again.")
+      toast.error("Failed to check number")
+    }
     finally { setChecking(false) }
   }
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>Start New Chat</DialogTitle></DialogHeader>
-        <div className="space-y-3 py-2">
-          <Label className="text-xs text-muted-foreground">Phone number (with country code)</Label>
-          <Input placeholder="+123****7890" value={phone} onChange={(e) => setPhone(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleCheck()} />
-        </div>
-        <DialogFooter>
+    <ComposerDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Start new chat"
+      footer={
+        <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleCheck} disabled={checking || !phone.trim()}>
-            {checking && <RefreshCw className="size-4 animate-spin mr-2" />}Start Chat
+          <Button onClick={handleCheck} disabled={checking || !phone.trim()} className="rounded-md">
+            {checking && <RefreshCw className="mr-2 size-4 animate-spin" strokeWidth={1.75} />}
+            Start chat
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </>
+      }
+    >
+      <div className="space-y-2">
+        <Label className="text-xs text-muted-foreground">Phone number (with country code)</Label>
+        <Input
+          placeholder="+233 50 123 4567"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleCheck()}
+        />
+      </div>
+      {error && (
+        <p role="alert" className="rounded-md border border-error-border bg-error-bg px-3 py-2 text-xs text-error-foreground">
+          {error}
+        </p>
+      )}
+    </ComposerDialog>
   )
 }
 
@@ -81,6 +193,7 @@ function SendMediaDialog({ open, onOpenChange, type, session, chatId, onSent }: 
     { id: "", text: "" },
   ])
   const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
   const [recording, setRecording] = useState(false)
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
   const [recordTime, setRecordTime] = useState(0)
@@ -93,7 +206,7 @@ function SendMediaDialog({ open, onOpenChange, type, session, chatId, onSent }: 
     setFile(null); setCaption(""); setLat(""); setLng(""); setTitle("")
     setPollName(""); setPollOptions(["", ""]); setPollType("single")
     setButtonsBody(""); setButtonsList([{ id: "", text: "" }, { id: "", text: "" }])
-    setRecording(false); setRecordedBlob(null); setRecordTime(0)
+    setRecording(false); setRecordedBlob(null); setRecordTime(0); setSendError(null)
     if (recordTimerRef.current) clearInterval(recordTimerRef.current)
   }
 
@@ -102,6 +215,7 @@ function SendMediaDialog({ open, onOpenChange, type, session, chatId, onSent }: 
 
   const handleSend = async () => {
     setSending(true)
+    setSendError(null)
     try {
       if (type === "location") {
         await api.sendLocation(session, chatId, parseFloat(lat), parseFloat(lng), title)
@@ -124,11 +238,14 @@ function SendMediaDialog({ open, onOpenChange, type, session, chatId, onSent }: 
         else if (type === "video") await api.sendVideo(session, chatId, fd, caption)
         else if (type === "file") await api.sendFile(session, chatId, fd, caption)
       }
-      toast.success("Sent!")
+      toast.success("Sent")
       onSent()
       onOpenChange(false)
       reset()
-    } catch { toast.error("Failed to send") }
+    } catch {
+      setSendError("The message could not be sent. Check the file and try again.")
+      toast.error("Failed to send")
+    }
     finally { setSending(false) }
   }
 
@@ -148,7 +265,10 @@ function SendMediaDialog({ open, onOpenChange, type, session, chatId, onSent }: 
       setRecording(true)
       setRecordTime(0)
       recordTimerRef.current = setInterval(() => setRecordTime((t) => t + 1), 1000)
-    } catch { toast.error("Microphone access denied") }
+    } catch {
+      setSendError("Microphone access was denied. Allow it in the browser and try again.")
+      toast.error("Microphone access denied")
+    }
   }
 
   const stopRecording = () => {
@@ -158,128 +278,165 @@ function SendMediaDialog({ open, onOpenChange, type, session, chatId, onSent }: 
   }
 
   const acceptTypes: Record<string, string> = { image: "image/*", video: "video/*", file: "*" }
-  const labels: Record<string, string> = { image: "Send Image", file: "Send File", voice: "Send Voice", video: "Send Video", location: "Send Location", poll: "Create Poll", buttons: "Send Buttons" }
+  const labels: Record<string, string> = { image: "Send image", file: "Send file", voice: "Send voice", video: "Send video", location: "Send location", poll: "Create poll", buttons: "Send buttons" }
+
+  const formatClock = (seconds: number) =>
+    `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`
+
+  const canSend =
+    type === "poll" ? !!pollName.trim()
+      : type === "buttons" ? (!!buttonsBody.trim() && buttonsList.filter((b) => b.text.trim()).length > 0)
+        : type === "location" ? (!!lat && !!lng)
+          : type === "voice" ? !!recordedBlob
+            : !!file
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset() }}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>{labels[type]}</DialogTitle></DialogHeader>
-
-        {(type === "image" || type === "file" || type === "video") && (
-          <div className="space-y-3 py-2">
-            <input ref={fileRef} type="file" accept={acceptTypes[type]} className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f) }} />
-            {!file ? (
-              <button onClick={() => fileRef.current?.click()}
-                className="w-full border-2 border-dashed rounded-xl py-10 flex flex-col items-center gap-3 hover:bg-muted/50 cursor-pointer transition-colors">
-                <p className="text-sm font-medium">Click to select {type}</p>
-                <p className="text-xs text-muted-foreground">or drag and drop</p>
-              </button>
-            ) : (
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-muted">
-                <span className="text-sm truncate flex-1">{file.name}</span>
-                <Button variant="ghost" size="icon" className="size-7 shrink-0" onClick={() => setFile(null)}>
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            )}
+    <ComposerDialog
+      open={open}
+      onOpenChange={(v) => { onOpenChange(v); if (!v) reset() }}
+      title={labels[type]}
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={handleSend} disabled={sending || !canSend} className="rounded-md">
+            {sending && <RefreshCw className="mr-2 size-4 animate-spin" strokeWidth={1.75} />}
+            Send
+          </Button>
+        </>
+      }
+    >
+      {(type === "image" || type === "file" || type === "video") && (
+        <>
+          {!file ? (
+            <FileDropzone inputRef={fileRef} accept={acceptTypes[type]} label={type} onSelect={setFile} />
+          ) : (
+            <FileRow name={file.name} onRemove={() => setFile(null)} />
+          )}
+          <div className="space-y-2">
             <Label className="text-xs text-muted-foreground">Caption (optional)</Label>
-            <Input placeholder="Add a caption..." value={caption} onChange={(e) => setCaption(e.target.value)} />
+            <Input placeholder="Add a caption" value={caption} onChange={(e) => setCaption(e.target.value)} />
           </div>
-        )}
+        </>
+      )}
 
-        {type === "voice" && (
-          <div className="space-y-4 py-4 flex flex-col items-center">
-            {!recording && !recordedBlob ? (
-              <button onClick={startRecording} className="size-20 rounded-full flex items-center justify-center bg-primary text-primary-foreground hover:scale-105 transition-all">
-                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
-              </button>
-            ) : recording ? (
-              <div className="flex flex-col items-center gap-3">
-                <button onClick={stopRecording} className="size-20 rounded-full flex items-center justify-center bg-red-500 text-white hover:bg-red-600 animate-pulse">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-                </button>
-                <span className="text-sm font-mono">{String(Math.floor(recordTime/60)).padStart(2,"0")}:{String(recordTime%60).padStart(2,"0")}</span>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-3">
-                <span className="text-sm">Recorded {String(Math.floor(recordTime/60)).padStart(2,"0")}:{String(recordTime%60).padStart(2,"0")}</span>
-                <Button variant="outline" size="sm" onClick={() => { setRecordedBlob(null); setRecordTime(0) }}>Re-record</Button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {type === "location" && (
-          <div className="space-y-3 py-2">
-            <div className="grid grid-cols-2 gap-2">
-              <div><Label className="text-xs">Latitude</Label><Input placeholder="5.6037" value={lat} onChange={(e) => setLat(e.target.value)} /></div>
-              <div><Label className="text-xs">Longitude</Label><Input placeholder="-0.1870" value={lng} onChange={(e) => setLng(e.target.value)} /></div>
+      {type === "voice" && (
+        <div className="flex flex-col items-center space-y-4 py-4">
+          {!recording && !recordedBlob ? (
+            <Button
+              type="button"
+              onClick={startRecording}
+              aria-label="Start recording"
+              className="size-20 rounded-full"
+            >
+              <Mic className="size-8" strokeWidth={1.75} />
+            </Button>
+          ) : recording ? (
+            <div className="flex flex-col items-center gap-3">
+              <Button
+                type="button"
+                onClick={stopRecording}
+                aria-label="Stop recording"
+                className="size-20 animate-pulse rounded-full bg-error text-white hover:bg-error/90"
+              >
+                <Square className="size-6" fill="currentColor" strokeWidth={1.75} />
+              </Button>
+              <Metric className="text-sm">{formatClock(recordTime)}</Metric>
             </div>
+          ) : (
+            <div className="flex flex-col items-center gap-3">
+              <span className="text-sm">Recorded <Metric>{formatClock(recordTime)}</Metric></span>
+              <Button variant="outline" size="sm" className="rounded-md" onClick={() => { setRecordedBlob(null); setRecordTime(0) }}>Re-record</Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {type === "location" && (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-2"><Label className="text-xs">Latitude</Label><Input placeholder="e.g. 5.6037" value={lat} onChange={(e) => setLat(e.target.value)} /></div>
+            <div className="space-y-2"><Label className="text-xs">Longitude</Label><Input placeholder="e.g. -0.1870" value={lng} onChange={(e) => setLng(e.target.value)} /></div>
+          </div>
+          <div className="space-y-2">
             <Label className="text-xs">Title (optional)</Label>
             <Input placeholder="Location name" value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
-        )}
+        </>
+      )}
 
-        {type === "poll" && (
-          <div className="space-y-3 py-2">
-            <Label className="text-xs">Poll Question</Label>
-            <Input placeholder="What's your question?" value={pollName} onChange={(e) => setPollName(e.target.value)} />
-            <Label className="text-xs">Poll Type</Label>
-            <div className="flex gap-2">
-              <button onClick={() => setPollType("single")} className={`flex-1 py-2 px-3 rounded-xl text-sm font-medium transition-colors ${pollType === "single" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>Single Choice</button>
-              <button onClick={() => setPollType("multiple")} className={`flex-1 py-2 px-3 rounded-xl text-sm font-medium transition-colors ${pollType === "multiple" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>Multiple Choice</button>
-            </div>
+      {type === "poll" && (
+        <>
+          <div className="space-y-2">
+            <Label className="text-xs">Poll question</Label>
+            <Input placeholder="What is your question?" value={pollName} onChange={(e) => setPollName(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs">Poll type</Label>
+            <Segmented
+              value={pollType}
+              onChange={(v) => setPollType(v as "single" | "multiple")}
+              options={[
+                { value: "single", label: "Single choice" },
+                { value: "multiple", label: "Multiple choice" },
+              ]}
+            />
+          </div>
+          <div className="space-y-2">
             <Label className="text-xs">Options</Label>
             {pollOptions.map((opt, i) => (
-              <div key={i} className="flex gap-2 items-center">
+              <div key={i} className="flex items-center gap-2">
                 <Input placeholder={`Option ${i + 1}`} value={opt} onChange={(e) => { const n = [...pollOptions]; n[i] = e.target.value; setPollOptions(n) }} />
                 {pollOptions.length > 2 && (
-                  <Button variant="ghost" size="icon" className="size-7 shrink-0" onClick={() => setPollOptions(pollOptions.filter((_, j) => j !== i))}>
-                    <Trash2 className="size-3" />
+                  <Button variant="ghost" size="icon" className="size-7 shrink-0 rounded-md" onClick={() => setPollOptions(pollOptions.filter((_, j) => j !== i))} aria-label={`Remove option ${i + 1}`}>
+                    <Trash2 className="size-3" strokeWidth={1.75} />
                   </Button>
                 )}
               </div>
             ))}
-            {pollOptions.length < 10 && (
-              <Button variant="ghost" size="sm" className="gap-1" onClick={() => setPollOptions([...pollOptions, ""])}>
-                + Add Option
-              </Button>
-            )}
           </div>
-        )}
+          {pollOptions.length < 10 && (
+            <Button variant="ghost" size="sm" className="gap-1 rounded-md" onClick={() => setPollOptions([...pollOptions, ""])}>
+              <Plus className="size-3.5" strokeWidth={1.75} />
+              Add option
+            </Button>
+          )}
+        </>
+      )}
 
-        {type === "buttons" && (
-          <div className="space-y-3 py-2">
-            <Label className="text-xs">Message Text</Label>
+      {type === "buttons" && (
+        <>
+          <div className="space-y-2">
+            <Label className="text-xs">Message text</Label>
             <Textarea placeholder="What would you like to say?" value={buttonsBody} onChange={(e) => setButtonsBody(e.target.value)} className="min-h-[80px]" />
+          </div>
+          <div className="space-y-2">
             <Label className="text-xs">Buttons</Label>
             {buttonsList.map((btn, i) => (
-              <div key={i} className="flex gap-2 items-center">
+              <div key={i} className="flex items-center gap-2">
                 <Input placeholder={`Button ${i + 1} text`} value={btn.text} onChange={(e) => { const n = [...buttonsList]; n[i] = { ...n[i], text: e.target.value }; setButtonsList(n) }} />
                 {buttonsList.length > 1 && (
-                  <Button variant="ghost" size="icon" className="size-7 shrink-0" onClick={() => setButtonsList(buttonsList.filter((_, j) => j !== i))}>
-                    <Trash2 className="size-3" />
+                  <Button variant="ghost" size="icon" className="size-7 shrink-0 rounded-md" onClick={() => setButtonsList(buttonsList.filter((_, j) => j !== i))} aria-label={`Remove button ${i + 1}`}>
+                    <Trash2 className="size-3" strokeWidth={1.75} />
                   </Button>
                 )}
               </div>
             ))}
-            {buttonsList.length < 3 && (
-              <Button variant="ghost" size="sm" className="gap-1" onClick={() => setButtonsList([...buttonsList, { id: "", text: "" }])}>
-                + Add Button
-              </Button>
-            )}
           </div>
-        )}
+          {buttonsList.length < 3 && (
+            <Button variant="ghost" size="sm" className="gap-1 rounded-md" onClick={() => setButtonsList([...buttonsList, { id: "", text: "" }])}>
+              <Plus className="size-3.5" strokeWidth={1.75} />
+              Add button
+            </Button>
+          )}
+        </>
+      )}
 
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSend} disabled={sending || (type === "poll" ? !pollName.trim() : type === "buttons" ? (!buttonsBody.trim() || buttonsList.filter((b) => b.text.trim()).length === 0) : type === "location" ? !lat || !lng : type === "voice" ? !recordedBlob : !file)}>
-            {sending && <RefreshCw className="size-4 animate-spin mr-2" />}Send
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      {sendError && (
+        <p role="alert" className="rounded-md border border-error-border bg-error-bg px-3 py-2 text-xs text-error-foreground">
+          {sendError}
+        </p>
+      )}
+    </ComposerDialog>
   )
 }
 
@@ -289,10 +446,12 @@ function StatusDialog({ open, onOpenChange, session, onSent }: { open: boolean; 
   const [text, setText] = useState("")
   const [file, setFile] = useState<File | null>(null)
   const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleSend = async () => {
     setSending(true)
+    setSendError(null)
     try {
       if (statusType === "text") {
         await api.postTextStatus(session, text)
@@ -302,51 +461,59 @@ function StatusDialog({ open, onOpenChange, session, onSent }: { open: boolean; 
         if (statusType === "image") await api.postImageStatus(session, fd, text)
         else await api.postVideoStatus(session, fd, text)
       }
-      toast.success("Status posted!")
+      toast.success("Status posted")
       onSent()
       onOpenChange(false)
       setText(""); setFile(null)
-    } catch { toast.error("Failed to post status") }
+    } catch {
+      setSendError("The status could not be posted. Try again.")
+      toast.error("Failed to post status")
+    }
     finally { setSending(false) }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>Post Status</DialogTitle></DialogHeader>
-        <div className="space-y-3 py-2">
-          <div className="flex gap-2">
-            {(["text", "image", "video"] as const).map((t) => (
-              <button key={t} onClick={() => { setStatusType(t); setFile(null) }} className={`flex-1 py-2 px-3 rounded-xl text-sm font-medium capitalize transition-colors ${statusType === t ? "bg-primary text-primary-foreground" : "bg-muted"}`}>{t}</button>
-            ))}
-          </div>
-          {statusType === "text" ? (
-            <Textarea placeholder="What's on your mind?" value={text} onChange={(e) => setText(e.target.value)} className="min-h-[100px]" />
-          ) : (
-            <>
-              <input ref={fileRef} type="file" accept={statusType === "image" ? "image/*" : "video/*"} className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-              {!file ? (
-                <button onClick={() => fileRef.current?.click()} className="w-full border-2 border-dashed rounded-xl py-8 flex flex-col items-center gap-2 hover:bg-muted/50 cursor-pointer">
-                  <span className="text-sm">Select {statusType}</span>
-                </button>
-              ) : (
-                <div className="flex items-center gap-3 p-3 rounded-xl bg-muted">
-                  <span className="text-sm truncate flex-1">{file.name}</span>
-                  <Button variant="ghost" size="icon" className="size-7" onClick={() => setFile(null)}><Trash2 className="size-4" /></Button>
-                </div>
-              )}
-              <Input placeholder="Caption (optional)" value={text} onChange={(e) => setText(e.target.value)} />
-            </>
-          )}
-        </div>
-        <DialogFooter>
+    <ComposerDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Post status"
+      footer={
+        <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSend} disabled={sending || (statusType === "text" ? !text.trim() : !file)}>
-            {sending && <RefreshCw className="size-4 animate-spin mr-2" />}Post Status
+          <Button onClick={handleSend} disabled={sending || (statusType === "text" ? !text.trim() : !file)} className="rounded-md">
+            {sending && <RefreshCw className="mr-2 size-4 animate-spin" strokeWidth={1.75} />}
+            Post status
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </>
+      }
+    >
+      <Segmented
+        value={statusType}
+        onChange={(v) => { setStatusType(v as "text" | "image" | "video"); setFile(null) }}
+        options={[
+          { value: "text", label: "Text" },
+          { value: "image", label: "Image" },
+          { value: "video", label: "Video" },
+        ]}
+      />
+      {statusType === "text" ? (
+        <Textarea placeholder="What is on your mind?" value={text} onChange={(e) => setText(e.target.value)} className="min-h-[100px]" />
+      ) : (
+        <>
+          {!file ? (
+            <FileDropzone inputRef={fileRef} accept={statusType === "image" ? "image/*" : "video/*"} label={statusType} onSelect={setFile} />
+          ) : (
+            <FileRow name={file.name} onRemove={() => setFile(null)} />
+          )}
+          <Input placeholder="Caption (optional)" value={text} onChange={(e) => setText(e.target.value)} />
+        </>
+      )}
+      {sendError && (
+        <p role="alert" className="rounded-md border border-error-border bg-error-bg px-3 py-2 text-xs text-error-foreground">
+          {sendError}
+        </p>
+      )}
+    </ComposerDialog>
   )
 }
 
@@ -359,9 +526,11 @@ interface ChatPageProps { initialSession?: string | null }
 export function ChatPage({ initialSession }: ChatPageProps) {
   /* ── State ── */
   const [sessions, setSessions] = useState<Session[]>([])
+  const [sessionsError, setSessionsError] = useState(false)
   const [selectedSession, setSelectedSession] = useState("")
   const [chats, setChats] = useState<ChatOverview[]>([])
   const [contacts, setContacts] = useState<Map<string, Contact>>(new Map())
+  const [contactsError, setContactsError] = useState(false)
   const [selectedChat, setSelectedChat] = useState<ChatOverview | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [loadingChats, setLoadingChats] = useState(false)
@@ -370,6 +539,7 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   const [editingMessage, setEditingMessage] = useState<ChatMessageData | null>(null)
   const [hasMoreMessages, setHasMoreMessages] = useState(false)
   const [userPicture, setUserPicture] = useState<string | null>(null)
+  const [pictureError, setPictureError] = useState(false)
   const [contactPictures, setContactPictures] = useState<Map<string, string>>(new Map())
   const [newChatOpen, setNewChatOpen] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
@@ -380,19 +550,23 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   const currentUserJid = resolveUserJid(currentSession || {})
 
   /* ── Data Loading ── */
-  const loadSessions = useCallback(async () => { try { setSessions(await api.getSessions()) } catch {} }, [])
+  const loadSessions = useCallback(async () => {
+    try { setSessions(await api.getSessions()); setSessionsError(false) }
+    catch { setSessionsError(true) }
+  }, [])
   useEffect(() => { loadSessions(); const iv = setInterval(loadSessions, 30000); return () => clearInterval(iv) }, [loadSessions])
   useEffect(() => { if (sessions.length > 0 && !selectedSession) setSelectedSession(initialSession || sessions[0].name) }, [sessions, selectedSession, initialSession])
   useEffect(() => { setSelectedChat(null); setMessages([]) }, [selectedSession])
 
   useEffect(() => {
-    if (!selectedSession) { setUserPicture(null); return }
+    if (!selectedSession) { setUserPicture(null); setPictureError(false); return }
     const s = sessions.find(s => s.name === selectedSession)
     if (!s?.me?.id) return
+    setPictureError(false)
     const jid = resolveUserJid(s)
     api.getContactPicture(selectedSession, jid).then(res => {
       if (res.profilePictureURL) setUserPicture(res.profilePictureURL)
-    }).catch(() => {})
+    }).catch(() => setPictureError(true))
   }, [selectedSession, sessions])
 
   useEffect(() => {
@@ -403,7 +577,7 @@ export function ChatPage({ initialSession }: ChatPageProps) {
       if (res.profilePictureURL) {
         setContactPictures(prev => { const m = new Map(prev); m.set(selectedChat.id, res.profilePictureURL!); return m })
       }
-    }).catch(() => {})
+    }).catch(() => setPictureError(true))
   }, [selectedChat, selectedSession])
 
   const loadContacts = useCallback(async () => {
@@ -411,7 +585,8 @@ export function ChatPage({ initialSession }: ChatPageProps) {
     try {
       const list = await api.getContacts(selectedSession, 500, 0)
       setContacts(new Map(list.map((c) => [c.id, c])))
-    } catch {}
+      setContactsError(false)
+    } catch { setContactsError(true) }
   }, [selectedSession, isWorking])
   useEffect(() => { loadContacts() }, [loadContacts])
 
@@ -522,7 +697,7 @@ export function ChatPage({ initialSession }: ChatPageProps) {
 
   /* ── Actions ── */
   const handleStartSession = async (name: string) => {
-    try { await api.startSession(name); toast.success("Starting..."); await loadSessions() }
+    try { await api.startSession(name); toast.success("Starting"); await loadSessions() }
     catch { toast.error("Failed to start") }
   }
 
@@ -571,7 +746,7 @@ export function ChatPage({ initialSession }: ChatPageProps) {
     if (!selectedSession || !selectedChat) return
     try {
       await api.sendVoice(selectedSession, selectedChat.id, { mimetype, filename: "voice.webm", data: base64 })
-      toast.success("Voice sent!")
+      toast.success("Voice sent")
       loadMessages(selectedChat.id)
       loadChats()
     } catch { toast.error("Failed to send voice") }
@@ -670,12 +845,22 @@ export function ChatPage({ initialSession }: ChatPageProps) {
         <div className="p-3 md:hidden">
           <SidebarTrigger />
         </div>
-        <div className="flex flex-1 items-center justify-center">
-          <div className="text-center">
-            <CircleDot className="mx-auto mb-3 size-10 text-[var(--chat-text-tertiary)]" />
-            <p className="text-sm text-[var(--chat-text-secondary)]">No active sessions</p>
-            <p className="text-xs text-[var(--chat-text-tertiary)] mt-1">Create and start a session first</p>
-          </div>
+        <div className="flex flex-1 items-center justify-center px-4">
+          {sessionsError ? (
+            <div className="w-full max-w-md">
+              <ErrorState
+                title="Could not load sessions"
+                description="The sessions API did not respond."
+                onRetry={loadSessions}
+              />
+            </div>
+          ) : (
+            <EmptyState
+              icon={<CircleDot className="size-6" strokeWidth={1.75} />}
+              title="No active sessions"
+              description="Create and start a session first."
+            />
+          )}
         </div>
       </div>
     )
@@ -701,11 +886,12 @@ export function ChatPage({ initialSession }: ChatPageProps) {
           onOpenNewChat={() => setNewChatOpen(true)}
           onOpenStatus={() => setStatusOpen(true)}
         />
-        <div className="hidden flex-1 md:flex items-center justify-center">
-          <div className="text-center">
-            <CircleDot className="mx-auto mb-3 size-12 text-[var(--chat-text-tertiary)]" />
-            <p className="text-sm text-[var(--chat-text-secondary)]">Select a conversation</p>
-          </div>
+        <div className="hidden flex-1 items-center justify-center px-4 md:flex">
+          <EmptyState
+            icon={<MessageSquare className="size-6" strokeWidth={1.75} />}
+            title="Select a conversation"
+            description="Choose a chat from the list to start messaging."
+          />
         </div>
         <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} session={selectedSession} onOpenChat={handleNewChatOpen} />
         <StatusDialog open={statusOpen} onOpenChange={setStatusOpen} session={selectedSession} onSent={loadChats} />
@@ -723,12 +909,12 @@ export function ChatPage({ initialSession }: ChatPageProps) {
       className="h-dvh"
       messageGroupingInterval={120}
       style={{
-        "--chat-accent": "#10B981",
-        "--chat-accent-soft": "rgba(16, 185, 129, 0.08)",
-        "--chat-green": "#10B981",
-        "--chat-bubble-outgoing": "#10B981",
-        "--chat-bubble-outgoing-text": "#FFFFFF",
-      } as React.CSSProperties}
+        "--chat-accent": "var(--primary)",
+        "--chat-accent-soft": "color-mix(in oklab, var(--primary) 10%, transparent)",
+        "--chat-green": "var(--primary)",
+        "--chat-bubble-outgoing": "var(--primary)",
+        "--chat-bubble-outgoing-text": "var(--primary-foreground)",
+      } as CSSProperties}
       onReactionAdd={handleReactionAdd}
       onReactionRemove={handleReactionRemove}
       onReply={handleReply}
@@ -758,27 +944,34 @@ export function ChatPage({ initialSession }: ChatPageProps) {
         </div>
 
         {/* Main Panel */}
-        <main className="flex-1 min-w-0 grid bg-[var(--chat-bg-main)]" style={{ gridTemplateRows: "auto 1fr auto" }}>
+        <main className="grid min-w-0 flex-1 bg-[var(--chat-bg-main)]" style={{ gridTemplateRows: "auto 1fr auto" }}>
           <ChatHeader
             chat={selectedChat}
             contacts={contacts}
             picture={picture}
             onBack={() => { setSelectedChat(null); setMessages([]) }}
             onArchive={() => {
-              if (selectedSession) api.archiveChat(selectedSession, selectedChat.id).then(() => { toast.success("Archived"); loadChats(); setSelectedChat(null) }).catch(() => toast.error("Failed"))
+              if (selectedSession) api.archiveChat(selectedSession, selectedChat.id).then(() => { toast.success("Archived"); loadChats(); setSelectedChat(null) }).catch(() => toast.error("Could not archive the chat"))
             }}
             onMarkUnread={() => {
-              if (selectedSession) api.unreadChat(selectedSession, selectedChat.id).then(() => toast.success("Marked unread")).catch(() => toast.error("Failed"))
+              if (selectedSession) api.unreadChat(selectedSession, selectedChat.id).then(() => toast.success("Marked unread")).catch(() => toast.error("Could not mark the chat unread"))
             }}
           />
 
-          <div className="flex flex-col min-h-0 overflow-hidden">
+          <div className="flex min-h-0 flex-col overflow-hidden">
+            {(contactsError || pictureError) && (
+              <div role="alert" className="mx-3 mt-3 flex items-center gap-2 rounded-md border border-error-border bg-error-bg px-3 py-2 text-xs text-error-foreground">
+                <TriangleAlert className="size-3.5 shrink-0" strokeWidth={1.75} />
+                Some contact details could not be loaded. Names and photos may be missing.
+              </div>
+            )}
             {loadingMessages && mappedMessages.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <RefreshCw className="mx-auto mb-2 size-6 animate-spin text-[var(--chat-text-tertiary)]" />
-                  <p className="text-xs text-[var(--chat-text-tertiary)]">Loading messages...</p>
-                </div>
+              <div className="flex flex-col gap-4 p-4" aria-hidden>
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} className={i % 2 === 0 ? "flex justify-start" : "flex justify-end"}>
+                    <Skeleton className={`h-16 rounded-2xl ${i % 2 === 0 ? "w-3/5" : "w-2/5"}`} />
+                  </div>
+                ))}
               </div>
             ) : (
               <ChatMessages

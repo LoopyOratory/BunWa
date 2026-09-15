@@ -128,14 +128,32 @@ function getDashboardAuth(): string | null {
   return localStorage.getItem("waha_dashboard_auth")
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" }
-
+/**
+ * Auth headers for every API call.
+ *
+ * The console signs in with the dashboard credentials, which the server accepts
+ * as admin-equivalent. A real API key can be supplied through localStorage
+ * (`waha-api-key`) for deployments that require one.
+ *
+ * We deliberately never send a placeholder key: a wrong `x-api-key` is rejected
+ * before Basic auth is considered, so a hardcoded fallback breaks every request
+ * on a server that has a real WAHA_API_KEY set.
+ */
+export function getApiAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {}
   const dashboardAuth = getDashboardAuth()
   if (dashboardAuth) {
     headers["Authorization"] = `Basic ${dashboardAuth}`
   }
-  headers["x-api-key"] = "waha"
+  const apiKey = localStorage.getItem("waha-api-key")
+  if (apiKey) {
+    headers["x-api-key"] = apiKey
+  }
+  return headers
+}
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json", ...getApiAuthHeaders() }
 
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { ...headers, ...options?.headers },
@@ -153,11 +171,7 @@ export async function fetchImageBlobUrl(imageUrl: string): Promise<string | null
   if (!imageUrl) return null
   const url = imageUrl.startsWith("http") ? imageUrl : `${API_BASE}${imageUrl}`
   try {
-    const headers: Record<string, string> = {}
-    const dashboardAuth = getDashboardAuth()
-    if (dashboardAuth) headers["Authorization"] = `Basic ${dashboardAuth}`
-    headers["x-api-key"] = "waha"
-    const res = await fetch(url, { headers })
+    const res = await fetch(url, { headers: getApiAuthHeaders() })
     if (!res.ok) return null
     const blob = await res.blob()
     return URL.createObjectURL(blob)

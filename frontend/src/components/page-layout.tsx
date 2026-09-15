@@ -1,8 +1,5 @@
-import type { ReactNode } from "react"
-import { Moon, Sun } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { useEffect, type ReactNode } from "react"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { useTheme } from "@/components/theme-provider"
 
 interface PageLayoutProps {
   title: string
@@ -11,41 +8,39 @@ interface PageLayoutProps {
   children: ReactNode
 }
 
+/**
+ * Console page shell: a fixed topbar plus one scrolling content area.
+ *
+ * The theme control lives in the sidebar footer only. It used to be duplicated
+ * here, which meant two controls for one setting.
+ */
 export function PageLayout({ title, description, actions, children }: PageLayoutProps) {
-  const { theme, setTheme } = useTheme()
-  const isDark = theme === "dark"
+  // Keep the tab title in step with the view; operators keep several tabs open.
+  useEffect(() => {
+    document.title = `${title} · BunWa`
+  }, [title])
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Topbar */}
-      <header className="sticky top-0 z-20 flex flex-wrap items-center gap-3 px-4 sm:px-6 py-4 border-b bg-background/80 backdrop-blur-sm">
+    <div className="flex h-dvh flex-col overflow-hidden">
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
+
+      <header className="z-20 flex shrink-0 flex-wrap items-center gap-3 border-b bg-background/85 px-4 py-3 backdrop-blur-sm sm:px-6">
         <SidebarTrigger className="md:hidden" />
-        <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-          <h1 className="text-xl font-bold tracking-tight truncate">{title}</h1>
-          {description && (
-            <p className="text-sm text-muted-foreground truncate">{description}</p>
-          )}
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate font-heading text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
+          {description && <p className="mt-0.5 max-w-2xl text-sm text-muted-foreground">{description}</p>}
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-          {actions}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setTheme(isDark ? "light" : "dark")}
-            className="size-9"
-            title={isDark ? "Light Mode" : "Dark Mode"}
-          >
-            {isDark ? <Sun className="size-5" /> : <Moon className="size-5" />}
-          </Button>
-        </div>
+        {actions && (
+          <div className="flex w-full items-center justify-end gap-2 sm:w-auto">{actions}</div>
+        )}
       </header>
 
-      {/* Content */}
-      <main className="flex-1 overflow-y-auto px-6 py-6 page-enter" key={title}>
-        <div className="max-w-screen-2xl mx-auto w-full">
-          {children}
-        </div>
-      </main>
+      {/* SidebarInset already renders the shell's <main> landmark. */}
+      <section id="main-content" className="page-enter flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+        <div className="mx-auto w-full max-w-screen-2xl">{children}</div>
+      </section>
     </div>
   )
 }

@@ -37,7 +37,7 @@ export function ChatHeader({
         aria-label="Back to conversations"
         className="mr-1 text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)] md:hidden"
       >
-        <ChevronLeft className="size-5" />
+        <ChevronLeft className="size-5" strokeWidth={1.75} />
       </button>
 
       <Avatar className="size-9 shrink-0">
@@ -51,11 +51,8 @@ export function ChatHeader({
         <span className="truncate text-[15px] font-semibold tracking-[-0.02em] text-[var(--chat-text-primary)]">
           {chatName(chat, contacts)}
         </span>
-        <span className="truncate text-[12px] text-[var(--chat-text-secondary)]">
-          <span className="inline-flex items-center gap-1">
-            <span className="size-1.5 rounded-full bg-emerald-500" />
-            online
-          </span>
+        <span className="truncate text-[12px] font-mono metric text-[var(--chat-text-secondary)]">
+          {chat.id.split("@")[0]}
         </span>
       </div>
 
@@ -69,7 +66,7 @@ export function ChatHeader({
               className="size-8 rounded-lg text-[var(--chat-text-secondary)] hover:bg-[var(--chat-accent-soft)] hover:text-[var(--chat-text-primary)]"
               onClick={onArchive}
             >
-              <Archive className="size-[16px]" />
+              <Archive className="size-[16px]" strokeWidth={1.75} />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Archive</TooltipContent>
@@ -83,12 +80,12 @@ export function ChatHeader({
               size="icon"
               className="size-8 rounded-lg text-[var(--chat-text-secondary)] hover:bg-[var(--chat-accent-soft)] hover:text-[var(--chat-text-primary)]"
             >
-              <MoreVertical className="size-[16px]" />
+              <MoreVertical className="size-[16px]" strokeWidth={1.75} />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[140px]">
             <DropdownMenuItem onClick={onMarkUnread} className="cursor-pointer text-xs">
-              <MessageSquarePlus className="size-3.5 mr-2" /> Mark Unread
+              <MessageSquarePlus className="size-3.5 mr-2" strokeWidth={1.75} /> Mark unread
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
