@@ -85,7 +85,9 @@ export function sessionField(description = 'Name of the BunWa session to use'): 
 	};
 }
 
-export function chatIdField(description = 'Chat ID, for example 15551234567@c.us or a group ID ending in @g.us'): INodeProperties {
+export function chatIdField(
+	description = 'Chat ID. Can be phone based (15551234567@c.us), LID based (218734094458920@lid, common on newer accounts and for inbound chats) or a group ending in @g.us. To reply to an inbound message, pass the "from" value from the trigger unchanged.',
+): INodeProperties {
 	return {
 		displayName: 'Chat ID',
 		name: 'chatId',

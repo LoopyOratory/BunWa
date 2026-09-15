@@ -107,6 +107,21 @@ see [[Testing]] and [[Dependency Injection]]. The suite is now **104/104 green**
 - **No metrics/Prometheus endpoint** — observability is health + logs + audit.
 - **Media URLs expire (~180 s)** on local storage; only S3 gives durable links.
 
+## Live-verified against the running server (2026-09-15)
+
+Checked through the BunWa **MCP** against a live session (`vivita`, status WORKING, account
+"Vivita Shop Support"), read-only. This confirmed some documented behaviour and corrected a few
+assumptions:
+
+| Observation | Detail |
+|---|---|
+| **MCP per-session key policy works** | `SessionList` (the only non-session-scoped tool) is correctly denied to a session-scoped key: `Tool 'SessionList' is not available to a session-scoped key` |
+| **Chat ids are LID-based in practice** | `PresenceGetAll` returns `...@lid` ids and inbound message keys carry `addressingMode: "lid"`, while outbound keys use `<number>@s.whatsapp.net`. The API-facing `from` is the LID. Workflows must echo `from` back unchanged instead of constructing `@c.us` ids (the n8n node's help text now says so) |
+| **`GET /api/messages` is a routing gap, not a capability gap** | The MCP `ChatGetMessages` returns real history from the per-session store, so the fix for the stub route is to point it at the same engine call |
+| **Message payload shape** | Matches the vault: `id` (`true_`/`false_` prefix encodes `fromMe`), `timestamp`, `from`, `fromMe`, `source` (`app` inbound, `api` for sends through BunWa), `body`, `hasMedia`, `ack`/`ackName` (`DEVICE`, `SERVER`), `replyTo`, `reactions`, `_data` (raw Baileys) |
+| **`location` / `vCards` always null live** | Confirms the `waproto` stub ([[Messaging]]); the message itself sends fine |
+| **`_status` in the session index can be stale** | `SessionGet` reported `status: "WORKING"` while `config._status: "STOPPED"`. The index copy is written on some transitions only, so it must not be used as a status source; read the live status |
+
 ## Related
 
 [[Roadmap]] · [[Testing]] · [[Dependency Injection]] · [[API Docs]] · [[OpenWA Parity]] · [[Plus Tier]]
