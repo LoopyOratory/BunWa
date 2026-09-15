@@ -4,7 +4,7 @@
  * Used for X-WAHA-Signature header.
  */
 
-import { createHmac } from 'crypto';
+import { CryptoHasher } from 'bun';
 
 /**
  * Generate HMAC-SHA256 signature for webhook payload.
@@ -13,7 +13,9 @@ import { createHmac } from 'crypto';
  * @returns Hex-encoded signature string
  */
 export function generateWebhookSignature(payload: string, secret: string): string {
-  return createHmac('sha256', secret).update(payload).digest('hex');
+  // Bun's native hasher — byte-identical to node:crypto's createHmac, faster,
+  // and on the hot path (every webhook delivery signs its payload).
+  return new CryptoHasher('sha256', secret).update(payload).digest('hex');
 }
 
 /**
@@ -43,6 +45,5 @@ export function verifyWebhookSignature(payload: string, signature: string, secre
  */
 export function generateIdempotencyKey(event: string, sessionId: string, data: any): string {
   const payload = `${event}:${sessionId}:${JSON.stringify(data)}`;
-  const { createHash } = require('crypto');
-  return createHash('sha256').update(payload).digest('hex').slice(0, 32);
+  return new CryptoHasher('sha256').update(payload).digest('hex').slice(0, 32);
 }

@@ -14,7 +14,8 @@ import { SwaggerConfigServiceCore } from './core/config/SwaggerConfigServiceCore
 import { basicAuthMiddleware } from './middleware/basic-auth';
 import { rateLimit, setBunServer } from './middleware/rate-limit';
 import { buildOpenApiSpec } from './swagger';
-import { existsSync, statSync } from 'fs';
+import { existsSync } from 'fs';
+import { stat } from 'fs/promises';
 import { join, resolve } from 'path';
 import { SessionManager } from './core/manager.core';
 import { ChatwootAppService } from './apps/chatwoot/services/ChatwootAppService';
@@ -33,6 +34,50 @@ function isPathSafe(resolvedPath: string, rootDir: string): boolean {
   const resolved = resolve(resolvedPath);
   const root = resolve(rootDir);
   return resolved.startsWith(root + '/') || resolved === root;
+}
+
+// Content-hashed build artefacts (Vite emits `name-<hash>.ext`) can be cached
+// forever; everything else gets a shorter TTL so rebuilds are picked up.
+const IMMUTABLE_ASSET = /-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/;
+
+/**
+ * Serve one file from disk with conditional-request support.
+ *
+ * Bun infers Content-Type from the extension and handles Range requests
+ * natively for file responses, so neither is hand-rolled here. ETags are added
+ * because Bun does not generate them: without one, every dashboard reload
+ * re-downloads the bundle instead of getting a 304.
+ *
+ * Returns null when the path does not exist, leaving the fallback to the caller.
+ */
+async function serveStaticFile(filePath: string, ifNoneMatch: string | null): Promise<Response | null> {
+  let fileStat;
+  try {
+    fileStat = await stat(filePath); // async: does not block the event loop per request
+  } catch {
+    return null;
+  }
+  if (fileStat.isDirectory()) {
+    return serveStaticFile(join(filePath, 'index.html'), ifNoneMatch);
+  }
+
+  const isHtml = filePath.endsWith('.html');
+  const etag = `W/"${fileStat.size}-${Math.floor(fileStat.mtimeMs)}"`;
+  const headers: Record<string, string> = {
+    ETag: etag,
+    'Last-Modified': fileStat.mtime.toUTCString(),
+    'X-Content-Type-Options': 'nosniff',
+    'Cache-Control': isHtml
+      ? 'no-cache'
+      : IMMUTABLE_ASSET.test(filePath)
+        ? 'public, max-age=31536000, immutable'
+        : 'public, max-age=86400',
+  };
+
+  if (ifNoneMatch === etag) {
+    return new Response(null, { status: 304, headers });
+  }
+  return new Response(Bun.file(filePath), { headers });
 }
 
 const log = pino({
@@ -162,63 +207,24 @@ async function bootstrap() {
       if (path.startsWith('/api/') || path.startsWith('/ping') || path.startsWith('/health') || path.startsWith('/mcp') || path.startsWith('/webhook/') || path.startsWith('/ws')) {
         return next();
       }
-      let filePath = join(customDashboardPath, path === '/' ? 'index.html' : path);
+      const filePath = join(customDashboardPath, path === '/' ? 'index.html' : path);
 
       if (!isPathSafe(filePath, customDashboardPath)) {
         return next();
       }
 
-      try {
-        const stat = statSync(filePath);
-        if (stat.isDirectory()) {
-          filePath = join(filePath, 'index.html');
-        }
-      } catch {}
-
-      if (existsSync(filePath)) {
-        let file = Bun.file(filePath);
-        const ext = filePath.split('.').pop()?.toLowerCase() || '';
-        const mimeTypes: Record<string, string> = {
-          'html': 'text/html; charset=utf-8',
-          'js': 'application/javascript; charset=utf-8',
-          'css': 'text/css; charset=utf-8',
-          'json': 'application/json; charset=utf-8',
-          'png': 'image/png',
-          'svg': 'image/svg+xml',
-          'woff2': 'font/woff2',
-          'woff': 'font/woff',
-          'ttf': 'font/ttf',
-          'ico': 'image/x-icon',
-          'webp': 'image/webp',
-        };
-        const contentType = mimeTypes[ext] || 'application/octet-stream';
-
-        if (ext === 'html') {
-          let html = await file.text();
-          // No API key injection needed — frontend uses Basic auth from dashboard login
-          return new Response(html, {
-            headers: {
-              'Content-Type': contentType,
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-            },
-          });
-        }
-
-        return new Response(file, {
-          headers: {
-            'Content-Type': contentType,
-            'Cache-Control': 'public, max-age=86400',
-          },
-        });
+      const file = await serveStaticFile(filePath, c.req.header('if-none-match') ?? null);
+      if (file) {
+        return file;
       }
 
       // SPA fallback: serve index.html for all non-file routes
-      const indexPath = join(customDashboardPath, 'index.html');
-      if (existsSync(indexPath)) {
-        const indexFile = Bun.file(indexPath);
-        return new Response(indexFile, {
-          headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' },
-        });
+      const indexFile = await serveStaticFile(
+        join(customDashboardPath, 'index.html'),
+        c.req.header('if-none-match') ?? null,
+      );
+      if (indexFile) {
+        return indexFile;
       }
 
       return next();
@@ -248,47 +254,14 @@ async function bootstrap() {
 
       app.use(dashboardConfig.dashboardUri + '/*', async (c, next) => {
         const path = new URL(c.req.url).pathname;
-        let filePath = join(effectiveDashboardPath, path.replace(dashboardConfig.dashboardUri, ''));
+        const filePath = join(effectiveDashboardPath, path.replace(dashboardConfig.dashboardUri, ''));
 
         if (!isPathSafe(filePath, effectiveDashboardPath)) {
           return next();
         }
 
-        // Check if path points to a directory, serve index.html
-        try {
-          const stat = statSync(filePath);
-          if (stat.isDirectory()) {
-            filePath = join(filePath, 'index.html');
-          }
-        } catch {}
-
-        if (existsSync(filePath)) {
-          const file = Bun.file(filePath);
-          const ext = filePath.split('.').pop()?.toLowerCase() || '';
-          const mimeTypes: Record<string, string> = {
-            'html': 'text/html; charset=utf-8',
-            'js': 'application/javascript; charset=utf-8',
-            'mjs': 'application/javascript; charset=utf-8',
-            'css': 'text/css; charset=utf-8',
-            'json': 'application/json; charset=utf-8',
-            'png': 'image/png',
-            'jpg': 'image/jpeg',
-            'jpeg': 'image/jpeg',
-            'gif': 'image/gif',
-            'svg': 'image/svg+xml',
-            'ico': 'image/x-icon',
-            'woff': 'font/woff',
-            'woff2': 'font/woff2',
-            'ttf': 'font/ttf',
-            'webp': 'image/webp',
-          };
-          const contentType = mimeTypes[ext] || 'application/octet-stream';
-          return new Response(file, {
-            headers: { 'Content-Type': contentType },
-          });
-        }
-
-        return next();
+        const file = await serveStaticFile(filePath, c.req.header('if-none-match') ?? null);
+        return file ?? next();
       });
 
       log.info(`Dashboard available at: ${dashboardConfig.dashboardUri}`);
@@ -323,6 +296,10 @@ async function bootstrap() {
   // Create server with WebSocket support
   const server = Bun.serve({
     port,
+    // Reject oversized bodies at the protocol level. The /api/* middleware below
+    // still returns a friendlier JSON 413, but it can only see a Content-Length
+    // header — this cap also applies to chunked requests that omit one.
+    maxRequestBodySize: 10 * 1024 * 1024,
     fetch: async (reqAny, server) => {
       const req = reqAny as any; // bun-types Request variance across versions
       // Handle WebSocket upgrade for /ws path
@@ -371,6 +348,9 @@ async function bootstrap() {
       return app.fetch(req);
     },
     websocket: {
+      // Event payloads are repetitive JSON — compression cuts bandwidth on the
+      // event stream substantially (per-message deflate).
+      perMessageDeflate: true,
       open: wsHandler.open,
       message: wsHandler.message,
       close: wsHandler.close,

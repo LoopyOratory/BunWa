@@ -25,7 +25,7 @@ import 'reflect-metadata';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { container } from 'tsyringe';
-import { createHash } from 'crypto';
+import { CryptoHasher } from 'bun';
 import { configureContainer } from '../di/container';
 import { SessionManager } from '../core/manager.core';
 import { ToolRegistryService } from './tool-registry.service';
@@ -54,7 +54,7 @@ try {
 const manager = container.resolve(SessionManager);
 
 // Auth: hash the provided key and verify it matches this session's stored hash
-const providedHash = createHash('sha256').update(mcpKey).digest('hex');
+const providedHash = new CryptoHasher('sha256').update(mcpKey).digest('hex');
 const config = manager.getSessionConfig(sessionName);
 
 if (!config?.mcp?.apiKeyHash || config.mcp.apiKeyHash !== providedHash) {

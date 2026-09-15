@@ -7,7 +7,6 @@
 import { Database } from 'bun:sqlite';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join, dirname, resolve } from 'path';
-import { createGzip, createGunzip } from 'zlib';
 import pino from 'pino';
 
 const log = pino({ name: 'ExportImportService' });
@@ -287,14 +286,8 @@ export class ExportImportService {
     chunks.push(Buffer.alloc(1024)); // end-of-archive
     const tarBuffer = Buffer.concat(chunks);
 
-    return new Promise((resolve, reject) => {
-      const gzip = createGzip({ level: 6 });
-      const bufs: Buffer[] = [];
-      gzip.on('data', (chunk) => bufs.push(chunk));
-      gzip.on('end', () => resolve(Buffer.concat(bufs)));
-      gzip.on('error', reject);
-      gzip.end(tarBuffer);
-    });
+    // Bun's native gzip — no stream plumbing needed for an in-memory buffer.
+    return Buffer.from(Bun.gzipSync(tarBuffer, { level: 6 }));
   }
 
   private createTarHeader(name: string, size: number): Buffer {
@@ -315,17 +308,10 @@ export class ExportImportService {
   }
 
   private async extractTarGz(buffer: Buffer): Promise<Array<{ name: string; data: Buffer }>> {
-    return new Promise((resolve, reject) => {
-      const gunzip = createGunzip();
-      const chunks: Buffer[] = [];
-      gunzip.on('data', (chunk: Buffer) => chunks.push(chunk));
-      gunzip.on('end', () => {
-        try { resolve(this.parseTarEntries(Buffer.concat(chunks))); }
-        catch (err) { reject(err); }
-      });
-      gunzip.on('error', reject);
-      gunzip.end(buffer);
-    });
+    // Copy into a plain Uint8Array: Bun's gzip typings require an
+    // ArrayBuffer-backed view, and Buffer's backing store is ArrayBufferLike.
+    const bytes = new Uint8Array(buffer);
+    return this.parseTarEntries(Buffer.from(Bun.gunzipSync(bytes)));
   }
 
   private parseTarEntries(buffer: Buffer): Array<{ name: string; data: Buffer }> {

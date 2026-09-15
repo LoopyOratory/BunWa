@@ -1,11 +1,7 @@
 import { IMediaStorage, MediaData, MediaStorageData } from './IMediaManager';
-import { existsSync, mkdirSync, unlinkSync, readdirSync, statSync } from 'fs';
+import { mkdir, readdir, stat } from 'fs/promises';
 import { join } from 'path';
 import pino from 'pino';
-
-const writeFile = async (path: string, data: Buffer) => {
-  await Bun.write(path, data);
-};
 
 export class MediaLocalStorage implements IMediaStorage {
   private filesFolder: string;
@@ -26,32 +22,23 @@ export class MediaLocalStorage implements IMediaStorage {
   }
 
   async init(): Promise<void> {
-    if (!existsSync(this.filesFolder)) {
-      mkdirSync(this.filesFolder, { recursive: true });
-    }
+    await mkdir(this.filesFolder, { recursive: true });
   }
 
   async save(buffer: Buffer, data: MediaData): Promise<boolean> {
     try {
       const sessionDir = join(this.filesFolder, data.session);
-      if (!existsSync(sessionDir)) {
-        mkdirSync(sessionDir, { recursive: true });
-      }
+      await mkdir(sessionDir, { recursive: true });
 
       const filename = `${data.message.id}.${data.file.extension}`;
       const filePath = join(sessionDir, filename);
-      await writeFile(filePath, buffer);
+      await Bun.write(filePath, buffer);
 
       // Schedule removal after lifetime
       if (this.lifetimeMs > 0) {
         setTimeout(() => {
-          try {
-            if (existsSync(filePath)) {
-              unlinkSync(filePath);
-            }
-          } catch (e) {
-            // Ignore cleanup errors
-          }
+          // Ignore cleanup errors — the file may already be gone
+          Bun.file(filePath).delete().catch(() => {});
         }, this.lifetimeMs);
       }
 
@@ -65,7 +52,7 @@ export class MediaLocalStorage implements IMediaStorage {
   async exists(data: MediaData): Promise<boolean> {
     const filename = `${data.message.id}.${data.file.extension}`;
     const filePath = join(this.filesFolder, data.session, filename);
-    return existsSync(filePath);
+    return Bun.file(filePath).exists();
   }
 
   async getStorageData(data: MediaData): Promise<MediaStorageData> {
@@ -75,26 +62,27 @@ export class MediaLocalStorage implements IMediaStorage {
   }
 
   async purge(): Promise<void> {
-    // Scan and remove expired files
-    if (!existsSync(this.filesFolder)) return;
+    // Scan and remove expired files. A missing folder just means nothing to do.
+    let sessions: string[];
+    try {
+      sessions = await readdir(this.filesFolder);
+    } catch {
+      return;
+    }
 
-    const sessions = readdirSync(this.filesFolder);
     for (const session of sessions) {
       const sessionDir = join(this.filesFolder, session);
-      if (!statSync(sessionDir).isDirectory()) continue;
+      if (!(await stat(sessionDir)).isDirectory()) continue;
 
-      const files = readdirSync(sessionDir);
+      const files = await readdir(sessionDir);
       for (const file of files) {
         const filePath = join(sessionDir, file);
-        const stat = statSync(filePath);
-        const age = Date.now() - stat.mtimeMs;
+        const fileStat = await stat(filePath);
+        const age = Date.now() - fileStat.mtimeMs;
 
         if (age > this.lifetimeMs) {
-          try {
-            unlinkSync(filePath);
-          } catch (e) {
-            // Ignore
-          }
+          // Ignore cleanup races — another sweep may have removed it already
+          await Bun.file(filePath).delete().catch(() => {});
         }
       }
     }

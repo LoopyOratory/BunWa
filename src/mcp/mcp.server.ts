@@ -13,7 +13,8 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
 import pino from 'pino';
-import { timingSafeEqual, createHash } from 'crypto';
+import { timingSafeEqual } from 'crypto';
+import { CryptoHasher } from 'bun';
 import type { SessionManager } from '../core/manager.core';
 import type { SessionConfig } from '../structures/sessions.dto';
 import type { ToolDescriptor } from './tool-descriptor';
@@ -142,7 +143,7 @@ function buildServer(
           let scopedSession: string | undefined;
 
           if (!globalOk && rawKey) {
-            const providedHash = createHash('sha256').update(rawKey).digest('hex');
+            const providedHash = new CryptoHasher('sha256').update(rawKey).digest('hex');
             const allSessions = await sessionManager.getSessions();
             for (const s of allSessions) {
               try {

@@ -79,7 +79,10 @@ export interface AuditQueryOptions {
 }
 
 function generateId(): string {
-  return crypto.randomUUID();
+  // UUIDv7 (time-ordered): new rows append to the right edge of the primary-key
+  // B-tree instead of scattering random keys through it, which keeps the audit
+  // table's inserts cheap as it grows.
+  return Bun.randomUUIDv7();
 }
 
 /**

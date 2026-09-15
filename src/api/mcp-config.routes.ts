@@ -7,7 +7,8 @@ import { container } from 'tsyringe';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanSession, Action, FromParam } from '../middleware/policies';
 import { SessionManager } from '../core/manager.core';
-import { createHash, randomBytes } from 'crypto';
+import { CryptoHasher } from 'bun';
+import { randomBytes } from 'crypto';
 import { sessionTools } from '../mcp/tools/session.tools';
 import { messageTools } from '../mcp/tools/message.tools';
 import { contactTools } from '../mcp/tools/contact.tools';
@@ -145,7 +146,7 @@ export function createMcpConfigRouter(): Hono {
 
       do {
         key = `sk_mcp_${randomBytes(16).toString('hex')}`;
-        hash = createHash('sha256').update(key).digest('hex');
+        hash = new CryptoHasher('sha256').update(key).digest('hex');
         attempts++;
 
         // Check uniqueness across all sessions
