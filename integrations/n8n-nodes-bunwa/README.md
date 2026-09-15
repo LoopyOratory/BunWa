@@ -122,7 +122,7 @@ Send WhatsApp messages, media and interactive content
 | React               | `PUT /api/reaction`                                   |       |
 | Reply               | `POST /api/reply`                                     |       |
 | Send Bulk           | `POST /api/{session}/messages/send-bulk`              |       |
-| Send Buttons        | `POST /api/sendButtons`                               |       |
+| Send Buttons        | `POST /api/sendButtons`                               | At most 3 buttons. Types: reply, url, call, copy, catalog, location, flow. Only reply buttons reply |
 | Send Contact VCard  | `POST /api/sendContactVcard`                          |       |
 | Send File           | `POST /api/sendFile`                                  |       |
 | Send Image          | `POST /api/sendImage`                                 |       |

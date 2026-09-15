@@ -19,7 +19,7 @@ const operations: INodePropertyOptions[] = [
 	{ name: 'React', value: 'react', action: 'React to a message' },
 	{ name: 'Reply', value: 'reply', action: 'Reply to a message' },
 	{ name: 'Send Bulk', value: 'sendBulk', action: 'Send a message to many recipients' },
-	{ name: 'Send Buttons', value: 'sendButtons', action: 'Send interactive buttons' },
+	{ name: 'Send Buttons', value: 'sendButtons', action: 'Send interactive buttons (reply, URL, call, copy, catalog, location, flow)' },
 	{ name: 'Send Contact VCard', value: 'sendContactVcard', action: 'Send one or more contact cards' },
 	{ name: 'Send File', value: 'sendFile', action: 'Send a document' },
 	{ name: 'Send Image', value: 'sendImage', action: 'Send an image' },
@@ -252,10 +252,13 @@ const properties: INodeProperties[] = [
 				name: 'buttons',
 				type: 'json',
 				default:
-					'[\n  { "type": "reply", "text": "Yes" },\n  { "type": "url", "text": "Open site", "url": "https://example.com" }\n]',
+					'[\n  { "type": "reply", "text": "Yes" },\n  { "type": "url", "text": "Open site", "url": "https://example.com" },\n  { "type": "copy", "text": "Copy code", "copyCode": "WELCOME10" }\n]',
 				required: true,
 				description:
-					'Array of buttons. type is reply, url, call or copy; url needs url, call needs phoneNumber, copy needs copyCode',
+					'Array of buttons, at most 3 (WhatsApp limit). type is one of: reply, url, call, copy, catalog, location, flow. ' +
+					'url needs url, call needs phoneNumber, copy needs copyCode, catalog takes an optional catalogId (omit it to open the account catalog), ' +
+					'flow needs flowId plus optional flowToken, flowAction (navigate or data_exchange) and flowCta. ' +
+					'Only reply buttons send anything back: url, call and copy are client-side actions, so a workflow will not see them tapped.',
 			},
 			{
 				displayName: 'Header',
