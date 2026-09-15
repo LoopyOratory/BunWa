@@ -393,7 +393,10 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
     },
     {
       name: 'MessageSendButtons',
-      description: 'Send an interactive message with reply/URL/call/copy buttons.',
+      description:
+        'Send an interactive message with buttons. Supported types: reply, url, call, copy, '
+        + 'catalog (opens the WhatsApp catalog), location (shares a static location) and flow '
+        + '(launches a Flow published in Meta Business Manager). WhatsApp renders at most 3 buttons.',
       tier: 'write',
       category: 'message',
       sessionScoped: true,
@@ -401,12 +404,17 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
         sessionId,
         chatId: z.string().describe('Chat JID'),
         buttons: z.array(z.object({
-          type: z.enum(['reply', 'url', 'call', 'copy']),
+          type: z.enum(['reply', 'url', 'call', 'copy', 'catalog', 'location', 'flow']),
           text: z.string().describe('Button label'),
           id: z.string().optional().describe('Button ID (for reply buttons)'),
           url: z.string().optional().describe('URL (for url buttons)'),
           phoneNumber: z.string().optional().describe('Phone number (for call buttons)'),
           copyCode: z.string().optional().describe('Code to copy (for copy buttons)'),
+          catalogId: z.string().optional().describe('Catalog ID (for catalog buttons); omit to open the account catalog'),
+          flowId: z.string().optional().describe('Published Flow ID (for flow buttons)'),
+          flowToken: z.string().optional().describe('Flow token passed to the flow endpoint (for flow buttons)'),
+          flowAction: z.enum(['navigate', 'data_exchange']).optional().describe('Flow action (for flow buttons)'),
+          flowCta: z.string().optional().describe('Label on a flow button; defaults to the button text'),
         })).min(1).describe('Buttons to display (1-3 typically)'),
         header: z.string().optional().describe('Header text'),
         body: z.string().optional().describe('Body text'),

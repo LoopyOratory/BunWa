@@ -11,6 +11,12 @@ function toName(type: ButtonType) {
       return 'cta_call';
     case ButtonType.COPY:
       return 'cta_copy';
+    case ButtonType.CATALOG:
+      return 'cta_catalog';
+    case ButtonType.LOCATION:
+      return 'send_location';
+    case ButtonType.FLOW:
+      return 'flow';
   }
 }
 
@@ -38,6 +44,21 @@ export function buttonToJson(button: Button) {
     case ButtonType.URL:
       buttonParams.url = button.url;
       buttonParams.merchant_url = button.url;
+      break;
+    case ButtonType.CATALOG:
+      if (button.catalogId) {
+        buttonParams.catalog_id = button.catalogId;
+      }
+      break;
+    case ButtonType.LOCATION:
+      // send_location takes no parameters.
+      break;
+    case ButtonType.FLOW:
+      buttonParams.flow_message_version = '3';
+      buttonParams.flow_token = button.flowToken || 'unused';
+      buttonParams.flow_id = button.flowId;
+      buttonParams.flow_cta = button.flowCta || button.text;
+      buttonParams.flow_action = button.flowAction || 'navigate';
       break;
   }
   return {
