@@ -1,6 +1,11 @@
-import { Database } from 'bun:sqlite';
+import type { Database } from 'bun:sqlite';
 import pino from 'pino';
 import { injectable } from 'tsyringe';
+import { TemplateRepositoryFactory } from './TemplateRepositoryFactory';
+import type { ITemplateRepository } from './ITemplateRepository';
+import type { Template, TemplateCreateDto, TemplateUpdateDto } from './template.types';
+
+export type { Template, TemplateCreateDto, TemplateUpdateDto } from './template.types';
 
 const logger = pino({ name: 'TemplateService' });
 
@@ -8,77 +13,33 @@ const NAME_MAX_LENGTH = 100;
 const BODY_MAX_LENGTH = 4096;
 const HEADER_FOOTER_MAX_LENGTH = 1024;
 
-export interface TemplateCreateDto {
-  name: string;
-  body: string;
-  header?: string | null;
-  footer?: string | null;
-}
-
-export interface TemplateUpdateDto {
-  name?: string;
-  body?: string;
-  header?: string | null;
-  footer?: string | null;
-}
-
-export interface Template {
-  id: string;
-  sessionId: string;
-  name: string;
-  body: string;
-  header: string | null;
-  footer: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
 function generateId(): string {
   return crypto.randomUUID();
 }
 
 /**
  * Message template service ported from OpenWA's template.service.ts.
- * Uses bun:sqlite for CRUD operations, variable substitution ({{name}}),
- * template validation, and preview rendering.
+ * Validation, variable substitution ({{name}}) and preview rendering live
+ * here; persistence sits behind ITemplateRepository so templates follow the
+ * configured database (SQLite file or PostgreSQL) instead of always writing
+ * a local templates.db that is lost when the container is replaced.
  *
  * Configurable via environment variables:
- *   WAHA_STORAGE_DIR — Directory for templates.db (default: './data')
+ *   WAHA_DATABASE_DRIVER — 'postgres'/'postgresql' for PostgreSQL, else SQLite
+ *   WAHA_STORAGE_DIR     — Directory for templates.db when using SQLite (default: './data')
  */
 @injectable()
 export class TemplateService {
-  private db: Database;
+  private readonly repository: ITemplateRepository;
+  /** Resolves once the repository schema exists; every operation awaits it. */
+  private readonly ready: Promise<void>;
 
   constructor(dbOrPath?: Database | string) {
-    if (typeof dbOrPath === 'string') {
-      this.db = new Database(`${dbOrPath}/templates.db`);
-    } else if (dbOrPath instanceof Database) {
-      this.db = dbOrPath;
-    } else {
-      const storageDir = process.env.WAHA_STORAGE_DIR ?? './data';
-      this.db = new Database(`${storageDir}/templates.db`);
-    }
-
-    this.db.run('PRAGMA journal_mode = WAL');
-    this.initSchema();
-  }
-
-  private initSchema(): void {
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS templates (
-        id TEXT PRIMARY KEY,
-        sessionId TEXT NOT NULL,
-        name TEXT NOT NULL,
-        body TEXT NOT NULL,
-        header TEXT,
-        footer TEXT,
-        createdAt TEXT NOT NULL,
-        updatedAt TEXT NOT NULL,
-        UNIQUE(sessionId, name)
-      )
-    `);
-
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_templates_session ON templates(sessionId)`);
+    this.repository = new TemplateRepositoryFactory().create(dbOrPath);
+    this.ready = this.repository.init();
+    // The constructor stays synchronous, so a rejected init would otherwise be
+    // an unhandled rejection before the first operation observes it.
+    this.ready.catch(() => {});
   }
 
   /**
@@ -142,12 +103,8 @@ export class TemplateService {
     };
 
     try {
-      this.db.run(
-        `INSERT INTO templates (id, sessionId, name, body, header, footer, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [template.id, template.sessionId, template.name, template.body,
-         template.header, template.footer, template.createdAt, template.updatedAt],
-      );
+      await this.ready;
+      await this.repository.create(template);
       logger.info({ sessionId, templateId: template.id, name: template.name }, 'Template created');
       return template;
     } catch (err) {
@@ -162,18 +119,16 @@ export class TemplateService {
    * Find all templates for a session.
    */
   async findBySession(sessionId: string): Promise<Template[]> {
-    return this.db
-      .query(`SELECT * FROM templates WHERE sessionId = ? ORDER BY createdAt DESC`)
-      .all(sessionId) as Template[];
+    await this.ready;
+    return this.repository.findBySession(sessionId);
   }
 
   /**
    * Find a template by id within a session.
    */
   async findOne(sessionId: string, id: string): Promise<Template> {
-    const template = this.db
-      .query(`SELECT * FROM templates WHERE id = ? AND sessionId = ?`)
-      .get(id, sessionId) as Template | undefined;
+    await this.ready;
+    const template = await this.repository.findOne(sessionId, id);
 
     if (!template) {
       throw new Error(`Template with id '${id}' not found`);
@@ -196,9 +151,8 @@ export class TemplateService {
     }
 
     if (templateName) {
-      const template = this.db
-        .query(`SELECT * FROM templates WHERE name = ? AND sessionId = ? ORDER BY createdAt ASC`)
-        .get(templateName, sessionId) as Template | undefined;
+      await this.ready;
+      const template = await this.repository.findByName(sessionId, templateName);
 
       if (!template) {
         throw new Error(`Template with name '${templateName}' not found`);
@@ -224,10 +178,7 @@ export class TemplateService {
     this.validate({ name: template.name, body: template.body }, false);
 
     try {
-      this.db.run(
-        `UPDATE templates SET name = ?, body = ?, header = ?, footer = ?, updatedAt = ? WHERE id = ? AND sessionId = ?`,
-        [template.name, template.body, template.header, template.footer, template.updatedAt, id, sessionId],
-      );
+      await this.repository.update(template);
       return template;
     } catch (err) {
       if (this.isUniqueViolation(err)) {
@@ -242,7 +193,7 @@ export class TemplateService {
    */
   async delete(sessionId: string, id: string): Promise<void> {
     await this.findOne(sessionId, id); // throws if not found
-    this.db.run(`DELETE FROM templates WHERE id = ? AND sessionId = ?`, [id, sessionId]);
+    await this.repository.delete(sessionId, id);
     logger.info({ sessionId, templateId: id }, 'Template deleted');
   }
 
