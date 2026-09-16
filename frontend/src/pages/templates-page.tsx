@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Plus, Trash2, FileText, Eye, Variable, ScrollText, MessageSquare, MousePointerClick } from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Plus, Trash2, FileText, Eye, Variable, ScrollText, MessageSquare, MousePointerClick, Send, Loader2 } from "lucide-react"
 import { PageLayout } from "@/components/page-layout"
 import { toast } from "sonner"
 import { api, getApiAuthHeaders, type Session } from "@/lib/api"
@@ -52,6 +52,12 @@ export function TemplatesPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null)
   const [formData, setFormData] = useState({ name: "", body: "", header: "", footer: "" })
+  const [variableValues, setVariableValues] = useState<Record<string, string>>({})
+  const [chatId, setChatId] = useState("")
+  const [previewText, setPreviewText] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [sendLoading, setSendLoading] = useState(false)
+  const [dialogError, setDialogError] = useState<string | null>(null)
 
   // Both loaders await before touching state, so the initial-load effects never
   // trigger cascading renders.
@@ -122,14 +128,68 @@ export function TemplatesPage() {
     return [...new Set(matches.map(m => m.replace(/[{}]/g, "")))]
   }
 
-  function renderPreview(template: Template): string {
-    const vars: Record<string, string> = {}
-    extractVariables(template.body).forEach(v => vars[v] = `[${v}]`)
-    let result = ""
-    if (template.header) result += template.header.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] || `{{${k}}}`) + "\n\n"
-    result += template.body.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] || `{{${k}}}`)
-    if (template.footer) result += "\n\n" + template.footer.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] || `{{${k}}}`)
-    return result
+  function openTemplateDialog(template: Template) {
+    const values: Record<string, string> = {}
+    extractVariables(template.body).forEach(v => { values[v] = "" })
+    setVariableValues(values)
+    setChatId("")
+    setPreviewText(null)
+    setDialogError(null)
+    setPreviewTemplate(template)
+  }
+
+  async function runPreview() {
+    if (!previewTemplate) return
+    setPreviewLoading(true)
+    setDialogError(null)
+    try {
+      const res = await fetch(`/api/sessions/${selectedSession}/templates/${previewTemplate.id}/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ variables: variableValues }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || data.error || `Request failed (${res.status})`)
+      setPreviewText(typeof data.text === "string" ? data.text : "")
+      // The route reads the header, body and footer, so its variable list is
+      // authoritative. Merge in any names the local body-only scan missed.
+      const names: string[] = Array.isArray(data.variables) ? data.variables : []
+      if (names.length > 0) {
+        setVariableValues(values => {
+          const next = { ...values }
+          for (const name of names) if (!(name in next)) next[name] = ""
+          return next
+        })
+      }
+    } catch (err) {
+      setPreviewText(null)
+      setDialogError(err instanceof Error ? err.message : "Could not preview this template")
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  async function sendTemplate() {
+    if (!previewTemplate) return
+    const target = chatId.trim()
+    if (!target) return
+    setSendLoading(true)
+    setDialogError(null)
+    try {
+      const res = await fetch(`/api/sessions/${selectedSession}/templates/${previewTemplate.id}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ chatId: target, variables: variableValues }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || data.error || `Request failed (${res.status})`)
+      toast.success("Template sent")
+      setPreviewTemplate(null)
+    } catch (err) {
+      setDialogError(err instanceof Error ? err.message : "Could not send this template")
+    } finally {
+      setSendLoading(false)
+    }
   }
 
   const newTemplateDialog = (
@@ -274,20 +334,17 @@ export function TemplatesPage() {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="whitespace-pre-wrap rounded-lg bg-muted/40 p-3 font-mono text-sm text-muted-foreground line-clamp-3">{template.body}</div>
-                    {vars.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {vars.map(v => (
-                          <Badge key={v} variant="outline" className="font-mono text-xs">
-                            <Variable className="size-3" strokeWidth={1.75} />{v}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
                     <div className="flex items-center gap-2 border-t border-border pt-3">
-                      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setPreviewTemplate(template)}>
+                      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openTemplateDialog(template)}>
                         <Eye className="size-4" strokeWidth={1.75} />
                         Preview
                       </Button>
+                      {vars.length > 0 && (
+                        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openTemplateDialog(template)}>
+                          <Variable className="size-4" strokeWidth={1.75} />
+                          Variables ({vars.length})
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"
@@ -307,28 +364,75 @@ export function TemplatesPage() {
         )}
 
         <Dialog open={!!previewTemplate} onOpenChange={() => setPreviewTemplate(null)}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Preview: {previewTemplate?.name}</DialogTitle>
-              <DialogDescription>Sample rendering with placeholder values.</DialogDescription>
+              <DialogTitle>Preview and send: {previewTemplate?.name}</DialogTitle>
+              <DialogDescription>
+                Fill in the variable values, preview the rendered message and send it to a chat.
+              </DialogDescription>
             </DialogHeader>
-            <div className="min-h-[200px] rounded-lg border border-border bg-muted/40 p-5">
-              <div className="ml-auto max-w-[85%]">
-                <div className="rounded-2xl rounded-br-md bg-primary p-4 text-primary-foreground shadow-sm">
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{previewTemplate && renderPreview(previewTemplate)}</p>
+            <div className="space-y-4">
+              {Object.keys(variableValues).length === 0 ? (
+                <p className="text-sm text-muted-foreground">This template does not use any variables.</p>
+              ) : (
+                <div className="max-h-56 space-y-3 overflow-y-auto pe-1">
+                  {Object.keys(variableValues).map(name => (
+                    <div key={name} className="space-y-1.5">
+                      <Label htmlFor={`template-variable-${name}`} className="font-mono text-xs">{name}</Label>
+                      <Input
+                        id={`template-variable-${name}`}
+                        value={variableValues[name]}
+                        onChange={e => setVariableValues(values => ({ ...values, [name]: e.target.value }))}
+                        placeholder={`Value for ${name}`}
+                      />
+                    </div>
+                  ))}
                 </div>
-                <p className="mt-1 text-right text-xs text-muted-foreground">just now</p>
+              )}
+
+              <div className="space-y-2">
+                <Button variant="outline" onClick={runPreview} disabled={previewLoading}>
+                  {previewLoading ? (
+                    <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
+                  ) : (
+                    <Eye strokeWidth={1.75} />
+                  )}
+                  Preview
+                </Button>
+                {previewText !== null && (
+                  <div className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border border-border bg-muted/40 p-3 text-sm">
+                    {previewText}
+                  </div>
+                )}
+              </div>
+
+              {dialogError && (
+                <p role="alert" className="rounded-md border border-error-border bg-error-bg px-3 py-2 text-xs text-error-foreground">
+                  {dialogError}
+                </p>
+              )}
+
+              <div className="space-y-1.5 border-t border-border pt-4">
+                <Label htmlFor="template-chat-id">Chat ID</Label>
+                <Input
+                  id="template-chat-id"
+                  value={chatId}
+                  onChange={e => setChatId(e.target.value)}
+                  placeholder="15551234567@c.us"
+                />
               </div>
             </div>
-            {previewTemplate && extractVariables(previewTemplate.body).length > 0 && (
-              <div className="flex flex-wrap justify-center gap-1.5">
-                {extractVariables(previewTemplate.body).map(v => (
-                  <Badge key={v} variant="secondary" className="font-mono text-xs">
-                    <Variable className="size-3" strokeWidth={1.75} />{v}
-                  </Badge>
-                ))}
-              </div>
-            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setPreviewTemplate(null)}>Cancel</Button>
+              <Button
+                onClick={sendTemplate}
+                disabled={!chatId.trim() || sendLoading}
+                title={!chatId.trim() ? "Enter a chat ID to send this message" : undefined}
+              >
+                {sendLoading ? <Loader2 className="size-4 animate-spin" strokeWidth={1.75} /> : <Send strokeWidth={1.75} />}
+                Send
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
