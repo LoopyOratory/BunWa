@@ -17,7 +17,7 @@ export function ChatComposerWrapper({
   onSend,
   onTyping,
   onFileUpload,
-  placeholder = "Type a message...",
+  placeholder = "Type a message",
   disabled = false,
   replyingTo,
   onCancelReply,

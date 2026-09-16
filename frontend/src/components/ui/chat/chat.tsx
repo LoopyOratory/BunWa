@@ -12,6 +12,7 @@ import {
   AlertCircle,
   Reply,
   SmilePlus,
+  Smile,
   MoreHorizontal,
   Pin,
   Pencil,
@@ -62,7 +63,8 @@ function useChatContext() {
 
 interface ChatProviderProps {
   currentUser: ChatUser
-  theme?: ChatTheme
+  /** Built-in themes plus the WhatsApp Web look, which is the default. */
+  theme?: ChatTheme | "whatsapp"
   dateFormat?: "relative" | "absolute" | "time-only"
   messageGroupingInterval?: number
   onReactionAdd?: (messageId: string, emoji: string) => void
@@ -78,7 +80,7 @@ interface ChatProviderProps {
 
 function ChatProvider({
   currentUser,
-  theme = "lunar",
+  theme = "whatsapp",
   dateFormat = "relative",
   messageGroupingInterval = 120,
   onReactionAdd,
@@ -408,6 +410,22 @@ function ChatMessage({
   const { currentUser } = useChatContext()
   const radiusClass = getBubbleRadius(isOutgoing, position)
   const [lightboxImage, setLightboxImage] = React.useState<string | null>(null)
+  // An image with nothing else inside the bubble: the media fills the bubble.
+  const mediaFillsBubble =
+    !message.text && !message.replyTo && !message.voice && !message.code &&
+    !message.linkPreview && !message.files?.length && !!message.images?.length
+
+  // Time, edited label and delivery ticks: one block, rendered either inline
+  // in the last line of text or as its own row under the content.
+  const meta = (
+    <>
+      {message.isEdited && <span className="italic">edited</span>}
+      <time className="tracking-[0.02em]">{formatTimestamp(timestamp)}</time>
+      {isOutgoing && message.status && (
+        <ChatMessageStatus status={message.status} />
+      )}
+    </>
+  )
 
   return (
     <div
@@ -439,7 +457,7 @@ function ChatMessage({
       <div className="flex max-w-[75%] flex-col">
         {/* Sender name — only first in group, incoming */}
         {showSender && !isOutgoing && (
-          <span className="mb-0.5 ml-3 text-[14px] font-semibold leading-tight tracking-[-0.01em] text-[var(--chat-text-secondary)]">
+          <span className="mb-0.5 ml-2 text-[13px] font-semibold leading-tight text-[var(--chat-text-secondary)]">
             {message.senderName}
           </span>
         )}
@@ -451,7 +469,8 @@ function ChatMessage({
 
           <div
             className={cn(
-              "chat-bubble relative px-3.5 py-2",
+              "chat-bubble relative",
+              mediaFillsBubble ? "p-1" : "px-2.5 py-1.5",
               isOutgoing
                 ? "bg-[var(--chat-bubble-outgoing)] text-[var(--chat-bubble-outgoing-text)]"
                 : "bg-[var(--chat-bubble-incoming)] text-[var(--chat-bubble-incoming-text)]",
@@ -466,21 +485,25 @@ function ChatMessage({
               />
             )}
 
-            {/* Text content */}
+            {/* Text content — the meta floats into the last line, like the
+                reference client, so a one-liner stays one line tall. */}
             {message.text && (
-              <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.35] tracking-[-0.01em]">
+              <p className="whitespace-pre-wrap break-words text-[14.2px] leading-[19px]">
                 {message.text}
+                <span className="chat-meta float-right ml-2 mt-[3px] flex select-none items-center gap-1">
+                  {meta}
+                </span>
               </p>
             )}
 
             {/* Images */}
             {message.images && message.images.length > 0 && (
-              <div className={cn("mt-1.5 flex flex-wrap gap-1.5", message.images.length === 1 ? "" : "")}>
+              <div className={cn("flex flex-wrap gap-1.5", mediaFillsBubble ? "" : "mt-1.5")}>
                 {message.images.map((img, idx) => (
                   <button
                     key={idx}
                     onClick={() => setLightboxImage(img.url)}
-                    className="cursor-pointer rounded-lg overflow-hidden"
+                    className="cursor-pointer overflow-hidden rounded-[calc(var(--chat-bubble-radius)-3px)]"
                     aria-label="View image"
                   >
                     <img
@@ -488,7 +511,7 @@ function ChatMessage({
                       alt={img.alt || "Image"}
                       width={img.width}
                       height={img.height}
-                      className="max-h-[200px] max-w-full rounded-lg object-cover transition-opacity hover:opacity-90"
+                      className="max-h-[240px] max-w-full rounded-[calc(var(--chat-bubble-radius)-3px)] object-cover transition-opacity hover:opacity-90"
                       loading="lazy"
                     />
                   </button>
@@ -551,23 +574,19 @@ function ChatMessage({
               <ChatVoiceMessage voice={message.voice} isOutgoing={isOutgoing} />
             )}
 
-            {/* Inline timestamp + status + edited label */}
-            <div
-              className={cn(
-                "mt-1 flex items-center gap-1",
-                isOutgoing ? "justify-end" : "justify-start"
-              )}
-            >
-              {message.isEdited && (
-                <span className="text-[10px] italic opacity-50">edited</span>
-              )}
-              <time className="text-[11px] tracking-[0.02em] opacity-60">
-                {formatTimestamp(timestamp)}
-              </time>
-              {isOutgoing && message.status && (
-                <ChatMessageStatus status={message.status} />
-              )}
-            </div>
+            {/* Meta for bubbles with no text of their own */}
+            {!message.text && !mediaFillsBubble && (
+              <div className="chat-meta mt-0.5 flex items-center justify-end gap-1">
+                {meta}
+              </div>
+            )}
+
+            {/* Media bubbles keep the meta as an overlay pill */}
+            {mediaFillsBubble && (
+              <div className="chat-meta absolute bottom-1.5 right-2 flex items-center gap-1 rounded-full bg-black/45 px-1.5 text-white">
+                {meta}
+              </div>
+            )}
           </div>
 
           {/* Pin indicator */}
@@ -623,35 +642,21 @@ function ChatMessage({
   )
 }
 
-// ─── Bubble radius helper ─────────────────────────────────────────────────────
+// ─── Bubble shape helpers ─────────────────────────────────────────────────────
+//
+// Corner radii live in chat.css (per theme) so every theme keeps its own
+// shape. The classes below only mark the direction and the position inside
+// the group: the tail is drawn on solo/last bubbles in themes that ask for it.
 
 function getBubbleRadius(
   isOutgoing: boolean,
   position: "solo" | "first" | "middle" | "last"
 ): string {
-  if (isOutgoing) {
-    switch (position) {
-      case "solo":
-        return "rounded-[18px_18px_4px_18px]"
-      case "first":
-        return "rounded-[18px_18px_4px_18px]"
-      case "middle":
-        return "rounded-[18px_4px_4px_18px]"
-      case "last":
-        return "rounded-[18px_4px_18px_18px]"
-    }
-  } else {
-    switch (position) {
-      case "solo":
-        return "rounded-[18px_18px_18px_4px]"
-      case "first":
-        return "rounded-[18px_18px_18px_4px]"
-      case "middle":
-        return "rounded-[4px_18px_18px_4px]"
-      case "last":
-        return "rounded-[4px_18px_18px_18px]"
-    }
-  }
+  return cn(
+    isOutgoing ? "chat-bubble-out" : "chat-bubble-in",
+    `chat-bubble-${position}`,
+    (position === "solo" || position === "last") && "chat-bubble-tail"
+  )
 }
 
 // ─── ChatMessageStatus ────────────────────────────────────────────────────────
@@ -698,7 +703,7 @@ function ChatMessageReactions({
   return (
     <div
       className={cn(
-        "mt-1 flex flex-wrap gap-1",
+        "relative z-10 -mt-2.5 flex flex-wrap gap-1",
         isOutgoing ? "justify-end" : "justify-start"
       )}
     >
@@ -715,17 +720,17 @@ function ChatMessageReactions({
               }
             }}
             className={cn(
-              "chat-reaction-pop flex h-[26px] items-center gap-1 rounded-full border px-2 text-xs tabular-nums transition-all hover:scale-105",
+              "chat-reaction-pop flex h-6 items-center gap-1 rounded-full border px-1.5 text-[11px] tabular-nums shadow-[var(--chat-shadow-sm)] transition-transform hover:scale-105",
               hasReacted
-                ? "border-[var(--chat-accent)]/30 bg-[var(--chat-accent-soft)]"
-                : "border-[var(--chat-border)] bg-[var(--chat-bg-sidebar)] hover:bg-[var(--chat-accent-soft)]"
+                ? "border-[var(--chat-accent)]/50 bg-[var(--chat-bg-composer)]"
+                : "border-[var(--chat-border-strong)] bg-[var(--chat-bg-composer)]"
             )}
             aria-label={`${r.emoji} ${r.count} reaction${r.count !== 1 ? "s" : ""}`}
           >
-            <span className="text-sm">{r.emoji}</span>
+            <span className="text-[13px] leading-none">{r.emoji}</span>
             <span
               className={cn(
-                "text-[12px] font-medium",
+                "text-[11px] font-medium",
                 hasReacted
                   ? "text-[var(--chat-accent)]"
                   : "text-[var(--chat-text-secondary)]"
@@ -740,7 +745,7 @@ function ChatMessageReactions({
       <div className="relative">
         <button
           onClick={() => setShowPicker(!showPicker)}
-          className="flex size-[26px] items-center justify-center rounded-full border border-dashed border-[var(--chat-border)] text-[var(--chat-text-tertiary)] opacity-0 transition-all hover:border-[var(--chat-accent)] hover:text-[var(--chat-accent)] group-hover/message:opacity-100"
+          className="flex size-6 items-center justify-center rounded-full border border-dashed border-[var(--chat-border-strong)] bg-[var(--chat-bg-composer)] text-[var(--chat-text-tertiary)] opacity-0 transition-all hover:border-[var(--chat-accent)] hover:text-[var(--chat-accent)] group-hover/message:opacity-100"
           aria-label="Add reaction"
         >
           <SmilePlus className="size-3" />
@@ -863,15 +868,13 @@ function ChatDateSeparator({ label, className }: ChatDateSeparatorProps) {
   return (
     <div
       className={cn(
-        "chat-date-separator my-6 flex items-center gap-4",
+        "chat-date-separator my-4 flex justify-center",
         className
       )}
     >
-      <div className="h-px flex-1 bg-[var(--chat-border)]" />
-      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--chat-text-tertiary)]">
+      <span className="rounded-full bg-[var(--chat-bg-date)] px-3 py-1 text-[11px] font-medium leading-[15px] text-[var(--chat-date-text)] tabular-nums shadow-[var(--chat-shadow-sm)] backdrop-blur-sm">
         {label}
       </span>
-      <div className="h-px flex-1 bg-[var(--chat-border)]" />
     </div>
   )
 }
@@ -887,11 +890,11 @@ function ChatSystemMessage({ message, className }: ChatSystemMessageProps) {
   return (
     <div
       className={cn(
-        "chat-system-message my-4 flex justify-center",
+        "chat-system-message my-3 flex justify-center",
         className
       )}
     >
-      <span className="text-[13px] font-medium tracking-[0.01em] text-[var(--chat-text-secondary)]">
+      <span className="max-w-[85%] rounded-full bg-[var(--chat-bg-date)] px-3 py-1 text-center text-[11px] font-medium leading-[15px] text-[var(--chat-date-text)] shadow-[var(--chat-shadow-sm)]">
         {message.text || message.systemEvent}
       </span>
     </div>
@@ -942,7 +945,7 @@ function ChatTypingIndicator({ users, className }: ChatTypingIndicatorProps) {
         </span>
 
         {/* Dots bubble */}
-        <div className="flex w-16 items-center justify-center gap-1 rounded-[18px_18px_18px_4px] bg-[var(--chat-bubble-incoming)] px-4 py-3">
+        <div className="flex w-14 items-center justify-center gap-1 rounded-[var(--chat-bubble-radius)] rounded-bl-[var(--chat-bubble-radius-grouped)] bg-[var(--chat-bubble-incoming)] px-3 py-2.5">
           <span
             className="chat-typing-dot size-[7px] rounded-full bg-[var(--chat-text-secondary)]"
             style={{ animationDelay: "0ms" }}
@@ -977,11 +980,11 @@ function ChatReplyPreview({
   return (
     <div
       className={cn(
-        "flex items-center gap-3 border-t border-[var(--chat-border)] bg-[var(--chat-bg-sidebar)] px-4 py-2",
+        "flex items-center gap-3 border-t border-[var(--chat-border)] bg-[var(--chat-bg-composer)] px-3 py-2",
         className
       )}
     >
-      <div className="h-8 w-0.5 shrink-0 rounded-full bg-[var(--chat-accent)]" />
+      <div className="h-8 w-[3px] shrink-0 rounded-full bg-[var(--chat-accent)]" />
       <div className="min-w-0 flex-1">
         <span className="block text-[12px] font-semibold text-[var(--chat-accent)]">
           {replyingTo.senderName}
@@ -992,7 +995,7 @@ function ChatReplyPreview({
       </div>
       <button
         onClick={onCancel}
-        className="flex size-6 shrink-0 items-center justify-center rounded-full text-[var(--chat-text-tertiary)] transition-colors hover:bg-[var(--chat-accent-soft)] hover:text-[var(--chat-text-primary)]"
+        className="flex size-6 shrink-0 items-center justify-center rounded-full text-[var(--chat-text-tertiary)] transition-colors hover:bg-[var(--chat-bg-hover)] hover:text-[var(--chat-text-primary)]"
         aria-label="Cancel reply"
       >
         <X className="size-3.5" />
@@ -1032,14 +1035,14 @@ function ChatMessages({
         className
       )}
     >
-      {/* Scrollable area */}
+      {/* Scrollable area — themed wallpaper sits behind the bubbles */}
       <div
         ref={containerRef}
-        className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
+        className="chat-wallpaper min-h-0 flex-1 overflow-y-auto px-3 py-3 md:px-6"
         role="log"
         aria-live="polite"
       >
-        <div className="mx-auto w-full max-w-5xl">
+        <div className="mx-auto w-full max-w-4xl">
           {items.map((item, i) => {
             switch (item.type) {
               case "date":
@@ -1077,7 +1080,7 @@ function ChatMessages({
       <button
         onClick={() => scrollToBottom("smooth")}
         className={cn(
-          "absolute bottom-4 right-4 z-5 flex size-10 items-center justify-center rounded-full border border-[var(--chat-border-strong)] bg-[var(--chat-bg-main)] shadow-[var(--chat-shadow-md)] transition-all duration-200",
+          "absolute bottom-4 right-4 z-5 flex size-10 items-center justify-center rounded-full border border-[var(--chat-border-strong)] bg-[var(--chat-bg-composer)] shadow-[var(--chat-shadow-md)] transition-all duration-200",
           isAtBottom
             ? "pointer-events-none translate-y-2 opacity-0"
             : "translate-y-0 opacity-100"
@@ -1189,6 +1192,7 @@ function ChatComposer({
   const [isRecording, setIsRecording] = React.useState(false)
   const [recordingTime, setRecordingTime] = React.useState(0)
   const [showMicConfirm, setShowMicConfirm] = React.useState(false)
+  const [showEmoji, setShowEmoji] = React.useState(false)
   const { textareaRef, resize } = useAutoResize({ maxRows: 6 })
   const { handleKeyDown: handleTypingKeyDown, stopTyping } =
     useTypingIndicator({ onTypingChange: onTyping })
@@ -1235,6 +1239,13 @@ function ChatComposer({
     stopTyping()
     if (textareaRef.current) textareaRef.current.style.height = "auto"
   }, [value, files, disabled, onSend, textareaRef, stopTyping])
+
+  /* ── Emoji insert: appends to the draft and keeps the caret in the field ── */
+  const insertEmoji = React.useCallback((emoji: string) => {
+    setValue((prev) => `${prev}${emoji}`)
+    setShowEmoji(false)
+    textareaRef.current?.focus()
+  }, [textareaRef])
 
   const handleKeyDown = React.useCallback(
     (e: React.KeyboardEvent) => {
@@ -1414,34 +1425,34 @@ function ChatComposer({
         </div>
       )}
 
-      <div className="border-t border-[var(--chat-border)] bg-[var(--chat-bg-composer)] px-3 py-2 backdrop-blur-[20px] backdrop-saturate-[180%]">
-        <div className="mx-auto max-w-3xl">
-          <div className="flex items-end gap-2">
-            {/* + / Cancel button */}
+      <div className="bg-[var(--chat-bg-composer)] px-3 py-2 backdrop-blur-[20px] backdrop-saturate-[180%]">
+        <div className="mx-auto max-w-4xl">
+          <div className="flex items-end gap-1.5">
+            {/* Attach / Cancel — outside the field, on the left */}
             <div className="relative">
               <button
-                onClick={() => { if (isRecording) { cancelVoiceRecording(); return }; setShowMicConfirm(false); setShowAttachMenu(!showAttachMenu) }}
+                onClick={() => { if (isRecording) { cancelVoiceRecording(); return }; setShowMicConfirm(false); setShowEmoji(false); setShowAttachMenu(!showAttachMenu) }}
                 className={cn(
-                  "flex size-9 items-center justify-center rounded-full border border-[var(--chat-border)] bg-[var(--chat-bg-sidebar)] transition-all",
+                  "flex size-9 items-center justify-center rounded-full transition-all",
                   isRecording
                     ? "text-red-500 hover:bg-red-500/10"
-                    : "text-[var(--chat-text-tertiary)] hover:bg-[var(--chat-accent-soft)] hover:text-[var(--chat-text-secondary)]",
-                  !isRecording && showAttachMenu && "rotate-45 bg-[var(--chat-accent-soft)] text-[var(--chat-accent)]"
+                    : "text-[var(--chat-text-secondary)] hover:bg-[var(--chat-bg-hover)] hover:text-[var(--chat-text-primary)]",
+                  !isRecording && showAttachMenu && "rotate-45 bg-[var(--chat-bg-hover)] text-[var(--chat-accent)]"
                 )}
                 aria-label={isRecording ? "Cancel recording" : "Attachments"}
               >
-                {isRecording ? <X className="size-5" /> : <Plus className="size-5" />}
+                {isRecording ? <X className="size-5" /> : <Plus className="size-5" strokeWidth={1.75} />}
               </button>
 
               {!isRecording && showAttachMenu && (
-                <div className="chat-toolbar-enter absolute bottom-full left-0 mb-2 w-44 overflow-hidden rounded-xl border border-[var(--chat-border-strong)] bg-[var(--chat-bg-sidebar)] py-1 shadow-[var(--chat-shadow-toolbar)]">
+                <div className="chat-toolbar-enter absolute bottom-full left-0 mb-2 w-44 overflow-hidden rounded-md border border-[var(--chat-border-strong)] bg-[var(--chat-bg-composer)] py-1 shadow-[var(--chat-shadow-toolbar)]">
                   {mediaItems.map(({ label, icon: Icon, type }) => (
                     <button
                       key={type}
                       onClick={() => handleMediaSelect(type)}
-                      className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-accent-soft)] hover:text-[var(--chat-text-primary)]"
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-bg-hover)] hover:text-[var(--chat-text-primary)]"
                     >
-                      <Icon className="size-4" />
+                      <Icon className="size-4" strokeWidth={1.75} />
                       {label}
                     </button>
                   ))}
@@ -1449,9 +1460,9 @@ function ChatComposer({
               )}
 
               {showMicConfirm && (
-                <div className="chat-toolbar-enter absolute bottom-full left-0 mb-2 w-72 overflow-hidden rounded-xl border border-[var(--chat-border-strong)] bg-[var(--chat-bg-sidebar)] p-4 shadow-lg">
+                <div className="chat-toolbar-enter absolute bottom-full left-0 mb-2 w-72 overflow-hidden rounded-md border border-[var(--chat-border-strong)] bg-[var(--chat-bg-composer)] p-4 shadow-[var(--chat-shadow-toolbar)]">
                   <div className="flex items-start gap-3">
-                    <Mic className="size-5 text-emerald-500 shrink-0 mt-0.5" />
+                    <Mic className="size-5 shrink-0 text-[var(--chat-accent)] mt-0.5" strokeWidth={1.75} />
                     <div>
                       <p className="text-sm font-semibold text-[var(--chat-text-primary)]">Microphone access</p>
                       <p className="mt-1 text-xs text-[var(--chat-text-secondary)] leading-relaxed">
@@ -1460,10 +1471,10 @@ function ChatComposer({
                     </div>
                   </div>
                   <div className="mt-3 flex justify-end gap-2">
-                    <button onClick={() => setShowMicConfirm(false)} className="px-3 py-1.5 text-xs font-medium rounded-lg text-[var(--chat-text-secondary)] hover:bg-[var(--chat-accent-soft)] transition-colors">
+                    <button onClick={() => setShowMicConfirm(false)} className="px-3 py-1.5 text-xs font-medium rounded-md text-[var(--chat-text-secondary)] hover:bg-[var(--chat-bg-hover)] transition-colors">
                       Cancel
                     </button>
-                    <button onClick={() => { setShowMicConfirm(false); startVoiceRecording() }} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors">
+                    <button onClick={() => { setShowMicConfirm(false); startVoiceRecording() }} className="px-3 py-1.5 text-xs font-medium rounded-md bg-[var(--chat-accent)] text-white hover:opacity-90 transition-opacity">
                       Continue
                     </button>
                   </div>
@@ -1474,15 +1485,15 @@ function ChatComposer({
             <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = "" }} />
             <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = "" }} />
 
-            {/* Recording UI / Textarea */}
+            {/* Recording UI / pill field */}
             {isRecording ? (
-              <div className="flex flex-1 items-center gap-3 rounded-[22px] border border-red-500/30 bg-[var(--chat-bg-sidebar)] px-4 py-[10px]">
+              <div className="flex flex-1 items-center gap-3 rounded-full bg-[var(--chat-bg-input)] px-4 py-2.5">
                 <span className="size-2.5 shrink-0 rounded-full bg-red-500 animate-pulse" />
-                <span className="font-mono tabular-nums text-[15px] text-[var(--chat-text-primary)]">{timerStr}</span>
-                <span className="hidden sm:inline text-[13px] text-[var(--chat-text-tertiary)]">Recording...</span>
+                <span className="metric font-mono text-[14px] text-[var(--chat-text-primary)]">{timerStr}</span>
+                <span className="hidden sm:inline text-[13px] text-[var(--chat-text-secondary)]">Recording...</span>
               </div>
             ) : (
-              <div className="relative flex flex-1 items-end rounded-[22px] border border-[var(--chat-border)] bg-[var(--chat-bg-sidebar)]">
+              <div className="relative flex flex-1 items-end rounded-full bg-[var(--chat-bg-input)] py-1 pl-2 pr-1">
                 <textarea
                   ref={textareaRef}
                   value={value}
@@ -1492,24 +1503,51 @@ function ChatComposer({
                   placeholder={placeholder}
                   disabled={disabled}
                   rows={1}
-                  className="flex-1 resize-none bg-transparent py-[10px] pl-4 pr-12 text-[15px] leading-[22px] tracking-[-0.01em] text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-tertiary)] focus:outline-none disabled:opacity-50"
+                  className="flex-1 resize-none bg-transparent py-[9px] pl-2 pr-1 text-[15px] leading-[20px] text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-tertiary)] focus:outline-none disabled:opacity-50"
                   style={{ overflow: "hidden", maxHeight: "160px" }}
                 />
 
-                {isRecording ? (
-                  <button onClick={stopVoiceRecording} className="absolute bottom-[6px] right-[6px] flex size-8 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors" aria-label="Stop recording">
-                    <Square className="size-4" />
+                {/* Emoji — inside the field, on the right */}
+                <div className="relative shrink-0">
+                  <button
+                    onClick={() => { setShowAttachMenu(false); setShowEmoji(!showEmoji) }}
+                    className={cn(
+                      "mb-0.5 flex size-8 items-center justify-center rounded-full transition-colors",
+                      showEmoji
+                        ? "bg-[var(--chat-bg-hover)] text-[var(--chat-text-primary)]"
+                        : "text-[var(--chat-text-secondary)] hover:bg-[var(--chat-bg-hover)] hover:text-[var(--chat-text-primary)]"
+                    )}
+                    aria-label="Insert emoji"
+                  >
+                    <Smile className="size-[18px]" strokeWidth={1.75} />
                   </button>
-                ) : !hasContent && onVoiceRecord ? (
-                  <button onClick={onVoiceRecord} disabled={disabled} className="absolute bottom-[6px] right-[6px] flex size-8 items-center justify-center rounded-full text-[var(--chat-text-tertiary)] transition-colors hover:text-[var(--chat-accent)]" aria-label="Record voice message">
-                    <Mic className="size-4" strokeWidth={2.5} />
-                  </button>
-                ) : (
-                  <button onClick={handleSend} disabled={!hasContent || disabled} className={cn("absolute bottom-[6px] right-[6px] flex size-8 items-center justify-center rounded-full transition-all duration-200", hasContent ? "bg-[var(--chat-accent)] text-white hover:scale-105 active:scale-95" : "bg-transparent text-[var(--chat-text-tertiary)]")} aria-label="Send message">
-                    <ArrowUp className="size-4" strokeWidth={2.5} />
-                  </button>
-                )}
+                  {showEmoji && (
+                    <div className="absolute bottom-full right-0 z-20 mb-2">
+                      <QuickReactionPicker onSelect={insertEmoji} onClose={() => setShowEmoji(false)} />
+                    </div>
+                  )}
+                </div>
               </div>
+            )}
+
+            {/* Mic when the field is empty, send when there is text */}
+            {isRecording ? (
+              <button onClick={stopVoiceRecording} className="flex size-10 shrink-0 items-center justify-center rounded-full bg-red-500 text-white transition-colors hover:bg-red-600" aria-label="Stop recording">
+                <Square className="size-4" />
+              </button>
+            ) : hasContent ? (
+              <button onClick={handleSend} disabled={disabled} className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--chat-accent)] text-white transition-transform hover:scale-105 active:scale-95 disabled:opacity-50" aria-label="Send message">
+                <ArrowUp className="size-5" strokeWidth={1.75} />
+              </button>
+            ) : (
+              <button
+                onClick={() => { setShowAttachMenu(false); setShowEmoji(false); if (onVoiceRecorded) setShowMicConfirm(true); else onVoiceRecord?.() }}
+                disabled={disabled || (!onVoiceRecord && !onVoiceRecorded)}
+                className="flex size-10 shrink-0 items-center justify-center rounded-full text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-bg-hover)] hover:text-[var(--chat-text-primary)] disabled:opacity-40"
+                aria-label="Record voice message"
+              >
+                <Mic className="size-5" strokeWidth={1.75} />
+              </button>
             )}
           </div>
         </div>

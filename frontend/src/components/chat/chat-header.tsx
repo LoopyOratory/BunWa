@@ -31,42 +31,42 @@ export function ChatHeader({
   const color = avColor(chat.id, false)
 
   return (
-    <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-[var(--chat-border)] bg-[var(--chat-bg-header)] px-4 py-3 backdrop-blur-[20px] backdrop-saturate-[180%]">
+    <header className="z-10 flex items-center gap-3 border-b border-[var(--chat-border)] bg-[var(--chat-bg-header)] px-3 py-2 md:px-4">
       <button
         onClick={onBack}
         aria-label="Back to conversations"
-        className="mr-1 text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)] md:hidden"
+        className="flex size-8 shrink-0 items-center justify-center rounded-full text-[var(--chat-text-secondary)] hover:bg-[var(--chat-bg-hover)] hover:text-[var(--chat-text-primary)] md:hidden"
       >
         <ChevronLeft className="size-5" strokeWidth={1.75} />
       </button>
 
-      <Avatar className="size-9 shrink-0">
+      <Avatar className="size-10 shrink-0">
         <AvatarImage src={picture || chat.picture} />
-        <AvatarFallback className="text-xs font-semibold" style={{ background: color.bg, color: color.fg }}>
+        <AvatarFallback className="text-xs" style={{ background: color.bg, color: color.fg }}>
           {chatInitials(chat, contacts)}
         </AvatarFallback>
       </Avatar>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-[15px] font-semibold tracking-[-0.02em] text-[var(--chat-text-primary)]">
+        <span className="truncate text-[16px] font-bold leading-[21px] text-[var(--chat-text-primary)]">
           {chatName(chat, contacts)}
         </span>
-        <span className="truncate text-[12px] font-mono metric text-[var(--chat-text-secondary)]">
+        <span className="metric truncate text-[13px] leading-[18px] text-[var(--chat-accent)]">
           {chat.id.split("@")[0]}
         </span>
       </div>
 
-      <div className="flex items-center gap-1">
+      <div className="flex shrink-0 items-center gap-0.5">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               aria-label="Archive chat"
               variant="ghost"
               size="icon"
-              className="size-8 rounded-lg text-[var(--chat-text-secondary)] hover:bg-[var(--chat-accent-soft)] hover:text-[var(--chat-text-primary)]"
+              className="size-9 rounded-full text-[var(--chat-text-secondary)] hover:bg-[var(--chat-bg-hover)] hover:text-[var(--chat-text-primary)]"
               onClick={onArchive}
             >
-              <Archive className="size-[16px]" strokeWidth={1.75} />
+              <Archive className="size-[18px]" strokeWidth={1.75} />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Archive</TooltipContent>
@@ -78,12 +78,12 @@ export function ChatHeader({
               aria-label="More options"
               variant="ghost"
               size="icon"
-              className="size-8 rounded-lg text-[var(--chat-text-secondary)] hover:bg-[var(--chat-accent-soft)] hover:text-[var(--chat-text-primary)]"
+              className="size-9 rounded-full text-[var(--chat-text-secondary)] hover:bg-[var(--chat-bg-hover)] hover:text-[var(--chat-text-primary)]"
             >
-              <MoreVertical className="size-[16px]" strokeWidth={1.75} />
+              <MoreVertical className="size-[18px]" strokeWidth={1.75} />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[140px]">
+          <DropdownMenuContent align="end" className="min-w-[160px]">
             <DropdownMenuItem onClick={onMarkUnread} className="cursor-pointer text-xs">
               <MessageSquarePlus className="size-3.5 mr-2" strokeWidth={1.75} /> Mark unread
             </DropdownMenuItem>

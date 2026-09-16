@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback, useMemo, type CSSProperties, type ReactNode, type RefObject } from "react"
+import { useEffect, useState, useRef, useCallback, useMemo, type ReactNode, type RefObject } from "react"
 import { RefreshCw, CircleDot, Trash2, Mic, Square, Plus, Upload, MessageSquare, TriangleAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -874,73 +874,77 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   /* ── Empty state: no session ── */
   if (!selectedSession) {
     return (
-      <div className="flex h-dvh flex-col overflow-hidden bg-[var(--chat-bg-main)]">
-        <div className="p-3 md:hidden">
-          <SidebarTrigger />
-        </div>
-        <div className="flex flex-1 items-center justify-center px-4">
-          {sessionsError ? (
-            <div className="w-full max-w-md">
-              <ErrorState
-                title="Could not load sessions"
-                description="The sessions API did not respond."
-                onRetry={loadSessions}
+      <ChatProvider currentUser={chatUser} theme="whatsapp" className="h-dvh" messageGroupingInterval={120}>
+        <div className="flex h-full flex-col overflow-hidden bg-[var(--chat-bg-main)]">
+          <div className="p-3 md:hidden">
+            <SidebarTrigger />
+          </div>
+          <div className="flex flex-1 items-center justify-center px-4">
+            {sessionsError ? (
+              <div className="w-full max-w-md">
+                <ErrorState
+                  title="Could not load sessions"
+                  description="The sessions API did not respond."
+                  onRetry={loadSessions}
+                />
+              </div>
+            ) : (
+              <EmptyState
+                icon={<CircleDot className="size-6" strokeWidth={1.75} />}
+                title="No active sessions"
+                description="Create and start a session first."
               />
-            </div>
-          ) : (
-            <EmptyState
-              icon={<CircleDot className="size-6" strokeWidth={1.75} />}
-              title="No active sessions"
-              description="Create and start a session first."
-            />
-          )}
+            )}
+          </div>
         </div>
-      </div>
+      </ChatProvider>
     )
   }
 
   /* ── No chat selected ── */
   if (!selectedChat) {
     return (
-      <div className="flex h-dvh overflow-hidden bg-[var(--chat-bg-main)]">
-        <ChatConversations
-          sessions={sessions}
-          selectedSession={selectedSession}
-          onSessionChange={setSelectedSession}
-          onStartSession={handleStartSession}
-          onStopSession={handleStopSession}
-          isWorking={isWorking}
-          chats={chats}
-          contacts={contacts}
-          selectedChatId={null}
-          onSelectChat={handleSelectChat}
-          loadingChats={loadingChats}
-          userPicture={userPicture}
-          onOpenNewChat={() => setNewChatOpen(true)}
-          onOpenStatus={() => setStatusOpen(true)}
-          storeDisabled={storeDisabled}
-          onRetryChats={loadChats}
-        />
-        <div className="hidden flex-1 items-center justify-center px-4 md:flex">
-          {storeDisabled ? (
-            <div className="w-full max-w-md">
-              <ErrorState
-                title={STORE_DISABLED_TITLE}
-                description={STORE_DISABLED_DESCRIPTION}
-                onRetry={loadChats}
+      <ChatProvider currentUser={chatUser} theme="whatsapp" className="h-dvh" messageGroupingInterval={120}>
+        <div className="flex h-full overflow-hidden bg-[var(--chat-bg-main)]">
+          <ChatConversations
+            sessions={sessions}
+            selectedSession={selectedSession}
+            onSessionChange={setSelectedSession}
+            onStartSession={handleStartSession}
+            onStopSession={handleStopSession}
+            isWorking={isWorking}
+            chats={chats}
+            contacts={contacts}
+            selectedChatId={null}
+            onSelectChat={handleSelectChat}
+            loadingChats={loadingChats}
+            userPicture={userPicture}
+            onOpenNewChat={() => setNewChatOpen(true)}
+            onOpenStatus={() => setStatusOpen(true)}
+            storeDisabled={storeDisabled}
+            onRetryChats={loadChats}
+          />
+          <div className="chat-wallpaper hidden flex-1 items-center justify-center px-4 md:flex">
+            {storeDisabled ? (
+              <div className="w-full max-w-md">
+                <ErrorState
+                  title={STORE_DISABLED_TITLE}
+                  description={STORE_DISABLED_DESCRIPTION}
+                  onRetry={loadChats}
+                />
+              </div>
+            ) : (
+              <EmptyState
+                icon={<MessageSquare className="size-6" strokeWidth={1.75} />}
+                title="Select a conversation"
+                description="Choose a chat from the list to start messaging."
               />
-            </div>
-          ) : (
-            <EmptyState
-              icon={<MessageSquare className="size-6" strokeWidth={1.75} />}
-              title="Select a conversation"
-              description="Choose a chat from the list to start messaging."
-            />
-          )}
+            )}
+          </div>
+          <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} session={selectedSession} onOpenChat={handleNewChatOpen} />
+          <StatusDialog open={statusOpen} onOpenChange={setStatusOpen} session={selectedSession} onSent={loadChats} />
         </div>
-        <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} session={selectedSession} onOpenChat={handleNewChatOpen} />
-        <StatusDialog open={statusOpen} onOpenChange={setStatusOpen} session={selectedSession} onSent={loadChats} />
-      </div>
+      </ChatProvider>
     )
   }
 
@@ -950,16 +954,9 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   return (
     <ChatProvider
       currentUser={chatUser}
-      theme="lunar"
+      theme="whatsapp"
       className="h-dvh"
       messageGroupingInterval={120}
-      style={{
-        "--chat-accent": "var(--primary)",
-        "--chat-accent-soft": "color-mix(in oklab, var(--primary) 10%, transparent)",
-        "--chat-green": "var(--primary)",
-        "--chat-bubble-outgoing": "var(--primary)",
-        "--chat-bubble-outgoing-text": "var(--primary-foreground)",
-      } as CSSProperties}
       onReactionAdd={handleReactionAdd}
       onReactionRemove={handleReactionRemove}
       onReply={handleReply}
@@ -1039,8 +1036,8 @@ export function ChatPage({ initialSession }: ChatPageProps) {
 
           {/* Composer toolbar: template picker above the input, visible on
               mobile where the sidebar is hidden. */}
-          <div>
-            <div className="flex items-center gap-2 border-t border-[var(--chat-border)] bg-[var(--chat-bg-composer)] px-3 pt-1.5 backdrop-blur-[20px]">
+          <div className="border-t border-[var(--chat-border)] bg-[var(--chat-bg-composer)] backdrop-blur-[20px]">
+            <div className="flex items-center gap-2 px-3 pt-2">
               <TemplatePicker
                 session={selectedSession}
                 chatId={selectedChat.id}
@@ -1050,7 +1047,7 @@ export function ChatPage({ initialSession }: ChatPageProps) {
             <ChatComposerWrapper
               onSend={handleSend}
               onTyping={handleTyping}
-              placeholder={editingMessage ? "Edit message..." : "Type a message..."}
+              placeholder={editingMessage ? "Edit message" : "Type a message"}
               disabled={!isWorking}
               replyingTo={editingMessage || replyingTo}
               onCancelReply={() => { setReplyingTo(null); setEditingMessage(null) }}

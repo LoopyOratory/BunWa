@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   chatcn — Three-Theme System (Lunar / Aurora / Ember)
+   chatcn — Five-Theme System (WhatsApp / Lunar / Aurora / Ember / Midnight)
    From chatcn-themes.md — all CSS variables per theme
    Applied via data-chat-theme attribute on ChatProvider wrapper
    ═══════════════════════════════════════════════════════════════════════ */
@@ -10,6 +10,115 @@
                     "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --chat-font-mono: "SF Mono", "JetBrains Mono", "Fira Code",
                     ui-monospace, monospace;
+
+  /* ─── Shared fallbacks ──────────────────────────────────────────────
+     Themes that do not define one of these inherit the neutral value.
+     Each one resolves against the active theme's own variables, so the
+     fallbacks stay legible in both light and dark mode. */
+  --chat-bg-hover:            rgba(127, 127, 127, 0.10);
+  --chat-bg-selected:         rgba(127, 127, 127, 0.16);
+  --chat-bg-input:            var(--chat-bg-sidebar);
+  --chat-bg-date:             rgba(127, 127, 127, 0.14);
+  --chat-date-text:           var(--chat-text-secondary);
+  --chat-unread-bg:           var(--chat-accent);
+  --chat-unread-text:         #FFFFFF;
+  --chat-wallpaper-image:     none;
+  /* Tail mask for themes that draw a bubble tail (WhatsApp). */
+  --chat-tail-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 13'%3E%3Cpath fill='%23fff' d='M5.188 0H0v11.193l6.467-8.625C7.526 1.156 6.958 0 5.188 0z'/%3E%3C/svg%3E");
+}
+
+/* ═══ THEME 5: WHATSAPP WEB (Default) ════════════════════════════════ */
+/* The reference client — compact rows, doodle wallpaper, green bubbles. */
+
+[data-chat-theme="whatsapp"] {
+  /* Light mode */
+  --chat-bg-app:              #F0F2F5;
+  --chat-bg-sidebar:          #FFFFFF;
+  --chat-bg-main:             #EFEAE2;
+  --chat-bg-header:           #F0F2F5;
+  --chat-bg-composer:         #F0F2F5;
+  --chat-bg-input:            #FFFFFF;
+  --chat-bg-hover:            #F5F6F6;
+  --chat-bg-selected:         #F0F2F5;
+  --chat-bg-date:             rgba(255, 255, 255, 0.92);
+  --chat-date-text:           #54656F;
+
+  --chat-bubble-outgoing:     #D9FDD3;
+  --chat-bubble-outgoing-text: #111B21;
+  --chat-bubble-incoming:     #FFFFFF;
+  --chat-bubble-incoming-text: #111B21;
+
+  --chat-accent:              #00A884;
+  --chat-accent-soft:         rgba(0, 168, 132, 0.10);
+  --chat-green:               #25D366;
+  --chat-orange:              #F59E0B;
+  --chat-red:                 #EA4335;
+
+  --chat-text-primary:        #111B21;
+  --chat-text-secondary:      #667781;
+  --chat-text-tertiary:       #8696A0;
+  --chat-border:              #E9EDEF;
+  --chat-border-strong:       #D1D7DB;
+
+  --chat-unread-bg:           #25D366;
+  --chat-unread-text:         #111B21;
+
+  --chat-shadow-sm:           0 1px 1px rgba(11, 20, 26, 0.06);
+  --chat-shadow-md:           0 2px 6px rgba(11, 20, 26, 0.10);
+  --chat-shadow-lg:           0 6px 24px rgba(11, 20, 26, 0.12);
+  --chat-shadow-toolbar:      0 2px 16px rgba(11, 20, 26, 0.16);
+
+  --chat-bubble-radius:       14px;
+  --chat-bubble-radius-grouped: 2px;
+  --chat-input-radius:        24px;
+  --chat-spacing-messages:    10px;
+  --chat-spacing-grouped:     2px;
+
+  --chat-wallpaper-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cg fill='none' stroke='%230B141A' stroke-opacity='0.045' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 22h44a6 6 0 0 1 6 6v20a6 6 0 0 1-6 6H32l-10 8v-8h-8a6 6 0 0 1-6-6V28a6 6 0 0 1 6-6z'/%3E%3Ccircle cx='124' cy='34' r='13'/%3E%3Cpath d='M96 108c0-11 9-19 20-19s20 8 20 19-9 19-20 19h-3l-7 6v-6h-2c-5-5-8-11-8-19z'/%3E%3Cpath d='M22 96l14 14M36 96l-14 14'/%3E%3Cpath d='M76 66h14M83 59v14'/%3E%3Cpath d='M138 132l10 10M148 132l-10 10'/%3E%3Cpath d='M28 130h18'/%3E%3C/g%3E%3C/svg%3E");
+
+  --chat-ease:                cubic-bezier(0.25, 0.1, 0.25, 1.0);
+  --chat-duration-fast:       150ms;
+  --chat-duration-normal:     250ms;
+}
+
+/* WhatsApp Web dark */
+.dark [data-chat-theme="whatsapp"],
+[data-chat-theme="whatsapp"].dark {
+  --chat-bg-app:              #0B141A;
+  --chat-bg-sidebar:          #111B21;
+  --chat-bg-main:             #0B141A;
+  --chat-bg-header:           #202C33;
+  --chat-bg-composer:         #202C33;
+  --chat-bg-input:            #2A3942;
+  --chat-bg-hover:            #202C33;
+  --chat-bg-selected:         #2A3942;
+  --chat-bg-date:             rgba(24, 34, 41, 0.92);
+  --chat-date-text:           #8696A0;
+
+  --chat-bubble-outgoing:     #005C4B;
+  --chat-bubble-outgoing-text: #E9EDEF;
+  --chat-bubble-incoming:     #202C33;
+  --chat-bubble-incoming-text: #E9EDEF;
+
+  --chat-accent:              #00A884;
+  --chat-accent-soft:         rgba(0, 168, 132, 0.14);
+  --chat-green:               #00A884;
+
+  --chat-text-primary:        #E9EDEF;
+  --chat-text-secondary:      #8696A0;
+  --chat-text-tertiary:       #667781;
+  --chat-border:              rgba(134, 150, 160, 0.15);
+  --chat-border-strong:       rgba(134, 150, 160, 0.22);
+
+  --chat-unread-bg:           #00A884;
+  --chat-unread-text:         #111B21;
+
+  --chat-shadow-sm:           0 1px 1px rgba(0, 0, 0, 0.25);
+  --chat-shadow-md:           0 2px 6px rgba(0, 0, 0, 0.35);
+  --chat-shadow-lg:           0 8px 28px rgba(0, 0, 0, 0.45);
+  --chat-shadow-toolbar:      0 2px 18px rgba(0, 0, 0, 0.45);
+
+  --chat-wallpaper-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cg fill='none' stroke='%23FFFFFF' stroke-opacity='0.035' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 22h44a6 6 0 0 1 6 6v20a6 6 0 0 1-6 6H32l-10 8v-8h-8a6 6 0 0 1-6-6V28a6 6 0 0 1 6-6z'/%3E%3Ccircle cx='124' cy='34' r='13'/%3E%3Cpath d='M96 108c0-11 9-19 20-19s20 8 20 19-9 19-20 19h-3l-7 6v-6h-2c-5-5-8-11-8-19z'/%3E%3Cpath d='M22 96l14 14M36 96l-14 14'/%3E%3Cpath d='M76 66h14M83 59v14'/%3E%3Cpath d='M138 132l10 10M148 132l-10 10'/%3E%3Cpath d='M28 130h18'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 /* ═══ THEME 1: LUNAR (Default) ═══════════════════════════════════════ */
@@ -380,4 +489,103 @@
 }
 [data-chat-theme="ember"] .chat-drop-overlay {
   border-radius: 4px;
+}
+
+/* ─── Bubble shape ─────────────────────────────────────────────────────
+   Radii come from the theme (--chat-bubble-radius) with a tighter corner
+   where grouped bubbles meet and under the tail. Only solo/last bubbles
+   carry a tail, and only themes that ask for one draw it. */
+.chat-bubble {
+  border-radius: var(--chat-bubble-radius);
+}
+.chat-bubble-in {
+  border-bottom-left-radius: var(--chat-bubble-radius-grouped);
+}
+.chat-bubble-out {
+  border-bottom-right-radius: var(--chat-bubble-radius-grouped);
+}
+.chat-bubble-in.chat-bubble-middle,
+.chat-bubble-in.chat-bubble-last {
+  border-top-left-radius: var(--chat-bubble-radius-grouped);
+}
+.chat-bubble-out.chat-bubble-middle,
+.chat-bubble-out.chat-bubble-last {
+  border-top-right-radius: var(--chat-bubble-radius-grouped);
+}
+
+/* ─── Bubble tail ──────────────────────────────────────────────────────
+   Masked to the app's tail path, tinted with the bubble colour so the
+   tail follows the theme without hard-coding two more colours. */
+[data-chat-theme="whatsapp"] .chat-bubble-tail::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 8px;
+  height: 13px;
+  pointer-events: none;
+  -webkit-mask-image: var(--chat-tail-mask);
+  mask-image: var(--chat-tail-mask);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+[data-chat-theme="whatsapp"] .chat-bubble-in.chat-bubble-tail::after {
+  left: -8px;
+  background-color: var(--chat-bubble-incoming);
+}
+[data-chat-theme="whatsapp"] .chat-bubble-out.chat-bubble-tail::after {
+  right: -8px;
+  background-color: var(--chat-bubble-outgoing);
+  transform: scaleX(-1);
+}
+
+/* ─── Wallpaper ────────────────────────────────────────────────────────
+   The chat area paints the theme wallpaper over its base colour. Themes
+   without a wallpaper pattern fall back to a plain surface. */
+.chat-wallpaper {
+  background-color: var(--chat-bg-main);
+  background-image: var(--chat-wallpaper-image);
+  background-repeat: repeat;
+  background-size: 160px 160px;
+}
+
+/* ─── Bubble meta (time + ticks) ───────────────────────────────────────
+   Tabular digits so the time and the ticks never shift the text around. */
+.chat-meta {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  font-size: 11px;
+  line-height: 15px;
+  letter-spacing: 0.02em;
+  opacity: 0.65;
+}
+
+/* WhatsApp read receipts are the light blue ticks, not the theme accent. */
+[data-chat-theme="whatsapp"] .chat-status-read {
+  color: #53BDEB;
+}
+
+/* ─── Micro animations ─────────────────────────────────────────────────
+   Inert class names the vendored components already emit. */
+@keyframes chat-toolbar-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+.chat-toolbar-enter {
+  animation: chat-toolbar-in 120ms var(--chat-ease, ease-out);
+}
+@keyframes chat-typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30%           { transform: translateY(-3px); opacity: 1; }
+}
+.chat-typing-dot {
+  animation: chat-typing-bounce 1.2s infinite ease-in-out;
+}
+
+/* ─── Composer ─────────────────────────────────────────────────────────
+   WhatsApp keeps the composer flat; the frosted glass stays opt-in. */
+[data-chat-theme="whatsapp"] .chat-composer {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }

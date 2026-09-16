@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from "react"
-import { Search, CircleDot, MessageSquarePlus, Play } from "lucide-react"
+import { Search, CircleDot, MessageSquarePlus, Play, CheckCheck, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -31,13 +31,26 @@ interface ChatConversationsProps {
   onRetryChats?: () => void
 }
 
+/* Filter pills across the top of the list, as in the reference client. */
+type ChatFilter = "all" | "unread" | "favourites" | "groups"
+
+const FILTERS: { value: ChatFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "unread", label: "Unread" },
+  { value: "favourites", label: "Favourites" },
+  { value: "groups", label: "Groups" },
+]
+
 function formatTime(ts: number): string {
   const d = new Date(ts * 1000)
   const now = new Date()
   if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  if (d.toDateString() === yesterday.toDateString()) return "Yesterday"
   const diff = Math.floor((now.getTime() - d.getTime()) / 86400000)
-  if (diff < 7) return d.toLocaleDateString([], { weekday: "short" })
-  return d.toLocaleDateString([], { month: "short", day: "numeric" })
+  if (diff < 7) return d.toLocaleDateString([], { weekday: "long" })
+  return d.toLocaleDateString([], { day: "2-digit", month: "2-digit", year: "numeric" })
 }
 
 export function ChatConversations({
@@ -58,6 +71,7 @@ export function ChatConversations({
   onRetryChats,
 }: ChatConversationsProps) {
   const [chatSearch, setChatSearch] = useState("")
+  const [filter, setFilter] = useState<ChatFilter>("all")
   const [picturesCache, setPicturesCache] = useState<Map<string, string>>(new Map())
   const [picturesError, setPicturesError] = useState(false)
   const [picturesRetry, setPicturesRetry] = useState(0)
@@ -69,10 +83,19 @@ export function ChatConversations({
     }
   }, [])
 
-  const filteredChats = useMemo(
-    () => chats.filter((c) => !chatSearch || chatName(c, contacts).toLowerCase().includes(chatSearch.toLowerCase())),
-    [chats, chatSearch, contacts]
-  )
+  const unreadTotal = chats.reduce((sum, c) => sum + (c.unreadCount ?? 0), 0)
+
+  const filteredChats = useMemo(() => {
+    const query = chatSearch.trim().toLowerCase()
+    return chats.filter((c) => {
+      if (query && !chatName(c, contacts).toLowerCase().includes(query)) return false
+      if (filter === "unread") return (c.unreadCount ?? 0) > 0
+      if (filter === "groups") return c.id.endsWith("@g.us")
+      // The overview route does not report favourites, so this list stays empty.
+      if (filter === "favourites") return false
+      return true
+    })
+  }, [chats, chatSearch, contacts, filter])
 
   useEffect(() => {
     if (!selectedSession) return
@@ -102,9 +125,20 @@ export function ChatConversations({
     return () => { cancelled = true }
   }, [filteredChats, selectedSession, contacts, picturesRetry])
 
+  const emptyCopy = filter === "unread"
+    ? { title: "No unread chats", description: "Everything in this session has been read." }
+    : filter === "favourites"
+      ? { title: "No favourite chats", description: "This session does not report favourites yet." }
+      : filter === "groups"
+        ? { title: "No group chats", description: "Group conversations will appear here." }
+        : chatSearch
+          ? { title: "No matching conversations", description: "Try a different search term." }
+          : { title: "No conversations yet", description: "Start a new chat or wait for incoming messages." }
+
   return (
-    <aside className="flex h-full w-full shrink-0 flex-col border-r border-[var(--chat-border-strong)] bg-[var(--chat-bg-sidebar)] sm:w-80">
-      <div className="flex items-center gap-1 px-3 pt-3 pb-1.5">
+    <aside className="flex h-full w-full shrink-0 flex-col border-r border-[var(--chat-border)] bg-[var(--chat-bg-sidebar)] md:w-[30%] md:min-w-[320px] md:max-w-[440px]">
+      {/* Header: account row plus the panel actions */}
+      <div className="flex items-center gap-0.5 px-2 py-1.5">
         <SidebarTrigger className="md:hidden shrink-0" />
         <div className="min-w-0 flex-1">
           <SessionSelector
@@ -115,42 +149,63 @@ export function ChatConversations({
             onStopSession={onStopSession}
           />
         </div>
+        <Tooltip><TooltipTrigger asChild>
+          <Button aria-label="Post status" variant="ghost" size="icon" className="size-8 shrink-0 rounded-full text-[var(--chat-text-secondary)] hover:bg-[var(--chat-bg-hover)] hover:text-[var(--chat-text-primary)]" onClick={onOpenStatus}>
+            <CircleDot className="size-[18px]" strokeWidth={1.75} />
+          </Button>
+        </TooltipTrigger><TooltipContent>Post status</TooltipContent></Tooltip>
       </div>
 
-      <div className="flex items-center justify-between px-4 py-1">
-        <div className="flex items-center gap-2">
-          <span className="text-[14px] font-bold tracking-tight text-[var(--chat-text-primary)]">Messages</span>
-          {chats.reduce((sum, c) => sum + (c.unreadCount ?? 0), 0) > 0 && (
-            <span className="metric flex size-[18px] items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
-              {chats.reduce((sum, c) => sum + (c.unreadCount ?? 0), 0) > 99 ? "99+" : chats.reduce((sum, c) => sum + (c.unreadCount ?? 0), 0)}
-            </span>
-          )}
-        </div>
-        <div className="flex gap-0.5">
-          <Tooltip><TooltipTrigger asChild>
-            <Button aria-label="Post status" variant="ghost" size="icon" className="size-7 text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)] hover:bg-[var(--chat-accent-soft)]" onClick={onOpenStatus}>
-              <CircleDot className="size-3.5" strokeWidth={1.75} />
-            </Button>
-          </TooltipTrigger><TooltipContent>Post status</TooltipContent></Tooltip>
-          <Tooltip><TooltipTrigger asChild>
-            <Button aria-label="New chat" variant="ghost" size="icon" className="size-7 text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)] hover:bg-[var(--chat-accent-soft)]" onClick={onOpenNewChat}>
-              <MessageSquarePlus className="size-3.5" strokeWidth={1.75} />
-            </Button>
-          </TooltipTrigger><TooltipContent>New chat</TooltipContent></Tooltip>
-        </div>
-      </div>
-
-      <div className="px-3 pb-2">
-        <div className="flex items-center gap-2 rounded-[10px] bg-[var(--chat-bg-main)] px-3 py-2">
-          <Search className="size-3.5 text-[var(--chat-text-tertiary)]" />
+      {/* Search */}
+      <div className="px-3 pb-2 pt-1">
+        <div className="flex items-center gap-2 rounded-full bg-[var(--chat-bg-input)] px-3 py-1.5">
+          <Search className="size-4 shrink-0 text-[var(--chat-text-tertiary)]" strokeWidth={1.75} />
           <input
-            placeholder="Search conversations"
+            placeholder="Search or start a new chat"
             value={chatSearch}
             onChange={(e) => setChatSearch(e.target.value)}
             disabled={!isWorking}
-            className="flex-1 bg-transparent text-[13px] text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-tertiary)] focus:outline-none disabled:opacity-50"
+            className="min-w-0 flex-1 bg-transparent text-[14px] text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-tertiary)] focus:outline-none disabled:opacity-50"
           />
         </div>
+      </div>
+
+      {/* Filter pills */}
+      <div className="flex items-center gap-1.5 px-3 pb-2">
+        {FILTERS.map((f) => {
+          const active = filter === f.value
+          return (
+            <button
+              key={f.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setFilter(f.value)}
+              className={`flex h-7 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                active
+                  ? "bg-[var(--chat-accent-soft)] font-medium text-[var(--chat-accent)]"
+                  : "bg-[var(--chat-bg-input)] text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)]"
+              }`}
+            >
+              {f.label}
+              {f.value === "unread" && unreadTotal > 0 && (
+                <span className="metric flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--chat-unread-bg)] px-1 text-[10px] font-bold text-[var(--chat-unread-text)]">
+                  {unreadTotal > 99 ? "99+" : unreadTotal}
+                </span>
+              )}
+            </button>
+          )
+        })}
+        <Tooltip><TooltipTrigger asChild>
+          <Button
+            aria-label="New chat"
+            variant="ghost"
+            size="icon"
+            className="ml-auto size-8 shrink-0 rounded-full bg-[var(--chat-bg-input)] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-bg-hover)] hover:text-[var(--chat-text-primary)]"
+            onClick={onOpenNewChat}
+          >
+            <Plus className="size-[18px]" strokeWidth={1.75} />
+          </Button>
+        </TooltipTrigger><TooltipContent>New chat</TooltipContent></Tooltip>
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
@@ -165,7 +220,7 @@ export function ChatConversations({
           <div className="space-y-3 p-3" aria-hidden>
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="flex items-center gap-3">
-                <Skeleton className="size-11 shrink-0 rounded-full" />
+                <Skeleton className="size-12 shrink-0 rounded-full" />
                 <div className="flex-1 space-y-1.5">
                   <Skeleton className="h-3.5 w-2/3" />
                   <Skeleton className="h-3 w-1/2" />
@@ -186,11 +241,11 @@ export function ChatConversations({
           <EmptyState
             compact
             icon={<MessageSquarePlus className="size-5" strokeWidth={1.75} />}
-            title={chatSearch ? "No matching conversations" : "No conversations yet"}
-            description={chatSearch ? "Try a different search term." : "Start a new chat or wait for incoming messages."}
+            title={emptyCopy.title}
+            description={emptyCopy.description}
           />
         ) : (
-          <div className="px-1 py-1">
+          <div className="py-1">
             {picturesError && (
               <div className="px-2 pb-2">
                 <ErrorState
@@ -208,41 +263,47 @@ export function ChatConversations({
               const name = chatName(chat, contacts)
               const initials = chatInitials(chat, contacts)
               const color = avColor(chat.id, false)
+              const unread = chat.unreadCount ?? 0
               return (
                 <button
                   key={chat.id}
                   onClick={() => onSelectChat(chat.id)}
                   aria-current={active ? "true" : undefined}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
-                    active ? "bg-[var(--chat-accent-soft)]" : "hover:bg-[var(--chat-accent-soft)]"
+                  className={`flex w-full items-center gap-3 px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
+                    active
+                      ? "bg-[var(--chat-bg-selected)]"
+                      : "hover:bg-[var(--chat-bg-hover)]"
                   }`}
                 >
                   <div className="relative shrink-0">
-                    <Avatar className="size-11">
+                    <Avatar className="size-[49px]">
                       <AvatarImage src={chat.picture || picturesCache.get(chat.id)} />
-                      <AvatarFallback className="text-xs font-semibold" style={{ background: color.bg, color: color.fg }}>
+                      <AvatarFallback className="text-sm" style={{ background: color.bg, color: color.fg }}>
                         {initials}
                       </AvatarFallback>
                     </Avatar>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className={`truncate text-[14px] ${chat.unreadCount && chat.unreadCount > 0 ? "font-bold" : "font-semibold"} text-[var(--chat-text-primary)]`}>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="truncate text-[15px] font-normal leading-[21px] text-[var(--chat-text-primary)]">
                         {name}
                       </span>
                       {chat.lastMessage && (
-                        <span className="metric ml-2 shrink-0 text-[11px] text-[var(--chat-text-tertiary)]">
+                        <span className="metric shrink-0 text-[12px] leading-[21px] text-[var(--chat-text-secondary)]">
                           {formatTime(chat.lastMessage.timestamp)}
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center justify-between mt-0.5">
-                      <span className="truncate text-[12px] text-[var(--chat-text-secondary)]">
-                        {chat.lastMessage?.body || ""}
+                    <div className="mt-0.5 flex items-center justify-between gap-2">
+                      <span className="flex min-w-0 items-center gap-1 text-[13px] leading-[18px] text-[var(--chat-text-secondary)]">
+                        {chat.lastMessage?.fromMe && (
+                          <CheckCheck className="size-4 shrink-0 text-[var(--chat-text-tertiary)]" strokeWidth={1.75} />
+                        )}
+                        <span className="truncate">{chat.lastMessage?.body || ""}</span>
                       </span>
-                      {(chat.unreadCount ?? 0) > 0 && (
-                        <span className="metric ml-2 flex size-[18px] shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
-                          {chat.unreadCount! > 99 ? "99+" : chat.unreadCount}
+                      {unread > 0 && (
+                        <span className="metric flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-[var(--chat-unread-bg)] px-1 text-[11px] font-bold text-[var(--chat-unread-text)]">
+                          {unread > 99 ? "99+" : unread}
                         </span>
                       )}
                     </div>

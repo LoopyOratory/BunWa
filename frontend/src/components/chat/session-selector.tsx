@@ -104,15 +104,15 @@ export function SessionSelector({
         disabled={disabled}
         aria-expanded={open}
         aria-haspopup="true"
-        className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-[var(--chat-accent-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex w-full items-center gap-3 rounded-full px-2 py-1.5 text-left transition-colors hover:bg-[var(--chat-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <Avatar className="size-9 shrink-0">
+        <Avatar className="size-10 shrink-0">
           <AvatarFallback className={`text-xs font-bold ${currentTone.chip}`}>
             {selectedSession[0]?.toUpperCase() || "?"}
           </AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[14px] font-semibold text-[var(--chat-text-primary)]">
+          <p className="truncate text-[15px] font-bold leading-[21px] text-[var(--chat-text-primary)]">
             {current?.me?.pushName || selectedSession}
           </p>
           <div className="flex items-center gap-1.5">
@@ -135,7 +135,7 @@ export function SessionSelector({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.96 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
-            className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-[var(--chat-border-strong)] bg-popover py-1 text-popover-foreground shadow-lg"
+            className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-md border border-[var(--chat-border-strong)] bg-[var(--chat-bg-composer)] py-1 text-[var(--chat-text-primary)] shadow-[var(--chat-shadow-toolbar)]"
           >
             {isScanning && (
               <div className="border-b border-[var(--chat-border)] p-3">
@@ -187,8 +187,8 @@ export function SessionSelector({
                       key={s.name}
                       onClick={() => { onSessionChange(s.name); setOpen(false) }}
                       aria-current={active ? "true" : undefined}
-                      className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
-                        active ? "bg-[var(--chat-accent-soft)]" : "hover:bg-[var(--chat-accent-soft)]"
+                      className={`flex w-full items-center gap-3 px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
+                        active ? "bg-[var(--chat-bg-selected)]" : "hover:bg-[var(--chat-bg-hover)]"
                       }`}
                     >
                       <Avatar className="size-8 shrink-0">
