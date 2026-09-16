@@ -24,6 +24,30 @@ import { ChatComposerWrapper } from "@/components/chat/chat-composer-wrapper"
 import { mapMessage, resolveUserJid } from "@/components/chat/helpers"
 
 /* ================================================================== */
+/*  STORE FAILURE HELPERS                                             */
+/* ================================================================== */
+
+/*
+ * A session with the message store disabled rejects every store read with a
+ * 400 that names the two settings to change. Recognise it in an error message
+ * or a raw response body so the UI can point at the fix instead of a
+ * generic failure.
+ */
+function isStoreDisabledError(error: unknown): boolean {
+  let text = ""
+  if (typeof error === "string") text = error
+  else if (error instanceof Error) text = error.message
+  else if (error && typeof error === "object") {
+    const body = error as { message?: unknown; error?: unknown; detail?: unknown }
+    text = [body.message, body.error, body.detail].filter((v): v is string => typeof v === "string").join(" ")
+  }
+  return /enable noweb store/i.test(text) || /noweb\.store\.enabled/i.test(text)
+}
+
+const STORE_DISABLED_TITLE = "Chat history is unavailable"
+const STORE_DISABLED_DESCRIPTION = "This session is running without a message store, so BunWa cannot read chats, messages or contacts. Enable the store in the session settings and restart the session. History backfill also needs full sync enabled."
+
+/* ================================================================== */
 /*  DIALOGS (ported from old chat-page)                                */
 /* ================================================================== */
 
@@ -535,6 +559,7 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [loadingChats, setLoadingChats] = useState(false)
   const [loadingMessages, setLoadingMessages] = useState(false)
+  const [storeDisabled, setStoreDisabled] = useState(false)
   const [replyingTo, setReplyingTo] = useState<ChatMessageData | null>(null)
   const [editingMessage, setEditingMessage] = useState<ChatMessageData | null>(null)
   const [hasMoreMessages, setHasMoreMessages] = useState(false)
@@ -556,7 +581,7 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   }, [])
   useEffect(() => { loadSessions(); const iv = setInterval(loadSessions, 30000); return () => clearInterval(iv) }, [loadSessions])
   useEffect(() => { if (sessions.length > 0 && !selectedSession) setSelectedSession(initialSession || sessions[0].name) }, [sessions, selectedSession, initialSession])
-  useEffect(() => { setSelectedChat(null); setMessages([]) }, [selectedSession])
+  useEffect(() => { setSelectedChat(null); setMessages([]); setStoreDisabled(false) }, [selectedSession])
 
   useEffect(() => {
     if (!selectedSession) { setUserPicture(null); setPictureError(false); return }
@@ -601,8 +626,12 @@ export function ChatPage({ initialSession }: ChatPageProps) {
     try {
       setChats(await api.getChatsOverview(selectedSession))
       chatsLoadedForSessionRef.current = selectedSession
+      setStoreDisabled(false)
     }
-    catch { toast.error("Failed to load chats") }
+    catch (error) {
+      if (isStoreDisabledError(error)) setStoreDisabled(true)
+      else toast.error("Failed to load chats")
+    }
     finally { if (isFirstLoad) setLoadingChats(false) }
   }, [selectedSession, isWorking])
   useEffect(() => { loadChats() }, [loadChats])
@@ -615,7 +644,10 @@ export function ChatPage({ initialSession }: ChatPageProps) {
       setMessages(msgs)
       setHasMoreMessages(msgs.length === 50)
       api.sendSeen(selectedSession, chatId).catch(() => {})
-    } catch { toast.error("Failed to load messages") }
+    } catch (error) {
+      if (isStoreDisabledError(error)) setStoreDisabled(true)
+      else toast.error("Failed to load messages")
+    }
     finally { setLoadingMessages(false) }
   }, [selectedSession])
   useEffect(() => { if (selectedChat) loadMessages(selectedChat.id) }, [selectedChat, loadMessages])
@@ -885,13 +917,25 @@ export function ChatPage({ initialSession }: ChatPageProps) {
           userPicture={userPicture}
           onOpenNewChat={() => setNewChatOpen(true)}
           onOpenStatus={() => setStatusOpen(true)}
+          storeDisabled={storeDisabled}
+          onRetryChats={loadChats}
         />
         <div className="hidden flex-1 items-center justify-center px-4 md:flex">
-          <EmptyState
-            icon={<MessageSquare className="size-6" strokeWidth={1.75} />}
-            title="Select a conversation"
-            description="Choose a chat from the list to start messaging."
-          />
+          {storeDisabled ? (
+            <div className="w-full max-w-md">
+              <ErrorState
+                title={STORE_DISABLED_TITLE}
+                description={STORE_DISABLED_DESCRIPTION}
+                onRetry={loadChats}
+              />
+            </div>
+          ) : (
+            <EmptyState
+              icon={<MessageSquare className="size-6" strokeWidth={1.75} />}
+              title="Select a conversation"
+              description="Choose a chat from the list to start messaging."
+            />
+          )}
         </div>
         <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} session={selectedSession} onOpenChat={handleNewChatOpen} />
         <StatusDialog open={statusOpen} onOpenChange={setStatusOpen} session={selectedSession} onSent={loadChats} />
@@ -940,6 +984,8 @@ export function ChatPage({ initialSession }: ChatPageProps) {
             userPicture={userPicture}
             onOpenNewChat={() => setNewChatOpen(true)}
             onOpenStatus={() => setStatusOpen(true)}
+            storeDisabled={storeDisabled}
+            onRetryChats={loadChats}
           />
         </div>
 
@@ -959,13 +1005,21 @@ export function ChatPage({ initialSession }: ChatPageProps) {
           />
 
           <div className="flex min-h-0 flex-col overflow-hidden">
-            {(contactsError || pictureError) && (
+            {(contactsError || pictureError) && !storeDisabled && (
               <div role="alert" className="mx-3 mt-3 flex items-center gap-2 rounded-md border border-error-border bg-error-bg px-3 py-2 text-xs text-error-foreground">
                 <TriangleAlert className="size-3.5 shrink-0" strokeWidth={1.75} />
                 Some contact details could not be loaded. Names and photos may be missing.
               </div>
             )}
-            {loadingMessages && mappedMessages.length === 0 ? (
+            {storeDisabled ? (
+              <div className="min-h-0 overflow-y-auto p-4">
+                <ErrorState
+                  title={STORE_DISABLED_TITLE}
+                  description={STORE_DISABLED_DESCRIPTION}
+                  onRetry={() => { loadMessages(selectedChat.id); loadChats() }}
+                />
+              </div>
+            ) : loadingMessages && mappedMessages.length === 0 ? (
               <div className="flex flex-col gap-4 p-4" aria-hidden>
                 {[0, 1, 2, 3].map((i) => (
                   <div key={i} className={i % 2 === 0 ? "flex justify-start" : "flex justify-end"}>

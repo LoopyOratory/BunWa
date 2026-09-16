@@ -26,6 +26,9 @@ interface ChatConversationsProps {
   userPicture: string | null
   onOpenNewChat: () => void
   onOpenStatus: () => void
+  /** Set when the chats request failed because the session runs without a message store. */
+  storeDisabled?: boolean
+  onRetryChats?: () => void
 }
 
 function formatTime(ts: number): string {
@@ -51,6 +54,8 @@ export function ChatConversations({
   loadingChats,
   onOpenNewChat,
   onOpenStatus,
+  storeDisabled,
+  onRetryChats,
 }: ChatConversationsProps) {
   const [chatSearch, setChatSearch] = useState("")
   const [picturesCache, setPicturesCache] = useState<Map<string, string>>(new Map())
@@ -167,6 +172,15 @@ export function ChatConversations({
                 </div>
               </div>
             ))}
+          </div>
+        ) : storeDisabled ? (
+          <div className="px-2 py-2">
+            <ErrorState
+              compact
+              title="Chat history is unavailable"
+              description="This session is running without a message store, so BunWa cannot read chats, messages or contacts. Enable the store in the session settings and restart the session. History backfill also needs full sync enabled."
+              onRetry={onRetryChats}
+            />
           </div>
         ) : filteredChats.length === 0 ? (
           <EmptyState
