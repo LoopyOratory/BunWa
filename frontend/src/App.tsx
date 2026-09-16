@@ -17,7 +17,6 @@ import { MessageTesterPage } from "./pages/message-tester-page"
 import { InfrastructurePage } from "./pages/infrastructure-page"
 import { QueuePage } from "./pages/queue-page"
 import { DocsPage } from "./pages/docs-page"
-import { PageLayout } from "@/components/page-layout"
 import { Toaster } from "@/components/ui/sonner"
 import { ErrorBoundary } from "./components/ErrorBoundary"
 
@@ -72,16 +71,7 @@ function AppRoutes() {
         <Route path="/events" element={<EventMonitorPage />} />
         {/* Written guide first; the raw Scalar reference stays one click away. */}
         <Route path="/docs" element={<DocsPage />} />
-        <Route path="/docs/reference" element={
-          <PageLayout title="API reference" description="Scalar reference generated from the OpenAPI document">
-            <iframe
-              src="/api-docs/"
-              className="h-[calc(100dvh-9rem)] w-full rounded-lg border border-border"
-              title="API reference"
-            />
-          </PageLayout>
-        } />
-        <Route path="*" element={<Navigate to="/" replace />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </DashboardLayout>
   )

@@ -5,6 +5,7 @@
 
 import type { ReactNode } from "react"
 import {
+  ExternalLink,
   Braces,
   CircleDot,
   Code,
@@ -143,7 +144,18 @@ export function DocsPage() {
             <Pill icon={Server}>Hono framework</Pill>
             <Pill icon={Shield}>Same REST surface as WAHA</Pill>
           </div>
-        </header>
+                  {/* The generated reference lives outside this shell on purpose: it has
+              its own navigation and auth, and framing it would nest scrolling. */}
+          <a
+            href="/api-docs/"
+            target="_blank"
+            rel="noreferrer"
+            className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            Open API reference
+            <ExternalLink className="size-3.5" strokeWidth={1.75} />
+          </a>
+</header>
 
         {/* Features */}
         <section>
