@@ -21,6 +21,7 @@ import { useWebSocket } from "@/lib/use-websocket"
 import { ChatConversations } from "@/components/chat/chat-conversations"
 import { ChatHeader } from "@/components/chat/chat-header"
 import { ChatComposerWrapper } from "@/components/chat/chat-composer-wrapper"
+import { TemplatePicker } from "@/components/chat/template-picker"
 import { mapMessage, resolveUserJid } from "@/components/chat/helpers"
 
 /* ================================================================== */
@@ -1036,16 +1037,27 @@ export function ChatPage({ initialSession }: ChatPageProps) {
             )}
           </div>
 
-          <ChatComposerWrapper
-            onSend={handleSend}
-            onTyping={handleTyping}
-            placeholder={editingMessage ? "Edit message..." : "Type a message..."}
-            disabled={!isWorking}
-            replyingTo={editingMessage || replyingTo}
-            onCancelReply={() => { setReplyingTo(null); setEditingMessage(null) }}
-            onOpenMediaDialog={(type) => setMediaDialog({ open: true, type })}
-            onVoiceRecorded={handleVoiceRecorded}
-          />
+          {/* Composer toolbar: template picker above the input, visible on
+              mobile where the sidebar is hidden. */}
+          <div>
+            <div className="flex items-center gap-2 border-t border-[var(--chat-border)] bg-[var(--chat-bg-composer)] px-3 pt-1.5 backdrop-blur-[20px]">
+              <TemplatePicker
+                session={selectedSession}
+                chatId={selectedChat.id}
+                onSent={() => { loadMessages(selectedChat.id); loadChats() }}
+              />
+            </div>
+            <ChatComposerWrapper
+              onSend={handleSend}
+              onTyping={handleTyping}
+              placeholder={editingMessage ? "Edit message..." : "Type a message..."}
+              disabled={!isWorking}
+              replyingTo={editingMessage || replyingTo}
+              onCancelReply={() => { setReplyingTo(null); setEditingMessage(null) }}
+              onOpenMediaDialog={(type) => setMediaDialog({ open: true, type })}
+              onVoiceRecorded={handleVoiceRecorded}
+            />
+          </div>
         </main>
 
         {/* Dialogs */}

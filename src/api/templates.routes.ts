@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { container } from 'tsyringe';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
-import { TemplateService } from '../core/templates/template.service';
+import { TemplateService, type Template } from '../core/templates/template.service';
 import { workingSessionResolver } from '../middleware/session-resolver';
 
 export function createTemplatesRouter(): Hono<{ Variables: { session: unknown } }> {
@@ -11,11 +11,27 @@ export function createTemplatesRouter(): Hono<{ Variables: { session: unknown } 
   router.use('*', apiKeyAuthMiddleware());
 
   // GET /api/sessions/:session/templates
+  // Each template carries the variables it needs, so a UI can render inputs
+  // without calling preview first.
   router.get('/:session/templates', async (c) => {
     const session = c.req.param('session');
     const svc = container.resolve(TemplateService);
     const templates = await svc.findBySession(session);
-    return c.json(templates);
+    return c.json(templates.map((template) => withVariables(svc, template)));
+  });
+
+  // GET /api/sessions/:session/templates/:id
+  // A single template, addressed by id or by name, with its variables.
+  router.get('/:session/templates/:id', async (c) => {
+    const session = c.req.param('session');
+    const id = c.req.param('id');
+    const svc = container.resolve(TemplateService);
+    try {
+      const template = await resolveTemplate(svc, session, id);
+      return c.json(withVariables(svc, template));
+    } catch (err) {
+      return c.json({ statusCode: 404, message: (err as Error).message }, 404);
+    }
   });
 
   // POST /api/sessions/:session/templates
@@ -105,6 +121,15 @@ export function createTemplatesRouter(): Hono<{ Variables: { session: unknown } 
     } catch {
       return await svc.resolve(session, { templateName: idOrName });
     }
+  }
+
+  // Variables are collected from the header, body and footer exactly as
+  // preview() composes them, so the list response is self-describing.
+  function withVariables(svc: TemplateService, template: Template) {
+    return {
+      ...template,
+      variables: svc.extractVariables([template.header, template.body, template.footer].filter(Boolean).join('\n')),
+    };
   }
 
   router.delete('/:session/templates/:id', async (c) => {
