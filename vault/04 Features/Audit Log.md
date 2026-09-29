@@ -5,7 +5,7 @@ engine: [any]
 tier: both
 endpoints: 1
 tags: [feature, ops, security]
-updated: 2026-09-14
+updated: 2026-09-29
 source: src/core/audit/audit.service.ts, src/api/audit.routes.ts
 ---
 
@@ -13,6 +13,12 @@ source: src/core/audit/audit.service.ts, src/api/audit.routes.ts
 
 A structured, queryable record of everything security- or lifecycle-relevant: session start/stop,
 message sends and failures, webhook deliveries, and **auth failures**.
+
+> ✅ **Verified live 2026-09-29** — a full session lifecycle (create → start → QR → stop → delete)
+> produced `session_created` → `session_started` → `session_qr_generated` → `session_stopped` →
+> `session_deleted` rows, each carrying `sessionName`, `severity` and a timestamp (21 rows in a
+> fresh `${WAHA_STORAGE_DIR}` store). `GET /api/audit` accepted both the API key and dashboard
+> basic auth; the dashboard `/logs` page rendered the same rows.
 
 ## Storage
 
@@ -58,7 +64,7 @@ tests and shutdown stay clean.
 | Source | Examples |
 |---|---|
 | Auth middleware | failed API-key attempts (with IP + user agent) |
-| Session manager | `QR_GENERATED`, `CONNECTED`, `DISCONNECTED`, `SESSION_DELETED`, `SESSION_FORCE_KILLED` |
+| Session manager | `SESSION_CREATED`, `SESSION_STARTED`, `QR_GENERATED`, `SESSION_STOPPED`, `CONNECTED`, `DISCONNECTED`, `SESSION_DELETED`, `SESSION_FORCE_KILLED` |
 | Webhook delivery | `WEBHOOK_TRIGGERED` (with status + delivery id), `WEBHOOK_FAILED` |
 | Messaging | send failures |
 

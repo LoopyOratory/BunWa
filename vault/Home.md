@@ -17,7 +17,7 @@ extended with a Plus tier, an MCP server for AI agents, and a React dashboard.
 | Tier | `PLUS` (auto-detected from `src/plus/`) |
 | Runtime | Bun ≥ 1.4.0 (verified on 1.4.2) |
 | Engines | [[NOWEB Engine\|NOWEB]] (Baileys) · [[WEBJS Engine\|WEBJS]] (Puppeteer) |
-| Tests | 190 tests / 23 files → **all passing** ([[Testing]]) |
+| Tests | 198 tests / 25 files → **all passing** ([[Testing]]) |
 | Typecheck | clean and **CI-enforced** — `tsc --noEmit` |
 | Dependencies | 29 runtime deps ([[Bun Runtime Adoption]]) |
 | License | [[BunWa#License — BCL v1.0\|BCL v1.0]] — free non-commercial, $200/mo commercial |

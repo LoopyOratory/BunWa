@@ -9,7 +9,7 @@ status: shipped
 
 # 🧪 Testing
 
-`bun test` — **190 tests across 23 files** in `src/__tests__/` (plus a live-database smoke script, see
+`bun test` — **198 tests across 25 files** in `src/__tests__/` (plus a live-database smoke script, see
 below), preloaded with `setup.ts` via `bunfig.toml`:
 
 ```toml
@@ -20,8 +20,8 @@ preload = ["./src/__tests__/setup.ts"]
 ## Current state (verified 2026-09-29)
 
 ```text
-190 tests · 447 expect() calls · 23 files
-190 pass · 0 fail        ← suite is green
+198 tests · 460 expect() calls · 25 files
+198 pass · 0 fail        ← suite is green
 ```
 
 The two long-standing failures (`Sessions API > creates/deletes a new session`) were a **test-harness**
@@ -31,7 +31,7 @@ constructor takes a path/DB handle, so tsyringe threw `TypeInfo not known for "O
 commit `30ac09c` applied to the webhook tests. Details in [[Dependency Injection]] and
 [[Bun Runtime Adoption]].
 
-## The 23 files
+## The 25 files
 
 | File | Covers |
 |---|---|
@@ -58,6 +58,8 @@ commit `30ac09c` applied to the webhook tests. Details in [[Dependency Injection
 | `template-tools.test.ts` | MCP template tools: CRUD, preview, send gating |
 | `knex-postgres.test.ts` | Postgres client subclass — driver resolves regardless of node_modules layout |
 | `postgres-url.test.ts` | `buildPostgresUrl` + the driver/URL resolution chain (explicit keys → dashboard fields → sqlite) |
+| `webjs-chrome-path.test.ts` | `getBrowserExecutablePath` — env overrides (`CHROME_PATH` → `PUPPETEER_EXECUTABLE_PATH`) precede system candidates |
+| `webjs-screenshot.test.ts` | WEBJS `getScreenshot` — `pupPage` accessor preferred, legacy fallback kept, failure modes |
 
 `setup.ts` is the preload: it points session storage at a temp dir so tests never touch a real
 `.sessions/`.
