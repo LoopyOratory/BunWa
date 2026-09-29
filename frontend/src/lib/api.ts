@@ -558,6 +558,9 @@ export const api = {
     request<any>(`/api/infra/config`),
   saveInfraConfig: (config: any) =>
     request<any>(`/api/infra/config`, { method: "PUT", body: JSON.stringify(config) }),
+  /** Try a PostgreSQL connection with the given settings before saving. */
+  testDatabase: (database: any) =>
+    request<{ ok: boolean; version?: string; message?: string }>(`/api/infra/database/test`, { method: "POST", body: JSON.stringify(database) }),
   restartServer: () =>
     request<any>(`/api/infra/restart`, { method: "POST" }),
 

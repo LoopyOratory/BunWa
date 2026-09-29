@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { Database, Server, HardDrive, RefreshCw, Save, Monitor, Smartphone } from "lucide-react"
+import { Database, Server, HardDrive, RefreshCw, Save, Monitor, Smartphone, Eye, EyeOff } from "lucide-react"
 import { PageLayout } from "@/components/page-layout"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
@@ -14,10 +14,12 @@ import { cn } from "@/lib/utils"
 import { ErrorState, Skeleton, StatRowSkeleton } from "@/components/primitives"
 
 interface InfraConfig {
-  database: { type: string; host: string; port: string; username: string; name: string; ssl: boolean }
+  database: { type: string; host: string; port: string; username: string; password: string; name: string; ssl: boolean }
   storage: { type: string; localPath: string; s3: { endpoint: string; bucket: string; region: string; accessKeyId: string; secretAccessKey: string } }
   queue: { enabled: boolean; redis: { host: string; port: string; password: string } }
   engine: string
+  /** Reported by the server: the driver the runtime is actually using now. */
+  runtime?: { databaseDriver: string }
 }
 
 const ENGINES = [
@@ -37,41 +39,56 @@ const ENGINES = [
 
 export function InfrastructurePage() {
   const [config, setConfig] = useState<InfraConfig>({
-    database: { type: "sqlite", host: "localhost", port: "5432", username: "", name: "./data/waha.sqlite", ssl: false },
+    database: { type: "sqlite", host: "localhost", port: "5432", username: "", password: "", name: "./data/waha.sqlite", ssl: false },
     storage: { type: "local", localPath: "./data/media", s3: { endpoint: "", bucket: "", region: "us-east-1", accessKeyId: "", secretAccessKey: "" } },
     queue: { enabled: false, redis: { host: "localhost", port: "6379", password: "" } },
     engine: "NOWEB",
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [showDbPassword, setShowDbPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [savedSnapshot, setSavedSnapshot] = useState<string>("")
 
+  const runtimeDriver = config.runtime?.databaseDriver
   const dirty = JSON.stringify(config) !== savedSnapshot
 
   useEffect(() => { loadConfig() }, [])
 
-  async function loadConfig() {
-    setLoading(true)
-    setError(null)
+  async function loadConfig(silent = false) {
+    if (!silent) { setLoading(true); setError(null) }
     try {
       const loaded = await api.getInfraConfig()
       setConfig(loaded)
       setSavedSnapshot(JSON.stringify(loaded))
     } catch (err: any) {
-      setError(err?.message || "Could not load configuration")
+      if (!silent) setError(err?.message || "Could not load configuration")
+    } finally {
+      if (!silent) setLoading(false)
     }
-    setLoading(false)
   }
 
   async function saveConfig() {
     setSaving(true)
     try {
       await api.saveInfraConfig(config)
-      setSavedSnapshot(JSON.stringify(config))
-      toast.success("Configuration saved. Restart to apply.")
+      await loadConfig(true)
+      toast.success("Configuration saved. Applies to new sessions; restart for everything.")
     } catch (err: any) { toast.error(err?.message || "Failed to save config") }
     setSaving(false)
+  }
+
+  async function testDb() {
+    setTesting(true)
+    try {
+      const res = await api.testDatabase(config.database)
+      if (res.ok) toast.success(res.version ? `Connected: ${res.version}` : "Connection OK")
+      else toast.error(res.message || "Could not connect")
+    } catch (err: any) {
+      toast.error(err?.message || "Could not connect")
+    }
+    setTesting(false)
   }
 
   async function restart() {
@@ -128,16 +145,36 @@ export function InfrastructurePage() {
           {/* Database */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base font-medium">
-                <Database className="size-4" strokeWidth={1.75} />
-                Database
-              </CardTitle>
-              <CardDescription>Configure the data storage backend.</CardDescription>
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1.5">
+                  <CardTitle className="flex items-center gap-2 text-base font-medium">
+                    <Database className="size-4" strokeWidth={1.75} />
+                    Database
+                  </CardTitle>
+                  <CardDescription>
+                    Session storage backend. Changes apply to sessions started after saving;
+                    restart to apply everywhere. Data stays in its current backend.
+                  </CardDescription>
+                </div>
+                {runtimeDriver && (
+                  <Badge variant={runtimeDriver === "postgres" ? "default" : "secondary"} className="shrink-0">
+                    Runtime: {runtimeDriver === "postgres" ? "PostgreSQL" : "SQLite"}
+                  </Badge>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="db-engine">Engine</Label>
-                <Select value={config.database.type} onValueChange={v => setConfig({ ...config, database: { ...config.database, type: v } })}>
+                <Select value={config.database.type} onValueChange={v => {
+                  const db = { ...config.database, type: v }
+                  // Carry over the defaults when the field still holds the
+                  // other backend's default value.
+                  const looksLikePath = db.name.includes("/") || /\.(sqlite3?|db)$/i.test(db.name)
+                  if (v === "postgres" && looksLikePath) db.name = "waha"
+                  if (v === "sqlite" && !looksLikePath) db.name = "./data/waha.sqlite"
+                  setConfig({ ...config, database: db })
+                }}>
                   <SelectTrigger id="db-engine"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="sqlite">SQLite (built-in)</SelectItem>
@@ -163,8 +200,28 @@ export function InfrastructurePage() {
                     <Input id="db-username" value={config.database.username} onChange={e => setConfig({ ...config, database: { ...config.database, username: e.target.value } })} />
                   </div>
                   <div className="space-y-2">
+                    <Label htmlFor="db-password">Password</Label>
+                    <div className="relative">
+                      <Input id="db-password" type={showDbPassword ? "text" : "password"} value={config.database.password} onChange={e => setConfig({ ...config, database: { ...config.database, password: e.target.value } })} />
+                      <button
+                        type="button"
+                        onClick={() => setShowDbPassword(v => !v)}
+                        aria-label={showDbPassword ? "Hide password" : "Show password"}
+                        className="absolute inset-y-0 right-2 flex items-center text-muted-foreground hover:text-foreground"
+                      >
+                        {showDbPassword ? <EyeOff className="size-4" strokeWidth={1.75} /> : <Eye className="size-4" strokeWidth={1.75} />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="db-name">Database name</Label>
                     <Input id="db-name" value={config.database.name} onChange={e => setConfig({ ...config, database: { ...config.database, name: e.target.value } })} />
+                  </div>
+                  <div className="flex items-center gap-3 pt-1">
+                    <Button type="button" variant="outline" size="sm" onClick={testDb} disabled={testing}>
+                      {testing ? "Testing" : "Test connection"}
+                    </Button>
+                    <p className="text-xs text-muted-foreground">Checks these settings before saving.</p>
                   </div>
                 </>
               )}
@@ -174,6 +231,11 @@ export function InfrastructurePage() {
                   <Input id="db-path" className="font-mono" value={config.database.name} onChange={e => setConfig({ ...config, database: { ...config.database, name: e.target.value } })} />
                   <p className="text-xs text-muted-foreground">Path on the server filesystem.</p>
                 </div>
+              )}
+              {config.database.type === "sqlite" && (
+                <p className="text-xs text-muted-foreground">
+                  Built-in, zero setup. Each session gets its own database file.
+                </p>
               )}
             </CardContent>
           </Card>
