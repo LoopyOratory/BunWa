@@ -72,7 +72,8 @@ extended with a Plus tier, an MCP server for AI agents, and a React dashboard.
 - [[Runbook]] — dev, prod, fresh boot, troubleshooting
 - [[Docker and Deployment]] — Dockerfile, Coolify, GitHub Actions
 - [[Health and Observability]] — health, readiness, logs, workers
-- [[Testing]] — the 13 test files and how to run them
+- [[Testing]] — the unit suite, conventions, and the Postgres smoke test
+- [[Postgres on PGlite]] — Postgres store bring-up on a WASM Postgres: targets, fixes, limitations
 
 ### 🛠️ Development
 - [[Code Conventions]] · [[Fix History]] · [[Roadmap]]
@@ -97,10 +98,11 @@ SORT status ASC, file.name ASC
 
 ## ⚠️ Watch list
 
-- **Anti-ban tooling is still missing** (send caps, reachout timelock) — see
-  [[Interactive Messages and Commerce]].
-- Two interactive round-trip bugs: `/api/send/buttons/reply` sends nothing, and inbound
-  `interactiveResponseMessage` taps are not parsed — [[Known Gaps and Stubs]].
+- **Anti-ban sending policy shipped** (2026-09): per-session caps, cold-outreach timelock, warm-up
+  ramp, quiet hours — "Sending limits" tab, REST policy endpoint, `SendingPolicy*` MCP tools.
+- One interactive round-trip bug remains: `/api/send/buttons/reply` sends nothing; inbound taps
+  (incl. `interactiveResponseMessage`) are now parsed into the structured `interactive` field —
+  [[Known Gaps and Stubs]].
 - `WAHA_DB_TYPE` (dashboard/infra config) does **not** drive the runtime DB — `WAHA_DATABASE_DRIVER` does. See [[Configuration Reference#Two database switches]] and [[Data and Storage]].
 - `/api-docs` documents **113** operations across 96 paths while the code mounts **~173** — [[API Docs|docs drift]].
 - Several completed subsystems are never wired in: plugins/hooks, the file-storage service, Postgres/Mongo auth repos — see [[Known Gaps and Stubs]].
