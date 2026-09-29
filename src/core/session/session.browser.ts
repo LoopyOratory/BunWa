@@ -25,6 +25,14 @@ const BROWSER_PATHS: Record<string, string[]> = {
 };
 
 export function getBrowserExecutablePath(): string {
+  // Explicit override wins first (CHROME_PATH, then PUPPETEER_EXECUTABLE_PATH)
+  // so containers and dev boxes can point at the Chrome the image ships.
+  // The WEBJS engine launches this same path — one resolution order for both
+  // the manager's pre-flight check and the engine itself.
+  const override = process.env.CHROME_PATH || process.env.PUPPETEER_EXECUTABLE_PATH;
+  if (override) {
+    return override;
+  }
   const paths = BROWSER_PATHS[process.platform] ?? BROWSER_PATHS['linux'];
   for (const p of paths) {
     if (fs.existsSync(p)) {
