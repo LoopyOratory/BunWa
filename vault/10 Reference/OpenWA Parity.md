@@ -64,6 +64,11 @@ The parity pass was verified with: typecheck clean, 97/97 tests at the time, and
 test on `:3210` — all new routes mounted, auth-gated, with the session resolver returning a correct
 404 for unknown sessions. Current test state (95/97) is documented in [[Testing]].
 
+## Upstream watch
+
+OpenWA and WAHA kept shipping after the audit. What they added since, compared
+against BunWa, is tracked in [[Upstream Watch]].
+
 ## Related
 
 [[BunWa]] · [[REST API]] · [[Known Gaps and Stubs]] · [[Roadmap]] · [[Fix History]]
