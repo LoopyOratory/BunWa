@@ -65,19 +65,16 @@ import {
   ReadChatMessagesResponse,
 } from '../../../structures/chats.dto';
 import { WhatsappSession } from '../../session/session.abc';
+import { getBrowserExecutablePath } from '../../session/session.browser';
 import {
   NotImplementedByEngineError,
 } from '../../exceptions';
 import { fetchBuffer } from '../../../utils/fetch';
 
 // ---------------------------------------------------------------------------
-// Chrome path — prefer env var, fall back to auto-detect
+// Chrome path — resolved at launch time by the shared browser-path helper
+// (CHROME_PATH → PUPPETEER_EXECUTABLE_PATH → system candidates).
 // ---------------------------------------------------------------------------
-const CHROME_PATH =
-  process.env.CHROME_PATH ||
-  process.env.PUPPETEER_EXECUTABLE_PATH ||
-  '/usr/bin/google-chrome';
-
 const WEBJS_SESSIONS_DIR = path.join(process.cwd(), '.sessions', 'webjs');
 
 // ---------------------------------------------------------------------------
@@ -190,7 +187,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       puppeteer: {
         headless: true,
         args: puppeteerArgs,
-        executablePath: CHROME_PATH,
+        executablePath: getBrowserExecutablePath(),
       },
       ...(this.authTimeout ? { authTimeoutMs: this.authTimeout } : {}),
     });
@@ -410,11 +407,14 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     if (!this.client) {
       throw new Error('Session is not started');
     }
-    const puppeteer = (this.client as any).puppeteer;
-    if (!puppeteer?.page) {
+    // whatsapp-web.js >= 1.31 exposes the live page as `pupPage`; older builds
+    // kept it under `client.puppeteer.page`. Support both so the screenshot
+    // endpoint works across versions.
+    const client = this.client as any;
+    const page = client.pupPage ?? client.puppeteer?.page;
+    if (!page) {
       throw new Error('Browser page not available');
     }
-    const page = puppeteer.page;
     return Buffer.from(await page.screenshot({ type: 'png' }));
   }
 

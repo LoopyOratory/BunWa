@@ -27,7 +27,10 @@ export function createScreenshotRouter(): Hono {
         const base64 = buffer.toString('base64');
         return c.json({ screenshot: base64 });
       } catch (error) {
-        return c.json({ statusCode: 400, message: 'Invalid request' }, 400);
+        // Surface the engine's message instead of a generic "Invalid request"
+        // so the dashboard can tell "not started" from "page not available".
+        const message = error instanceof Error ? error.message : String(error);
+        return c.json({ statusCode: 400, message: `Failed to take screenshot: ${message}` }, 400);
       }
     }
   );
