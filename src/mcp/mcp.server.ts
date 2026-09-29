@@ -27,6 +27,8 @@ import { contactTools } from './tools/contact.tools';
 import { chatTools } from './tools/chat.tools';
 import { statusTools } from './tools/status.tools';
 import { presenceTools } from './tools/presence.tools';
+import { policyTools } from './tools/policy.tools';
+import { templateTools } from './tools/template.tools';
 
 const logger = pino({ name: 'McpServer' });
 
@@ -53,9 +55,14 @@ function safeCompare(a: string, b: string): boolean {
   return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
 
-/** API key validation against the configured key using timing-safe comparison. */
+/**
+ * API key validation against the configured key using timing-safe comparison.
+ * With no key configured the endpoint is open (dev mode) unless the operator
+ * set WAHA_ALLOW_NO_AUTH=false — the same fail-closed switch the REST API
+ * honors, so keyless MCP access dies with it.
+ */
 export function validateApiKey(rawKey: string | undefined, configuredKey: string | undefined): boolean {
-  if (!configuredKey) return true; // No key configured = open access (dev mode)
+  if (!configuredKey) return process.env.WAHA_ALLOW_NO_AUTH !== 'false';
   if (!rawKey) return false;
   return safeCompare(rawKey, configuredKey);
 }
@@ -259,6 +266,8 @@ export function createMcpRouter(
     ...chatTools(sessionManager),
     ...statusTools(sessionManager),
     ...presenceTools(sessionManager),
+    ...policyTools(sessionManager),
+    ...templateTools(sessionManager),
   ];
   const registry = new ToolRegistryService(allTools);
 

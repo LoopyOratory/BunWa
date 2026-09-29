@@ -1,7 +1,7 @@
 import { Database } from 'bun:sqlite';
 import pino from 'pino';
 import { injectable } from 'tsyringe';
-import { TooManyRequestsException } from '../../core/exceptions';
+import { BadRequestException, TooManyRequestsException } from '../../core/exceptions';
 
 const logger = pino({ name: 'SendingPolicyService' });
 
@@ -184,6 +184,77 @@ export function warmupFactor(
  * outreach still occupies the reachout timelock slot. Such rows also count
  * toward the caps, which is deliberately conservative.
  */
+
+const OVERRIDE_FIELDS = [
+  'maxPerMinute',
+  'maxPerHour',
+  'maxPerDay',
+  'newChatsPerDay',
+  'reachoutMinIntervalSeconds',
+  'warmupDays',
+  'warmupFloorPercent',
+  'quietHours',
+  'enabled',
+] as const;
+
+const NUMBER_FIELDS: ReadonlySet<string> = new Set([
+  'maxPerMinute',
+  'maxPerHour',
+  'maxPerDay',
+  'newChatsPerDay',
+  'reachoutMinIntervalSeconds',
+  'warmupDays',
+  'warmupFloorPercent',
+]);
+
+/**
+ * Validate and normalize a per-session policy override body. Shared by the
+ * REST PUT route and the SendingPolicySet MCP tool. Throws
+ * BadRequestException on unknown or malformed fields.
+ */
+export function parseOverrides(body: any): SendingPolicyConfig {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    throw new BadRequestException('Body must be a JSON object with policy overrides');
+  }
+  const overrides: SendingPolicyConfig = {};
+  for (const [key, value] of Object.entries(body)) {
+    if (!OVERRIDE_FIELDS.includes(key as any)) {
+      throw new BadRequestException(`Unknown policy field '${key}'`);
+    }
+    if (value === null) {
+      continue;
+    }
+    if (NUMBER_FIELDS.has(key)) {
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+        throw new BadRequestException(`Field '${key}' must be a non-negative number`);
+      }
+      (overrides as any)[key] = value;
+      continue;
+    }
+    if (key === 'quietHours') {
+      if (typeof value !== 'string') {
+        throw new BadRequestException("Field 'quietHours' must be a 'HH:MM-HH:MM' string or ''");
+      }
+      const trimmed = value.trim();
+      if (trimmed && !parseQuietHours(trimmed)) {
+        throw new BadRequestException(
+          "Field 'quietHours' must be a 'HH:MM-HH:MM' string or ''",
+        );
+      }
+      overrides.quietHours = trimmed;
+      continue;
+    }
+    if (key === 'enabled') {
+      if (typeof value !== 'boolean') {
+        throw new BadRequestException("Field 'enabled' must be a boolean");
+      }
+      overrides.enabled = value;
+      continue;
+    }
+  }
+  return overrides;
+}
+
 @injectable()
 export class SendingPolicyService {
   private db: Database;

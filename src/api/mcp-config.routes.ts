@@ -15,6 +15,8 @@ import { contactTools } from '../mcp/tools/contact.tools';
 import { chatTools } from '../mcp/tools/chat.tools';
 import { statusTools } from '../mcp/tools/status.tools';
 import { presenceTools } from '../mcp/tools/presence.tools';
+import { policyTools } from '../mcp/tools/policy.tools';
+import { templateTools } from '../mcp/tools/template.tools';
 import { ToolRegistryService } from '../mcp/tool-registry.service';
 import type { ToolCategory } from '../mcp/tool-descriptor';
 
@@ -46,6 +48,8 @@ export function createMcpConfigRouter(): Hono {
       ...chatTools(manager),
       ...statusTools(manager),
       ...presenceTools(manager),
+      ...policyTools(manager),
+      ...templateTools(manager),
     ];
     const registry = new ToolRegistryService(allTools);
 
