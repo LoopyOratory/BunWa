@@ -195,6 +195,15 @@ unusable anywhere Chrome isn't at a hardcoded system path.
 | Bug fixed | Both stacked charts displayed the shared in-range event count (71) as their own total; the bucket helper now counts only entries each chart actually classifies. Caught by vision review. |
 | Verified | CDP on a seeded test store: totals match the KPI cards (22 events, 29 issues, 21/8 messages at 28%), tooltip renders (Delivered 1 / Failed 0 on hover), range swaps axis labels, zero overflow light/dark/mobile; MiMo 8-9/10; `bun run test` 198/0, typecheck + oxlint clean. |
 
+## Logo + uniform stat cards (2026-09-29)
+
+| Item | Detail |
+|---|---|
+| Ask | "Use this logo and the cards at the top of the dashboard should be uniform." |
+| Logo | Supplied mark adopted as `logo.jpg` (sidebar, login hero and og:image read it directly); `favicon.png` (64) + `apple-touch-icon.png` (180) regenerated from it; stale `favicon.svg` link and file removed. |
+| Cards | `h-full flex-col` shell for all five cards, grid `grid-cols-2 → lg:grid-cols-5` with the last card spanning both columns below lg, version-card footer normalized to a one-line hint (`NOWEB engine`), docs links moved to a "BunWa docs" line under the row. |
+| Verified | Five cards 205x215 identical at 1440px; mobile 2+2+1 full-width, zero overflow; MiMo 9/10 desktop + 9/10 mobile; logo approved on sidebar light/dark and login; `bun run test` 198/0, typecheck + oxlint clean. |
+
 ## Related
 
 [[OpenWA Parity]] · [[Roadmap]] · [[Testing]] · [[Dashboard]] · [[Known Gaps and Stubs]]

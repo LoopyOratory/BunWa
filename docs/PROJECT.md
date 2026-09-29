@@ -283,3 +283,14 @@ Ask: the dashboard should show the data graphically, and the data should be filt
 | Filters | Session dropdown (scopes the charts, KPIs and the sessions table to one session; "All sessions" releases), engine chips (All/NOWEB/WEBJS, apply to sessions and workers), a From/To date range with arbitrary dates (hourly buckets up to two days, daily beyond) plus Today/7d/30d quick presets, and a Reset filters action. |
 | Data | Only real API data: sessions/workers/version as before, plus `GET /api/audit` (limit 500) fetched on a 30s cadence (gated so the 5s poll does not hammer it). Message volume comes from the `message_sent`/`message_failed` audit actions; issues are warn/error severities grouped by action into causes. |
 | Verified | CDP pass on a seeded test store: session scoping works end to end (sales-bot: 0 delivered / 6 failed / 100%, Issues mostly Messages; gh-main: 19 / 1 / 5%, Issues mostly Webhooks; sessions table 3→1 rows, dropdown label tracks selection); preset and custom ranges reshape every chart (Today hourly HH:00, 7d/30d daily dates, custom from=26 Sep works); reset restores defaults; totals match the KPI cards; zero horizontal overflow light/dark; MiMo vision 8-8.5/10; `bun run test` 198/0, typecheck + oxlint clean. |
+
+## 🏷️ Logo + uniform stat cards (2026-09-29)
+
+The operator supplied a new logo and asked for the dashboard KPI cards to be uniform.
+
+| Area | What changed |
+|---|---|
+| Logo | Adopted the supplied mark (kawaii bun in a glossy speech bubble on cream) as `logo.jpg`; the sidebar, login hero and `og:image` pick it up automatically. Regenerated `favicon.png` (64px) and `apple-touch-icon.png` (180px) from it; dropped the stale `favicon.svg` link and file. |
+| Uniform cards | All five stat cards share the same shell now: `h-full flex-col` inside the grid (equal heights), the grid is `grid-cols-2 → lg:grid-cols-5`, and the last card spans both columns below lg so there are never holes at 390/768/1024 widths. |
+| Pattern | The Server version card's footer was normalized to a one-line hint (`NOWEB engine`) like its siblings; its Changelog / How to update links moved to a "BunWa docs" line under the row. |
+| Verified | CDP: five cards render 205x215 pixel-identical at 1440px, mobile 2+2+1 full-width, zero horizontal overflow; MiMo vision 9/10 desktop and 9/10 mobile; logo approved on sidebar light/dark and login; `bun run test` 198/0, typecheck + oxlint clean. |

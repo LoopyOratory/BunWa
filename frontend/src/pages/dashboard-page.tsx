@@ -266,7 +266,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
         {loading ? (
           <StatRowSkeleton count={5} />
         ) : (
-          <Stagger className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
+          <Stagger className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
             <StaggerItem>
               <StatCard
                 label="Sessions"
@@ -345,30 +345,25 @@ export function DashboardPage(_props?: DashboardPageProps) {
                 icon={<TriangleAlert strokeWidth={1.75} />}
               />
             </StaggerItem>
-            <StaggerItem>
+            <StaggerItem className="max-lg:col-span-2">
               <StatCard
                 label="Server version"
               value={version ? version.version : "-"}
-              hint={
-                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  {version?.engine ? (
-                    <EngineBadge engine={version.engine} />
-                  ) : (
-                    <span>Version unavailable</span>
-                  )}
-                  <Link to="/docs" className="font-medium text-foreground underline-offset-4 hover:underline">
-                    Changelog
-                  </Link>
-                  <Link to="/docs" className="font-medium text-foreground underline-offset-4 hover:underline">
-                    How to update
-                  </Link>
-                </span>
-              }
+              hint={version?.engine ? <><Metric>{version.engine}</Metric> engine</> : "Version unavailable"}
               icon={<CloudDownload strokeWidth={1.75} />}
             />
             </StaggerItem>
           </Stagger>
         )}
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs text-muted-foreground">
+          <span>BunWa docs:</span>
+          <Link to="/docs" className="font-medium text-foreground underline-offset-4 hover:underline">
+            Changelog
+          </Link>
+          <Link to="/docs" className="font-medium text-foreground underline-offset-4 hover:underline">
+            How to update
+          </Link>
+        </p>
 
         {/* Insights: filters drive the charts and the tables below */}
         <section className="space-y-3">

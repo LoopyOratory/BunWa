@@ -101,7 +101,7 @@ export function StatCard({
   tone?: keyof typeof STAT_TONE
 }) {
   return (
-    <div className="stat-card glass-card rounded-lg p-5">
+    <div className="stat-card glass-card flex h-full flex-col rounded-lg p-5">
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
         {icon && <span className={cn("icon-chip size-10", STAT_CHIP[tone])}>{icon}</span>}
