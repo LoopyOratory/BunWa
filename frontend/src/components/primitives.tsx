@@ -7,7 +7,7 @@
 // Rules for consumers:
 //   - Status colour comes from <StatusBadge> / <SeverityBadge> / <EngineBadge>,
 //     never from raw Tailwind palettes (emerald-500, amber-500, red-500).
-//   - Numbers that update or align in columns use <Metric> (tabular digits).
+//   - Numbers that update or align in columns use <Metric> / <CountUp>.
 //   - Tables sit inside <DataTable> so every table shares one shell.
 //   - Every data view provides loading (skeleton), empty and error states.
 import type { ReactNode, Ref } from "react"
@@ -15,6 +15,7 @@ import { AppWindow, RotateCw, TriangleAlert, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Table } from "@/components/ui/table"
+import { FloatingArt } from "@/components/dream"
 import { STATUS_LABEL, mapSessionStatus, mapSeverity, type StatusKind, type Severity } from "@/lib/status"
 
 /* ── StatusBadge: semantic session/worker status ─────────────────────── */
@@ -35,7 +36,7 @@ export function EngineBadge({ engine, className }: { engine?: string; className?
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/60 px-2 py-0.5 text-xs font-medium text-muted-foreground",
+        "inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs font-semibold text-muted-foreground shadow-xs",
         className,
       )}
     >
@@ -57,7 +58,7 @@ export function SeverityBadge({ severity }: { severity?: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium capitalize",
+        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold capitalize",
         SEVERITY_CLASS[k],
       )}
     >
@@ -79,6 +80,13 @@ const STAT_TONE: Record<string, string> = {
   error: "text-error-foreground",
 }
 
+const STAT_CHIP: Record<string, string> = {
+  neutral: "",
+  success: "chip-mint",
+  warning: "chip-peach",
+  error: "chip-rose",
+}
+
 export function StatCard({
   label,
   value,
@@ -93,12 +101,12 @@ export function StatCard({
   tone?: keyof typeof STAT_TONE
 }) {
   return (
-    <div className="stat-card rounded-lg border border-border bg-card p-4">
+    <div className="stat-card rounded-lg border border-border/70 bg-card p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        {icon && <span className="icon-chip size-8 [&>svg]:size-4">{icon}</span>}
+        {icon && <span className={cn("icon-chip size-9", STAT_CHIP[tone])}>{icon}</span>}
       </div>
-      <p className={cn("metric mt-2 font-heading text-2xl font-semibold leading-none", STAT_TONE[tone])}>
+      <p className={cn("metric mt-2 font-heading text-3xl font-semibold leading-none", STAT_TONE[tone])}>
         {value}
       </p>
       {hint && <p className="mt-2 text-xs text-muted-foreground">{hint}</p>}
@@ -120,7 +128,7 @@ export function DataTable({
   scrollRef?: Ref<HTMLDivElement>
 }) {
   return (
-    <div className={cn("overflow-hidden rounded-lg border border-border bg-card", className)}>
+    <div className={cn("overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm", className)}>
       <div ref={scrollRef} className="overflow-x-auto">
         <Table className={minWidthClassName === false ? undefined : minWidthClassName}>
           {children}
@@ -132,14 +140,14 @@ export function DataTable({
 
 /* ── Skeleton loaders: shaped like the content they stand in for ─────── */
 export function Skeleton({ className }: { className?: string }) {
-  return <div aria-hidden className={cn("animate-pulse rounded-md bg-muted", className)} />
+  return <div aria-hidden className={cn("skeleton-shimmer rounded-md", className)} />
 }
 
 export function StatRowSkeleton({ count = 4 }: { count?: number }) {
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="rounded-lg border border-border bg-card p-4">
+        <div key={i} className="rounded-lg border border-border/70 bg-card p-4 shadow-sm">
           <Skeleton className="h-4 w-24" />
           <Skeleton className="mt-3 h-7 w-16" />
         </div>
@@ -150,7 +158,7 @@ export function StatRowSkeleton({ count = 4 }: { count?: number }) {
 
 export function TableSkeleton({ rows = 6, columns = 5 }: { rows?: number; columns?: number }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card">
+    <div className="overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
       <div className="border-b border-border px-4 py-3">
         <Skeleton className="h-4 w-40" />
       </div>
@@ -171,7 +179,7 @@ export function CardGridSkeleton({ count = 4 }: { count?: number }) {
   return (
     <div className="card-grid">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="rounded-lg border border-border bg-card p-5">
+        <div key={i} className="rounded-lg border border-border/70 bg-card p-5 shadow-sm">
           <Skeleton className="h-5 w-32" />
           <Skeleton className="mt-4 h-4 w-full" />
           <Skeleton className="mt-2 h-4 w-2/3" />
@@ -198,9 +206,9 @@ export function EmptyState({
 }) {
   return (
     <div className={cn("empty-state", compact && "py-10")}>
-      <div className={cn("icon-chip", compact ? "size-10 [&>svg]:size-5" : "size-12 [&>svg]:size-6")}>{icon}</div>
+      <FloatingArt icon={icon} className={compact ? "scale-90" : undefined} />
       <div>
-        <p className="font-medium text-foreground">{title}</p>
+        <p className="font-heading font-medium text-foreground">{title}</p>
         {description && (
           <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>
         )}
@@ -228,13 +236,13 @@ export function ErrorState({
     <div
       role="alert"
       className={cn(
-        "flex flex-col items-center justify-center gap-3 rounded-lg border border-error-border bg-error-bg/60 px-6 text-center",
+        "flex flex-col items-center justify-center gap-3 rounded-lg border border-error-border bg-error-bg/50 px-6 text-center",
         compact ? "py-8" : "py-12",
       )}
     >
       <TriangleAlert className="size-5 text-error-foreground" strokeWidth={1.75} />
       <div>
-        <p className="font-medium text-foreground">{title}</p>
+        <p className="font-heading font-medium text-foreground">{title}</p>
         {description && (
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{description}</p>
         )}
@@ -267,8 +275,11 @@ export function SectionHeading({
   return (
     <div className={cn("flex flex-wrap items-center justify-between gap-3", className)}>
       <div>
-        <h2 className="font-heading text-base font-semibold tracking-tight">{title}</h2>
-        {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
+        <div className="flex items-center gap-2.5">
+          <span aria-hidden className="flourish" />
+          <h2 className="font-heading text-base font-semibold tracking-tight">{title}</h2>
+        </div>
+        {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
       {action}
     </div>

@@ -63,6 +63,7 @@ import {
 import { SessionSettingsDialog } from "@/components/session-settings-dialog"
 import { CreateSessionDialog } from "@/components/create-session-dialog"
 import { SessionDetailDialog } from "@/pages/session-detail-dialog"
+import { celebrate, CountUp, Stagger, StaggerItem } from "@/components/dream"
 
 interface SessionsPageProps {
   onNavigate?: (page: string, options?: { sessionName?: string }) => void
@@ -102,6 +103,7 @@ export function SessionsPage(_props?: SessionsPageProps) {
   const handleAction = async (label: string, fn: () => Promise<any>) => {
     try {
       await fn()
+      celebrate()
       toast.success(`Session ${label} succeeded`)
       loadSessions()
     } catch {
@@ -167,30 +169,38 @@ export function SessionsPage(_props?: SessionsPageProps) {
       ) : (
         <div className="space-y-6">
           {/* Stats */}
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-            <StatCard
-              label="Total sessions"
-              value={String(totalSessions)}
-              icon={<MessageSquare strokeWidth={1.75} />}
-            />
-            <StatCard
-              label="Working"
-              value={String(workingSessions)}
-              tone="success"
-              icon={<Play strokeWidth={1.75} />}
-            />
-            <StatCard
-              label="Scanning QR"
-              value={String(scanningSessions)}
-              tone="warning"
-              icon={<QrCode strokeWidth={1.75} />}
-            />
-            <StatCard
-              label="Stopped"
-              value={String(stoppedSessions)}
-              icon={<Square strokeWidth={1.75} />}
-            />
-          </div>
+          <Stagger className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+            <StaggerItem>
+              <StatCard
+                label="Total sessions"
+                value={<CountUp value={totalSessions} />}
+                icon={<MessageSquare strokeWidth={1.75} />}
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <StatCard
+                label="Working"
+                value={<CountUp value={workingSessions} />}
+                tone="success"
+                icon={<Play strokeWidth={1.75} />}
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <StatCard
+                label="Scanning QR"
+                value={<CountUp value={scanningSessions} />}
+                tone="warning"
+                icon={<QrCode strokeWidth={1.75} />}
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <StatCard
+                label="Stopped"
+                value={<CountUp value={stoppedSessions} />}
+                icon={<Square strokeWidth={1.75} />}
+              />
+            </StaggerItem>
+          </Stagger>
 
           {/* Sessions table */}
           <section className="space-y-3">

@@ -221,3 +221,20 @@ Audited upstream [rmyndharis/OpenWA](https://github.com/rmyndharis/OpenWA) — *
 ### Verified
 typecheck clean · 97/97 tests · live boot smoke on :3210 — all new routes mounted,
 auth-gated, session-resolver working (404 "session not found" for unknown sessions = correct).
+
+---
+
+## 🎨 Dream UI pass (2026-09-29)
+
+The console was a serious green ops theme; the ask was a fun, dreamy, eye-candy UI with
+beautiful animations, touching every component. No business logic changed: palette and
+motion live in tokens (`index.css`) and shared pieces (`dream.tsx`, `primitives.tsx`).
+
+| Area | What changed |
+|---|---|
+| Tokens | Full palette rebuild on Bun-brand colors: cream/vanilla light theme (default now) + deep plum dark theme; soft clay radii; glow shadows; pastel status chips; `.text-gradient` for brand moments. |
+| Type | Fredoka (headings) + Nunito (body) via `@fontsource-variable`, replacing Oxanium. |
+| Motion | Stagger entrances (`Stagger`/`StaggerItem`), rolling `CountUp` metrics, springy buttons/switch, sliding pills for tabs and sidebar nav (Framer Motion `layoutId`), ambient aurora + login orbs, confetti `celebrate()` on session actions, send-button pop in chat. `useReducedMotion` respected. |
+| Components | Every ui/* primitive restyled: pill buttons, soft lifting cards, glass bordered menus, shimmer skeletons, pastel rich toasts, softer dialogs/sheets, uppercase table heads, redesigned switch. |
+| Pages | Login rebuilt (split-screen, drifting orbs, password reveal toggle, gradient headline); dashboard + sessions stat cards stagger and count up; infra engine cards; sidebar regrouped Operate/Tools with animated active pill; chat bubble + composer polish. |
+| Verified | `tsc -b` + vite build clean; live CDP pass over login/dashboard/sessions/infrastructure/events/logs/workers at 1440×900@2 and 390×844@3, light + dark; zero console errors; password reveal flips `password`→`text`; theme toggle flips `light`→`dark`→`light`; `bun run test` 198/0, typecheck + lint clean. |

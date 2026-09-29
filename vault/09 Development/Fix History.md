@@ -150,6 +150,18 @@ unusable anywhere Chrome isn't at a hardcoded system path.
 | CI hardening | `bun install --frozen-lockfile` and `PUPPETEER_SKIP_DOWNLOAD=true` in the CI job. |
 | Verified | On Bun 1.4.2: `bun run test` 198/0 (parallel), typecheck + lint clean, boot smoke test with `--no-orphans` and exit. Lockfile-format analysis and declined candidates: [[Bun Runtime Adoption#Bun 1.4.2 pin (2026-09-29)]]. |
 
+## Dream UI pass (2026-09-29)
+
+| Item | Detail |
+|---|---|
+| Ask | Console "too serious and boring" → fun, dreamy, eye-candy UI with beautiful animations; every component touched. |
+| Palette | Bun-brand tokens: cream light theme (now the default) + plum dark theme; pastel status chips; aurora background; `.text-gradient`. |
+| Type | Fredoka + Nunito (`@fontsource-variable`); Oxanium retired. |
+| Motion | Stagger/CountUp/celebrate (`dream.tsx`), sliding tab + nav pills (Framer Motion `layoutId`), springy primitives, login orbs, chat send pop; `useReducedMotion` respected. |
+| Components | All ui/* primitives restyled; dialogs/sheets/menus softened; shimmer skeletons; pastel rich toasts; login rebuilt with password reveal toggle; sidebar IA regrouped Operate/Tools. |
+| Load path | `scripts/build-frontend.sh` → `frontend-dist` (untracked build artifact served by the API). |
+| Verified | Build clean; CDP screenshots light/dark + mobile (1440×900@2, 390×844@3); reveal toggle and theme toggle live-checked; `bun run test` 198/0; typecheck + lint clean. |
+
 ## Related
 
 [[OpenWA Parity]] · [[Roadmap]] · [[Testing]] · [[Dashboard]] · [[Known Gaps and Stubs]]

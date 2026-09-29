@@ -53,6 +53,7 @@ import {
 import { SessionSettingsDialog } from "@/components/session-settings-dialog"
 import { CreateSessionDialog } from "@/components/create-session-dialog"
 import { SessionDetailDialog } from "@/pages/session-detail-dialog"
+import { CountUp, Stagger, StaggerItem } from "@/components/dream"
 
 interface DashboardPageProps {
   onNavigate?: (page: string, options?: { sessionName?: string }) => void
@@ -142,10 +143,11 @@ export function DashboardPage(_props?: DashboardPageProps) {
         {loading ? (
           <StatRowSkeleton count={3} />
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-            <StatCard
-              label="Sessions"
-              value={sessionsError ? "-" : String(sessions.length)}
+          <Stagger className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+            <StaggerItem>
+              <StatCard
+                label="Sessions"
+                value={sessionsError ? "-" : <CountUp value={sessions.length} />}
               tone={attentionCount > 0 ? "warning" : "neutral"}
               hint={
                 sessionsError ? (
@@ -162,10 +164,12 @@ export function DashboardPage(_props?: DashboardPageProps) {
               }
               icon={<MessageSquare strokeWidth={1.75} />}
             />
-            <StatCard
-              label="Workers"
-              value={workersError ? "-" : String(workers.length)}
-              tone={workersError ? "error" : "neutral"}
+            </StaggerItem>
+            <StaggerItem>
+              <StatCard
+                label="Workers"
+                value={workersError ? "-" : <CountUp value={workers.length} />}
+                tone={workersError ? "error" : "neutral"}
               hint={
                 workersError ? (
                   "Unavailable"
@@ -178,9 +182,11 @@ export function DashboardPage(_props?: DashboardPageProps) {
                 )
               }
               icon={<Server strokeWidth={1.75} />}
-            />
-            <StatCard
-              label="Server version"
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <StatCard
+                label="Server version"
               value={version ? version.version : "-"}
               hint={
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -199,7 +205,8 @@ export function DashboardPage(_props?: DashboardPageProps) {
               }
               icon={<CloudDownload strokeWidth={1.75} />}
             />
-          </div>
+            </StaggerItem>
+          </Stagger>
         )}
 
         {/* Workers */}

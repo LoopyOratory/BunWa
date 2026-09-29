@@ -358,7 +358,7 @@ export function InfrastructurePage() {
                       onClick={() => setConfig({ ...config, engine: engine.value })}
                       aria-pressed={selected}
                       className={cn(
-                        "rounded-lg border-2 p-4 text-left transition-colors",
+                        "rounded-xl border-2 p-4 text-left transition-all duration-200 hover:-translate-y-0.5",
                         selected ? "border-primary bg-primary/10" : "border-border hover:border-muted-foreground/40",
                       )}
                     >

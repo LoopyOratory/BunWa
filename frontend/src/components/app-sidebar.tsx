@@ -1,4 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom"
+import { motion, useReducedMotion } from "framer-motion"
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel,
   SidebarGroupContent, SidebarMenu, SidebarMenuButton,
@@ -46,6 +47,7 @@ function NavGroup({
   currentPath: string
   onNavigate: (path: string) => void
 }) {
+  const reduce = useReducedMotion()
   return (
     <SidebarGroup>
       <SidebarGroupLabel>{label}</SidebarGroupLabel>
@@ -61,8 +63,17 @@ function NavGroup({
                   onClick={() => onNavigate(item.path)}
                   tooltip={item.label}
                 >
-                  <item.icon strokeWidth={1.75} />
-                  <span>{item.label}</span>
+                  {/* The fill physically slides between items as you navigate. */}
+                  {active && (
+                    <motion.span
+                      aria-hidden
+                      layoutId="nav-active-pill"
+                      className="nav-pill absolute inset-0 rounded-[inherit]"
+                      transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 420, damping: 38 }}
+                    />
+                  )}
+                  <item.icon className="relative z-10" strokeWidth={active ? 2.1 : 1.75} />
+                  <span className="relative z-10">{item.label}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )
@@ -83,15 +94,17 @@ export function AppSidebar() {
 
   return (
     <Sidebar variant="sidebar" collapsible="icon">
-      <SidebarHeader className="border-b px-4 py-3.5">
-        <div className="flex items-center gap-3">
+      <SidebarHeader className="border-b border-sidebar-border/70 px-4 py-3.5">
+        <div className="sidebar-logo flex items-center gap-3">
           <img
             src="/logo.jpg"
             alt="BunWa"
-            className="size-9 shrink-0 rounded-lg object-cover"
+            className="size-9 shrink-0 rounded-xl object-cover shadow-sm ring-1 ring-primary/25"
           />
           <div className="flex min-w-0 flex-col group-data-[collapsible=icon]:hidden">
-            <span className="font-heading text-base font-semibold leading-tight tracking-tight">BunWa</span>
+            <span className="font-heading text-base font-semibold leading-tight tracking-tight">
+              Bun<span className="text-primary">Wa</span>
+            </span>
             <span className="truncate text-xs text-muted-foreground">WhatsApp HTTP API</span>
           </div>
         </div>
@@ -99,18 +112,22 @@ export function AppSidebar() {
 
       <SidebarContent className="px-2 py-2">
         <NavGroup label="Operate" items={menuItems} currentPath={currentPath} onNavigate={navigate} />
-        <SidebarSeparator className="mx-2 my-1" />
+        <SidebarSeparator className="mx-2 my-1 opacity-60" />
         <NavGroup label="Tools" items={secondaryItems} currentPath={currentPath} onNavigate={navigate} />
       </SidebarContent>
 
-      <SidebarFooter className="border-t px-2 py-2">
+      <SidebarFooter className="border-t border-sidebar-border/70 px-2 py-2">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
               onClick={() => setTheme(isDark ? "light" : "dark")}
               tooltip={isDark ? "Switch to light mode" : "Switch to dark mode"}
             >
-              {isDark ? <Sun strokeWidth={1.75} /> : <Moon strokeWidth={1.75} />}
+              {isDark ? (
+                <Sun key="sun" className="theme-icon" strokeWidth={1.75} />
+              ) : (
+                <Moon key="moon" className="theme-icon" strokeWidth={1.75} />
+              )}
               <span>{isDark ? "Light mode" : "Dark mode"}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>

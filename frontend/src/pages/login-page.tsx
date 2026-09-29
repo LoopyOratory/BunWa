@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle, Braces, Loader2, Webhook, Zap, type LucideIcon } from "lucide-react"
+import { AlertCircle, Braces, Eye, EyeOff, Loader2, Webhook, Zap, type LucideIcon } from "lucide-react"
 import { useAuth } from "@/lib/auth"
 
 // Short, verifiable capability lines (README: dual engine, HMAC webhooks, MCP).
@@ -18,6 +18,7 @@ export function LoginPage() {
   const { login } = useAuth()
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
@@ -39,14 +40,24 @@ export function LoginPage() {
 
   return (
     <div className="login-container">
+      {/* Drifting pastel orbs behind everything. */}
+      <span aria-hidden className="login-orb orb-1" />
+      <span aria-hidden className="login-orb orb-2" />
+      <span aria-hidden className="login-orb orb-3" />
+      <span aria-hidden className="login-orb orb-4" />
+
       <div className="relative z-10 grid w-full max-w-5xl items-center gap-10 md:grid-cols-2 md:gap-16">
         {/* Sign-in card. First in the DOM so small screens keep an h1; second visually. */}
-        <Card className="order-1 w-full max-w-sm animate-scale-in justify-self-center rounded-lg border-border bg-card shadow-lg hover:shadow-lg md:order-2 md:justify-self-end">
+        <Card className="order-1 w-full max-w-sm animate-pop-in justify-self-center shadow-xl md:order-2 md:justify-self-end">
           <CardHeader className="space-y-4">
-            <img src="/logo.jpg" alt="" aria-hidden className="size-12 rounded-lg object-cover" />
+            <div className="grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-primary/25 via-primary/10 to-transparent ring-1 ring-primary/20">
+              <img src="/logo.jpg" alt="" aria-hidden className="size-10 rounded-xl object-cover" />
+            </div>
             <div>
-              <h1 className="font-heading text-xl font-semibold tracking-tight">Sign in</h1>
-              <p className="mt-1 text-xs/relaxed text-muted-foreground">Use your dashboard credentials.</p>
+              <h1 className="font-heading text-2xl font-semibold tracking-tight">Welcome back</h1>
+              <p className="mt-1 text-xs/relaxed text-muted-foreground">
+                Use your dashboard credentials. Your sessions are waiting.
+              </p>
             </div>
           </CardHeader>
           <CardContent>
@@ -71,17 +82,33 @@ export function LoginPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="pe-9"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-pressed={showPassword}
+                    className="absolute end-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-primary-soft hover:text-foreground"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="size-3.5" strokeWidth={1.75} />
+                    ) : (
+                      <Eye className="size-3.5" strokeWidth={1.75} />
+                    )}
+                  </button>
+                </div>
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" size="lg" className="w-full" disabled={loading}>
                 {loading ? (
                   <>
                     <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
@@ -96,14 +123,22 @@ export function LoginPage() {
         </Card>
 
         {/* Marketing panel: brand, one value line, three facts. */}
-        <div className="order-2 hidden md:order-1 md:flex md:flex-col md:gap-8 md:border-r md:border-border/70 md:pr-16">
+        <div className="order-2 hidden md:order-1 md:flex md:flex-col md:gap-8 md:border-r md:border-border/60 md:pr-16">
           <div className="flex items-center gap-3">
-            <img src="/logo.jpg" alt="" aria-hidden className="size-10 rounded-lg object-cover" />
-            <span className="font-heading text-lg font-semibold tracking-tight">BunWa</span>
+            <img
+              src="/logo.jpg"
+              alt=""
+              aria-hidden
+              className="size-10 rounded-xl object-cover shadow-sm ring-1 ring-primary/25"
+            />
+            <span className="font-heading text-lg font-semibold tracking-tight">
+              Bun<span className="text-primary">Wa</span>
+            </span>
           </div>
           <div>
             <h2 className="font-heading text-3xl font-semibold tracking-tight text-balance">
-              WhatsApp automation for the Bun runtime.
+              WhatsApp automation{" "}
+              <span className="text-gradient">with a little sparkle</span>.
             </h2>
             <p className="mt-3 max-w-sm text-muted-foreground">
               Multi-session messaging, webhooks, and an MCP server in one self-hosted console.
@@ -112,7 +147,9 @@ export function LoginPage() {
           <ul className="space-y-3">
             {FACTS.map(({ icon: Icon, text }) => (
               <li key={text} className="flex items-center gap-3 text-sm text-muted-foreground">
-                <Icon className="size-4 shrink-0 text-primary" strokeWidth={1.75} />
+                <span className="icon-chip size-7 [&>svg]:size-3.5">
+                  <Icon strokeWidth={1.75} />
+                </span>
                 {text}
               </li>
             ))}
