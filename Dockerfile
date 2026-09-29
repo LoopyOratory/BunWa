@@ -4,7 +4,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ──────────── stage 1: build ────────────
-FROM oven/bun:1 AS builder
+FROM oven/bun:1.4.2 AS builder
 WORKDIR /app
 
 # Skip Puppeteer's Chromium download at install time — WEBJS users mount
@@ -24,7 +24,7 @@ COPY . .
 RUN bash scripts/build-frontend.sh
 
 # ──────────── stage 2: production ────────────
-FROM oven/bun:1-slim
+FROM oven/bun:1.4.2-slim
 WORKDIR /app
 
 # ffmpeg — required for transcoding voice notes to OGG/Opus (WhatsApp voice
@@ -82,4 +82,7 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD bun -e "const r=await fetch('http://localhost:'+(process.env.PORT||3000)+'/health');process.exit(r.ok?0:1)"
 
-CMD ["bun", "run", "src/main.ts"]
+# --no-orphans: when the server exits (graceful shutdown, crash, container
+# stop), kill every descendant process it spawned — e.g. the Chrome running
+# inside a WEBJS session — instead of leaving them behind.
+CMD ["bun", "run", "--no-orphans", "src/main.ts"]

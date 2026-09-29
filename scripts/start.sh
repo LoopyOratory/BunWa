@@ -17,4 +17,6 @@ echo ""
 
 mkdir -p "$WAHA_DIR/data"
 cd "$WAHA_DIR"
-bun run src/main.ts
+# --no-orphans: if this server process exits, take its descendants with it —
+# notably the Chrome a WEBJS session spawns (Bun >= 1.4).
+bun run --no-orphans src/main.ts

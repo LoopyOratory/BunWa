@@ -10,14 +10,19 @@ jobs:
   ci:
     runs-on: ubuntu-latest
 
+    env:
+      # Skip Puppeteer's Chromium download — same as README/Docker. Tests never
+      # launch the bundled browser (WEBJS uses CHROME_PATH / a mounted Chrome).
+      PUPPETEER_SKIP_DOWNLOAD: "true"
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: "1.4.2"
 
-      - run: bun install
+      - run: bun install --frozen-lockfile
 
       - run: bun run test
 
