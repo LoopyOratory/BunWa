@@ -100,6 +100,8 @@ Two WhatsApp engines are supported:
 git clone https://github.com/LoopyOratory/BunWa.git bunwa
 cd bunwa
 
+# Requires Bun >= 1.4.2 (pinned in .bun-version + package.json engines) —
+# upgrade with `bun upgrade` if needed.
 # Install dependencies (skips Puppeteer Chromium download — use system Chrome for WEBJS)
 PUPPETEER_SKIP_DOWNLOAD=true bun install
 

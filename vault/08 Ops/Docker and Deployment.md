@@ -14,7 +14,7 @@ despite what the older docs claim ([[Known Gaps and Stubs]]).
 
 ## `Dockerfile` — production image
 
-Multi-stage: `oven/bun:1` builder → `oven/bun:1-slim` runtime.
+Multi-stage: `oven/bun:1.4.2` builder → `oven/bun:1.4.2-slim` runtime.
 
 ```text
 builder
@@ -23,7 +23,7 @@ builder
   cd frontend && bun install --frozen-lockfile
   bash scripts/build-frontend.sh      → frontend-dist/
 
-runtime (oven/bun:1-slim)
+runtime (oven/bun:1.4.2-slim)
   apt-get install ffmpeg              ← required for voice transcoding
   non-root user waha (uid/gid 1001)
   COPY src/ · frontend-dist/ · package.json · bun.lock · tsconfig.json

@@ -15,7 +15,7 @@ extended with a Plus tier, an MCP server for AI agents, and a React dashboard.
 |---|---|
 | Version | `2026.5.1` (package `waha-bun`) |
 | Tier | `PLUS` (auto-detected from `src/plus/`) |
-| Runtime | Bun ≥ 1.4.0 (verified on 1.4.2) |
+| Runtime | Bun ≥ 1.4.2 (pinned: `engines.bun` + `.bun-version`; CI + Docker images pinned) |
 | Engines | [[NOWEB Engine\|NOWEB]] (Baileys) · [[WEBJS Engine\|WEBJS]] (Puppeteer) |
 | Tests | 198 tests / 25 files → **all passing** ([[Testing]]) |
 | Typecheck | clean and **CI-enforced** — `tsc --noEmit` |

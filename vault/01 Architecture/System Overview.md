@@ -17,7 +17,7 @@ are held in-process by an engine per session.
 | Item | Value |
 |---|---|
 | Entry point | `src/main.ts` → `bootstrap()` |
-| Runtime | Bun ≥ 1.4.0 (`engines.bun`); `bunfig.toml` sets `linker = "isolated"`, `globalStore = true` |
+| Runtime | Bun ≥ 1.4.2 (`engines.bun` + `.bun-version`); `bunfig.toml` sets `linker = "isolated"`, `globalStore = true` |
 | HTTP framework | Hono 4.x, mounted onto `Bun.serve` |
 | Default port | `PORT` → `WHATSAPP_API_PORT` → **3000** in scripts/docs (dev script advertises 3001) |
 | Tier detection | `getWAHAVersion()` in `src/version.ts`: `WAHA_VERSION=CORE` forces CORE, otherwise the presence of `src/plus/` ⇒ **PLUS** (and the final fallback is also PLUS) |

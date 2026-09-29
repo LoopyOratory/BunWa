@@ -2,7 +2,7 @@
 type: note
 section: development
 tags: [bunwa, bun, dev, ops]
-updated: 2026-09-14
+updated: 2026-09-29
 source: src/main.ts, src/common/security/webhook-signing.ts, src/plus/storage/s3/S3MediaStorage.ts, package.json
 status: shipped
 ---
@@ -77,6 +77,52 @@ and audit rows with UUIDv7 ids.
   smoke test — the two guards that matter most are the body cap and the static-file semantics.
 - **Consider `Bun.SQL`** only alongside a Postgres store-layer refactor.
 - Axios removal in the Chatwoot app remains available as a standalone cleanup ([[Roadmap]]).
+
+## Bun 1.4.2 pin (2026-09-29)
+
+The runtime is now pinned to **1.4.2** everywhere instead of "whatever latest is":
+
+| Surface | Before | After |
+|---|---|---|
+| `package.json` → `engines.bun` | `>=1.4.0` | `>=1.4.2` |
+| `.bun-version` | — | `1.4.2` |
+| CI (`setup-bun`) | `bun-version: latest` | `bun-version: "1.4.2"` |
+| Docker (both files) | `oven/bun:1` / `:1-slim` | `oven/bun:1.4.2` / `:1.4.2-slim` |
+| Types | `@types/bun` 1.3.14, `bun-types` 1.4.0 | both `^1.4.2` |
+
+Adopted in the same pass:
+
+- **`--no-orphans`** on the production launch (`scripts/start.sh`, both Dockerfiles). Probed both ways:
+  a Bun process that exits kills its spawned descendants with the flag and leaves them alive without
+  it (`sleep` child, `process.exit(0)`). This is the cleanup for a WEBJS session's Chrome when the
+  server dies without a clean `client.destroy()`.
+- **`bun test --parallel`** as the `test` script — worker processes, fresh globals per file, ≈2.2s.
+  It exposed a latent test bug: `auth.test.ts` only passed because another file happened to register
+  `AuditService` in the container first; it now registers its own instance
+  ([[Fix History#Bun 1.4.2 pin (2026-09-29)]]).
+- **CI hardening**: `bun install --frozen-lockfile` + `PUPPETEER_SKIP_DOWNLOAD=true`.
+
+Checked against the 1.4 upgrade checklist on this tree:
+
+- **No native addons** (`find node_modules -name '*.node'` → 0 results) — nothing to rebuild for the
+  Node 26.3.0 compat target.
+- **Lockfile format**: 1.4.2 reads and writes the repo's existing `bun.lock` (v1) fine — verified with
+  `bun install`, `--frozen-lockfile` and `bun add`. Fresh lockfiles get **v2**; migrating this one
+  requires a full re-resolution (measured on a scratch copy: **113 version bumps** — hono
+  4.12.25→4.13.11, sharp 0.34.5→0.35.5, oxlint 1.69→1.86, …), so it pairs with a deliberate
+  dependency refresh, not a runtime pin.
+
+Evaluated and declined (probed, not assumed):
+
+| Candidate | Why not |
+|---|---|
+| **Bun.WebView** | Replaces simple automation, not whatsapp-web.js — the WEBJS engine needs wwebjs's deep `page.evaluate` bridging and its own persistent session. Not a drop-in. |
+| **`Bun.cron`** | Probe returned an in-process `CronJob` object (no crontab entry written). The one scheduled job (audit retention) is deliberately tied to the server lifecycle — timer torn down in `destroy()`, tests rely on that. |
+| **HTTP/2 in `Bun.serve`** | h2 without TLS needs prior-knowledge h2c, which browsers don't speak; the app serves cleartext behind a TLS-terminating proxy and has no TLS options wired. |
+| **`Bun.write()` streaming a Response to disk** | No call site writes a `Response`/fetch result to disk — media writes are buffers/strings. |
+| **WebSocket `pause()` / `resume()`** | The event stream is low-volume and a few clients deep; Bun buffers sends internally. Revisit if a per-chat firehose subscription is ever added. |
+| **`install --offline` / `--prefer-offline`** | Docker's layer cache covers warm installs; CI needs the network anyway. |
+| Bun.Image · `Bun.markdown` · JSON5 · JSONL | No call sites. |
 
 ## Related
 
