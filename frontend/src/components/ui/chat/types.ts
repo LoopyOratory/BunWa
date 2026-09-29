@@ -34,6 +34,14 @@ export interface ChatMessageData {
   isSystem?: boolean
   systemEvent?: string
 
+  /** Structured selection from an interactive reply (button tap, list row or flow) */
+  interactive?: {
+    type: "button" | "list" | "flow"
+    selectedId: string | null
+    selectedText: string | null
+    repliedToMessageId: string | null
+  }
+
   // Read receipts (group chat) — list of users who have read up to this message
   readBy?: { userId: string; name: string; avatar?: string }[]
 }

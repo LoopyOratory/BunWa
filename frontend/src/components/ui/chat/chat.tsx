@@ -496,6 +496,27 @@ function ChatMessage({
               </p>
             )}
 
+            {/* Interactive reply — button tap, list selection or flow */}
+            {message.interactive && (
+              <div className="chat-content-card mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 px-2.5 py-1.5">
+                <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-[var(--chat-text-tertiary)]">
+                  <MousePointerClick className="size-3.5" />
+                  {message.interactive.type === "button"
+                    ? "Button reply"
+                    : message.interactive.type === "list"
+                      ? "List selection"
+                      : message.interactive.type === "flow"
+                        ? "Form reply"
+                        : message.interactive.type}
+                </span>
+                {(message.interactive.selectedText || message.interactive.selectedId) && (
+                  <span className="text-[13px] font-medium text-[var(--chat-text-primary)]">
+                    {message.interactive.selectedText || message.interactive.selectedId}
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Images */}
             {message.images && message.images.length > 0 && (
               <div className={cn("flex flex-wrap gap-1.5", mediaFillsBubble ? "" : "mt-1.5")}>
