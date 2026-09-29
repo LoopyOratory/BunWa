@@ -4,6 +4,7 @@ import { INowebLidPNRepository } from '../INowebLidPNRepository';
 import { Schema } from '../../../../storage/Schema';
 import Knex from 'knex';
 import { INowebStorage } from '../INowebStorage';
+import { makePostgresKnex } from '../../../../db/knex-postgres';
 import { Migrations, NOWEB_STORE_SCHEMA } from '../schemas';
 import { PostgresChatRepository } from './PostgresChatRepository';
 import { PostgresContactRepository } from './PostgresContactRepository';
@@ -23,17 +24,7 @@ export class PostgresStorage extends INowebStorage {
 
   constructor(connectionString: string) {
     super();
-    this.knex = Knex({
-      client: 'pg',
-      connection: connectionString,
-      pool: {
-        min: 2,
-        max: 10,
-        idleTimeoutMillis: 60_000,
-        createTimeoutMillis: 120_000,
-        acquireTimeoutMillis: 120_000,
-      },
-    });
+    this.knex = makePostgresKnex(connectionString);
     this.tables = NOWEB_STORE_SCHEMA;
   }
 

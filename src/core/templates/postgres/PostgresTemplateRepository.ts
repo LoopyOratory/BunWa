@@ -1,5 +1,6 @@
 import Knex from 'knex';
 import pino from 'pino';
+import { makePostgresKnex } from '../../db/knex-postgres';
 import { ITemplateRepository } from '../ITemplateRepository';
 import type { Template } from '../template.types';
 
@@ -24,17 +25,7 @@ export class PostgresTemplateRepository implements ITemplateRepository {
    */
   private getKnex(): Knex.Knex {
     if (!this.knex) {
-      this.knex = Knex({
-        client: 'pg',
-        connection: this.connectionString,
-        pool: {
-          min: 2,
-          max: 10,
-          idleTimeoutMillis: 60_000,
-          createTimeoutMillis: 120_000,
-          acquireTimeoutMillis: 120_000,
-        },
-      });
+      this.knex = makePostgresKnex(this.connectionString);
     }
     return this.knex;
   }
@@ -106,5 +97,13 @@ export class PostgresTemplateRepository implements ITemplateRepository {
 
   async delete(sessionId: string, id: string): Promise<void> {
     await this.getKnex()('templates').where({ id, sessionId }).del();
+  }
+
+  /** Destroy the underlying pool (mirrors PostgresStorage.close). */
+  async close(): Promise<void> {
+    if (this.knex) {
+      await this.knex.destroy();
+      this.knex = null;
+    }
   }
 }
