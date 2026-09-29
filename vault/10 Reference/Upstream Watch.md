@@ -2,7 +2,7 @@
 type: note
 section: reference
 tags: [bunwa, openwa, waha, upstream, parity]
-updated: 2026-09-29
+updated: 2026-09-15
 status: active
 source: github.com/rmyndharis/OpenWA commits + releases (fetched via GitHub API, 2026-09-29), devlikeapro/waha releases
 ---
@@ -39,6 +39,10 @@ are directly relevant to BunWa.
 | 13 | Observability: Prometheus + OpenTelemetry | 0.23.8: delivery metrics | 2026.8.2 | none, by choice | Reconsider (Roadmap #19) |
 | 14 | Engine hygiene: Chrome for Testing 153, WhatsApp Web build fixes, LID group-list fix | v0.23.5-0.23.7 | 2026.9.1: many WEBJS fixes | webjs 1.34.7 / puppeteer 24 | Track |
 | 15 | Plus features merged into free Core | — | 2026.6.1 | our tier flag is cosmetic | No action |
+| 16 | ChatWoot delivered/read ticks + contact name sync | — | 2026.9.1 | partial: contacts and inbound media sync, tick sync not implemented | Optional |
+| 17 | `chats/overview` pagination now required (breaking) | — | 2026.5.1 | already limit/offset | No action |
+| 18 | MCP auth via `?x-api-key` query param | — | 2026.4.3 | supported | No action |
+| 19 | Dashboard chat UI (media preview, history) | — | 2026.4.1 | ahead: route restyled as WhatsApp Web, store-disabled state explains itself | No action |
 
 Sources per row: OpenWA release notes (v0.23.4 → v0.23.7, 0.23.8 train) and WAHA release
 notes (2026.3.4 → 2026.9.1).

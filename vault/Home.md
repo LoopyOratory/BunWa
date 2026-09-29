@@ -82,7 +82,7 @@ extended with a Plus tier, an MCP server for AI agents, and a React dashboard.
 - [[Glossary]] — WAHA · JID · LID · NOWEB · tiers
 - [[OpenWA Parity]] — the upstream audit and what was deliberately not ported
 - [[Upstream Watch]] — what OpenWA and WAHA shipped since, compared to BunWa
-- [[Upstream Watch - WAHA vs BunWa]] — the 2026-09 comparison against WAHA's recent releases
+- [[Upstream Watch]] — the three-way OpenWA → WAHA → BunWa comparison, with a prioritised port list
 - [[Feature Tracker.base|📊 Feature Tracker]] (Obsidian Base)
 - [[Architecture Canvas.canvas|🗺️ Architecture Canvas]] (Obsidian Canvas)
 
