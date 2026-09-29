@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react"
+import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -35,6 +35,8 @@ import {
   RefreshCw,
   FilterX,
   MoreHorizontal,
+  Send,
+  TriangleAlert,
 } from "lucide-react"
 import { api, type AuditEntry, type ServerVersion, type Session, type Worker } from "@/lib/api"
 import { toast } from "sonner"
@@ -52,11 +54,15 @@ import {
   TableSkeleton,
 } from "@/components/primitives"
 import {
-  ActivityChart,
+  IssuesChart,
+  MessagesChart,
+  SessionActivityChart,
   SessionsDonut,
   STATUS_META,
   STATUS_ORDER,
   WorkersLoad,
+  isIssue,
+  issueCategoryOf,
 } from "@/components/dashboard-charts"
 import { SessionSettingsDialog } from "@/components/session-settings-dialog"
 import { CreateSessionDialog } from "@/components/create-session-dialog"
@@ -181,6 +187,38 @@ export function DashboardPage(_props?: DashboardPageProps) {
     return w.name.toLowerCase().includes(workerSearch.toLowerCase())
   })
 
+  /* ── Aggregates from the audit log, for the KPI cards ─────────────── */
+  const auditStats = useMemo(() => {
+    const cutoff = Date.now() - rangeHours * 3_600_000
+    let sent = 0
+    let failed = 0
+    const byCat = new Map<string, number>()
+    for (const e of audit) {
+      const t = Date.parse(e.createdAt)
+      if (Number.isNaN(t) || t < cutoff) continue
+      if (e.action === "message_sent") sent++
+      else if (e.action === "message_failed") failed++
+      if (isIssue(e)) {
+        const cat = issueCategoryOf(e) ?? "Other"
+        byCat.set(cat, (byCat.get(cat) ?? 0) + 1)
+      }
+    }
+    let issues = 0
+    let top = ""
+    let topN = 0
+    for (const [cat, n] of byCat) {
+      issues += n
+      if (n > topN) {
+        top = cat
+        topN = n
+      }
+    }
+    const total = sent + failed
+    return { sent, failed, issues, top, rate: total > 0 ? Math.round((failed / total) * 100) : 0, total }
+  }, [audit, rangeHours])
+
+  const rangeLabel = rangeHours === 24 ? "24h" : rangeHours === 168 ? "7d" : "30d"
+
   return (
     <PageLayout
       title="Dashboard"
@@ -194,9 +232,9 @@ export function DashboardPage(_props?: DashboardPageProps) {
       <div className="space-y-6">
         {/* Stats */}
         {loading ? (
-          <StatRowSkeleton count={3} />
+          <StatRowSkeleton count={5} />
         ) : (
-          <Stagger className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+          <Stagger className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
             <StaggerItem>
               <StatCard
                 label="Sessions"
@@ -239,6 +277,44 @@ export function DashboardPage(_props?: DashboardPageProps) {
             </StaggerItem>
             <StaggerItem>
               <StatCard
+                label={`Messages ${rangeLabel}`}
+                value={auditFailed ? "-" : <CountUp value={auditStats.total} />}
+                tone={!auditFailed && auditStats.failed > 0 ? "warning" : "neutral"}
+                hint={
+                  auditFailed ? (
+                    "Unavailable"
+                  ) : auditStats.total === 0 ? (
+                    "No send attempts in this range"
+                  ) : (
+                    <>
+                      <Metric>{auditStats.failed}</Metric> failed, <Metric>{auditStats.rate}%</Metric> of attempts
+                    </>
+                  )
+                }
+                icon={<Send strokeWidth={1.75} />}
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <StatCard
+                label={`Issues ${rangeLabel}`}
+                value={auditFailed ? "-" : <CountUp value={auditStats.issues} />}
+                tone={!auditFailed && auditStats.issues > 0 ? "error" : "neutral"}
+                hint={
+                  auditFailed ? (
+                    "Unavailable"
+                  ) : auditStats.issues === 0 ? (
+                    "All clear in this window"
+                  ) : (
+                    <>
+                      mostly <Metric>{auditStats.top}</Metric>
+                    </>
+                  )
+                }
+                icon={<TriangleAlert strokeWidth={1.75} />}
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <StatCard
                 label="Server version"
               value={version ? version.version : "-"}
               hint={
@@ -266,7 +342,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
         <section className="space-y-3">
           <SectionHeading
             title="Insights"
-            description="Live read of sessions, workers and event traffic"
+            description="Live read of sessions, workers and the latest 500 audit entries"
             action={
               <Button variant="ghost" size="sm" onClick={resetFilters} disabled={!filtersActive}>
                 <FilterX className="size-4" strokeWidth={1.75} />
@@ -312,11 +388,11 @@ export function DashboardPage(_props?: DashboardPageProps) {
           <div className="grid gap-4 lg:grid-cols-3">
             <SessionsDonut sessions={chartSessions} />
             <div className="lg:col-span-2">
-              <ActivityChart entries={audit} rangeHours={rangeHours} failed={auditFailed} />
+              <MessagesChart entries={audit} rangeHours={rangeHours} failed={auditFailed} />
             </div>
-            <div className="lg:col-span-3">
-              <WorkersLoad workers={engineWorkers} />
-            </div>
+            <SessionActivityChart entries={audit} rangeHours={rangeHours} />
+            <IssuesChart entries={audit} rangeHours={rangeHours} failed={auditFailed} />
+            <WorkersLoad workers={engineWorkers} />
           </div>
         </section>
 

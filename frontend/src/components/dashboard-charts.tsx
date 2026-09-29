@@ -1,24 +1,23 @@
 /**
- * Dashboard charts — live pictures of the data the console already fetches.
+ * Dashboard charts — the metrics an operator actually watches, each one
+ * computed only from real API data (sessions, workers, audit log):
  *
- * Three pieces, one material: everything renders into glass cards with
- * pastel slices, so the graphs read as part of the dreamscape, not bolted on.
+ *   SessionsDonut        status mix of the sessions the filters let through
+ *   MessagesChart        send volume: delivered vs failed, per hour/day
+ *   SessionActivityChart session lifecycle events (created/started/stopped/QR)
+ *   IssuesChart          warn+error audit events grouped by cause
+ *   WorkersLoad          sessions handled by each worker
  *
- *   SessionsDonut  status mix of the sessions the filters let through
- *   ActivityChart  audit events per hour/day, severity stacked
- *   WorkersLoad    sessions handled by each worker
- *
- * Charts are driven only by real API data (sessions, workers, audit log).
+ * All time series share one bucketing helper so the range chips reshape
+ * every chart at once. Buckets are hourly for 24h and daily for 7d/30d.
  */
-import { useMemo, useState } from "react"
+import { useMemo } from "react"
 import {
   ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
   Tooltip,
-  AreaChart,
-  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -52,6 +51,56 @@ function fmtDay(t: number) {
   return `${d.getDate()} ${MONTHS[d.getMonth()]}`
 }
 
+/* ── Issue classification, shared by the chart and the KPI cards ─────── */
+
+export const isIssue = (e: AuditEntry) => e.severity === "warn" || e.severity === "error"
+
+const ISSUE_CATEGORY: Record<string, string> = {
+  message_failed: "Messages",
+  webhook_failed: "Webhooks",
+  api_key_auth_failed: "Auth",
+  session_disconnected: "Sessions",
+  session_force_killed: "Sessions",
+  session_stopped: "Sessions",
+}
+
+/** Category for a warn/error entry, or null when it is not an issue. */
+export function issueCategoryOf(e: AuditEntry): string | null {
+  if (!isIssue(e)) return null
+  return ISSUE_CATEGORY[e.action] ?? "Other"
+}
+
+const ISSUE_SERIES = [
+  { key: "Messages", color: "var(--error)" },
+  { key: "Webhooks", color: "var(--warning)" },
+  { key: "Auth", color: "var(--info)" },
+  { key: "Sessions", color: "var(--primary)" },
+  { key: "Other", color: OFFLINE_COLOR },
+] as const
+
+const ACTIVITY_SERIES = [
+  { key: "Created", color: "var(--chart-3)" },
+  { key: "Started", color: "var(--success)" },
+  { key: "Stopped", color: OFFLINE_COLOR },
+  { key: "QR", color: "var(--info)" },
+] as const
+
+const ACTIVITY_CATEGORY: Record<string, string> = {
+  session_created: "Created",
+  session_started: "Started",
+  session_connected: "Started",
+  session_stopped: "Stopped",
+  session_disconnected: "Stopped",
+  session_force_killed: "Stopped",
+  session_deleted: "Stopped",
+  session_qr_generated: "QR",
+}
+
+const MESSAGE_SERIES = [
+  { label: "Delivered", color: "var(--success)" },
+  { label: "Failed", color: "var(--error)" },
+] as const
+
 /* ── Shared bits ─────────────────────────────────────────────────────── */
 
 type TipItem = { name?: string; value?: number | string; color?: string }
@@ -84,11 +133,68 @@ function ChartEmpty({ text }: { text: string }) {
   )
 }
 
+function ChartLegend({ items }: { items: ReadonlyArray<{ label: string; color: string }> }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+      {items.map((it) => (
+        <span key={it.label} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="filter-dot" style={{ background: it.color }} />
+          {it.label}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 const CARD_HEAD = "flex flex-wrap items-start justify-between gap-3"
 const CHART_TITLE = "font-heading text-sm font-semibold tracking-tight"
 const CHART_HINT = "mt-0.5 text-xs text-muted-foreground"
 
 const TICK = { fontSize: 11, fill: "var(--muted-foreground)" } as const
+const BAR_MARGIN = { top: 6, right: 8, bottom: 0, left: 0 }
+
+/** Bucket audit entries into hourly (24h) or daily (7d/30d) windows.
+ *  `add` returns true only when it actually classified the entry, so the
+ *  returned `hit` is this chart's own total, never the global event count. */
+function bucketize<T>(
+  entries: AuditEntry[],
+  rangeHours: number,
+  makeRow: (label: string) => T,
+  add: (row: T, e: AuditEntry) => boolean,
+): { rows: T[]; perHour: boolean; hit: number } {
+  const now = Date.now()
+  const hourMs = 3_600_000
+  const dayMs = 86_400_000
+  const perHour = rangeHours <= 24
+  const count = perHour ? 24 : Math.round(rangeHours / 24)
+  const step = perHour ? hourMs : dayMs
+  const end = Math.ceil(now / step) * step
+  const start = end - count * step
+  const rows = Array.from({ length: count }, (_, i) =>
+    makeRow(perHour ? fmtHour(start + i * step) : fmtDay(start + i * step)),
+  )
+  let hit = 0
+  for (const e of entries) {
+    const t = Date.parse(e.createdAt)
+    if (Number.isNaN(t) || t < start) continue
+    const idx = Math.min(count - 1, Math.max(0, Math.floor((t - start) / step)))
+    if (add(rows[idx], e)) hit++
+  }
+  return { rows, perHour, hit }
+}
+
+function TimeXAxis({ perHour, count }: { perHour: boolean; count: number }) {
+  return (
+    <XAxis
+      dataKey="label"
+      tickLine={false}
+      axisLine={false}
+      tick={TICK}
+      interval={perHour ? 3 : Math.max(0, Math.floor(count / 10) - 1)}
+      minTickGap={16}
+    />
+  )
+}
 
 /* ── 1. Sessions by status ───────────────────────────────────────────── */
 
@@ -162,134 +268,220 @@ export function SessionsDonut({ sessions }: { sessions: Session[] }) {
   )
 }
 
-/* ── 2. Event activity ───────────────────────────────────────────────── */
+/* ── 2. Messages: delivered vs failed ────────────────────────────────── */
 
-export function ActivityChart({ entries, rangeHours, failed }: { entries: AuditEntry[]; rangeHours: number; failed?: boolean }) {
-  const [issuesOnly, setIssuesOnly] = useState(false)
+export function MessagesChart({ entries, rangeHours, failed }: { entries: AuditEntry[]; rangeHours: number; failed?: boolean }) {
+  const { rows, perHour, sent, fail } = useMemo(() => {
+    let sentCount = 0
+    let failCount = 0
+    const b = bucketize(
+      entries,
+      rangeHours,
+      (label) => ({ label, delivered: 0, failed: 0 }),
+      (row, e) => {
+        if (e.action === "message_sent") {
+          row.delivered++
+          sentCount++
+          return true
+        }
+        if (e.action === "message_failed") {
+          row.failed++
+          failCount++
+          return true
+        }
+        return false
+      },
+    )
+    return { rows: b.rows, perHour: b.perHour, sent: sentCount, fail: failCount }
+  }, [entries, rangeHours])
 
-  const { rows, total, issues, perHour } = useMemo(() => {
-    const now = Date.now()
-    const hourMs = 3_600_000
-    const dayMs = 86_400_000
-    const hourly = rangeHours <= 24
-    const count = hourly ? 24 : Math.max(1, Math.round(rangeHours / 24))
-    const step = hourly ? hourMs : dayMs
-    const end = Math.ceil(now / step) * step
-    const start = end - count * step
+  const total = sent + fail
+  const rate = total > 0 ? Math.round((fail / total) * 100) : 0
 
-    const buckets = Array.from({ length: count }, (_, i) => {
-      const t = start + i * step
-      return { label: hourly ? fmtHour(t) : fmtDay(t), info: 0, warn: 0, error: 0 }
-    })
+  return (
+    <Card className="hover-float flex flex-col gap-4 p-5">
+      <div className={CARD_HEAD}>
+        <div>
+          <p className={CHART_TITLE}>Messages</p>
+          <p className={CHART_HINT}>Send attempts {perHour ? "per hour" : "per day"}, delivered vs failed</p>
+        </div>
+        {total > 0 && (
+          <span className="text-xs text-muted-foreground">
+            <span className="font-semibold tabular-nums text-foreground">{sent}</span> delivered
+            <span className="mx-1.5">·</span>
+            <span className="font-semibold tabular-nums text-foreground">{fail}</span> failed
+            <span className="mx-1.5">·</span>
+            <span className="font-semibold tabular-nums text-foreground">{rate}%</span> fail rate
+          </span>
+        )}
+      </div>
+      {total === 0 ? (
+        <ChartEmpty text={failed ? "Could not load audit events." : "No messages in this window."} />
+      ) : (
+        <>
+          <ChartLegend items={MESSAGE_SERIES} />
+          <div className="h-[215px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={rows} margin={BAR_MARGIN} barCategoryGap="25%">
+              <CartesianGrid vertical={false} stroke="var(--border)" strokeOpacity={0.55} strokeDasharray="3 6" />
+              <TimeXAxis perHour={perHour} count={rows.length} />
+              <YAxis width={30} allowDecimals={false} tickLine={false} axisLine={false} tick={TICK} />
+              <Tooltip content={<GlassTooltip />} cursor={{ fill: "var(--primary)", fillOpacity: 0.06 }} />
+              <Bar dataKey="delivered" name="Delivered" stackId="m" fill="var(--success)" maxBarSize={9} />
+              <Bar dataKey="failed" name="Failed" stackId="m" fill="var(--error)" maxBarSize={9} radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          </div>
+        </>
+      )}
+    </Card>
+  )
+}
 
-    let seen = 0
-    let bad = 0
-    for (const e of entries) {
-      const t = Date.parse(e.createdAt)
-      if (Number.isNaN(t) || t < start) continue
-      const idx = Math.min(count - 1, Math.max(0, Math.floor((t - start) / step)))
-      const sev = e.severity === "error" ? "error" : e.severity === "warn" ? "warn" : "info"
-      buckets[idx][sev] += 1
-      seen += 1
-      if (sev !== "info") bad += 1
+/* ── 3. Session lifecycle activity ───────────────────────────────────── */
+
+export function SessionActivityChart({ entries, rangeHours }: { entries: AuditEntry[]; rangeHours: number }) {
+  const { rows, perHour, hit } = useMemo(
+    () =>
+      bucketize(
+        entries,
+        rangeHours,
+        (label) => ({ label, Created: 0, Started: 0, Stopped: 0, QR: 0 }) as Record<string, number | string>,
+        (row, e) => {
+          const cat = ACTIVITY_CATEGORY[e.action]
+          if (!cat) return false
+          row[cat] = (row[cat] as number) + 1
+          return true
+        },
+      ),
+    [entries, rangeHours],
+  )
+
+  return (
+    <Card className="hover-float flex flex-col gap-4 p-5">
+      <div className={CARD_HEAD}>
+        <div>
+          <p className={CHART_TITLE}>Session activity</p>
+          <p className={CHART_HINT}>Lifecycle events {perHour ? "per hour" : "per day"}</p>
+        </div>
+        <span className="text-xs text-muted-foreground">
+          <span className="font-semibold tabular-nums text-foreground">{hit}</span> events
+        </span>
+      </div>
+      {hit === 0 ? (
+        <ChartEmpty text="No session events in this window." />
+      ) : (
+        <>
+          <ChartLegend items={ACTIVITY_SERIES.map((s) => ({ label: s.key, color: s.color }))} />
+          <div className="h-[215px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={rows} margin={BAR_MARGIN} barCategoryGap="25%">
+              <CartesianGrid vertical={false} stroke="var(--border)" strokeOpacity={0.55} strokeDasharray="3 6" />
+              <TimeXAxis perHour={perHour} count={rows.length} />
+              <YAxis width={30} allowDecimals={false} tickLine={false} axisLine={false} tick={TICK} />
+              <Tooltip content={<GlassTooltip />} cursor={{ fill: "var(--primary)", fillOpacity: 0.06 }} />
+              {ACTIVITY_SERIES.map((s, i) => (
+                <Bar
+                  key={s.key}
+                  dataKey={s.key}
+                  name={s.key}
+                  stackId="a"
+                  fill={s.color}
+                  maxBarSize={9}
+                  radius={i === ACTIVITY_SERIES.length - 1 ? [3, 3, 0, 0] : undefined}
+                />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+          </div>
+        </>
+      )}
+    </Card>
+  )
+}
+
+/* ── 4. Issues by cause ──────────────────────────────────────────────── */
+
+export function IssuesChart({ entries, rangeHours, failed }: { entries: AuditEntry[]; rangeHours: number; failed?: boolean }) {
+  const { rows, perHour, total, top } = useMemo(() => {
+    const counts = new Map<string, number>()
+    const b = bucketize(
+      entries,
+      rangeHours,
+      (label) => {
+        const row: Record<string, number | string> = { label }
+        for (const s of ISSUE_SERIES) row[s.key] = 0
+        return row
+      },
+      (row, e) => {
+        const cat = issueCategoryOf(e)
+        if (!cat) return false
+        row[cat] = (row[cat] as number) + 1
+        counts.set(cat, (counts.get(cat) ?? 0) + 1)
+        return true
+      },
+    )
+    let biggest = ""
+    let biggestCount = 0
+    for (const [cat, n] of counts) {
+      if (n > biggestCount) {
+        biggest = cat
+        biggestCount = n
+      }
     }
-    return { rows: buckets, total: seen, issues: bad, perHour: hourly }
+    return { rows: b.rows, perHour: b.perHour, total: b.hit, top: biggest }
   }, [entries, rangeHours])
 
   return (
     <Card className="hover-float flex flex-col gap-4 p-5">
       <div className={CARD_HEAD}>
         <div>
-          <p className={CHART_TITLE}>Event activity</p>
-          <p className={CHART_HINT}>
-            Audit log entries {perHour ? "per hour" : "per day"}, severity stacked
-          </p>
+          <p className={CHART_TITLE}>Issues</p>
+          <p className={CHART_HINT}>Warnings and errors {perHour ? "per hour" : "per day"}, by cause</p>
         </div>
-        <div className="flex items-center gap-1.5">
-          <button type="button" className="filter-chip" data-active={!issuesOnly} onClick={() => setIssuesOnly(false)}>
-            All
-          </button>
-          <button type="button" className="filter-chip" data-active={issuesOnly} onClick={() => setIssuesOnly(true)}>
-            Issues
-          </button>
-          <span className="ms-1 text-xs text-muted-foreground">
-            <span className="font-semibold tabular-nums text-foreground">{issuesOnly ? issues : total}</span>{" "}
-            {issuesOnly ? "issues" : "events"}
-          </span>
-        </div>
+        <span className="text-xs text-muted-foreground">
+          <span className="font-semibold tabular-nums text-foreground">{total}</span> total
+          {total > 0 && top && (
+            <>
+              <span className="mx-1.5">·</span>
+              mostly {top}
+            </>
+          )}
+        </span>
       </div>
       {total === 0 ? (
-        <ChartEmpty text={failed ? "Could not load audit events." : "No audit events in this window."} />
+        <ChartEmpty text={failed ? "Could not load audit events." : "No issues in this window. Nice."} />
       ) : (
-        <div className="h-[215px]">
+        <>
+          <ChartLegend items={ISSUE_SERIES.map((s) => ({ label: s.key, color: s.color }))} />
+          <div className="h-[215px]">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={rows} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
-              <defs>
-                <linearGradient id="act-info" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.4} />
-                  <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.03} />
-                </linearGradient>
-                <linearGradient id="act-warn" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--warning)" stopOpacity={0.5} />
-                  <stop offset="100%" stopColor="var(--warning)" stopOpacity={0.05} />
-                </linearGradient>
-                <linearGradient id="act-error" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--error)" stopOpacity={0.55} />
-                  <stop offset="100%" stopColor="var(--error)" stopOpacity={0.07} />
-                </linearGradient>
-              </defs>
+            <BarChart data={rows} margin={BAR_MARGIN} barCategoryGap="25%">
               <CartesianGrid vertical={false} stroke="var(--border)" strokeOpacity={0.55} strokeDasharray="3 6" />
-              <XAxis
-                dataKey="label"
-                tickLine={false}
-                axisLine={false}
-                tick={TICK}
-                interval={perHour ? 3 : Math.max(0, Math.floor(rows.length / 10) - 1)}
-                minTickGap={16}
-              />
+              <TimeXAxis perHour={perHour} count={rows.length} />
               <YAxis width={30} allowDecimals={false} tickLine={false} axisLine={false} tick={TICK} />
-              <Tooltip content={<GlassTooltip />} cursor={{ stroke: "var(--primary)", strokeOpacity: 0.3 }} />
-              {!issuesOnly && (
-                <Area
-                  type="monotone"
-                  dataKey="info"
-                  name="Info"
-                  stackId="1"
-                  stroke="var(--primary)"
-                  strokeWidth={2}
-                  fill="url(#act-info)"
-                  isAnimationActive={false}
+              <Tooltip content={<GlassTooltip />} cursor={{ fill: "var(--primary)", fillOpacity: 0.06 }} />
+              {ISSUE_SERIES.map((s, i) => (
+                <Bar
+                  key={s.key}
+                  dataKey={s.key}
+                  name={s.key}
+                  stackId="i"
+                  fill={s.color}
+                  maxBarSize={9}
+                  radius={i === ISSUE_SERIES.length - 1 ? [3, 3, 0, 0] : undefined}
                 />
-              )}
-              <Area
-                type="monotone"
-                dataKey="warn"
-                name="Warnings"
-                stackId="1"
-                stroke="var(--warning)"
-                strokeWidth={2}
-                fill="url(#act-warn)"
-                isAnimationActive={false}
-              />
-              <Area
-                type="monotone"
-                dataKey="error"
-                name="Errors"
-                stackId="1"
-                stroke="var(--error)"
-                strokeWidth={2}
-                fill="url(#act-error)"
-                isAnimationActive={false}
-              />
-            </AreaChart>
+              ))}
+            </BarChart>
           </ResponsiveContainer>
-        </div>
+          </div>
+        </>
       )}
     </Card>
   )
 }
 
-/* ── 3. Workers load ─────────────────────────────────────────────────── */
+/* ── 5. Workers load ─────────────────────────────────────────────────── */
 
 export function WorkersLoad({ workers }: { workers: Worker[] }) {
   const data = useMemo(
