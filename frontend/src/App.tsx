@@ -24,9 +24,10 @@ import { Aurora } from "./components/dream"
 function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider defaultOpen={true}>
+      {/* One continuous sky behind sidebar and content alike. */}
+      <Aurora />
       <AppSidebar />
-      <SidebarInset className="relative overflow-hidden">
-        <Aurora />
+      <SidebarInset className="relative z-10 overflow-hidden">
         <div className="relative z-10 flex min-h-dvh flex-col">{children}</div>
       </SidebarInset>
     </SidebarProvider>

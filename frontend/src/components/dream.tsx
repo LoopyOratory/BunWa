@@ -15,10 +15,25 @@ import { cn } from "@/lib/utils"
 export function Aurora({ className }: { className?: string }) {
   return (
     <div aria-hidden className={cn("aurora-root", className)}>
+      {/* Sky: layered gradient washes, aurora ribbons, bloom, stars,
+          bokeh, sparkles, veil and a whisper of film grain. */}
+      <div className="aurora-sky" />
+      <div className="aurora-bloom" />
       <div className="aurora-blob aurora-1" />
       <div className="aurora-blob aurora-2" />
       <div className="aurora-blob aurora-3" />
+      <div className="aurora-blob aurora-4" />
+      <div className="aurora-stars aurora-stars-a" />
+      <div className="aurora-stars aurora-stars-b" />
+      <div className="aurora-bokeh bokeh-1" />
+      <div className="aurora-bokeh bokeh-2" />
+      <div className="aurora-bokeh bokeh-3" />
+      <div className="aurora-sparkle sparkle-1" />
+      <div className="aurora-sparkle sparkle-2" />
+      <div className="aurora-sparkle sparkle-3" />
+      <div className="aurora-sparkle sparkle-4" />
       <div className="aurora-veil" />
+      <div className="aurora-grain" />
     </div>
   )
 }
@@ -110,11 +125,12 @@ export function StaggerItem({
     <motion.div
       className={className}
       variants={{
-        hidden: { opacity: 0, y: reduce ? 0 : 14 },
+        hidden: { opacity: 0, y: reduce ? 0 : 16, filter: reduce ? "none" : "blur(8px)" },
         show: {
           opacity: 1,
           y: 0,
-          transition: { type: "spring", stiffness: 260, damping: 26 },
+          filter: "blur(0px)",
+          transition: { type: "spring", stiffness: 240, damping: 26 },
         },
       }}
     >

@@ -172,6 +172,17 @@ unusable anywhere Chrome isn't at a hardcoded system path.
 | Mobile | Unchanged: 16px root, compact rhythm preserved. |
 | Verified | CDP computed-style audit (root 18px, inputs 36px, card padding 22.5px), zero h-overflow on 6 pages, dialog + select menu inspected, `bun run test` 198/0, typecheck + oxlint clean. |
 
+## Dreamscape v2 (2026-09-29)
+
+| Item | Detail |
+|---|---|
+| Ask | User rated the first dream pass "3/10", asked for research + a genuinely eye-appealing, dreamy design. |
+| Insight | v1's dream was skin-deep: flat cards on a flat page, slab sidebar, aurora trapped inside the content inset so sidebar and content lived in different worlds. |
+| Fix | One fixed dreamscape layer behind the whole app (gradient sky + 4 aurora ribbons + bloom + sparkles/bokeh + dark starfield + veil + grain); glass material system (`.glass-card` / `.glass-frost` / `.glass-pop` / `.glass-field`) applied to cards, dock, menus, dialogs, sheets, fields, empty states, chips; floating glass dock (26px radius, 0.75rem inset, blur); bigger display type (stat metrics text-4xl, page titles text-3xl, login headline text-4xl). |
+| Blur budget | backdrop-filter only on fixed/sticky/overlay surfaces (dock, page header, menus, dialogs, login card); scrolling cards use translucent gradients (cheap on the 4 GiB box). |
+| Build fix | Hand-written `-webkit-backdrop-filter` pairs got collapsed to prefixed-only by LightningCSS (Chromium ignores it → computed none). Standard property only in source now; build autoprefixes. |
+| Verified | CDP: dock blur live, gradient glass computed everywhere, zero overflow light/dark/mobile; MiMo vision rate 7.5–9/10 on login/dashboard/sessions/dialog/mobile (was 3/10); flagged polish (empty state, dark contrast) fixed; `bun run test` 198/0, typecheck + oxlint clean. |
+
 ## Related
 
 [[OpenWA Parity]] · [[Roadmap]] · [[Testing]] · [[Dashboard]] · [[Known Gaps and Stubs]]

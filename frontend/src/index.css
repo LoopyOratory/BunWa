@@ -19,19 +19,31 @@ body { -webkit-font-smoothing: antialiased; }
   gap: 1rem;
 }
 
-/* ── Touch targets ──
-   Field heights live on the components (ui/input.tsx defaults to h-11, dense
-   forms opt down to h-9). A global `min-height: 44px !important` used to
-   override those on purpose-built compact inputs. */
-
 /* ═══════════════════════════════════════════════════════════════════
-   BunWa Dream Console — warm cream + bun-pink, soft clay shapes,
-   springy motion. One palette per surface, semantic tokens only.
-   Shape system (one documented rule for the whole console):
-     interactive pills  (buttons, badges, switches, tabs)  → rounded-full
-     surfaces           (cards, tables, alerts, panels)    → rounded-lg  (20px)
-     inputs             (fields, selects, triggers)        → rounded-md  (16px)
-     modals             (dialogs, sheets, popovers)        → rounded-xl  (28px)
+   BunWa Dreamscape v2 — a living sky behind the whole console.
+
+   The previous pass painted the dream onto flat panels: near-white
+   cards on a near-flat cream page. This pass moves the dream into the
+   world itself. Three ideas govern everything below:
+
+     1. ONE SKY        A fixed gradient sky with aurora ribbons, a soft
+                       bloom, stars (night) and drifting bokeh sits behind
+                       the entire app, sidebar included. Surfaces are
+                       translucent so the sky reads through them.
+
+     2. GLASS SURFACES Every card, menu, dialog and dock is glass: a
+                       translucent fill, a gradient hairline border that
+                       catches light at the top-left, an inner top
+                       highlight, and a wide, soft tinted shadow.
+
+     3. SHAPE SYSTEM   interactive pills (buttons, badges, tabs, switches)
+                       surfaces            rounded-lg  (18px)
+                       inputs              rounded-md  (14px)
+                       modals/popovers     rounded-xl  (25px)
+
+   Blur budget: backdrop-filter is reserved for fixed, sticky and
+   overlay surfaces (dock, page header, menus, dialogs, login card).
+   Scrolling cards use translucent gradients only, which is cheap.
    ═══════════════════════════════════════════════════════════════════ */
 :root {
     --background: oklch(0.975 0.022 83);
@@ -40,7 +52,7 @@ body { -webkit-font-smoothing: antialiased; }
     --card-foreground: oklch(0.265 0.045 55);
     --popover: oklch(0.998 0.006 85);
     --popover-foreground: oklch(0.265 0.045 55);
-    --primary: oklch(0.72 0.19 352);
+    --primary: oklch(0.70 0.20 353);
     --primary-foreground: oklch(0.245 0.06 350);
     --primary-soft: color-mix(in oklab, var(--primary) 15%, var(--background));
     --primary-strong: oklch(0.45 0.15 350);
@@ -51,9 +63,9 @@ body { -webkit-font-smoothing: antialiased; }
     --accent: oklch(0.935 0.04 340);
     --accent-foreground: oklch(0.32 0.06 345);
     --destructive: oklch(0.585 0.21 25);
-    --border: oklch(0.905 0.028 75);
+    --border: oklch(0.90 0.03 78);
     --input: oklch(0.90 0.026 75);
-    --ring: oklch(0.72 0.16 352);
+    --ring: oklch(0.70 0.16 352);
     --chart-1: oklch(0.72 0.18 350);
     --chart-2: oklch(0.78 0.13 55);
     --chart-3: oklch(0.70 0.14 295);
@@ -62,27 +74,45 @@ body { -webkit-font-smoothing: antialiased; }
     --radius: 1rem;
     --sidebar: oklch(0.958 0.028 82);
     --sidebar-foreground: oklch(0.265 0.045 55);
-    --sidebar-primary: oklch(0.72 0.19 352);
+    --sidebar-primary: oklch(0.70 0.20 353);
     --sidebar-primary-foreground: oklch(0.245 0.06 350);
     --sidebar-accent: oklch(0.93 0.045 342);
     --sidebar-accent-foreground: oklch(0.30 0.06 345);
     --sidebar-border: oklch(0.91 0.028 75);
-    --sidebar-ring: oklch(0.72 0.16 352);
-    /* Active nav item: tinted fill plus a higher-contrast foreground than the
-       raw primary, which is too light to read on a warm sidebar. */
-    --sidebar-active-bg: color-mix(in oklab, var(--primary) 18%, transparent);
+    --sidebar-ring: oklch(0.70 0.16 352);
+    --sidebar-active-bg: color-mix(in oklab, var(--primary) 20%, transparent);
     --sidebar-active-fg: oklch(0.40 0.14 350);
     --sidebar-active-border: color-mix(in oklab, var(--primary) 30%, transparent);
-    /* Elevation — tinted with the surface hue rather than pure black, so
-       depth reads as warm light instead of grey mud. */
+
+    /* Aurora ribbon colors — richer than v1 so the sky is visible. */
+    --aur-1: oklch(0.83 0.13 350);
+    --aur-2: oklch(0.86 0.11 60);
+    --aur-3: oklch(0.78 0.13 297);
+    --aur-4: oklch(0.82 0.09 235);
+
+    /* Glass system — one recipe, two materials (card fill + hairline). */
+    --glass-a: rgb(255 255 255 / 0.80);
+    --glass-b: rgb(255 255 255 / 0.52);
+    --glass-hl: rgb(255 255 255 / 0.9);
+    --glass-line-a: rgb(255 255 255 / 0.95);
+    --glass-line-b: color-mix(in oklab, var(--primary) 30%, transparent);
+    --glass-line-c: color-mix(in oklab, oklch(0.72 0.13 295) 28%, transparent);
+    --glass-shadow: 0 20px 45px -24px oklch(0.55 0.12 340 / 0.38), 0 6px 18px -12px oklch(0.55 0.12 340 / 0.22);
+    --glass-shadow-strong: 0 30px 65px -28px oklch(0.55 0.12 340 / 0.5), 0 10px 26px -14px oklch(0.55 0.12 340 / 0.3);
+    /* Popover/dialog glass is denser so text stays effortless to read. */
+    --pop-a: rgb(255 255 255 / 0.92);
+    --pop-b: rgb(255 255 255 / 0.84);
+
+    /* Elevation — tinted with the surface hue rather than pure black. */
     --shadow-xs: 0 1px 2px 0 oklch(0.35 0.06 30 / 0.06);
     --shadow-sm: 0 2px 4px -1px oklch(0.35 0.06 30 / 0.06), 0 1px 2px -1px oklch(0.35 0.06 30 / 0.06);
     --shadow-md: 0 6px 16px -6px oklch(0.35 0.06 30 / 0.12), 0 2px 6px -2px oklch(0.35 0.06 30 / 0.08);
     --shadow-lg: 0 14px 30px -10px oklch(0.35 0.06 30 / 0.16), 0 5px 12px -5px oklch(0.35 0.06 30 / 0.10);
     --shadow-xl: 0 24px 50px -16px oklch(0.35 0.06 30 / 0.20), 0 10px 20px -10px oklch(0.35 0.06 30 / 0.12);
     --shadow-2xl: 0 32px 70px -20px oklch(0.30 0.08 20 / 0.30);
-    --shadow-primary: 0 6px 18px -6px oklch(0.72 0.19 352 / 0.45);
-    --shadow-primary-lg: 0 10px 28px -8px oklch(0.72 0.19 352 / 0.55);
+    --shadow-primary: 0 6px 18px -6px oklch(0.70 0.20 353 / 0.45);
+    --shadow-primary-lg: 0 12px 30px -8px oklch(0.70 0.20 353 / 0.55);
+
     /* Success/warning/error card variants */
     --success-bg: oklch(0.955 0.05 160);
     --success-border: oklch(0.885 0.09 160);
@@ -93,17 +123,12 @@ body { -webkit-font-smoothing: antialiased; }
     --error-bg: oklch(0.95 0.045 27);
     --error-border: oklch(0.875 0.09 27);
     --error-foreground: oklch(0.44 0.15 27);
-    /* Solid status fills for dots, icons and meters */
     --success: oklch(0.70 0.17 158);
     --warning: oklch(0.78 0.15 75);
     --error: oklch(0.62 0.20 27);
     --info: oklch(0.64 0.14 245);
-    /* Dream accents: aurora grading + celebratory confetti */
-    --aur-1: oklch(0.85 0.11 350);
-    --aur-2: oklch(0.88 0.09 60);
-    --aur-3: oklch(0.82 0.09 295);
-    --aur-4: oklch(0.86 0.07 235);
     --overlay: color-mix(in oklab, oklch(0.32 0.07 340) 55%, transparent);
+
     /* Motion */
     --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
     --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
@@ -117,11 +142,11 @@ body { -webkit-font-smoothing: antialiased; }
 }
 
 .dark {
-    --background: oklch(0.19 0.032 315);
+    --background: oklch(0.185 0.034 312);
     --foreground: oklch(0.96 0.015 80);
-    --card: oklch(0.23 0.034 315);
+    --card: oklch(0.225 0.036 315);
     --card-foreground: oklch(0.96 0.015 80);
-    --popover: oklch(0.24 0.036 315);
+    --popover: oklch(0.235 0.038 315);
     --popover-foreground: oklch(0.96 0.015 80);
     --primary: oklch(0.76 0.17 352);
     --primary-foreground: oklch(0.22 0.05 345);
@@ -129,8 +154,8 @@ body { -webkit-font-smoothing: antialiased; }
     --primary-strong: oklch(0.84 0.12 350);
     --secondary: oklch(0.29 0.045 55);
     --secondary-foreground: oklch(0.93 0.02 70);
-    --muted: oklch(0.275 0.028 315);
-    --muted-foreground: oklch(0.755 0.03 320);
+    --muted: oklch(0.27 0.03 315);
+    --muted-foreground: oklch(0.80 0.028 320);
     --accent: oklch(0.31 0.05 340);
     --accent-foreground: oklch(0.955 0.02 340);
     --destructive: oklch(0.68 0.19 25);
@@ -153,7 +178,25 @@ body { -webkit-font-smoothing: antialiased; }
     --sidebar-active-bg: color-mix(in oklab, var(--primary) 24%, transparent);
     --sidebar-active-fg: oklch(0.88 0.13 350);
     --sidebar-active-border: color-mix(in oklab, var(--primary) 32%, transparent);
-    /* Elevation for dark surfaces — deep plum shade, same language as light */
+
+    /* Night aurora — pulled brighter so ribbons glow against the plum sky. */
+    --aur-1: oklch(0.68 0.17 350);
+    --aur-2: oklch(0.70 0.13 60);
+    --aur-3: oklch(0.62 0.15 295);
+    --aur-4: oklch(0.60 0.11 235);
+
+    /* Glass on night surfaces: a soft frosted plum, not grey. */
+    --glass-a: rgb(255 255 255 / 0.085);
+    --glass-b: rgb(255 255 255 / 0.035);
+    --glass-hl: rgb(255 255 255 / 0.12);
+    --glass-line-a: rgb(255 255 255 / 0.24);
+    --glass-line-b: color-mix(in oklab, var(--primary) 42%, transparent);
+    --glass-line-c: color-mix(in oklab, oklch(0.72 0.14 295) 38%, transparent);
+    --glass-shadow: 0 24px 55px -26px oklch(0.02 0.02 300 / 0.85), 0 8px 22px -14px oklch(0.02 0.02 300 / 0.6);
+    --glass-shadow-strong: 0 34px 75px -30px oklch(0.01 0.02 300 / 0.95), 0 12px 30px -16px oklch(0.01 0.02 300 / 0.7);
+    --pop-a: color-mix(in oklab, oklch(0.245 0.038 315) 88%, transparent);
+    --pop-b: color-mix(in oklab, oklch(0.225 0.036 315) 82%, transparent);
+
     --shadow-xs: 0 1px 2px 0 oklch(0.06 0.02 300 / 0.5);
     --shadow-sm: 0 2px 4px -1px oklch(0.06 0.02 300 / 0.5), 0 1px 2px -1px oklch(0.06 0.02 300 / 0.5);
     --shadow-md: 0 6px 16px -6px oklch(0.06 0.02 300 / 0.55), 0 2px 6px -2px oklch(0.06 0.02 300 / 0.5);
@@ -161,8 +204,8 @@ body { -webkit-font-smoothing: antialiased; }
     --shadow-xl: 0 24px 50px -16px oklch(0.04 0.02 300 / 0.65), 0 10px 20px -10px oklch(0.04 0.02 300 / 0.6);
     --shadow-2xl: 0 32px 70px -20px oklch(0.03 0.02 300 / 0.8);
     --shadow-primary: 0 6px 18px -6px oklch(0.76 0.17 352 / 0.40);
-    --shadow-primary-lg: 0 10px 28px -8px oklch(0.76 0.17 352 / 0.50);
-    /* Success/warning/error card variants for dark */
+    --shadow-primary-lg: 0 12px 30px -8px oklch(0.76 0.17 352 / 0.50);
+
     --success-bg: oklch(0.24 0.05 160);
     --success-border: oklch(0.33 0.07 160);
     --success-foreground: oklch(0.86 0.11 160);
@@ -172,16 +215,10 @@ body { -webkit-font-smoothing: antialiased; }
     --error-bg: oklch(0.245 0.05 27);
     --error-border: oklch(0.335 0.08 27);
     --error-foreground: oklch(0.86 0.11 27);
-    /* Solid status fills for dots, icons and meters */
     --success: oklch(0.76 0.17 158);
     --warning: oklch(0.82 0.15 78);
     --error: oklch(0.70 0.18 27);
     --info: oklch(0.72 0.13 245);
-    /* Dream accents, lifted for the midnight plum surfaces */
-    --aur-1: oklch(0.60 0.16 350);
-    --aur-2: oklch(0.62 0.12 60);
-    --aur-3: oklch(0.56 0.13 295);
-    --aur-4: oklch(0.55 0.10 235);
     --overlay: color-mix(in oklab, oklch(0.10 0.02 300) 65%, transparent);
 }
 
@@ -242,8 +279,6 @@ body { -webkit-font-smoothing: antialiased; }
     --radius-2xl: calc(var(--radius) * 1.8);
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
-    /* Shadow utilities resolve through the semantic scale above, so `shadow-sm`
-       and friends pick up the warm plum tint everywhere. */
     --shadow-xs: var(--shadow-xs);
     --shadow-sm: var(--shadow-sm);
     --shadow-md: var(--shadow-md);
@@ -272,7 +307,15 @@ body { -webkit-font-smoothing: antialiased; }
     /* Fredoka everywhere a heading is meant: bubbly, warm, unmistakably Bun. */
     h1, h2, h3 {
         font-family: var(--font-heading);
-        letter-spacing: -0.015em;
+        letter-spacing: -0.02em;
+        text-wrap: balance;
+    }
+    p {
+        text-wrap: pretty;
+    }
+    /* Featherweight icon strokes: elegant, Linear-calm, never chunky. */
+    svg.lucide {
+        stroke-width: 1.6;
     }
     /* Smooth scrollbar styling */
     ::-webkit-scrollbar {
@@ -297,15 +340,9 @@ body { -webkit-font-smoothing: antialiased; }
     }
     /* Focus ring styles */
     :focus-visible {
-        outline: 2px solid var(--ring);
+        outline: 2px solid color-mix(in oklab, var(--ring) 80%, transparent);
         outline-offset: 2px;
         border-radius: var(--radius);
-    }
-    h1, h2, h3 {
-        text-wrap: balance;
-    }
-    p {
-        text-wrap: pretty;
     }
     html {
         scroll-behavior: smooth;
@@ -415,7 +452,6 @@ body { -webkit-font-smoothing: antialiased; }
     .card-hover:hover {
         box-shadow: var(--shadow-lg);
         transform: translateY(-2px);
-        border-color: color-mix(in oklab, var(--primary) 24%, var(--border));
     }
 }
 
@@ -425,13 +461,329 @@ body { -webkit-font-smoothing: antialiased; }
 }
 
 /* ═══════════════════════════════════════════════════════════
-   BunWa Dream Console — status system, surfaces, motion
+   THE SKY — one continuous dreamscape behind the entire app
+   ═══════════════════════════════════════════════════════════ */
+
+.aurora-root {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+/* Layered gradient sky. Warm dawn above the fold, rose dusk below. */
+.aurora-sky {
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(120% 85% at 50% -20%, color-mix(in oklab, var(--aur-1) 45%, transparent), transparent 62%),
+        radial-gradient(85% 60% at 88% 6%, color-mix(in oklab, var(--aur-3) 40%, transparent), transparent 58%),
+        radial-gradient(95% 70% at 6% 102%, color-mix(in oklab, var(--aur-2) 44%, transparent), transparent 60%),
+        radial-gradient(70% 50% at 96% 96%, color-mix(in oklab, var(--aur-4) 30%, transparent), transparent 60%),
+        linear-gradient(172deg, oklch(0.985 0.014 84), oklch(0.974 0.026 340) 52%, oklch(0.966 0.03 288));
+}
+.dark .aurora-sky {
+    background:
+        radial-gradient(115% 80% at 50% -18%, color-mix(in oklab, var(--aur-1) 34%, transparent), transparent 60%),
+        radial-gradient(80% 55% at 90% 4%, color-mix(in oklab, var(--aur-3) 32%, transparent), transparent 56%),
+        radial-gradient(90% 65% at 4% 104%, color-mix(in oklab, var(--aur-2) 22%, transparent), transparent 58%),
+        linear-gradient(172deg, oklch(0.185 0.034 308), oklch(0.162 0.04 306) 48%, oklch(0.148 0.045 268));
+}
+
+/* Soft light source at the very top, like a window out of frame. */
+.aurora-bloom {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(52% 34% at 50% -6%, rgb(255 255 255 / 0.75), transparent 72%);
+    animation: bloom-breathe 14s ease-in-out infinite;
+}
+.dark .aurora-bloom {
+    background: radial-gradient(50% 30% at 50% -8%, color-mix(in oklab, var(--aur-3) 36%, transparent), transparent 74%);
+}
+
+/* Aurora ribbons: soft radial color fields that drift on slow loops.
+   Radial falloff instead of filter blur keeps the GPU cost tiny. */
+.aurora-blob {
+    position: absolute;
+    border-radius: 9999px;
+    opacity: 0.68;
+    will-change: transform;
+    transform: translateZ(0);
+}
+.aurora-1 {
+    width: 58rem;
+    height: 46rem;
+    left: -16rem;
+    top: -20rem;
+    background: radial-gradient(closest-side, color-mix(in oklab, var(--aur-1) 70%, transparent), transparent 72%);
+    animation: aurora-a 30s ease-in-out infinite;
+}
+.aurora-2 {
+    width: 46rem;
+    height: 40rem;
+    right: -14rem;
+    top: 18%;
+    background: radial-gradient(closest-side, color-mix(in oklab, var(--aur-3) 62%, transparent), transparent 72%);
+    animation: aurora-b 36s ease-in-out infinite;
+}
+.aurora-3 {
+    width: 52rem;
+    height: 42rem;
+    left: 22%;
+    bottom: -22rem;
+    background: radial-gradient(closest-side, color-mix(in oklab, var(--aur-2) 62%, transparent), transparent 72%);
+    animation: aurora-c 42s ease-in-out infinite;
+}
+.aurora-4 {
+    width: 34rem;
+    height: 30rem;
+    right: 6%;
+    bottom: 2%;
+    background: radial-gradient(closest-side, color-mix(in oklab, var(--aur-4) 46%, transparent), transparent 72%);
+    animation: aurora-b 34s ease-in-out infinite reverse;
+}
+.dark .aurora-blob { opacity: 0.55; }
+
+@keyframes aurora-a {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    33% { transform: translate3d(3rem, 2rem, 0) scale(1.08); }
+    66% { transform: translate3d(-1.5rem, 4rem, 0) scale(0.96); }
+}
+@keyframes aurora-b {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    40% { transform: translate3d(-3rem, -2.5rem, 0) scale(1.06); }
+    70% { transform: translate3d(-1rem, 3rem, 0) scale(0.95); }
+}
+@keyframes aurora-c {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    45% { transform: translate3d(2.5rem, -3rem, 0) scale(1.05); }
+    75% { transform: translate3d(-2rem, -1rem, 0) scale(0.98); }
+}
+@keyframes bloom-breathe {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.72; }
+}
+
+/* Starfield for the night sky: two parallax layers of tiny dots that
+   twinkle out of phase. Hidden by day. Cheap: one repeated background. */
+.aurora-stars {
+    position: absolute;
+    inset: 0;
+    display: none;
+}
+.dark .aurora-stars { display: block; }
+.aurora-stars-a {
+    background-image:
+        radial-gradient(1.4px 1.4px at 25px 35px, rgb(255 255 255 / 0.95), transparent 100%),
+        radial-gradient(1px 1px at 110px 90px, rgb(255 236 245 / 0.8), transparent 100%),
+        radial-gradient(1.8px 1.8px at 190px 150px, rgb(255 255 255 / 0.75), transparent 100%),
+        radial-gradient(1px 1px at 60px 210px, rgb(255 240 250 / 0.7), transparent 100%),
+        radial-gradient(1.2px 1.2px at 240px 60px, rgb(255 255 255 / 0.8), transparent 100%);
+    background-size: 280px 280px;
+    background-repeat: repeat;
+    animation: star-twinkle 6s ease-in-out infinite alternate;
+}
+.aurora-stars-b {
+    background-image:
+        radial-gradient(1px 1px at 70px 20px, rgb(255 255 255 / 0.7), transparent 100%),
+        radial-gradient(2px 2px at 200px 120px, rgb(255 220 240 / 0.75), transparent 100%),
+        radial-gradient(1.2px 1.2px at 150px 230px, rgb(255 255 255 / 0.6), transparent 100%),
+        radial-gradient(1.6px 1.6px at 300px 190px, rgb(240 230 255 / 0.7), transparent 100%);
+    background-size: 360px 360px;
+    background-position: 120px 70px;
+    opacity: 0.8;
+    animation: star-twinkle 9s ease-in-out infinite alternate-reverse;
+}
+@keyframes star-twinkle {
+    from { opacity: 0.55; }
+    to { opacity: 1; }
+}
+
+/* Drifting bokeh: soft out-of-focus light motes, both themes. */
+.aurora-bokeh {
+    position: absolute;
+    border-radius: 9999px;
+    background: radial-gradient(closest-side, rgb(255 255 255 / 0.9), transparent 78%);
+    opacity: 0.55;
+    will-change: transform;
+    animation: bokeh-drift 16s ease-in-out infinite;
+}
+.bokeh-1 { width: 18px; height: 18px; left: 12%; top: 30%; animation-delay: 0s; }
+.bokeh-2 { width: 26px; height: 26px; right: 16%; top: 16%; animation-delay: -5s; animation-duration: 21s; }
+.bokeh-3 { width: 13px; height: 13px; left: 46%; bottom: 18%; animation-delay: -9s; animation-duration: 18s; }
+.dark .aurora-bokeh {
+    background: radial-gradient(closest-side, color-mix(in oklab, var(--aur-1) 60%, white), transparent 78%);
+    opacity: 0.35;
+}
+@keyframes bokeh-drift {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    33% { transform: translate3d(14px, -20px, 0); }
+    66% { transform: translate3d(-10px, 12px, 0); }
+}
+
+/* Sparkle stars: four-point twinkles scattered in the sky. */
+.aurora-sparkle {
+    position: absolute;
+    background: color-mix(in oklab, var(--aur-2) 55%, white);
+    clip-path: polygon(50% 0%, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0% 50%, 39% 39%);
+    opacity: 0.7;
+    animation: sparkle-twinkle 5s ease-in-out infinite;
+}
+.dark .aurora-sparkle {
+    background: color-mix(in oklab, var(--aur-1) 45%, white);
+    opacity: 0.8;
+}
+.sparkle-1 { width: 16px; height: 16px; left: 7%; top: 12%; animation-delay: 0s; }
+.sparkle-2 { width: 10px; height: 10px; left: 32%; top: 6%; animation-delay: 1.3s; animation-duration: 6s; }
+.sparkle-3 { width: 13px; height: 13px; right: 24%; top: 22%; animation-delay: 2.4s; animation-duration: 7s; }
+.sparkle-4 { width: 9px; height: 9px; right: 8%; top: 42%; animation-delay: 3.6s; animation-duration: 5.5s; }
+@keyframes sparkle-twinkle {
+    0%, 100% { opacity: 0.15; transform: scale(0.7) rotate(0deg); }
+    50% { opacity: 0.85; transform: scale(1.1) rotate(18deg); }
+}
+
+/* Bottom veil: grounds the sky so content near the fold stays readable. */
+.aurora-veil {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 62%, color-mix(in oklab, var(--background) 45%, transparent) 100%);
+}
+
+/* Film grain: a whisper of texture over the whole dream. */
+.aurora-grain {
+    position: absolute;
+    inset: -60%;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    opacity: 0.035;
+}
+.dark .aurora-grain { opacity: 0.06; }
+
+@media (prefers-reduced-motion: reduce) {
+    .aurora-blob, .aurora-bloom, .aurora-stars, .aurora-bokeh, .aurora-sparkle { animation: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GLASS SURFACES — one material, three densities
+   ═══════════════════════════════════════════════════════════ */
+
+/* Cards and panels. Translucent gradient fill + gradient hairline that
+   brightens toward the top-left light source + inner top highlight. */
+.glass-card {
+    border: 1px solid transparent;
+    background:
+        linear-gradient(160deg, var(--glass-a), var(--glass-b)) padding-box,
+        linear-gradient(150deg, var(--glass-line-a), rgb(255 255 255 / 0.28) 36%, var(--glass-line-b) 68%, var(--glass-line-c)) border-box;
+    box-shadow: inset 0 1px 0 var(--glass-hl), var(--glass-shadow);
+}
+.dark .glass-card {
+    background:
+        linear-gradient(160deg, var(--glass-a), var(--glass-b)) padding-box,
+        linear-gradient(150deg, var(--glass-line-a), rgb(255 255 255 / 0.08) 36%, var(--glass-line-b) 68%, var(--glass-line-c)) border-box;
+}
+
+/* Frosted variant for fixed, sticky and hero surfaces (blur allowed there). */
+.glass-frost {
+    backdrop-filter: blur(22px) saturate(1.55);
+}
+
+/* Overlay glass for menus, dialogs, sheets and toasts: denser fill so
+   text over any backdrop stays effortless, with a real blur behind. */
+.glass-pop {
+    border: 1px solid transparent;
+    background:
+        linear-gradient(160deg, var(--pop-a), var(--pop-b)) padding-box,
+        linear-gradient(150deg, var(--glass-line-a), rgb(255 255 255 / 0.22) 36%, var(--glass-line-b) 70%, var(--glass-line-c)) border-box;
+    box-shadow: inset 0 1px 0 var(--glass-hl), var(--glass-shadow-strong);
+    backdrop-filter: blur(26px) saturate(1.5);
+}
+
+/* Field material for inputs, textareas and select triggers. */
+.glass-field {
+    border: 1px solid transparent;
+    background:
+        linear-gradient(180deg, rgb(255 255 255 / 0.72), rgb(255 255 255 / 0.5)) padding-box,
+        linear-gradient(180deg, rgb(255 255 255 / 0.9), color-mix(in oklab, var(--primary) 18%, transparent)) border-box;
+    box-shadow: inset 0 1.5px 3px oklch(0.35 0.08 340 / 0.06);
+}
+.glass-field:hover {
+    background:
+        linear-gradient(180deg, rgb(255 255 255 / 0.82), rgb(255 255 255 / 0.6)) padding-box,
+        linear-gradient(180deg, rgb(255 255 255 / 0.95), color-mix(in oklab, var(--primary) 34%, transparent)) border-box;
+}
+.glass-field:focus-visible,
+.glass-field[data-state="open"] {
+    border-color: transparent;
+    outline: none;
+    background:
+        linear-gradient(180deg, rgb(255 255 255 / 0.9), rgb(255 255 255 / 0.72)) padding-box,
+        linear-gradient(180deg, color-mix(in oklab, var(--primary) 55%, transparent), color-mix(in oklab, var(--primary) 25%, transparent)) border-box;
+    box-shadow: inset 0 1.5px 3px oklch(0.35 0.08 340 / 0.05), 0 0 0 4px color-mix(in oklab, var(--primary) 16%, transparent);
+}
+.dark .glass-field {
+    background:
+        linear-gradient(180deg, rgb(255 255 255 / 0.07), rgb(255 255 255 / 0.03)) padding-box,
+        linear-gradient(180deg, rgb(255 255 255 / 0.2), color-mix(in oklab, var(--primary) 22%, transparent)) border-box;
+    box-shadow: inset 0 1.5px 3px oklch(0.02 0.02 300 / 0.35);
+}
+.dark .glass-field:hover {
+    background:
+        linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.05)) padding-box,
+        linear-gradient(180deg, rgb(255 255 255 / 0.26), color-mix(in oklab, var(--primary) 34%, transparent)) border-box;
+}
+.dark .glass-field:focus-visible,
+.dark .glass-field[data-state="open"] {
+    background:
+        linear-gradient(180deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.07)) padding-box,
+        linear-gradient(180deg, color-mix(in oklab, var(--primary) 60%, transparent), color-mix(in oklab, var(--primary) 30%, transparent)) border-box;
+    box-shadow: inset 0 1.5px 3px oklch(0.02 0.02 300 / 0.3), 0 0 0 4px color-mix(in oklab, var(--primary) 18%, transparent);
+}
+
+/* Hover float for cards that should physically lift toward the light. */
+.hover-float {
+    transition: transform 0.3s var(--ease-out-soft), box-shadow 0.3s ease;
+}
+.hover-float:hover {
+    transform: translateY(-4px);
+    box-shadow: inset 0 1px 0 var(--glass-hl), var(--glass-shadow-strong);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   THE DOCK — sidebar as a floating glass rail
+   ═══════════════════════════════════════════════════════════ */
+
+[data-slot="sidebar-container"] {
+    padding: 0.75rem;
+}
+[data-slot="sidebar-inner"] {
+    border-radius: 26px;
+    border: 1px solid transparent;
+    background:
+        linear-gradient(165deg, var(--glass-a), var(--glass-b)) padding-box,
+        linear-gradient(150deg, var(--glass-line-a), rgb(255 255 255 / 0.25) 40%, var(--glass-line-b) 72%, var(--glass-line-c)) border-box;
+    box-shadow: inset 0 1px 0 var(--glass-hl), var(--glass-shadow);
+    backdrop-filter: blur(24px) saturate(1.5);
+}
+.dark [data-slot="sidebar-inner"] {
+    background:
+        linear-gradient(165deg, var(--glass-a), var(--glass-b)) padding-box,
+        linear-gradient(150deg, var(--glass-line-a), rgb(255 255 255 / 0.07) 40%, var(--glass-line-b) 72%, var(--glass-line-c)) border-box;
+}
+[data-slot="sidebar-inset"] {
+    background: transparent;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   STATUS SYSTEM + SURFACES
    ═══════════════════════════════════════════════════════════ */
 
 /* Status badge system (consistent across all routes). */
 .status-badge {
   @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45);
 }
+.dark .status-badge { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08); }
 .status-working { @apply border border-success-border bg-success-bg text-success-foreground; }
 .status-starting { @apply border border-warning-border bg-warning-bg text-warning-foreground; }
 .status-stopped { @apply border border-border bg-muted text-muted-foreground; }
@@ -455,95 +807,26 @@ body { -webkit-font-smoothing: antialiased; }
   .status-dot-working, .status-dot-starting { animation: none; }
 }
 
-/* ── Aurora: the room the whole console lives in ── */
-.aurora-root {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-.aurora-blob {
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(72px);
-  opacity: 0.5;
-  will-change: transform;
-  transform: translateZ(0);
-}
-.aurora-1 {
-  width: 44rem;
-  height: 44rem;
-  left: -12rem;
-  top: -16rem;
-  background: color-mix(in oklab, var(--aur-1) 75%, transparent);
-  animation: aurora-a 26s ease-in-out infinite;
-}
-.aurora-2 {
-  width: 36rem;
-  height: 36rem;
-  right: -10rem;
-  top: 24%;
-  background: color-mix(in oklab, var(--aur-3) 62%, transparent);
-  animation: aurora-b 32s ease-in-out infinite;
-}
-.aurora-3 {
-  width: 40rem;
-  height: 40rem;
-  left: 26%;
-  bottom: -18rem;
-  background: color-mix(in oklab, var(--aur-2) 66%, transparent);
-  animation: aurora-c 38s ease-in-out infinite;
-}
-.aurora-veil {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(60% 42% at 50% 0%, color-mix(in oklab, var(--primary) 7%, transparent), transparent 70%);
-}
-.dark .aurora-blob { opacity: 0.4; }
-.dark .aurora-veil {
-  background: radial-gradient(60% 42% at 50% 0%, color-mix(in oklab, var(--primary) 9%, transparent), transparent 70%);
-}
-
-@keyframes aurora-a {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-  33% { transform: translate3d(3rem, 2rem, 0) scale(1.08); }
-  66% { transform: translate3d(-1.5rem, 4rem, 0) scale(0.96); }
-}
-@keyframes aurora-b {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-  40% { transform: translate3d(-3rem, -2.5rem, 0) scale(1.06); }
-  70% { transform: translate3d(-1rem, 3rem, 0) scale(0.95); }
-}
-@keyframes aurora-c {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-  45% { transform: translate3d(2.5rem, -3rem, 0) scale(1.05); }
-  75% { transform: translate3d(-2rem, -1rem, 0) scale(0.98); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .aurora-blob { animation: none; }
-}
-
 /* ── Buttons: bun-pink with a travelling sheen ── */
 .btn-dream {
   background-image: linear-gradient(
     160deg,
-    color-mix(in oklab, white 22%, var(--primary)),
+    color-mix(in oklab, white 34%, var(--primary)),
     var(--primary) 55%,
-    color-mix(in oklab, var(--primary), oklch(0.60 0.20 330) 40%)
+    color-mix(in oklab, var(--primary), oklch(0.58 0.21 330) 45%)
   );
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 35%), var(--shadow-primary);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 45%), inset 0 -8px 14px -10px rgb(120 20 80 / 0.35), var(--shadow-primary);
   overflow: hidden;
 }
 .btn-dream:hover {
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 42%), var(--shadow-primary-lg);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 55%), inset 0 -8px 14px -10px rgb(120 20 80 / 0.3), var(--shadow-primary-lg);
 }
 .btn-dream::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(105deg, transparent 32%, rgb(255 255 255 / 30%) 48%, transparent 62%);
+  background: linear-gradient(105deg, transparent 32%, rgb(255 255 255 / 32%) 48%, transparent 62%);
   background-size: 260% 100%;
   background-position: 130% 0;
   transition: background-position 0.65s ease;
@@ -553,42 +836,70 @@ body { -webkit-font-smoothing: antialiased; }
   background-position: -60% 0;
 }
 
+/* Glass chip for outline-style buttons: same material family as cards. */
+.btn-glass {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.75), rgb(255 255 255 / 0.5)) padding-box,
+    linear-gradient(180deg, rgb(255 255 255 / 0.95), color-mix(in oklab, var(--primary) 26%, transparent)) border-box;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.85), 0 6px 16px -10px oklch(0.55 0.12 340 / 0.3);
+}
+.btn-glass:hover {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.88), rgb(255 255 255 / 0.64)) padding-box,
+    linear-gradient(180deg, rgb(255 255 255 / 1), color-mix(in oklab, var(--primary) 42%, transparent)) border-box;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95), 0 10px 22px -12px oklch(0.55 0.12 340 / 0.4);
+}
+.dark .btn-glass {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.05)) padding-box,
+    linear-gradient(180deg, rgb(255 255 255 / 0.26), color-mix(in oklab, var(--primary) 30%, transparent)) border-box;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 8px 18px -12px oklch(0.02 0.02 300 / 0.7);
+}
+.dark .btn-glass:hover {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.08)) padding-box,
+    linear-gradient(180deg, rgb(255 255 255 / 0.34), color-mix(in oklab, var(--primary) 46%, transparent)) border-box;
+}
+
 /* ── Nav pill: the sliding active item in the sidebar ── */
 .nav-pill {
-  background: linear-gradient(120deg, color-mix(in oklab, var(--primary) 26%, transparent), color-mix(in oklab, var(--primary) 10%, transparent));
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 26%, transparent), var(--shadow-xs);
+  background: linear-gradient(120deg, color-mix(in oklab, var(--primary) 30%, transparent), color-mix(in oklab, var(--primary) 10%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 30%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.35), var(--shadow-xs);
+}
+.dark .nav-pill {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 36%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.12), var(--shadow-xs);
 }
 
 /* Stat card: gradient icon chips + hover float */
 .stat-card {
-  transition: transform 250ms var(--ease-out-soft), box-shadow 250ms ease, border-color 250ms ease;
+  transition: transform 300ms var(--ease-out-soft), box-shadow 300ms ease, border-color 300ms ease;
 }
 .stat-card:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-lg), 0 0 0 1px color-mix(in oklab, var(--primary) 12%, transparent);
-  border-color: color-mix(in oklab, var(--primary) 28%, var(--border));
+  transform: translateY(-4px);
+  box-shadow: inset 0 1px 0 var(--glass-hl), var(--glass-shadow-strong), 0 0 0 1px color-mix(in oklab, var(--primary) 14%, transparent);
 }
 
 .icon-chip {
   @apply flex size-9 items-center justify-center rounded-xl;
-  background: linear-gradient(135deg, color-mix(in oklab, var(--primary) 22%, transparent), color-mix(in oklab, var(--primary) 8%, transparent));
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 25%);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--primary) 26%, transparent), color-mix(in oklab, var(--primary) 8%, transparent));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), 0 6px 14px -8px color-mix(in oklab, var(--primary) 45%, transparent);
 }
 .icon-chip > svg { @apply size-5; color: var(--primary-strong); }
 .chip-peach {
-  background: linear-gradient(135deg, color-mix(in oklab, oklch(0.80 0.14 55) 28%, transparent), color-mix(in oklab, oklch(0.80 0.14 55) 9%, transparent));
+  background: linear-gradient(135deg, color-mix(in oklab, oklch(0.80 0.14 55) 30%, transparent), color-mix(in oklab, oklch(0.80 0.14 55) 9%, transparent));
 }
 .chip-peach > svg { color: oklch(0.52 0.13 55); }
 .chip-mint {
-  background: linear-gradient(135deg, color-mix(in oklab, oklch(0.78 0.14 160) 28%, transparent), color-mix(in oklab, oklch(0.78 0.14 160) 9%, transparent));
+  background: linear-gradient(135deg, color-mix(in oklab, oklch(0.78 0.14 160) 30%, transparent), color-mix(in oklab, oklch(0.78 0.14 160) 9%, transparent));
 }
 .chip-mint > svg { color: oklch(0.46 0.12 160); }
 .chip-sky {
-  background: linear-gradient(135deg, color-mix(in oklab, oklch(0.76 0.11 235) 28%, transparent), color-mix(in oklab, oklch(0.76 0.11 235) 9%, transparent));
+  background: linear-gradient(135deg, color-mix(in oklab, oklch(0.76 0.11 235) 30%, transparent), color-mix(in oklab, oklch(0.76 0.11 235) 9%, transparent));
 }
 .chip-sky > svg { color: oklch(0.50 0.12 245); }
 .chip-rose {
-  background: linear-gradient(135deg, color-mix(in oklab, oklch(0.72 0.15 25) 26%, transparent), color-mix(in oklab, oklch(0.72 0.15 25) 8%, transparent));
+  background: linear-gradient(135deg, color-mix(in oklab, oklch(0.72 0.15 25) 28%, transparent), color-mix(in oklab, oklch(0.72 0.15 25) 8%, transparent));
 }
 .chip-rose > svg { color: oklch(0.50 0.16 25); }
 .dark .chip-peach > svg { color: oklch(0.84 0.12 55); }
@@ -597,13 +908,16 @@ body { -webkit-font-smoothing: antialiased; }
 .dark .chip-rose > svg { color: oklch(0.80 0.13 25); }
 .dark .icon-chip > svg { color: var(--primary-strong); }
 
-/* Sticky table headers */
+/* Sticky table headers ride the glass language. */
 [data-slot="table-header"] th, thead tr th {
   position: sticky;
   top: 0;
   z-index: var(--z-sticky);
-  background: color-mix(in oklab, var(--card) 88%, transparent);
-  backdrop-filter: blur(8px);
+  background: color-mix(in oklab, var(--card) 68%, transparent);
+  backdrop-filter: blur(10px);
+}
+.dark [data-slot="table-header"] th, .dark thead tr th {
+  background: color-mix(in oklab, var(--card) 55%, transparent);
 }
 
 /* Table row hover */
@@ -611,7 +925,7 @@ tbody tr {
   transition: background-color 150ms ease;
 }
 tbody tr:hover {
-  background: color-mix(in oklab, var(--primary) 5%, transparent);
+  background: color-mix(in oklab, var(--primary) 6%, transparent);
 }
 
 /* Page transition */
@@ -628,9 +942,9 @@ tbody tr:hover {
 /* ── Page header: frosted, with a warm gradient hairline ── */
 .page-header {
   position: relative;
-  background: color-mix(in oklab, var(--background) 80%, transparent);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+  background: color-mix(in oklab, var(--background) 55%, transparent);
+  backdrop-filter: blur(18px) saturate(1.4);
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
 }
 .page-header::after {
   content: "";
@@ -638,14 +952,26 @@ tbody tr:hover {
   inset-inline: 0;
   bottom: -1px;
   height: 1px;
-  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--primary) 35%, transparent) 30%, color-mix(in oklab, var(--aur-2) 45%, transparent) 70%, transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--primary) 40%, transparent) 30%, color-mix(in oklab, var(--aur-2) 50%, transparent) 70%, transparent);
   pointer-events: none;
 }
 
-/* Empty state */
+/* Empty state: presence without noise. Soft gradient glass, a pastel
+   dashed hairline and an inner highlight so it reads as a destination. */
 .empty-state {
-  @apply flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border/80 py-14 text-center;
-  background: color-mix(in oklab, var(--card) 60%, transparent);
+  @apply flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-14 text-center;
+  border-color: color-mix(in oklab, var(--primary) 26%, var(--border));
+  background: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--card) 68%, transparent),
+    color-mix(in oklab, var(--card) 42%, transparent)
+  );
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5);
+  backdrop-filter: blur(10px);
+}
+.dark .empty-state {
+  border-color: color-mix(in oklab, var(--primary) 34%, var(--border));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07);
 }
 
 /* ── Blob art: the little friend that lives in empty states ── */
@@ -757,7 +1083,7 @@ tbody tr:hover {
 .login-orb {
   position: absolute;
   border-radius: 9999px;
-  filter: blur(64px);
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--aur-1) 65%, transparent), transparent 75%);
   opacity: 0.55;
   will-change: transform;
   animation: orb-float 18s ease-in-out infinite;
@@ -765,24 +1091,23 @@ tbody tr:hover {
 .orb-1 {
   width: 34rem; height: 34rem;
   left: -8rem; top: -10rem;
-  background: color-mix(in oklab, var(--aur-1) 72%, transparent);
 }
 .orb-2 {
   width: 26rem; height: 26rem;
   right: -6rem; top: 18%;
-  background: color-mix(in oklab, var(--aur-3) 62%, transparent);
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--aur-3) 60%, transparent), transparent 75%);
   animation-duration: 22s; animation-delay: -6s;
 }
 .orb-3 {
   width: 30rem; height: 30rem;
   left: 22%; bottom: -14rem;
-  background: color-mix(in oklab, var(--aur-2) 66%, transparent);
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--aur-2) 62%, transparent), transparent 75%);
   animation-duration: 26s; animation-delay: -10s;
 }
 .orb-4 {
   width: 16rem; height: 16rem;
   right: 16%; bottom: 6%;
-  background: color-mix(in oklab, var(--aur-4) 55%, transparent);
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--aur-4) 52%, transparent), transparent 75%);
   animation-duration: 20s; animation-delay: -3s;
 }
 @keyframes orb-float {

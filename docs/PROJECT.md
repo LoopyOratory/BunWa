@@ -253,3 +253,20 @@ inputs, 12px text on desktop) and the 20px base radius was oversized relative to
 | Card spacing | Default `--card-spacing` pinned to `--spacing(5)` (22.5px desktop); card titles and descriptions bumped one step. |
 | Legacy overrides | Removed per-page `text-xs` / `text-[10-11px]` overrides on search inputs, filter selects and settings dialog controls that cancelled the scale. |
 | Verified | Live CDP: root 18px desktop / 16px mobile, inputs 36px, zero horizontal overflow on 6 pages; dialog + open select menu inspected (no clipping); `bun run test` 198/0, typecheck + oxlint clean. |
+
+## 🌌 Dreamscape v2 (2026-09-29)
+
+Operator feedback on the first dream pass: "design wise I'll give it 3/10". Diagnosis: the dream
+was only skin-deep. Flat near-white cards sat on a flat cream page, the sidebar was a solid slab
+disjointed from the content area, and the ambient aurora was trapped inside the content inset, so
+nothing shared a world. v2 moves the dream into the material itself.
+
+| Area | What changed |
+|---|---|
+| One sky | `<Aurora/>` now renders once, fixed, behind the entire app incl. sidebar and login. Layers: gradient sky, bloom, 4 drifting aurora ribbons, light sparkles + bokeh (both themes), twinkling starfield (dark), bottom veil, film grain. |
+| Glass system | One recipe, three densities in `index.css`: `.glass-card` (translucent gradient fill + gradient hairline border + inner top light + tinted shadow), `.glass-frost` (adds backdrop blur for fixed/sticky/hero), `.glass-pop` (denser, blurred overlay glass for menus/dialogs/sheets), `.glass-field` (inputs/textarea/select with focus glow ring). Blur reserved for fixed/sticky/overlay surfaces; scrolling cards paint gradients only (cheap). |
+| The dock | Sidebar container padded 0.75rem, inner panel 26px radius, glass fill, frost; `SidebarInset` background made transparent so the sky runs edge to edge behind both columns. |
+| Surfaces | Cards, stat cards, table wrappers, skeletons, empty states, page header, menus, dialogs, sheets, dropdowns, selects, tooltips all on the glass materials. Empty state now gradient glass + pastel dashed border + inner highlight; status chips get an inner light; ghost buttons get explicit `text-foreground/80`. |
+| Size + type | Stat metrics text-3xl→text-4xl, page titles text-3xl, section headings text-lg, sidebar wordmark text-xl, login headline text-4xl. |
+| Build fix | LightningCSS collapsed the hand-written standard+`-webkit-` backdrop-filter pairs to prefixed-only, which modern Chromium ignores (computed `backdrop-filter: none`). Source now declares only the standard property; the build autoprefixes. |
+| Verified | CDP pass: dock blur live (`blur(24px) saturate(1.5)`), 17 aurora layers, gradient glass computed on cards/fields, zero horizontal overflow light+dark+mobile; MiMo vision review of login/dashboard/sessions/dialog/mobile in both themes rated 7.5–9/10 (was 3/10), issues it flagged (empty-state presence, dark secondary-text contrast, ghost-icon contrast) then fixed; `bun run test` 198/0, typecheck + oxlint clean. |

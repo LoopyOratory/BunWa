@@ -99,10 +99,10 @@ export function AppSidebar() {
           <img
             src="/logo.jpg"
             alt="BunWa"
-            className="size-9 shrink-0 rounded-xl object-cover shadow-sm ring-1 ring-primary/25"
+            className="size-10 shrink-0 rounded-2xl object-cover shadow-md ring-1 ring-primary/30"
           />
           <div className="flex min-w-0 flex-col group-data-[collapsible=icon]:hidden">
-            <span className="font-heading text-base font-semibold leading-tight tracking-tight">
+            <span className="font-heading text-xl font-semibold leading-tight tracking-tight">
               Bun<span className="text-primary">Wa</span>
             </span>
             <span className="truncate text-xs text-muted-foreground">WhatsApp HTTP API</span>

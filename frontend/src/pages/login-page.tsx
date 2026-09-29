@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle, Braces, Eye, EyeOff, Loader2, Webhook, Zap, type LucideIcon } from "lucide-react"
+import { Aurora } from "@/components/dream"
 import { useAuth } from "@/lib/auth"
 
 // Short, verifiable capability lines (README: dual engine, HMAC webhooks, MCP).
@@ -40,21 +41,18 @@ export function LoginPage() {
 
   return (
     <div className="login-container">
-      {/* Drifting pastel orbs behind everything. */}
-      <span aria-hidden className="login-orb orb-1" />
-      <span aria-hidden className="login-orb orb-2" />
-      <span aria-hidden className="login-orb orb-3" />
-      <span aria-hidden className="login-orb orb-4" />
+      {/* The same dreamscape sky as the console, behind everything. */}
+      <Aurora />
 
       <div className="relative z-10 grid w-full max-w-5xl items-center gap-10 md:grid-cols-2 md:gap-16">
         {/* Sign-in card. First in the DOM so small screens keep an h1; second visually. */}
-        <Card className="order-1 w-full max-w-sm animate-pop-in justify-self-center shadow-xl md:order-2 md:justify-self-end">
+        <Card className="order-1 w-full max-w-sm animate-pop-in justify-self-center glass-frost md:order-2 md:justify-self-end">
           <CardHeader className="space-y-4">
-            <div className="grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-primary/25 via-primary/10 to-transparent ring-1 ring-primary/20">
-              <img src="/logo.jpg" alt="" aria-hidden className="size-10 rounded-xl object-cover" />
+            <div className="grid size-16 place-items-center rounded-2xl bg-gradient-to-br from-primary/25 via-primary/10 to-transparent ring-1 ring-primary/30 shadow-[0_12px_34px_-14px_var(--primary)]">
+              <img src="/logo.jpg" alt="" aria-hidden className="size-11 rounded-2xl object-cover" />
             </div>
             <div>
-              <h1 className="font-heading text-2xl font-semibold tracking-tight">Welcome back</h1>
+              <h1 className="font-heading text-3xl font-semibold tracking-tight">Welcome back</h1>
               <p className="mt-1 text-xs/relaxed text-muted-foreground">
                 Use your dashboard credentials. Your sessions are waiting.
               </p>
@@ -123,20 +121,20 @@ export function LoginPage() {
         </Card>
 
         {/* Marketing panel: brand, one value line, three facts. */}
-        <div className="order-2 hidden md:order-1 md:flex md:flex-col md:gap-8 md:border-r md:border-border/60 md:pr-16">
+        <div className="order-2 hidden md:order-1 md:flex md:flex-col md:gap-8 md:pr-16">
           <div className="flex items-center gap-3">
             <img
               src="/logo.jpg"
               alt=""
               aria-hidden
-              className="size-10 rounded-xl object-cover shadow-sm ring-1 ring-primary/25"
+              className="size-11 rounded-2xl object-cover shadow-md ring-1 ring-primary/30"
             />
-            <span className="font-heading text-lg font-semibold tracking-tight">
+            <span className="font-heading text-xl font-semibold tracking-tight">
               Bun<span className="text-primary">Wa</span>
             </span>
           </div>
           <div>
-            <h2 className="font-heading text-3xl font-semibold tracking-tight text-balance">
+            <h2 className="font-heading text-4xl font-semibold tracking-tight text-balance">
               WhatsApp automation{" "}
               <span className="text-gradient">with a little sparkle</span>.
             </h2>
@@ -147,7 +145,7 @@ export function LoginPage() {
           <ul className="space-y-3">
             {FACTS.map(({ icon: Icon, text }) => (
               <li key={text} className="flex items-center gap-3 text-sm text-muted-foreground">
-                <span className="icon-chip size-7 [&>svg]:size-3.5">
+                <span className="icon-chip size-8 [&>svg]:size-4">
                   <Icon strokeWidth={1.75} />
                 </span>
                 {text}

@@ -36,7 +36,7 @@ export function EngineBadge({ engine, className }: { engine?: string; className?
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs font-semibold text-muted-foreground shadow-xs",
+        "inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card/60 px-2.5 py-0.5 text-xs font-semibold text-muted-foreground",
         className,
       )}
     >
@@ -101,12 +101,12 @@ export function StatCard({
   tone?: keyof typeof STAT_TONE
 }) {
   return (
-    <div className="stat-card rounded-lg border border-border/70 bg-card p-5 shadow-sm">
+    <div className="stat-card glass-card rounded-lg p-5">
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
         {icon && <span className={cn("icon-chip size-10", STAT_CHIP[tone])}>{icon}</span>}
       </div>
-      <p className={cn("metric mt-2 font-heading text-3xl font-semibold leading-none", STAT_TONE[tone])}>
+      <p className={cn("metric mt-2 font-heading text-4xl font-semibold leading-none", STAT_TONE[tone])}>
         {value}
       </p>
       {hint && <p className="mt-2 text-xs text-muted-foreground">{hint}</p>}
@@ -128,7 +128,7 @@ export function DataTable({
   scrollRef?: Ref<HTMLDivElement>
 }) {
   return (
-    <div className={cn("overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm", className)}>
+    <div className={cn("glass-card overflow-hidden rounded-lg", className)}>
       <div ref={scrollRef} className="overflow-x-auto">
         <Table className={minWidthClassName === false ? undefined : minWidthClassName}>
           {children}
@@ -147,7 +147,7 @@ export function StatRowSkeleton({ count = 4 }: { count?: number }) {
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="rounded-lg border border-border/70 bg-card p-5 shadow-sm">
+        <div key={i} className="glass-card rounded-lg p-5">
           <Skeleton className="h-4 w-24" />
           <Skeleton className="mt-3 h-7 w-16" />
         </div>
@@ -158,7 +158,7 @@ export function StatRowSkeleton({ count = 4 }: { count?: number }) {
 
 export function TableSkeleton({ rows = 6, columns = 5 }: { rows?: number; columns?: number }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
+    <div className="glass-card overflow-hidden rounded-lg">
       <div className="border-b border-border px-4 py-3">
         <Skeleton className="h-4 w-40" />
       </div>
@@ -179,7 +179,7 @@ export function CardGridSkeleton({ count = 4 }: { count?: number }) {
   return (
     <div className="card-grid">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="rounded-lg border border-border/70 bg-card p-5 shadow-sm">
+        <div key={i} className="glass-card rounded-lg p-5">
           <Skeleton className="h-5 w-32" />
           <Skeleton className="mt-4 h-4 w-full" />
           <Skeleton className="mt-2 h-4 w-2/3" />
@@ -277,7 +277,7 @@ export function SectionHeading({
       <div>
         <div className="flex items-center gap-2.5">
           <span aria-hidden className="flourish" />
-          <h2 className="font-heading text-base font-semibold tracking-tight">{title}</h2>
+          <h2 className="font-heading text-lg font-semibold tracking-tight">{title}</h2>
         </div>
         {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>

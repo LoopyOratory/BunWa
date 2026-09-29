@@ -13,11 +13,11 @@ const buttonVariants = cva(
       variant: {
         default: "btn-dream bg-primary text-primary-foreground",
         outline:
-          "border-border bg-card shadow-xs hover:border-primary/40 hover:bg-primary-soft/50 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",
+          "btn-glass text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",
         secondary:
           "bg-secondary text-secondary-foreground shadow-xs hover:bg-[color-mix(in_oklab,var(--secondary),var(--foreground)_6%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
         ghost:
-          "hover:bg-primary-soft/60 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",
+          "text-foreground/80 hover:bg-primary-soft/60 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/15 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         link: "text-primary-strong underline-offset-4 hover:underline",
