@@ -67,3 +67,20 @@ export class UnprocessableEntityException extends Error {
     this.name = 'UnprocessableEntityException';
   }
 }
+
+/**
+ * Thrown by the sending policy when a send is blocked (caps, reachout
+ * timelock, quiet hours). Mapped to HTTP 429 with a Retry-After header.
+ */
+export class TooManyRequestsException extends Error {
+  public readonly retryAfterMs: number;
+  public readonly reason: string;
+
+  constructor(retryAfterMs: number, reason: string) {
+    const seconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+    super(`Send blocked by the sending policy: ${reason}. Retry after ${seconds} seconds`);
+    this.name = 'TooManyRequestsException';
+    this.retryAfterMs = Math.max(0, retryAfterMs);
+    this.reason = reason;
+  }
+}

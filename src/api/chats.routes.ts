@@ -4,6 +4,23 @@ import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanSession, Action, FromParam } from '../middleware/policies';
 import { workingSessionResolver } from '../middleware/session-resolver';
 
+/**
+ * Single implementation for chat message history, shared by
+ * GET /api/{session}/chats/{chatId}/messages and the flat
+ * GET /api/messages route.
+ */
+export async function getChatMessagesViaEngine(
+  session: any,
+  chatId: string,
+  opts: { limit?: number; offset?: number; downloadMedia?: boolean } = {},
+): Promise<any[]> {
+  return (session as any).getChatMessages(chatId, {
+    limit: opts.limit ?? 50,
+    offset: opts.offset ?? 0,
+    downloadMedia: opts.downloadMedia === true,
+  }, {});
+}
+
 export function createChatsRouter(): Hono<{ Variables: { session: any; body: any } }> {
   const router = new Hono<{ Variables: { session: any; body: any } }>();
 
@@ -80,11 +97,11 @@ export function createChatsRouter(): Hono<{ Variables: { session: any; body: any
       const limit = parseInt(c.req.query('limit') || '50');
       const offset = parseInt(c.req.query('offset') || '0');
       const downloadMedia = c.req.query('downloadMedia') === 'true';
-      const messages = await (session as any).getChatMessages(
-        chatId,
-        { limit, offset, downloadMedia },
-        {}
-      );
+      const messages = await getChatMessagesViaEngine(session, chatId, {
+        limit,
+        offset,
+        downloadMedia,
+      });
       return c.json(messages);
     }
   );

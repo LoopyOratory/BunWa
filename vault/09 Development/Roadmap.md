@@ -2,7 +2,7 @@
 type: note
 section: development
 tags: [bunwa, dev, roadmap]
-updated: 2026-09-14
+updated: 2026-09-29
 status: active
 ---
 
@@ -17,8 +17,8 @@ Full analysis in [[Interactive Messages and Commerce]].
 
 | # | Task | Why |
 |---|---|---|
-| A1 | **Sending policy service** — per-session message caps (min/hour/day), reachout timelock for *new* chats, new-contact quotas, warm-up ramp for fresh sessions, quiet hours, 429 enforcement + retry-after | **the highest-value missing capability.** Nothing caps sending today; the only limiter is HTTP-level and bulk pacing, both bypassable. Cold outreach is what gets Baileys-style sessions banned |
-| A2 | **Parse `interactiveResponseMessage`** — incl. `nativeFlowResponseMessage.paramsJson` → expose `selectedButtonId` / `selectedRowId` | button and list taps sent *by this server* currently arrive with an empty body |
+| ~~A1~~ | ~~**Sending policy service** — per-session message caps (min/hour/day), reachout timelock for *new* chats, new-contact quotas, warm-up ramp for fresh sessions, quiet hours, 429 enforcement + retry-after~~ | ✅ **done** — `SendingPolicyService` (`src/core/sending-policy/`, SQLite-persisted counters), enforced at every NOWEB send method, per-session overrides and usage via `GET/PUT /api/sessions/:session/policy`, 429 with `Retry-After` |
+| ~~A2~~ | ~~**Parse `interactiveResponseMessage`** — incl. `nativeFlowResponseMessage.paramsJson` → expose `selectedButtonId` / `selectedRowId`~~ | ✅ **done** — inbound selections surface as `WAMessage.interactive {type, selectedId, selectedText, repliedToMessageId}` for all four response shapes |
 | A3 | **Wire `/api/send/buttons/reply`** | it returns success and sends nothing; the engine method exists but has no caller |
 | A4 | **Validate interactive limits** — ≤3 buttons, ≤10 list rows / ≤3 sections → clear 422 | over-limit messages are silently dropped by WhatsApp while the API reports success |
 | A5 | **Carousel message type** — `interactiveMessage.carouselMessage.cards[]` | the one genuinely missing interactive type that needs no Meta infrastructure |
@@ -30,7 +30,7 @@ Full analysis in [[Interactive Messages and Commerce]].
 |---|---|---|
 | ~~1~~ | ~~Fix the 2 failing tests~~ | ✅ **done** — 104/104 green ([[Bun Runtime Adoption]]) |
 | ~~2~~ | ~~Tighten CI typecheck cap 1049 → 0~~ | ✅ **done** — the cap is gone, CI runs strict `tsc` |
-| 3 | **Wire or delete the stub routes** — `contacts/block`·`unblock`, `groups/:id` delete, `events`, `media/convert/video` | four endpoints currently lie in the docs and fail at runtime ([[Known Gaps and Stubs]]) |
+| 3 | **Wire or delete the stub routes** — `contacts/block`·`unblock`, `groups/:id` delete, `events`, `media/convert/video` | two stubs are gone (`sendSticker` now reads `session` from the body, `GET /api/messages` is wired); four still lie in the docs and fail at runtime ([[Known Gaps and Stubs]]) |
 | 4 | **Chat mute/unmute** — implement `muteChat`/`unmuteChat` on the NOWEB engine | the routes exist and always 400; NOWEB has the underlying primitive |
 | ~~5~~ | ~~Remove the hardcoded `x-api-key: waha`~~ | ✅ **done** — `getApiAuthHeaders()` sends the dashboard Basic credentials plus an optional real key from `localStorage["waha-api-key"]` ([[Dashboard]]) |
 | 6 | ~~Declare `sharp` or delete it~~ | ✅ **done** — `sharp` and 7 other unused deps were removed ([[Bun Runtime Adoption]]) |

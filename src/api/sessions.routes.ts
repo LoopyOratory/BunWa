@@ -13,12 +13,20 @@ export function createSessionsRouter(): Hono {
 
   router.use('*', apiKeyAuthMiddleware());
 
-  // GET /api/sessions - List all sessions (requires server-level access)
+  // GET /api/sessions - List all sessions (requires server-level access).
+  // Optional ?name= filters by exact or prefix name match (case-insensitive).
   router.get('/',
     policiesMiddleware(CanServer(Action.Read)),
     async (c) => {
       const manager = container.resolve(SessionManager);
-      const sessions = await manager.getSessions();
+      let sessions = await manager.getSessions();
+      const nameFilter = c.req.query('name');
+      if (nameFilter) {
+        const prefix = nameFilter.toLowerCase();
+        sessions = sessions.filter((s) =>
+          s.name === nameFilter || (s.name ?? '').toLowerCase().startsWith(prefix)
+        );
+      }
       return c.json(sessions);
     }
   );

@@ -25,6 +25,7 @@ import { createAppsRouter } from './apps.routes';
 import { createWorkersRouter } from './workers.routes';
 import { createWebhooksRouter } from './webhooks.routes';
 import { createTemplatesRouter } from './templates.routes';
+import { createSendingPolicyRouter } from './sending-policy.routes';
 import { createAuditRouter } from './audit.routes';
 import { createInfraRouter } from './infra.routes';
 import { createMcpConfigRouter } from './mcp-config.routes';
@@ -58,6 +59,7 @@ export function createApiRouter(): Hono {
   router.route('/api', createWorkersRouter());
   router.route('/api/sessions', createWebhooksRouter());
   router.route('/api/sessions', createTemplatesRouter());
+  router.route('/api/sessions', createSendingPolicyRouter());
   router.route('/api', createAuditRouter());
   router.route('/api', createInfraRouter());
   router.route('/api', createMcpConfigRouter());

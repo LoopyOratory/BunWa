@@ -2,16 +2,23 @@ import { Hono } from 'hono';
 import { BulkMessageService } from '../core/bulk-message.service';
 import { container } from 'tsyringe';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
-import { policiesMiddleware, CanSession, Action, FromParam } from '../middleware/policies';
+import { policiesMiddleware, CanSession, Action, FromParam, FromQuery } from '../middleware/policies';
 import { workingSessionResolver } from '../middleware/session-resolver';
 import { SessionManager } from '../core/manager.core';
 import { getSessionFromBody } from '../middleware/get-session-from-body';
 import { AuditService, AuditAction } from '../core/audit/audit.service';
+import { TooManyRequestsException } from '../core/exceptions';
+import { getChatMessagesViaEngine } from './chats.routes';
 
 // Get session name from body for policy enforcement
 const FromBodySession = (c: any) => {
   const body = c.get('body');
   return body?.session;
+};
+
+// GET bodies are rare: prefer the query string, fall back to a parsed body
+const FromBodyOrQuerySession = (c: any) => {
+  return c.req.query('session') || FromBodySession(c);
 };
 
 /**
@@ -74,6 +81,9 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
         }));
         return c.json(result);
       } catch (e: any) {
+        // Let mapped domain exceptions (e.g. the 429 sending policy) reach
+        // the global error handler instead of flattening into a 500.
+        if (e instanceof TooManyRequestsException) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -94,6 +104,9 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
         }));
         return c.json(result);
       } catch (e: any) {
+        // Let mapped domain exceptions (e.g. the 429 sending policy) reach
+        // the global error handler instead of flattening into a 500.
+        if (e instanceof TooManyRequestsException) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -113,6 +126,9 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
         }));
         return c.json(result);
       } catch (e: any) {
+        // Let mapped domain exceptions (e.g. the 429 sending policy) reach
+        // the global error handler instead of flattening into a 500.
+        if (e instanceof TooManyRequestsException) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -133,6 +149,9 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
         }));
         return c.json(result);
       } catch (e: any) {
+        // Let mapped domain exceptions (e.g. the 429 sending policy) reach
+        // the global error handler instead of flattening into a 500.
+        if (e instanceof TooManyRequestsException) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -225,6 +244,9 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
         }));
         return c.json(result);
       } catch (e: any) {
+        // Let mapped domain exceptions (e.g. the 429 sending policy) reach
+        // the global error handler instead of flattening into a 500.
+        if (e instanceof TooManyRequestsException) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -247,6 +269,9 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
         }));
         return c.json(result);
       } catch (e: any) {
+        // Let mapped domain exceptions (e.g. the 429 sending policy) reach
+        // the global error handler instead of flattening into a 500.
+        if (e instanceof TooManyRequestsException) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -262,6 +287,9 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
         const result = await sendAndAudit(body.session, 'sendList', () => (session as any).sendList?.(body));
         return c.json(result);
       } catch (e: any) {
+        // Let mapped domain exceptions (e.g. the 429 sending policy) reach
+        // the global error handler instead of flattening into a 500.
+        if (e instanceof TooManyRequestsException) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -347,6 +375,9 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
         }));
         return c.json({ result: true });
       } catch (e: any) {
+        // Let mapped domain exceptions (e.g. the 429 sending policy) reach
+        // the global error handler instead of flattening into a 500.
+        if (e instanceof TooManyRequestsException) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -367,6 +398,9 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
         }));
         return c.json({ result: true });
       } catch (e: any) {
+        // Let mapped domain exceptions (e.g. the 429 sending policy) reach
+        // the global error handler instead of flattening into a 500.
+        if (e instanceof TooManyRequestsException) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -402,15 +436,48 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
         const result = await (session as any).checkNumberStatus({ phone });
         return c.json(result);
       } catch (e: any) {
+        // Let mapped domain exceptions (e.g. the 429 sending policy) reach
+        // the global error handler instead of flattening into a 500.
+        if (e instanceof TooManyRequestsException) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
   );
 
+  // WAHA-style flat message history. Session may come from the query string
+  // or a JSON body; chatId is required. Delegates to the same engine call as
+  // GET /api/{session}/chats/{chatId}/messages.
   router.get('/messages',
-    policiesMiddleware(CanSession(Action.Read, FromBodySession)),
-    (c) => {
-      return c.json([]);
+    policiesMiddleware(CanSession(Action.Read, FromBodyOrQuerySession)),
+    async (c) => {
+      let sessionName = c.req.query('session');
+      if (!sessionName) {
+        const body = await c.req.json().catch(() => ({}));
+        sessionName = body?.session;
+      }
+      if (!sessionName) {
+        return c.json({ statusCode: 400, message: 'Session name required in query or body' }, 400);
+      }
+      const chatId = c.req.query('chatId');
+      if (!chatId) {
+        return c.json({ statusCode: 400, message: 'chatId query param required' }, 400);
+      }
+      const manager = container.resolve(SessionManager);
+      let session: any;
+      try {
+        session = manager.getSession(sessionName);
+      } catch (e) {
+        return c.json({ statusCode: 404, message: `Session ${sessionName} not found` }, 404);
+      }
+      const limit = parseInt(c.req.query('limit') || '50');
+      const offset = parseInt(c.req.query('offset') || '0');
+      const downloadMedia = c.req.query('downloadMedia') === 'true';
+      const messages = await getChatMessagesViaEngine(session, chatId, {
+        limit,
+        offset,
+        downloadMedia,
+      });
+      return c.json(messages);
     }
   );
 
@@ -424,6 +491,9 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
         const id = await (session as any).generateNewMessageId();
         return c.json({ id });
       } catch (e: any) {
+        // Let mapped domain exceptions (e.g. the 429 sending policy) reach
+        // the global error handler instead of flattening into a 500.
+        if (e instanceof TooManyRequestsException) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -431,11 +501,11 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
 
   // ===== OpenWA parity: sticker send (image/webp via sendFile) =====
   router.post('/sendSticker',
-    policiesMiddleware(CanSession(Action.Send, FromParam('session'))),
-    workingSessionResolver(),
+    policiesMiddleware(CanSession(Action.Send, FromBodySession)),
+    getSessionFromBody(),
     async (c) => {
       const session = c.get('session');
-      const body = await c.req.json();
+      const body = c.get('body');
       const chatId = body.chatId || body.to;
       if (!chatId || !body.file || !body.file.data) {
         return c.json({ error: 'chatId and file.data (base64 webp/png) required' }, 400);
@@ -451,6 +521,7 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
         });
         return c.json({ success: true, id: result?.key?.id ?? result?._id ?? null });
       } catch (e: any) {
+        if (e instanceof TooManyRequestsException) throw e;
         return c.json({ error: String(e?.message || e) }, 500);
       }
     }

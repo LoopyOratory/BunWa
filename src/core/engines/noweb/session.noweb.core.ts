@@ -169,7 +169,11 @@ import {
   WAHAChatPresences,
   WAHAPresenceData,
 } from '../../../structures/presence.dto';
-import { WAMessage, WAMessageReaction } from '../../../structures/responses.dto';
+import {
+  WAMessage,
+  WAMessageInteractiveReply,
+  WAMessageReaction,
+} from '../../../structures/responses.dto';
 import { MeInfo } from '../../../structures/sessions.dto';
 import {
   BROADCAST_ID,
@@ -239,6 +243,8 @@ import {
 } from '../../env';
 import { StatusStringToStatus } from '../../utils/acks';
 import promiseRetry from 'promise-retry';
+import { container } from 'tsyringe';
+import { SendingPolicyService } from '../../sending-policy/sending-policy.service';
 
 export const BaileysEvents = {
   CONNECTION_UPDATE: 'connection.update',
@@ -1036,17 +1042,91 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     await this.sock.rejectCall(id, jid);
   }
 
+  // ===== Anti-ban sending policy =====
+
+  private sendingPolicyService?: SendingPolicyService | null;
+
+  /**
+   * Lazy, optional access to the sending policy service. The engine is not
+   * DI-managed, so the service is pulled from the tsyringe container on first
+   * use and simply skipped when it was never registered (e.g. unit tests).
+   */
+  protected getSendingPolicy(): SendingPolicyService | null {
+    if (this.sendingPolicyService === undefined) {
+      this.sendingPolicyService = null;
+      try {
+        if (container.isRegistered(SendingPolicyService)) {
+          this.sendingPolicyService = container.resolve(SendingPolicyService);
+        }
+      } catch (error) {
+        this.logger.warn({ error }, 'Sending policy unavailable, sends are not gated');
+        this.sendingPolicyService = null;
+      }
+    }
+    return this.sendingPolicyService;
+  }
+
+  /**
+   * Normalize the chat id and run the sending-policy gate (caps, reachout
+   * timelock, quiet hours) before a send. Returns the normalized chat id so
+   * callers keep a single normalization point. Throws
+   * TooManyRequestsException when the send must not go out.
+   */
+  private policyGate(requestChatId: string): string {
+    const chatId = toJID(this.ensureSuffix(requestChatId));
+    this.getSendingPolicy()?.assertSendAllowed(this.name, chatId);
+    return chatId;
+  }
+
+  /** Record a send against the policy counters (success, or a failed cold attempt). */
+  private policyRecord(chatId: string, failed: boolean): void {
+    this.getSendingPolicy()?.recordSend(this.name, chatId, failed);
+  }
+
+  /**
+   * Security guard for edit/revoke protocol messages: the protocol key must
+   * target the chat the event arrived on. A crafted protocol message naming a
+   * different chat would otherwise let a message in one chat emit an edit or
+   * revoke for a message in another chat.
+   */
+  private isSameChatProtocolEvent(message: any): boolean {
+    const protocolKey =
+      message?.message?.protocolMessage?.key ??
+      message?.message?.secretEncryptedMessage?.targetMessageKey;
+    const protocolRemoteJid = protocolKey?.remoteJid;
+    if (!protocolRemoteJid || !message?.key?.remoteJid) {
+      // Nothing to compare against — keep the existing behaviour
+      return true;
+    }
+    const same =
+      jidNormalizedUser(protocolRemoteJid) === jidNormalizedUser(message.key.remoteJid);
+    if (!same) {
+      this.logger.debug(
+        { chat: message.key.remoteJid, protocolChat: protocolRemoteJid },
+        'Dropped a cross-chat edit/revoke protocol message',
+      );
+    }
+    return same;
+  }
+
   @Activity()
   async sendText(request: MessageTextRequest) {
-    const chatId = toJID(this.ensureSuffix(request.chatId));
-    const message = {
-      text: request.text,
-      mentions: request.mentions?.map(toJID),
-      linkPreview: this.getLinkPreview(request),
-    };
-    const options: any = await this.getMessageOptions(request);
-    options.linkPreviewHighQuality = request.linkPreviewHighQuality;
-    return this.sock.sendMessage(chatId, message, options);
+    const chatId = this.policyGate(request.chatId);
+    try {
+      const message = {
+        text: request.text,
+        mentions: request.mentions?.map(toJID),
+        linkPreview: this.getLinkPreview(request),
+      };
+      const options: any = await this.getMessageOptions(request);
+      options.linkPreviewHighQuality = request.linkPreviewHighQuality;
+      const result = await this.sock.sendMessage(chatId, message, options);
+      this.policyRecord(chatId, false);
+      return result;
+    } catch (error) {
+      this.policyRecord(chatId, true);
+      throw error;
+    }
   }
 
   @Activity()
@@ -1121,16 +1201,23 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async sendContactVCard(request: MessageContactVcardRequest) {
-    const chatId = toJID(this.ensureSuffix(request.chatId));
     const contacts = (request.contacts || []).map((el) => ({
       vcard: toVcardV3([el]),
     }));
     if (contacts.length === 0) {
       throw new UnprocessableEntityException('No contacts provided');
     }
-    const options: any = await this.getMessageOptions(request);
-    const msg = { contacts: { contacts: contacts } };
-    return await this.sock.sendMessage(chatId, msg, options);
+    const chatId = this.policyGate(request.chatId);
+    try {
+      const options: any = await this.getMessageOptions(request);
+      const msg = { contacts: { contacts: contacts } };
+      const result = await this.sock.sendMessage(chatId, msg, options);
+      this.policyRecord(chatId, false);
+      return result;
+    } catch (error) {
+      this.policyRecord(chatId, true);
+      throw error;
+    }
   }
 
   @Activity()
@@ -1156,21 +1243,34 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       messageSecret: requestPoll.messageSecret,
     };
     const message = { poll: poll };
-    const remoteJid = toJID(this.ensureSuffix(request.chatId));
-    const options: any = await this.getMessageOptions(request);
-    const result = await this.sock.sendMessage(remoteJid, message, options);
-    return this.toWAMessage(result);
+    const remoteJid = this.policyGate(request.chatId);
+    try {
+      const options: any = await this.getMessageOptions(request);
+      const result = await this.sock.sendMessage(remoteJid, message, options);
+      this.policyRecord(remoteJid, false);
+      return this.toWAMessage(result);
+    } catch (error) {
+      this.policyRecord(remoteJid, true);
+      throw error;
+    }
   }
 
   @Activity()
   async reply(request: MessageReplyRequest) {
-    const chatId = toJID(this.ensureSuffix(request.chatId));
-    const options: any = await this.getMessageOptions(request);
-    const message = {
-      text: request.text,
-      mentions: request.mentions?.map(toJID),
-    };
-    return await this.sock.sendMessage(chatId, message, options);
+    const chatId = this.policyGate(request.chatId);
+    try {
+      const options: any = await this.getMessageOptions(request);
+      const message = {
+        text: request.text,
+        mentions: request.mentions?.map(toJID),
+      };
+      const result = await this.sock.sendMessage(chatId, message, options);
+      this.policyRecord(chatId, false);
+      return result;
+    } catch (error) {
+      this.policyRecord(chatId, true);
+      throw error;
+    }
   }
 
   /**
@@ -1192,67 +1292,95 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async sendImage(request: MessageImageRequest) {
-    const chatId = toJID(this.ensureSuffix(request.chatId));
-    const fileData = this.fileToBuffer(request.file);
-    const message: any = {
-      image: typeof fileData === 'string' ? { url: fileData } : fileData,
-      caption: request.caption,
-      mentions: request.mentions?.map(toJID),
-    };
-    const options: any = await this.getMessageOptions(request);
-    return this.sock.sendMessage(chatId, message, options);
+    const chatId = this.policyGate(request.chatId);
+    try {
+      const fileData = this.fileToBuffer(request.file);
+      const message: any = {
+        image: typeof fileData === 'string' ? { url: fileData } : fileData,
+        caption: request.caption,
+        mentions: request.mentions?.map(toJID),
+      };
+      const options: any = await this.getMessageOptions(request);
+      const result = await this.sock.sendMessage(chatId, message, options);
+      this.policyRecord(chatId, false);
+      return result;
+    } catch (error) {
+      this.policyRecord(chatId, true);
+      throw error;
+    }
   }
 
   @Activity()
   async sendFile(request: MessageFileRequest) {
-    const chatId = toJID(this.ensureSuffix(request.chatId));
-    const fileData = this.fileToBuffer(request.file);
-    const message: any = {
-      document: typeof fileData === 'string' ? { url: fileData } : fileData,
-      caption: request.caption,
-      mentions: request.mentions?.map(toJID),
-    };
-    const options: any = await this.getMessageOptions(request);
-    return this.sock.sendMessage(chatId, message, options);
+    const chatId = this.policyGate(request.chatId);
+    try {
+      const fileData = this.fileToBuffer(request.file);
+      const message: any = {
+        document: typeof fileData === 'string' ? { url: fileData } : fileData,
+        caption: request.caption,
+        mentions: request.mentions?.map(toJID),
+      };
+      const options: any = await this.getMessageOptions(request);
+      const result = await this.sock.sendMessage(chatId, message, options);
+      this.policyRecord(chatId, false);
+      return result;
+    } catch (error) {
+      this.policyRecord(chatId, true);
+      throw error;
+    }
   }
 
   @Activity()
   async sendVoice(request: MessageVoiceRequest) {
-    const chatId = toJID(this.ensureSuffix(request.chatId));
-    const fileData = this.fileToBuffer(request.file);
-    const convert = request.convert !== false; // default: transcode to OGG/Opus
+    const chatId = this.policyGate(request.chatId);
+    try {
+      const fileData = this.fileToBuffer(request.file);
+      const convert = request.convert !== false; // default: transcode to OGG/Opus
 
-    let message: any;
-    if (convert) {
-      // WhatsApp voice notes must be OGG/Opus. Materialize the bytes, skip if
-      // already Opus, otherwise transcode via ffmpeg.
-      const input = await materializeAudioBytes(fileData);
-      const opus = isOggOpus(input) ? input : await this.mediaConverter.voice(input);
-      const seconds = await getAudioDurationSeconds(opus);
-      message = { audio: opus, mimetype: 'audio/ogg; codecs=opus', ptt: true, seconds };
-    } else {
-      // Caller opted out of conversion — send as-is (must already be OGG/Opus).
-      message = { audio: typeof fileData === 'string' ? { url: fileData } : fileData, ptt: true };
+      let message: any;
+      if (convert) {
+        // WhatsApp voice notes must be OGG/Opus. Materialize the bytes, skip if
+        // already Opus, otherwise transcode via ffmpeg.
+        const input = await materializeAudioBytes(fileData);
+        const opus = isOggOpus(input) ? input : await this.mediaConverter.voice(input);
+        const seconds = await getAudioDurationSeconds(opus);
+        message = { audio: opus, mimetype: 'audio/ogg; codecs=opus', ptt: true, seconds };
+      } else {
+        // Caller opted out of conversion — send as-is (must already be OGG/Opus).
+        message = { audio: typeof fileData === 'string' ? { url: fileData } : fileData, ptt: true };
+      }
+
+      const options: any = await this.getMessageOptions(request);
+      const result = await this.sock.sendMessage(chatId, message, options);
+      this.policyRecord(chatId, false);
+      return result;
+    } catch (error) {
+      this.policyRecord(chatId, true);
+      throw error;
     }
-
-    const options: any = await this.getMessageOptions(request);
-    return this.sock.sendMessage(chatId, message, options);
   }
 
   @Activity()
   async sendVideo(request: MessageVideoRequest) {
-    const chatId = toJID(this.ensureSuffix(request.chatId));
-    const fileData = this.fileToBuffer(request.file);
-    const message: any = {
-      video: typeof fileData === 'string' ? { url: fileData } : fileData,
-      caption: request.caption,
-      mentions: request.mentions?.map(toJID),
-    };
-    const options: any = await this.getMessageOptions(request);
-    if (request.asNote) {
-      message.notes = true;
+    const chatId = this.policyGate(request.chatId);
+    try {
+      const fileData = this.fileToBuffer(request.file);
+      const message: any = {
+        video: typeof fileData === 'string' ? { url: fileData } : fileData,
+        caption: request.caption,
+        mentions: request.mentions?.map(toJID),
+      };
+      const options: any = await this.getMessageOptions(request);
+      if (request.asNote) {
+        message.notes = true;
+      }
+      const result = await this.sock.sendMessage(chatId, message, options);
+      this.policyRecord(chatId, false);
+      return result;
+    } catch (error) {
+      this.policyRecord(chatId, true);
+      throw error;
     }
-    return this.sock.sendMessage(chatId, message, options);
   }
 
   @Activity()
@@ -1336,82 +1464,102 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async sendButtons(request: SendButtonsRequest) {
-    const chatId = toJID(this.ensureSuffix(request.chatId));
-    const headerImage = await this.uploadMedia(request.headerImage, 'image');
-    return await sendButtonMessage(
-      this.sock,
-      chatId,
-      request.buttons,
-      request.header,
-      headerImage,
-      request.body,
-      request.footer,
-    );
+    const chatId = this.policyGate(request.chatId);
+    try {
+      const headerImage = await this.uploadMedia(request.headerImage, 'image');
+      const result = await sendButtonMessage(
+        this.sock,
+        chatId,
+        request.buttons,
+        request.header,
+        headerImage,
+        request.body,
+        request.footer,
+      );
+      this.policyRecord(chatId, false);
+      return result;
+    } catch (error) {
+      this.policyRecord(chatId, true);
+      throw error;
+    }
   }
 
   @Activity()
   async sendList(request: SendListRequest) {
-    const chatId = toJID(this.ensureSuffix(request.chatId));
-    const sections = request.sections.map((s) => ({
-      title: s.title || '',
-      rows: (s.rows || []).map((r) => ({
-        title: r.title || '',
-        description: r.description || '',
-        rowId: r.rowId || randomId(),
-      })),
-    }));
-    const options: any = await this.getMessageOptions(request);
-    // Sent as interactiveMessage directly (no viewOnceMessage wrapper — that
-    // marks the message view-once, unrelated to rendering the list/buttons).
-    const inner: any = {
-      messageContextInfo: {
-        deviceListMetadata: {},
-        deviceListMetadataVersion: 2,
-      },
-      interactiveMessage: {
-        body: { text: request.description || '' },
-        header: request.title ? { title: request.title } : undefined,
-        nativeFlowMessage: {
-          buttons: [
-            {
-              name: 'single_select',
-              buttonParamsJson: JSON.stringify({
-                title: request.button || 'Options',
-                sections: sections,
-              }),
-            },
-          ],
-          messageParamsJson: JSON.stringify({}),
+    const chatId = this.policyGate(request.chatId);
+    try {
+      const sections = request.sections.map((s) => ({
+        title: s.title || '',
+        rows: (s.rows || []).map((r) => ({
+          title: r.title || '',
+          description: r.description || '',
+          rowId: r.rowId || randomId(),
+        })),
+      }));
+      const options: any = await this.getMessageOptions(request);
+      // Sent as interactiveMessage directly (no viewOnceMessage wrapper — that
+      // marks the message view-once, unrelated to rendering the list/buttons).
+      const inner: any = {
+        messageContextInfo: {
+          deviceListMetadata: {},
+          deviceListMetadataVersion: 2,
         },
-      },
-    };
-    const msg = proto.Message.create(wrapInteractiveMessage(inner) as any);
-    const fullMessage = generateWAMessageFromContent(chatId, msg, {
-      userJid: this.sock?.user?.id ?? '',
-    });
-    // WhatsApp requires the same biz/interactive/native_flow (+ bot for
-    // private chats) binary nodes as sendButtons for the list to render.
-    // fullMessage.message is guaranteed present: it was just built from
-    // the freshly-constructed `msg` content above.
-    await this.sock.relayMessage(chatId, fullMessage.message!, {
-      messageId: fullMessage.key.id ?? undefined,
-      additionalNodes: buildButtonBinaryNodes(chatId),
-    });
-    return fullMessage;
+        interactiveMessage: {
+          body: { text: request.description || '' },
+          header: request.title ? { title: request.title } : undefined,
+          nativeFlowMessage: {
+            buttons: [
+              {
+                name: 'single_select',
+                buttonParamsJson: JSON.stringify({
+                  title: request.button || 'Options',
+                  sections: sections,
+                }),
+              },
+            ],
+            messageParamsJson: JSON.stringify({}),
+          },
+        },
+      };
+      const msg = proto.Message.create(wrapInteractiveMessage(inner) as any);
+      const fullMessage = generateWAMessageFromContent(chatId, msg, {
+        userJid: this.sock?.user?.id ?? '',
+      });
+      // WhatsApp requires the same biz/interactive/native_flow (+ bot for
+      // private chats) binary nodes as sendButtons for the list to render.
+      // fullMessage.message is guaranteed present: it was just built from
+      // the freshly-constructed `msg` content above.
+      await this.sock.relayMessage(chatId, fullMessage.message!, {
+        messageId: fullMessage.key.id ?? undefined,
+        additionalNodes: buildButtonBinaryNodes(chatId),
+      });
+      this.policyRecord(chatId, false);
+      return fullMessage;
+    } catch (error) {
+      this.policyRecord(chatId, true);
+      throw error;
+    }
   }
 
   @Activity()
   async sendLocation(request: MessageLocationRequest) {
-    const chatId = toJID(this.ensureSuffix(request.chatId));
-    const msg = {
-      location: {
-        name: request.title || null,
-        degreesLatitude: request.latitude,
-        degreesLongitude: request.longitude,
-      },
-    };
-    const options: any = await this.getMessageOptions(request);
-    return await this.sock.sendMessage(chatId, msg, options);
+    const chatId = this.policyGate(request.chatId);
+    try {
+      const msg = {
+        location: {
+          name: request.title || null,
+          degreesLatitude: request.latitude,
+          degreesLongitude: request.longitude,
+        },
+      };
+      const options: any = await this.getMessageOptions(request);
+      const result = await this.sock.sendMessage(chatId, msg, options);
+      this.policyRecord(chatId, false);
+      return result;
+    } catch (error) {
+      this.policyRecord(chatId, true);
+      throw error;
+    }
   }
 
   @Activity()
@@ -1435,14 +1583,21 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async sendLinkPreview(request: MessageLinkPreviewRequest) {
-    const chatId = toJID(this.ensureSuffix(request.chatId));
-    const text = request.title ? `${request.title}\n${request.url}` : request.url;
-    const msg: any = {
-      text: text,
-      linkPreview: true,
-    };
-    const options: any = await this.getMessageOptions(request);
-    return this.sock.sendMessage(chatId, msg, options);
+    const chatId = this.policyGate(request.chatId);
+    try {
+      const text = request.title ? `${request.title}\n${request.url}` : request.url;
+      const msg: any = {
+        text: text,
+        linkPreview: true,
+      };
+      const options: any = await this.getMessageOptions(request);
+      const result = await this.sock.sendMessage(chatId, msg, options);
+      this.policyRecord(chatId, false);
+      return result;
+    } catch (error) {
+      this.policyRecord(chatId, true);
+      throw error;
+    }
   }
 
   @Activity()
@@ -2587,6 +2742,8 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
           message.message?.protocolMessage?.type ===
           proto.Message.ProtocolMessage.Type.REVOKE,
       ),
+      // Security: drop revokes whose protocol key targets a different chat
+      filter((message) => this.isSameChatProtocolEvent(message)),
       mergeMap(async (message): Promise<WAMessageRevokedBody> => {
         const afterMessage = this.toWAMessage(message);
         // Extract the revoked message ID from protocolMessage.key
@@ -2610,6 +2767,8 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
           IsEditedMessage(message.message) ||
           IsSecretEncryptedMessageEdit(message.message),
       ),
+      // Security: drop edits whose protocol key targets a different chat
+      filter((message) => this.isSameChatProtocolEvent(message)),
       mergeMap(async (message): Promise<WAMessageEditedBody> => {
         const waMessage = this.toWAMessage(message);
         let body = '';
@@ -3145,6 +3304,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       vCards: extractVCards(waproto),
       replyTo: replyTo,
       reactions: message.reactions || [],
+      interactive: extractInteractiveReply(message.message),
       _data: message,
     };
   }
@@ -3589,6 +3749,86 @@ export function getDestination(key: any, meId = undefined): MessageDestination {
     from: toCusFormat(getFrom(key, meId)),
     fromMe: key.fromMe,
   };
+}
+
+/**
+ * Extract the structured selection from an interactive reply (button tap,
+ * list row pick or native-flow response). Complements extractBody(), which
+ * keeps supplying the display text for the plain body field.
+ */
+export function extractInteractiveReply(
+  message: any,
+): WAMessageInteractiveReply | null {
+  if (!message) {
+    return null;
+  }
+  const content = extractMessageContent(message);
+  if (!content) {
+    return null;
+  }
+
+  // Verified live: a tap on a native-flow quick_reply arrives as
+  // templateButtonReplyMessage {selectedId, selectedDisplayText,
+  // contextInfo.stanzaId}.
+  const templateReply = content.templateButtonReplyMessage;
+  if (templateReply) {
+    return {
+      type: 'button',
+      selectedId: templateReply.selectedId ?? null,
+      selectedText: templateReply.selectedDisplayText ?? null,
+      repliedToMessageId: templateReply.contextInfo?.stanzaId ?? null,
+    };
+  }
+
+  const buttonsResponse = content.buttonsResponseMessage;
+  if (buttonsResponse) {
+    return {
+      type: 'button',
+      selectedId: buttonsResponse.selectedButtonId ?? null,
+      selectedText: buttonsResponse.selectedDisplayText ?? null,
+      repliedToMessageId: buttonsResponse.contextInfo?.stanzaId ?? null,
+    };
+  }
+
+  const listResponse = content.listResponseMessage;
+  if (listResponse) {
+    return {
+      type: 'list',
+      selectedId: listResponse.singleSelectReply?.selectedRowId ?? null,
+      selectedText: listResponse.title ?? null,
+      repliedToMessageId: listResponse.contextInfo?.stanzaId ?? null,
+    };
+  }
+
+  // Taps on native-flow buttons and single_select rows answer with
+  // interactiveResponseMessage; the selection id hides inside the JSON
+  // paramsJson payload.
+  const flowResponse = content.interactiveResponseMessage;
+  if (flowResponse) {
+    let selectedId: string | null = null;
+    let selectedText: string | null = null;
+    const params = flowResponse.nativeFlowResponseMessage?.paramsJson;
+    if (typeof params === 'string') {
+      try {
+        const parsed = JSON.parse(params);
+        selectedId = parsed?.id ?? parsed?.selectedId ?? null;
+        selectedText = parsed?.display_text ?? parsed?.title ?? null;
+      } catch {
+        // Malformed paramsJson — fall back to the body text below.
+      }
+    }
+    if (selectedId === null && selectedText === null) {
+      selectedText = flowResponse.body?.text ?? null;
+    }
+    return {
+      type: 'flow',
+      selectedId,
+      selectedText,
+      repliedToMessageId: flowResponse.contextInfo?.stanzaId ?? null,
+    };
+  }
+
+  return null;
 }
 
 export function extractBody(message: any): string | null {

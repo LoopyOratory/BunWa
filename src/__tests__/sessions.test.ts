@@ -7,6 +7,8 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { createApiRouter } from '../api';
 import { AuditService } from '../core/audit/audit.service';
+import { SessionManager } from '../core/manager.core';
+import { WhatsappConfigService } from '../config.service';
 
 // Set up API key so fail-closed middleware works in tests
 process.env.WAHA_API_KEY = 'waha';
@@ -24,6 +26,16 @@ describe('Sessions API', () => {
     container.registerInstance(
       AuditService,
       new AuditService(mkdtempSync(join(tmpdir(), 'bunwa-audit-'))),
+    );
+
+    // Without an explicit instance tsyringe constructs a fresh SessionManager
+    // for every resolve(), so sessions created through POST /api/sessions were
+    // invisible to GET /api/sessions. Register one shared manager, like
+    // configureContainer() does in production.
+    container.registerInstance(WhatsappConfigService, new WhatsappConfigService());
+    container.registerInstance(
+      SessionManager,
+      new SessionManager(container.resolve(WhatsappConfigService)),
     );
 
     app = new Hono();
@@ -72,5 +84,62 @@ describe('Sessions API', () => {
     });
     const res = await app.fetch(req);
     expect(res.status).toBe(200);
+  });
+});
+
+describe('Sessions API name filter', () => {
+  let app: Hono;
+
+  beforeAll(async () => {
+    container.registerInstance(
+      AuditService,
+      new AuditService(mkdtempSync(join(tmpdir(), 'bunwa-audit-'))),
+    );
+    app = new Hono();
+    app.route('/', createApiRouter());
+
+    for (const name of ['filter-alpha', 'filter-beta', 'other']) {
+      await app.fetch(
+        new Request('http://localhost/api/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': 'waha' },
+          body: JSON.stringify({ name }),
+        }),
+      );
+    }
+  });
+
+  it('filters by prefix', async () => {
+    const res = await app.fetch(
+      new Request('http://localhost/api/sessions?name=filter-', {
+        headers: { 'x-api-key': 'waha' },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    const names = data.map((s: any) => s.name).sort();
+    expect(names).toEqual(['filter-alpha', 'filter-beta']);
+  });
+
+  it('matches an exact name too', async () => {
+    const res = await app.fetch(
+      new Request('http://localhost/api/sessions?name=other', {
+        headers: { 'x-api-key': 'waha' },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.map((s: any) => s.name)).toEqual(['other']);
+  });
+
+  it('returns everything when no name is given', async () => {
+    const res = await app.fetch(
+      new Request('http://localhost/api/sessions', {
+        headers: { 'x-api-key': 'waha' },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.length).toBeGreaterThanOrEqual(3);
   });
 });

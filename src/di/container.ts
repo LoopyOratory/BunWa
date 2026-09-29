@@ -8,6 +8,7 @@ import { setSessionManager } from '../api/websocket';
 import { ChatwootAppService } from '../apps/chatwoot/services/ChatwootAppService';
 import { AuditService } from '../core/audit/audit.service';
 import { TemplateService } from '../core/templates/template.service';
+import { SendingPolicyService } from '../core/sending-policy/sending-policy.service';
 import pino from 'pino';
 
 export function configureContainer(): DependencyContainer {
@@ -32,6 +33,10 @@ export function configureContainer(): DependencyContainer {
   // default to an env-configured SQLite path when constructed with no args.
   container.registerInstance(AuditService, new AuditService());
   container.registerInstance(TemplateService, new TemplateService());
+  // Same optional-constructor shape as AuditService (dbOrPath), so it must be
+  // an explicit instance too. The NOWEB engine's send methods resolve it to
+  // gate sends through the anti-ban policy.
+  container.registerInstance(SendingPolicyService, new SendingPolicyService());
 
   return container;
 }

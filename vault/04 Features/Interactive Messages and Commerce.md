@@ -3,7 +3,7 @@ type: note
 section: features
 status: partial
 tags: [bunwa, feature, interactive, commerce, gap]
-updated: 2026-09-14
+updated: 2026-09-29
 source: src/core/engines/noweb/noweb.buttons.ts, src/structures/chatting.buttons.dto.ts, WAProto, src/core/bulk-message.service.ts
 ---
 
@@ -59,6 +59,11 @@ So: BunWa *sends* native-flow buttons/lists, and parses the response format of t
 type it no longer sends. A user tapping a button therefore arrives with `body: null` (the raw payload
 is still in `_data`, so nothing is lost — it just is not surfaced).
 
+> **Shipped 2026-09-29:** every inbound selection now also carries a structured
+> `interactive {type: 'button'|'list'|'flow', selectedId, selectedText, repliedToMessageId}`
+> field on the message payload (`extractInteractiveReply()`), covering all four response shapes
+> including `interactiveResponseMessage`. `extractBody()` is unchanged.
+
 **Verify with one live tap**, then parse both shapes and expose them as first-class fields
 (e.g. `selectedButtonId` / `selectedRowId`) instead of stuffing text into `body`.
 
@@ -83,7 +88,23 @@ is still in `_data`, so nothing is lost — it just is not surfaced).
 | **WhatsApp Pay / payments / invoices** | ❌ | Country- and business-gated; `invoiceMessage` exists in the proto but the web protocol is not a supported payment path. |
 | **Business profile management** (hours, address, email, website) | ❌ | No Baileys API for business-profile fields; name/status/picture are the only writable profile surfaces ([[Plus Tier]]). |
 
-## Anti-ban tooling — the highest-value addition, and it does not exist
+## Anti-ban tooling — ✅ shipped (2026-09-29)
+
+The sending policy is live: `SendingPolicyService` in `src/core/sending-policy/` persists counters
+in `${WAHA_STORAGE_DIR}/sending-limits.db` (bun:sqlite, WAL) and gates every outbound message at
+the NOWEB engine's send methods, so REST, bulk and MCP are all covered.
+
+Shipped controls: per-minute/hour/day caps (`SEND_MAX_PER_*`), reachout timelock between distinct
+never-written chats (`REACHOUT_MIN_INTERVAL_SECONDS`), new-chat daily quota (`NEW_CHATS_PER_DAY`),
+warm-up ramp over 14 days with a 20% floor (first-seen date per session), quiet hours
+(`SEND_QUIET_HOURS`), global switch and per-session bypass (`SEND_POLICY_ENABLED`,
+`SEND_POLICY_BYPASS_SESSIONS`), and per-session overrides in the `policy` table via
+`PUT /api/sessions/:session/policy`. Blocked sends answer 429 with `Retry-After`
+(`TooManyRequestsException`), and `GET /api/sessions/:session/policy/usage` reports counters and
+next-allowed times. Introspection surfaces usage in `GET /api/sessions/:session/policy`.
+
+The design table below is kept as the design record. Still outstanding from it: the circuit
+breaker (Roadmap A6) and an optional `message_throttled` audit row / webhook event.
 
 > Nothing in the codebase caps sending. The only rate limiting is HTTP-level
 > (200 req/min per IP on `/api/*`, `src/middleware/rate-limit.ts`) which does nothing to protect the

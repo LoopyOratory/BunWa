@@ -2,7 +2,11 @@ import 'reflect-metadata';
 import { describe, it, expect } from 'bun:test';
 import { Hono } from 'hono';
 import { globalErrorHandler } from '../middleware/error-handler';
-import { NotFoundException, ForbiddenException } from '../core/exceptions';
+import {
+  NotFoundException,
+  ForbiddenException,
+  TooManyRequestsException,
+} from '../core/exceptions';
 
 /**
  * The error handler is the last line of defence for leaking internals, and it
@@ -40,6 +44,21 @@ describe('global error handler', () => {
     const body = await res.json();
     expect(body.statusCode).toBe(413);
     expect(body.message).toContain('too large');
+  });
+
+  it('maps the sending policy block to 429 with Retry-After', async () => {
+    const res = await appThatThrows(
+      new TooManyRequestsException(42_500, 'Per minute send cap reached'),
+    ).fetch(new Request('http://localhost/boom'));
+    expect(res.status).toBe(429);
+    // 42500ms rounds up to 43 seconds, in the header and the body
+    expect(res.headers.get('Retry-After')).toBe('43');
+    const body = await res.json();
+    expect(body.statusCode).toBe(429);
+    expect(body.retryAfterSeconds).toBe(43);
+    expect(body.message).toContain('Per minute send cap reached');
+    // Sentence case, no exclamation marks in the user-visible message
+    expect(body.message).not.toMatch(/!/);
   });
 
   it('never exposes internal error details on unknown failures', async () => {

@@ -2,7 +2,7 @@
 type: note
 section: security
 tags: [bunwa, gap, reference]
-updated: 2026-09-14
+updated: 2026-09-29
 source: whole-repo audit (see each row)
 status: gap
 ---
@@ -38,7 +38,7 @@ These are mounted and documented, but always fail:
 | GOWS engine | `GowsBootstrap` is an empty class commented "not supported in Bun version"; `getEngine()` maps `GOWS` → NOWEB, `GowsEngineConfigService` is empty |
 | WPP engine | enum value only, no directory, no implementation |
 | Auto-restart (historical) | was completely broken until commit `0eb3202`; treat staleness guards as recently-established behaviour |
-| Incoming native-flow responses | **Corrected by live evidence:** tapping a native-flow `quick_reply` button comes back as `templateButtonReplyMessage` (with `selectedId` and `selectedDisplayText`), which `extractBody()` already parsed, so reply buttons round-trip correctly. `interactiveResponseMessage` parsing was added for the `single_select` list case and is still untested. Note the reply arrives from the chat LID, not the `@c.us` id it was sent to. See [[Interactive Messages and Commerce]] |
+| Incoming native-flow responses | **Corrected by live evidence:** tapping a native-flow `quick_reply` button comes back as `templateButtonReplyMessage` (with `selectedId` and `selectedDisplayText`), which `extractBody()` already parsed, so reply buttons round-trip correctly. All four response shapes (incl. `interactiveResponseMessage`) now also surface a structured `interactive` field on the message payload and are covered by tests (`interactive-replies.test.ts`). Note the reply arrives from the chat LID, not the `@c.us` id it was sent to. See [[Interactive Messages and Commerce]] |
 
 ## 3. Implemented but never wired in
 
@@ -117,7 +117,7 @@ assumptions:
 |---|---|
 | **MCP per-session key policy works** | `SessionList` (the only non-session-scoped tool) is correctly denied to a session-scoped key: `Tool 'SessionList' is not available to a session-scoped key` |
 | **Chat ids are LID-based in practice** | `PresenceGetAll` returns `...@lid` ids and inbound message keys carry `addressingMode: "lid"`, while outbound keys use `<number>@s.whatsapp.net`. The API-facing `from` is the LID. Workflows must echo `from` back unchanged instead of constructing `@c.us` ids (the n8n node's help text now says so) |
-| **`GET /api/messages` is a routing gap, not a capability gap** | The MCP `ChatGetMessages` returns real history from the per-session store, so the fix for the stub route is to point it at the same engine call |
+| **`GET /api/messages` was a routing gap, not a capability gap** | The MCP `ChatGetMessages` returns real history from the per-session store; the flat REST route is now wired to the same engine call as `GET /api/{session}/chats/{chatId}/messages` (session from query or body, `chatId` required) |
 | **Message payload shape** | Matches the vault: `id` (`true_`/`false_` prefix encodes `fromMe`), `timestamp`, `from`, `fromMe`, `source` (`app` inbound, `api` for sends through BunWa), `body`, `hasMedia`, `ack`/`ackName` (`DEVICE`, `SERVER`), `replyTo`, `reactions`, `_data` (raw Baileys) |
 | **`location` / `vCards` always null live** | Confirms the `waproto` stub ([[Messaging]]); the message itself sends fine |
 | **`_status` in the session index can be stale** | `SessionGet` reported `status: "WORKING"` while `config._status: "STOPPED"`. The index copy is written on some transitions only, so it must not be used as a status source; read the live status |

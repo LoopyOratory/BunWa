@@ -8,6 +8,7 @@ import {
   AvailableInPlusVersion,
   AvailableInPlusVersionAll,
   NotImplementedByEngineError,
+  TooManyRequestsException,
 } from '../core/exceptions';
 import pino from 'pino';
 
@@ -37,6 +38,17 @@ export const globalErrorHandler: ErrorHandler = (err, c) => {
   }
   if (err instanceof NotImplementedByEngineError) {
     return c.json({ statusCode: 422, message: err.message }, 422);
+  }
+  // Sending-policy blocks are expected traffic shaping, not server faults.
+  // Report them as 429 with a Retry-After header and keep them out of the
+  // error log.
+  if (err instanceof TooManyRequestsException) {
+    const retryAfterSeconds = Math.max(1, Math.ceil(err.retryAfterMs / 1000));
+    c.header('Retry-After', String(retryAfterSeconds));
+    return c.json(
+      { statusCode: 429, message: err.message, retryAfterSeconds },
+      429,
+    );
   }
 
   // Bun's protocol-level body cap (maxRequestBodySize) rejects the request while

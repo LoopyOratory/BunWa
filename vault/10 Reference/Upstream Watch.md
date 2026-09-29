@@ -2,7 +2,7 @@
 type: note
 section: reference
 tags: [bunwa, openwa, waha, upstream, parity]
-updated: 2026-09-15
+updated: 2026-09-29
 status: active
 source: github.com/rmyndharis/OpenWA commits + releases (fetched via GitHub API, 2026-09-29), devlikeapro/waha releases
 ---
@@ -24,13 +24,13 @@ are directly relevant to BunWa.
 
 | # | Upstream feature | OpenWA | WAHA | BunWa | Verdict |
 |---|---|---|---|---|---|
-| 1 | **Anti-ban: message capping + reachout timelock** | v0.23.8: delivery-failure metrics (`openwa_webhook_delivery_failures_total`), admin-only failure runbook, send-pacing env (`SEND_PACING_ENABLED`) | 2026.8.1: "Message Capping & Reachout Timelock APIs" | **none** — Roadmap A1 | **Port. Both upstreams converged on this; it is no longer optional.** |
+| 1 | **Anti-ban: message capping + reachout timelock** | v0.23.8: delivery-failure metrics (`openwa_webhook_delivery_failures_total`), admin-only failure runbook, send-pacing env (`SEND_PACING_ENABLED`) | 2026.8.1: "Message Capping & Reachout Timelock APIs" | ✅ **shipped** — `SendingPolicyService` with caps, reachout timelock, new-chat quota, warm-up ramp, quiet hours, 429 + `Retry-After` | **Done** |
 | 2 | **Scoped API keys** | v0.23.6: keys gain `allowedChats`; v0.23.4: keys scoped to chosen sessions | 2026.7.1: session keys scoped to media/control, read/send | MCP keys are session-scoped, but REST keys are global-admin | **Port** (Roadmap #20) |
-| 3 | **Structured button replies** | v0.23.6: inbound button/list replies typed `text` with structured `button {id, text}` | — | `body` carries the label; the **id** only surfaces via the n8n trigger's `interactive` field | **Port: expose `selectedId` in the API payload** |
-| 4 | **Deleted-for-everyone semantics** | v0.23.7: reply/react/edit on a deleted message answers `404`; inbound edits/revokes targeting messages **from other chats are dropped** (security) | — | not implemented | **Port the security half** |
+| 3 | **Structured button replies** | v0.23.6: inbound button/list replies typed `text` with structured `button {id, text}` | — | ✅ **shipped** — `interactive {type, selectedId, selectedText, repliedToMessageId}` on every inbound selection | **Done** |
+| 4 | **Deleted-for-everyone semantics** | v0.23.7: reply/react/edit on a deleted message answers `404`; inbound edits/revokes targeting messages **from other chats are dropped** (security) | — | ✅ **security half shipped** — cross-chat edit/revoke protocol messages are dropped; reply/react on a deleted message still does not answer 404 | **Done (security); 404 semantics outstanding** |
 | 5 | **Inbound commerce typing** | v0.23.5: order/product messages typed | — | order/product messages unhandled (documented) | **Port: type them, emit events** |
-| 6 | **`sendSticker`** | — | 2026.8.2: shipped properly | **our route is broken** — 400 on every call (no `:session` path param for its resolver) | **Fix ours** |
-| 7 | Sessions `?name=` filter (REST + MCP + SDK) | v0.23.5 | — | no filter | Minor, cheap |
+| 6 | **`sendSticker`** | — | 2026.8.2: shipped properly | ✅ **fixed** — the route reads `session` from the body like the sibling send routes | **Done** |
+| 7 | Sessions `?name=` filter (REST + MCP + SDK) | v0.23.5 | — | ✅ **REST shipped** — exact or prefix match; MCP/SDK listing not filtered | Done (REST) |
 | 8 | Message keyset cursor (`after`) + `inlineMedia=false` | v0.23.4 | — | limit/offset only | Port for large chats |
 | 9 | Role-gated reads: invite codes need OPERATOR; `session.qr` WS event restricted | v0.23.5 | — | any credential is admin | Port when roles land |
 | 10 | Session delete clears statuses and mute/archive/pin state | v0.23.7 | — | config cleared; stored state unverified | Verify ours |
@@ -60,13 +60,13 @@ that explains its own store-disabled state.
 ## Port list, prioritised
 
 ```text
-1. Anti-ban policy service        (both upstreams shipped it; Roadmap A1)
-2. Structured button ids in the API payload
+1. [done] Anti-ban policy service   (both upstreams shipped it; Roadmap A1)
+2. [done] Structured button ids in the API payload
 3. Scoped REST API keys (allowedChats / per-session)
-4. Deleted-message 404 semantics + cross-chat edit/revoke drop (security)
-5. Fix POST /api/sendSticker      (broken here, working upstream)
+4. [done, security half] Cross-chat edit/revoke drop; 404-on-deleted semantics outstanding
+5. [done] Fix POST /api/sendSticker
 6. Order/product message typing
-7. Sessions ?name= filter, message keyset cursor
+7. [done, REST] Sessions ?name= filter; message keyset cursor outstanding
 ```
 
 ## Related

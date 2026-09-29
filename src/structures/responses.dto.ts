@@ -25,7 +25,20 @@ export class WAMessage extends WAMessageBase {
   vCards?: string[] | null;
   replyTo?: any;
   reactions?: any[];
+  interactive?: WAMessageInteractiveReply | null;
   _data?: any;
+}
+
+/**
+ * Structured selection from an interactive reply (button tap, list row pick
+ * or native-flow response). Surfaced on WAMessage.interactive alongside the
+ * plain-text body so consumers can act on the id, not the label.
+ */
+export interface WAMessageInteractiveReply {
+  type: 'button' | 'list' | 'flow';
+  selectedId: string | null;
+  selectedText: string | null;
+  repliedToMessageId: string | null;
 }
 
 export class WAReaction {
