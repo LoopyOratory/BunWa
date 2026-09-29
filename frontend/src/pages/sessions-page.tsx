@@ -210,7 +210,7 @@ export function SessionsPage(_props?: SessionsPageProps) {
               action={
                 <div className="flex flex-wrap items-center gap-2">
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="h-8 w-full text-xs sm:w-32" aria-label="Filter by status">
+                    <SelectTrigger className="h-8 w-full sm:w-32" aria-label="Filter by status">
                       <SelectValue placeholder="All statuses" />
                     </SelectTrigger>
                     <SelectContent>
@@ -231,7 +231,7 @@ export function SessionsPage(_props?: SessionsPageProps) {
                       aria-label="Search sessions"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      className="h-8 w-full pl-8 text-xs sm:w-60"
+                      className="h-8 w-full pl-8 sm:w-60"
                     />
                   </div>
                   <Button size="sm" onClick={() => setShowCreateDialog(true)}>

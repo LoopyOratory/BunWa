@@ -101,10 +101,10 @@ export function StatCard({
   tone?: keyof typeof STAT_TONE
 }) {
   return (
-    <div className="stat-card rounded-lg border border-border/70 bg-card p-4 shadow-sm">
+    <div className="stat-card rounded-lg border border-border/70 bg-card p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        {icon && <span className={cn("icon-chip size-9", STAT_CHIP[tone])}>{icon}</span>}
+        {icon && <span className={cn("icon-chip size-10", STAT_CHIP[tone])}>{icon}</span>}
       </div>
       <p className={cn("metric mt-2 font-heading text-3xl font-semibold leading-none", STAT_TONE[tone])}>
         {value}
@@ -147,7 +147,7 @@ export function StatRowSkeleton({ count = 4 }: { count?: number }) {
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="rounded-lg border border-border/70 bg-card p-4 shadow-sm">
+        <div key={i} className="rounded-lg border border-border/70 bg-card p-5 shadow-sm">
           <Skeleton className="h-4 w-24" />
           <Skeleton className="mt-3 h-7 w-16" />
         </div>

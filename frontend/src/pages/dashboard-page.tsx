@@ -225,7 +225,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
                   aria-label="Search workers"
                   value={workerSearch}
                   onChange={(e) => setWorkerSearch(e.target.value)}
-                  className="h-8 w-full pl-8 text-xs sm:w-48"
+                  className="h-8 w-full pl-8 sm:w-48"
                 />
               </div>
             }
@@ -331,7 +331,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
                     aria-label="Search sessions"
                     value={sessionSearch}
                     onChange={(e) => setSessionSearch(e.target.value)}
-                    className="h-8 w-full pl-8 text-xs sm:w-60"
+                    className="h-8 w-full pl-8 sm:w-60"
                   />
                 </div>
                 <Button size="sm" onClick={() => setShowCreateDialog(true)}>

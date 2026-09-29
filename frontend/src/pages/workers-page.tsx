@@ -127,7 +127,7 @@ export function WorkersPage() {
                     aria-label="Search workers"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="h-8 w-full pl-8 text-xs sm:w-56"
+                    className="h-8 w-full pl-8 sm:w-56"
                   />
                 </div>
               }

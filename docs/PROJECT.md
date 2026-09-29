@@ -238,3 +238,18 @@ motion live in tokens (`index.css`) and shared pieces (`dream.tsx`, `primitives.
 | Components | Every ui/* primitive restyled: pill buttons, soft lifting cards, glass bordered menus, shimmer skeletons, pastel rich toasts, softer dialogs/sheets, uppercase table heads, redesigned switch. |
 | Pages | Login rebuilt (split-screen, drifting orbs, password reveal toggle, gradient headline); dashboard + sessions stat cards stagger and count up; infra engine cards; sidebar regrouped Operate/Tools with animated active pill; chat bubble + composer polish. |
 | Verified | `tsc -b` + vite build clean; live CDP pass over login/dashboard/sessions/infrastructure/events/logs/workers at 1440×900@2 and 390×844@3, light + dark; zero console errors; password reveal flips `password`→`text`; theme toggle flips `light`→`dark`→`light`; `bun run test` 198/0, typecheck + lint clean. |
+
+## 🖥️ Desktop sizing + radius pass (2026-09-29)
+
+Operator feedback: on desktop everything read too small and rounded corners looked like they
+were cropping elements. Root cause: the dream pass kept the original compact density (28px
+inputs, 12px text on desktop) and the 20px base radius was oversized relative to content.
+
+| Area | What changed |
+|---|---|
+| Desktop scale | `@media (min-width: 1024px) { html { font-size: 18px } }`. Every rem-based token (type, controls, spacing, radii, sidebar width) scales together; mobile keeps 16px untouched. |
+| Controls | Inputs h-7→h-8 (28→36px desktop), select triggers h-7→h-8, badges h-5→h-6, tabs h-8→h-9, table heads h-10→h-11, roomier button paddings (px-3.5→px-5 default, etc). |
+| Radius | Base `--radius` 1.25rem→1rem so corners sit smaller relative to roomier content (cards 20→18px, dialogs 25px at desktop scale). |
+| Card spacing | Default `--card-spacing` pinned to `--spacing(5)` (22.5px desktop); card titles and descriptions bumped one step. |
+| Legacy overrides | Removed per-page `text-xs` / `text-[10-11px]` overrides on search inputs, filter selects and settings dialog controls that cancelled the scale. |
+| Verified | Live CDP: root 18px desktop / 16px mobile, inputs 36px, zero horizontal overflow on 6 pages; dialog + open select menu inspected (no clipping); `bun run test` 198/0, typecheck + oxlint clean. |

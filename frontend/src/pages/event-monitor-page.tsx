@@ -164,11 +164,11 @@ export function EventMonitorPage() {
                   aria-label="Search events"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="h-8 w-full pl-8 text-xs sm:w-48"
+                  className="h-8 w-full pl-8 sm:w-48"
                 />
               </div>
               <Select value={eventFilter} onValueChange={setEventFilter}>
-                <SelectTrigger className="h-8 w-full text-xs sm:w-36" aria-label="Filter by event type">
+                <SelectTrigger className="h-8 w-full sm:w-36" aria-label="Filter by event type">
                   <SelectValue placeholder="All events" />
                 </SelectTrigger>
                 <SelectContent>

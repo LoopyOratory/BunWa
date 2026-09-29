@@ -162,6 +162,16 @@ unusable anywhere Chrome isn't at a hardcoded system path.
 | Load path | `scripts/build-frontend.sh` → `frontend-dist` (untracked build artifact served by the API). |
 | Verified | Build clean; CDP screenshots light/dark + mobile (1440×900@2, 390×844@3); reveal toggle and theme toggle live-checked; `bun run test` 198/0; typecheck + lint clean. |
 
+## Desktop sizing and radius pass (2026-09-29)
+
+| | |
+|---|---|
+| Ask | "On desktop elements and components are too small and the border radius crops out elements." |
+| Root cause | Dream pass kept the original compact density: 28px inputs, `md:text-xs` shrinking text to 12px on desktop, 20px base radius oversized relative to content. |
+| Fix | Desktop-only root scale `@media (min-width: 1024px) { html { font-size: 18px } }` so all rem-based tokens grow together; control heights bumped (inputs h-8, selects h-8, badges h-6, tabs h-9, table heads h-11); base `--radius` 1.25rem→1rem; `--card-spacing` pinned to `--spacing(5)`; legacy `text-xs`/`text-[10-11px]` page overrides removed. |
+| Mobile | Unchanged: 16px root, compact rhythm preserved. |
+| Verified | CDP computed-style audit (root 18px, inputs 36px, card padding 22.5px), zero h-overflow on 6 pages, dialog + select menu inspected, `bun run test` 198/0, typecheck + oxlint clean. |
+
 ## Related
 
 [[OpenWA Parity]] · [[Roadmap]] · [[Testing]] · [[Dashboard]] · [[Known Gaps and Stubs]]

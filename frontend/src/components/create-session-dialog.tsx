@@ -218,11 +218,11 @@ export function CreateSessionDialog({ open, onOpenChange, onCreated }: CreateSes
                         </div>
                         <div>
                           <h4 className="text-sm font-semibold">{e.name}</h4>
-                          <p className="text-[11px] text-muted-foreground">{e.subtitle}</p>
+                          <p className="text-xs text-muted-foreground">{e.subtitle}</p>
                         </div>
                       </div>
-                      {selected && <Badge variant="secondary" className="text-[10px]">Selected</Badge>}
-                      <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{e.description}</p>
+                      {selected && <Badge variant="secondary">Selected</Badge>}
+                      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{e.description}</p>
                     </button>
                   )
                 })}
