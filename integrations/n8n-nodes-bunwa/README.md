@@ -290,21 +290,27 @@ Post and delete WhatsApp statuses (stories)
 
 Inspect the BunWa server and manage templates and MCP policy
 
-| Operation          | Route                                                   | Notes                                                                     |
-| ------------------ | ------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Convert Voice Note | `POST /api/{session}/media/convert/voice`               | The response carries the converted audio as base64 data with its mimetype |
-| Create Template    | `POST /api/sessions/{session}/templates`                |                                                                           |
-| Delete Template    | `DELETE /api/sessions/{session}/templates/{templateId}` |                                                                           |
-| Get Audit Logs     | `GET /api/audit`                                        |                                                                           |
-| Get MCP Policy     | `GET /api/sessions/{session}/mcp`                       |                                                                           |
-| Get Server Status  | `GET /api/server/status`                                |                                                                           |
-| Get Version        | `GET /api/version`                                      |                                                                           |
-| Get Workers        | `GET /api/workers`                                      |                                                                           |
-| Health             | `GET /health`                                           |                                                                           |
-| List MCP Tools     | `GET /api/mcp/tools`                                    |                                                                           |
-| List Templates     | `GET /api/sessions/{session}/templates`                 |                                                                           |
-| Ping               | `GET /ping`                                             |                                                                           |
-| Update MCP Policy  | `PUT /api/sessions/{session}/mcp`                       |                                                                           |
+| Operation          | Route                                                         | Notes                                                                                 |
+| ------------------ | ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Convert Voice Note | `POST /api/{session}/media/convert/voice`                     | The response carries the converted audio as base64 data with its mimetype             |
+| Create Template    | `POST /api/sessions/{session}/templates`                      |                                                                                       |
+| Delete Template    | `DELETE /api/sessions/{session}/templates/{templateId}`       |                                                                                       |
+| Get Audit Logs     | `GET /api/audit`                                              |                                                                                       |
+| Get MCP Policy     | `GET /api/sessions/{session}/mcp`                             |                                                                                       |
+| Get Server Status  | `GET /api/server/status`                                      |                                                                                       |
+| Get Version        | `GET /api/version`                                            |                                                                                       |
+| Get Workers        | `GET /api/workers`                                            |                                                                                       |
+| Health             | `GET /health`                                                 |                                                                                       |
+| List MCP Tools     | `GET /api/mcp/tools`                                          |                                                                                       |
+| List Templates     | `GET /api/sessions/{session}/templates`                       |                                                                                       |
+| Ping               | `GET /ping`                                                   |                                                                                       |
+| Preview Template   | `POST /api/sessions/{session}/templates/{templateId}/preview` | Returns the rendered text and the names of the variables the template expects         |
+| Send Template      | `POST /api/sessions/{session}/templates/{templateId}/send`    | Delivers the rendered template to a chat; the template can be picked by ID or by name |
+| Update MCP Policy  | `PUT /api/sessions/{session}/mcp`                             |                                                                                       |
+| Update Template    | `PUT /api/sessions/{session}/templates/{templateId}`          | Only the fields that are sent are changed                                             |
+
+A template can be addressed by its ID or by its name, so Preview Template and Send Template accept a name such as `welcome-message` without looking the ID up first.
+Preview returns the rendered text along with the names of the variables the template expects, so a workflow can build the Variables (JSON) input from that response before sending.
 
 ## Deliberately not exposed
 

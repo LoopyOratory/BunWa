@@ -1,6 +1,7 @@
 import type { IDataObject, INodeProperties, INodePropertyOptions } from 'n8n-workflow';
 import {
 	bunwaApiRequest,
+	chatIdField,
 	forOperations,
 	optional,
 	sessionField,
@@ -26,7 +27,29 @@ const operations: INodePropertyOptions[] = [
 	{ name: 'List MCP Tools', value: 'listMcpTools', action: 'List the MCP tools of the server' },
 	{ name: 'List Templates', value: 'listTemplates', action: 'List the message templates of a session' },
 	{ name: 'Ping', value: 'ping', action: 'Ping the server' },
-	{ name: 'Update MCP Policy', value: 'updateMcpPolicy', action: 'Update the MCP policy of a session' },
+	{
+		name: 'Preview Template',
+		value: 'previewTemplate',
+		action: 'Preview a message template',
+		description: 'Returns the rendered text and the names of the variables the template expects',
+	},
+	{
+		name: 'Send Template',
+		value: 'sendTemplate',
+		action: 'Send a message template to a chat',
+		description: 'Renders the template and delivers it to the chat; the template can be picked by ID or by name',
+	},
+	{
+		name: 'Update MCP Policy',
+		value: 'updateMcpPolicy',
+		action: 'Update the MCP policy of a session',
+	},
+	{
+		name: 'Update Template',
+		value: 'updateTemplate',
+		action: 'Update a message template',
+		description: 'Only the template fields that are sent are changed',
+	},
 ];
 
 /** Operations that act on one session. */
@@ -36,7 +59,10 @@ const sessionOperations = [
 	'deleteTemplate',
 	'getMcpPolicy',
 	'listTemplates',
+	'previewTemplate',
+	'sendTemplate',
 	'updateMcpPolicy',
+	'updateTemplate',
 ];
 
 const properties: INodeProperties[] = [
@@ -122,7 +148,79 @@ const properties: INodeProperties[] = [
 				description: 'ID of the template, as returned by the list operation',
 			},
 		],
-		['deleteTemplate'],
+		['deleteTemplate', 'updateTemplate'],
+	),
+	...forOperations(
+		[
+			{
+				displayName: 'Template ID or Name',
+				name: 'templateId',
+				type: 'string',
+				default: '',
+				required: true,
+				description: 'ID of the template, as returned by the list operation; a template name is accepted too',
+			},
+			{
+				displayName: 'Variables (JSON)',
+				name: 'variables',
+				type: 'json',
+				default: '{}',
+				description: 'Values for the {{variable}} placeholders of the template, as a JSON object of variable name to value',
+			},
+		],
+		['previewTemplate', 'sendTemplate'],
+	),
+	...forOperations(
+		[
+			chatIdField(
+				'Chat to deliver the rendered template to. Can be phone based (15551234567@c.us), LID based (218734094458920@lid, common on newer accounts and for inbound chats) or a group ending in @g.us.',
+			),
+		],
+		['sendTemplate'],
+	),
+	...forOperations(
+		[
+			{
+				displayName: 'Update Fields',
+				name: 'updateFields',
+				type: 'collection',
+				default: {},
+				placeholder: 'Add Field',
+				description: 'Template fields to change; the fields that are not added are left unchanged',
+				options: [
+					{
+						displayName: 'Name',
+						name: 'name',
+						type: 'string',
+						default: '',
+						description: 'New name of the template, up to 100 characters',
+					},
+					{
+						displayName: 'Body',
+						name: 'body',
+						type: 'string',
+						typeOptions: { rows: 4 },
+						default: '',
+						description: 'New body of the template, up to 4096 characters; {{variable}} placeholders are kept as text',
+					},
+					{
+						displayName: 'Header',
+						name: 'header',
+						type: 'string',
+						default: '',
+						description: 'New header of the template, up to 1024 characters; an empty value clears it',
+					},
+					{
+						displayName: 'Footer',
+						name: 'footer',
+						type: 'string',
+						default: '',
+						description: 'New footer of the template, up to 1024 characters; an empty value clears it',
+					},
+				],
+			},
+		],
+		['updateTemplate'],
 	),
 	...forOperations(
 		[
@@ -183,6 +281,11 @@ const properties: INodeProperties[] = [
 	),
 ];
 
+/** Parses the variables JSON field, which arrives as a string or an object depending on the editor. */
+function parseVariables(raw: string | IDataObject): IDataObject {
+	return typeof raw === 'string' ? (JSON.parse(raw || '{}') as IDataObject) : raw;
+}
+
 export const opsResource: ResourceModule = {
 	value: 'ops',
 	name: 'Server',
@@ -228,6 +331,32 @@ export const opsResource: ResourceModule = {
 				const templateId = ctx.getNodeParameter('templateId', itemIndex) as string;
 				return bunwaApiRequest.call(ctx, 'DELETE', `/api/sessions/${session}/templates/${templateId}`);
 			}
+			case 'previewTemplate': {
+				const templateId = ctx.getNodeParameter('templateId', itemIndex) as string;
+				const variables = parseVariables(ctx.getNodeParameter('variables', itemIndex, '{}') as string | IDataObject);
+				return bunwaApiRequest.call(
+					ctx,
+					'POST',
+					`/api/sessions/${session}/templates/${templateId}/preview`,
+					{ variables },
+				);
+			}
+			case 'sendTemplate': {
+				const templateId = ctx.getNodeParameter('templateId', itemIndex) as string;
+				const chatId = ctx.getNodeParameter('chatId', itemIndex) as string;
+				const variables = parseVariables(ctx.getNodeParameter('variables', itemIndex, '{}') as string | IDataObject);
+				return bunwaApiRequest.call(
+					ctx,
+					'POST',
+					`/api/sessions/${session}/templates/${templateId}/send`,
+					{ chatId, variables },
+				);
+			}
+			case 'updateTemplate': {
+				const templateId = ctx.getNodeParameter('templateId', itemIndex) as string;
+				const updateFields = ctx.getNodeParameter('updateFields', itemIndex, {}) as IDataObject;
+				return bunwaApiRequest.call(ctx, 'PUT', `/api/sessions/${session}/templates/${templateId}`, updateFields);
+			}
 			case 'listMcpTools':
 				return bunwaApiRequest.call(ctx, 'GET', '/api/mcp/tools');
 			case 'getMcpPolicy':
@@ -261,6 +390,9 @@ export const opsRoutes: Record<string, string> = {
 	listTemplates: 'GET /api/sessions/{session}/templates',
 	createTemplate: 'POST /api/sessions/{session}/templates',
 	deleteTemplate: 'DELETE /api/sessions/{session}/templates/{templateId}',
+	updateTemplate: 'PUT /api/sessions/{session}/templates/{templateId}',
+	previewTemplate: 'POST /api/sessions/{session}/templates/{templateId}/preview',
+	sendTemplate: 'POST /api/sessions/{session}/templates/{templateId}/send',
 	listMcpTools: 'GET /api/mcp/tools',
 	getMcpPolicy: 'GET /api/sessions/{session}/mcp',
 	updateMcpPolicy: 'PUT /api/sessions/{session}/mcp',
