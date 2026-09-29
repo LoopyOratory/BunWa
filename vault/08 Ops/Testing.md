@@ -9,7 +9,7 @@ status: shipped
 
 # 🧪 Testing
 
-`bun test` — **176 tests across 22 files** in `src/__tests__/` (plus a live-database smoke script, see
+`bun test` — **190 tests across 23 files** in `src/__tests__/` (plus a live-database smoke script, see
 below), preloaded with `setup.ts` via `bunfig.toml`:
 
 ```toml
@@ -20,8 +20,8 @@ preload = ["./src/__tests__/setup.ts"]
 ## Current state (verified 2026-09-29)
 
 ```text
-176 tests · 422 expect() calls · 22 files
-176 pass · 0 fail        ← suite is green
+190 tests · 447 expect() calls · 23 files
+190 pass · 0 fail        ← suite is green
 ```
 
 The two long-standing failures (`Sessions API > creates/deletes a new session`) were a **test-harness**
@@ -31,7 +31,7 @@ constructor takes a path/DB handle, so tsyringe threw `TypeInfo not known for "O
 commit `30ac09c` applied to the webhook tests. Details in [[Dependency Injection]] and
 [[Bun Runtime Adoption]].
 
-## The 22 files
+## The 23 files
 
 | File | Covers |
 |---|---|
@@ -57,6 +57,7 @@ commit `30ac09c` applied to the webhook tests. Details in [[Dependency Injection
 | `policy-tools.test.ts` | MCP policy tools: get/set/usage + destructive gating |
 | `template-tools.test.ts` | MCP template tools: CRUD, preview, send gating |
 | `knex-postgres.test.ts` | Postgres client subclass — driver resolves regardless of node_modules layout |
+| `postgres-url.test.ts` | `buildPostgresUrl` + the driver/URL resolution chain (explicit keys → dashboard fields → sqlite) |
 
 `setup.ts` is the preload: it points session storage at a temp dir so tests never touch a real
 `.sessions/`.

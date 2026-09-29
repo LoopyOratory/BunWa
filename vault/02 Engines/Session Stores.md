@@ -30,8 +30,9 @@ WAHA_DATABASE_DRIVER = postgres | postgresql   →  PostgresStorage(WHATSAPP_SES
 anything else (default sqlite)                 →  Sqlite3Storage at <sessionDir>/store.sqlite3
 ```
 
-> `WAHA_DATABASE_DRIVER` is the switch. `WAHA_DB_TYPE` on the Infrastructure page is *not* —
-> see [[Data and Storage#Database switches — ⚠️ two of them]].
+> The Infrastructure page writes `WAHA_DATABASE_DRIVER` + `WAHA_DATABASE_URL` when you save, so the
+> dashboard switch is real; a `WAHA_DB_TYPE=postgres` saved by an older build is honoured as a
+> fallback. See [[Data and Storage#Database switches]].
 
 ## Interface
 

@@ -17,7 +17,7 @@ extended with a Plus tier, an MCP server for AI agents, and a React dashboard.
 | Tier | `PLUS` (auto-detected from `src/plus/`) |
 | Runtime | Bun ≥ 1.4.0 (verified on 1.4.2) |
 | Engines | [[NOWEB Engine\|NOWEB]] (Baileys) · [[WEBJS Engine\|WEBJS]] (Puppeteer) |
-| Tests | 104 tests / 15 files → **all passing** ([[Testing]]) |
+| Tests | 190 tests / 23 files → **all passing** ([[Testing]]) |
 | Typecheck | clean and **CI-enforced** — `tsc --noEmit` |
 | Dependencies | 29 runtime deps ([[Bun Runtime Adoption]]) |
 | License | [[BunWa#License — BCL v1.0\|BCL v1.0]] — free non-commercial, $200/mo commercial |
@@ -103,7 +103,9 @@ SORT status ASC, file.name ASC
 - One interactive round-trip bug remains: `/api/send/buttons/reply` sends nothing; inbound taps
   (incl. `interactiveResponseMessage`) are now parsed into the structured `interactive` field —
   [[Known Gaps and Stubs]].
-- `WAHA_DB_TYPE` (dashboard/infra config) does **not** drive the runtime DB — `WAHA_DATABASE_DRIVER` does. See [[Configuration Reference#Two database switches]] and [[Data and Storage]].
+- The Infrastructure page drives the session store directly: saving writes `WAHA_DATABASE_DRIVER` +
+  `WAHA_DATABASE_URL`, and a bare `WAHA_DB_TYPE=postgres` is honoured as a fallback. Test connection
+  checks the settings before saving. See [[Configuration Reference#Database switches]] and [[Data and Storage]].
 - `/api-docs` documents **113** operations across 96 paths while the code mounts **~173** — [[API Docs|docs drift]].
 - Several completed subsystems are never wired in: plugins/hooks, the file-storage service, Postgres/Mongo auth repos — see [[Known Gaps and Stubs]].
 - `docs/PROJECT.md` in the repo is the **pre-vault** feature log; this vault supersedes it.
