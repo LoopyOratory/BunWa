@@ -42,10 +42,6 @@ export const STATUS_ORDER = ["WORKING", "STARTING", "SCAN_QR_CODE", "FAILED", "S
 const OFFLINE_COLOR = "oklch(0.72 0.03 320)"
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-function fmtHour(t: number) {
-  const d = new Date(t)
-  return `${String(d.getHours()).padStart(2, "0")}:00`
-}
 function fmtDay(t: number) {
   const d = new Date(t)
   return `${d.getDate()} ${MONTHS[d.getMonth()]}`
@@ -153,30 +149,36 @@ const CHART_HINT = "mt-0.5 text-xs text-muted-foreground"
 const TICK = { fontSize: 11, fill: "var(--muted-foreground)" } as const
 const BAR_MARGIN = { top: 6, right: 8, bottom: 0, left: 0 }
 
-/** Bucket audit entries into hourly (24h) or daily (7d/30d) windows.
- *  `add` returns true only when it actually classified the entry, so the
- *  returned `hit` is this chart's own total, never the global event count. */
+/** Bucket audit entries between two timestamps picked in the range control.
+ *  Hourly buckets for spans up to two days, daily buckets beyond; `add`
+ *  returns true only when it classified the entry, so `hit` is this chart's
+ *  own total, never the global event count. */
 function bucketize<T>(
   entries: AuditEntry[],
-  rangeHours: number,
+  from: number,
+  to: number,
   makeRow: (label: string) => T,
   add: (row: T, e: AuditEntry) => boolean,
 ): { rows: T[]; perHour: boolean; hit: number } {
-  const now = Date.now()
   const hourMs = 3_600_000
   const dayMs = 86_400_000
-  const perHour = rangeHours <= 24
-  const count = perHour ? 24 : Math.round(rangeHours / 24)
+  const spanMs = Math.max(hourMs, to - from)
+  const perHour = spanMs <= 48 * hourMs
   const step = perHour ? hourMs : dayMs
-  const end = Math.ceil(now / step) * step
-  const start = end - count * step
-  const rows = Array.from({ length: count }, (_, i) =>
-    makeRow(perHour ? fmtHour(start + i * step) : fmtDay(start + i * step)),
-  )
+  const count = Math.max(1, Math.min(130, Math.ceil(spanMs / step)))
+  const start = from
+  const multiDay = count > 24
+  const label = (t: number) => {
+    if (!perHour) return fmtDay(t)
+    const d = new Date(t)
+    const hh = `${String(d.getHours()).padStart(2, "0")}:00`
+    return multiDay ? `${d.getDate()} ${MONTHS[d.getMonth()]} ${hh}` : hh
+  }
+  const rows = Array.from({ length: count }, (_, i) => makeRow(label(start + i * step)))
   let hit = 0
   for (const e of entries) {
     const t = Date.parse(e.createdAt)
-    if (Number.isNaN(t) || t < start) continue
+    if (Number.isNaN(t) || t < start || t > to) continue
     const idx = Math.min(count - 1, Math.max(0, Math.floor((t - start) / step)))
     if (add(rows[idx], e)) hit++
   }
@@ -217,7 +219,7 @@ export function SessionsDonut({ sessions }: { sessions: Session[] }) {
       <div className={CARD_HEAD}>
         <div>
           <p className={CHART_TITLE}>Sessions by status</p>
-          <p className={CHART_HINT}>Toggle the status chips above to focus this chart</p>
+          <p className={CHART_HINT}>Status mix of the sessions in view</p>
         </div>
       </div>
       {total === 0 ? (
@@ -270,13 +272,14 @@ export function SessionsDonut({ sessions }: { sessions: Session[] }) {
 
 /* ── 2. Messages: delivered vs failed ────────────────────────────────── */
 
-export function MessagesChart({ entries, rangeHours, failed }: { entries: AuditEntry[]; rangeHours: number; failed?: boolean }) {
+export function MessagesChart({ entries, from, to, failed }: { entries: AuditEntry[]; from: number; to: number; failed?: boolean }) {
   const { rows, perHour, sent, fail } = useMemo(() => {
     let sentCount = 0
     let failCount = 0
     const b = bucketize(
       entries,
-      rangeHours,
+      from,
+      to,
       (label) => ({ label, delivered: 0, failed: 0 }),
       (row, e) => {
         if (e.action === "message_sent") {
@@ -293,7 +296,7 @@ export function MessagesChart({ entries, rangeHours, failed }: { entries: AuditE
       },
     )
     return { rows: b.rows, perHour: b.perHour, sent: sentCount, fail: failCount }
-  }, [entries, rangeHours])
+  }, [entries, from, to])
 
   const total = sent + fail
   const rate = total > 0 ? Math.round((fail / total) * 100) : 0
@@ -340,12 +343,13 @@ export function MessagesChart({ entries, rangeHours, failed }: { entries: AuditE
 
 /* ── 3. Session lifecycle activity ───────────────────────────────────── */
 
-export function SessionActivityChart({ entries, rangeHours }: { entries: AuditEntry[]; rangeHours: number }) {
+export function SessionActivityChart({ entries, from, to }: { entries: AuditEntry[]; from: number; to: number }) {
   const { rows, perHour, hit } = useMemo(
     () =>
       bucketize(
         entries,
-        rangeHours,
+        from,
+        to,
         (label) => ({ label, Created: 0, Started: 0, Stopped: 0, QR: 0 }) as Record<string, number | string>,
         (row, e) => {
           const cat = ACTIVITY_CATEGORY[e.action]
@@ -354,7 +358,7 @@ export function SessionActivityChart({ entries, rangeHours }: { entries: AuditEn
           return true
         },
       ),
-    [entries, rangeHours],
+    [entries, from, to],
   )
 
   return (
@@ -402,12 +406,13 @@ export function SessionActivityChart({ entries, rangeHours }: { entries: AuditEn
 
 /* ── 4. Issues by cause ──────────────────────────────────────────────── */
 
-export function IssuesChart({ entries, rangeHours, failed }: { entries: AuditEntry[]; rangeHours: number; failed?: boolean }) {
+export function IssuesChart({ entries, from, to, failed }: { entries: AuditEntry[]; from: number; to: number; failed?: boolean }) {
   const { rows, perHour, total, top } = useMemo(() => {
     const counts = new Map<string, number>()
     const b = bucketize(
       entries,
-      rangeHours,
+      from,
+      to,
       (label) => {
         const row: Record<string, number | string> = { label }
         for (const s of ISSUE_SERIES) row[s.key] = 0
@@ -430,7 +435,7 @@ export function IssuesChart({ entries, rangeHours, failed }: { entries: AuditEnt
       }
     }
     return { rows: b.rows, perHour: b.perHour, total: b.hit, top: biggest }
-  }, [entries, rangeHours])
+  }, [entries, from, to])
 
   return (
     <Card className="hover-float flex flex-col gap-4 p-5">

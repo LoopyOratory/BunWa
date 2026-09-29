@@ -58,12 +58,17 @@ import {
   MessagesChart,
   SessionActivityChart,
   SessionsDonut,
-  STATUS_META,
-  STATUS_ORDER,
   WorkersLoad,
   isIssue,
   issueCategoryOf,
 } from "@/components/dashboard-charts"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { SessionSettingsDialog } from "@/components/session-settings-dialog"
 import { CreateSessionDialog } from "@/components/create-session-dialog"
 import { SessionDetailDialog } from "@/pages/session-detail-dialog"
@@ -72,6 +77,10 @@ import { CountUp, Stagger, StaggerItem } from "@/components/dream"
 interface DashboardPageProps {
   onNavigate?: (page: string, options?: { sessionName?: string }) => void
 }
+
+/** Local-date string (YYYY-MM-DD) for the range inputs. */
+const localDateStr = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 
 export function DashboardPage(_props?: DashboardPageProps) {
   const navigate = useNavigate()
@@ -85,9 +94,10 @@ export function DashboardPage(_props?: DashboardPageProps) {
   const [workerSearch, setWorkerSearch] = useState("")
   const [audit, setAudit] = useState<AuditEntry[]>([])
   const [auditFailed, setAuditFailed] = useState(false)
-  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set(STATUS_ORDER))
+  const [sessionFilter, setSessionFilter] = useState<string>("all")
   const [engineFilter, setEngineFilter] = useState<"all" | "NOWEB" | "WEBJS">("all")
-  const [rangeHours, setRangeHours] = useState<24 | 168 | 720>(24)
+  const [fromDate, setFromDate] = useState<string>(() => localDateStr(new Date()))
+  const [toDate, setToDate] = useState<string>(() => localDateStr(new Date()))
   const lastAuditFetch = useRef(0)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showSettingsDialog, setShowSettingsDialog] = useState(false)
@@ -145,33 +155,58 @@ export function DashboardPage(_props?: DashboardPageProps) {
   const connectedWorkers = workers.filter((w) => w.connected).length
 
   /* ── Filters driving the insights row ───────────────────────────────
-     Status chips select which slices of the sessions data are in focus;
-     the engine filter applies to sessions and workers alike; the range
-     only shapes the audit activity chart. */
+     The session dropdown scopes the charts, KPIs and the sessions table;
+     the engine filter applies to sessions and workers alike; the date
+     range picks the window every time series reads. */
   const engineOf = (s: Session) => (s.config?.engine ? String(s.config.engine).toUpperCase() : "NOWEB")
 
   const engineSessions = sessions.filter((s) => engineFilter === "all" || engineOf(s) === engineFilter)
-  const chartSessions = engineSessions.filter((s) => statusFilter.has(s.status))
+  const dropdownSessions = engineSessions.filter((s) => sessionFilter === "all" || s.name === sessionFilter)
   const engineWorkers = workers.filter(
     (w) => engineFilter === "all" || String(w.engine || "").toUpperCase() === engineFilter,
   )
 
-  const toggleStatus = (k: string) =>
-    setStatusFilter((prev) => {
-      const next = new Set(prev)
-      if (next.has(k)) next.delete(k)
-      else next.add(k)
-      return next
-    })
+  // Drop back to "all" when the picked session disappears (deleted, or renamed).
+  useEffect(() => {
+    if (sessionFilter !== "all" && !sessions.some((s) => s.name === sessionFilter)) setSessionFilter("all")
+  }, [sessions, sessionFilter])
 
-  const filtersActive = statusFilter.size !== STATUS_ORDER.length || engineFilter !== "all" || rangeHours !== 24
-  const resetFilters = () => {
-    setStatusFilter(new Set(STATUS_ORDER))
-    setEngineFilter("all")
-    setRangeHours(24)
+  const fromTs = useMemo(() => Date.parse(`${fromDate}T00:00:00`), [fromDate])
+  const toTs = useMemo(() => Date.parse(`${toDate}T23:59:59.999`), [toDate])
+  const rangeAudit = useMemo(
+    () => (sessionFilter === "all" ? audit : audit.filter((e) => e.sessionName === sessionFilter)),
+    [audit, sessionFilter],
+  )
+
+  const todayStr = localDateStr(new Date())
+  const presetFrom = (days: number) => {
+    const n = new Date()
+    return localDateStr(new Date(n.getFullYear(), n.getMonth(), n.getDate() - (days - 1)))
+  }
+  const setQuickRange = (days: number) => {
+    setFromDate(presetFrom(days))
+    setToDate(todayStr)
+  }
+  const onFromChange = (v: string) => {
+    if (!v) return
+    if (toDate && v > toDate) setToDate(v)
+    setFromDate(v)
+  }
+  const onToChange = (v: string) => {
+    if (!v) return
+    if (fromDate && v < fromDate) setFromDate(v)
+    setToDate(v)
   }
 
-  const filteredSessions = chartSessions.filter((s) => {
+  const filtersActive = sessionFilter !== "all" || engineFilter !== "all" || fromDate !== todayStr || toDate !== todayStr
+  const resetFilters = () => {
+    setSessionFilter("all")
+    setEngineFilter("all")
+    setFromDate(todayStr)
+    setToDate(todayStr)
+  }
+
+  const filteredSessions = dropdownSessions.filter((s) => {
     if (!sessionSearch) return true
     const q = sessionSearch.toLowerCase()
     return (
@@ -189,13 +224,12 @@ export function DashboardPage(_props?: DashboardPageProps) {
 
   /* ── Aggregates from the audit log, for the KPI cards ─────────────── */
   const auditStats = useMemo(() => {
-    const cutoff = Date.now() - rangeHours * 3_600_000
     let sent = 0
     let failed = 0
     const byCat = new Map<string, number>()
-    for (const e of audit) {
+    for (const e of rangeAudit) {
       const t = Date.parse(e.createdAt)
-      if (Number.isNaN(t) || t < cutoff) continue
+      if (Number.isNaN(t) || t < fromTs || t > toTs) continue
       if (e.action === "message_sent") sent++
       else if (e.action === "message_failed") failed++
       if (isIssue(e)) {
@@ -215,9 +249,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
     }
     const total = sent + failed
     return { sent, failed, issues, top, rate: total > 0 ? Math.round((failed / total) * 100) : 0, total }
-  }, [audit, rangeHours])
-
-  const rangeLabel = rangeHours === 24 ? "24h" : rangeHours === 168 ? "7d" : "30d"
+  }, [rangeAudit, fromTs, toTs])
 
   return (
     <PageLayout
@@ -277,7 +309,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
             </StaggerItem>
             <StaggerItem>
               <StatCard
-                label={`Messages ${rangeLabel}`}
+                label="Messages"
                 value={auditFailed ? "-" : <CountUp value={auditStats.total} />}
                 tone={!auditFailed && auditStats.failed > 0 ? "warning" : "neutral"}
                 hint={
@@ -296,7 +328,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
             </StaggerItem>
             <StaggerItem>
               <StatCard
-                label={`Issues ${rangeLabel}`}
+                label="Issues"
                 value={auditFailed ? "-" : <CountUp value={auditStats.issues} />}
                 tone={!auditFailed && auditStats.issues > 0 ? "error" : "neutral"}
                 hint={
@@ -342,7 +374,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
         <section className="space-y-3">
           <SectionHeading
             title="Insights"
-            description="Live read of sessions, workers and the latest 500 audit entries"
+            description="Charts read the latest 500 audit entries, scoped by session and range"
             action={
               <Button variant="ghost" size="sm" onClick={resetFilters} disabled={!filtersActive}>
                 <FilterX className="size-4" strokeWidth={1.75} />
@@ -353,19 +385,20 @@ export function DashboardPage(_props?: DashboardPageProps) {
 
           <div className="glass-card flex flex-wrap items-center gap-x-6 gap-y-3 rounded-xl px-4 py-3">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="me-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Status</span>
-              {STATUS_ORDER.map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  className="filter-chip"
-                  data-active={statusFilter.has(k)}
-                  onClick={() => toggleStatus(k)}
-                >
-                  <span className="filter-dot" style={{ background: STATUS_META[k].color }} />
-                  {STATUS_META[k].label}
-                </button>
-              ))}
+              <span className="me-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Session</span>
+              <Select value={sessionFilter} onValueChange={setSessionFilter}>
+                <SelectTrigger className="h-8 w-full sm:w-52" aria-label="Filter by session">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All sessions</SelectItem>
+                  {sessions.map((s) => (
+                    <SelectItem key={s.name} value={s.name}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="me-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Engine</span>
@@ -377,8 +410,32 @@ export function DashboardPage(_props?: DashboardPageProps) {
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="me-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Range</span>
-              {([[24, "24h"], [168, "7d"], [720, "30d"]] as const).map(([h, label]) => (
-                <button key={h} type="button" className="filter-chip" data-active={rangeHours === h} onClick={() => setRangeHours(h)}>
+              <Input
+                type="date"
+                aria-label="From date"
+                value={fromDate}
+                max={toDate}
+                onChange={(e) => onFromChange(e.target.value)}
+                className="h-8 w-[9.5rem] [color-scheme:light] dark:[color-scheme:dark]"
+              />
+              <span className="text-xs text-muted-foreground">to</span>
+              <Input
+                type="date"
+                aria-label="To date"
+                value={toDate}
+                min={fromDate}
+                max={todayStr}
+                onChange={(e) => onToChange(e.target.value)}
+                className="h-8 w-[9.5rem] [color-scheme:light] dark:[color-scheme:dark]"
+              />
+              {([[1, "Today"], [7, "7d"], [30, "30d"]] as const).map(([days, label]) => (
+                <button
+                  key={days}
+                  type="button"
+                  className="filter-chip"
+                  data-active={fromDate === presetFrom(days) && toDate === todayStr}
+                  onClick={() => setQuickRange(days)}
+                >
                   {label}
                 </button>
               ))}
@@ -386,12 +443,12 @@ export function DashboardPage(_props?: DashboardPageProps) {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-3">
-            <SessionsDonut sessions={chartSessions} />
+            <SessionsDonut sessions={dropdownSessions} />
             <div className="lg:col-span-2">
-              <MessagesChart entries={audit} rangeHours={rangeHours} failed={auditFailed} />
+              <MessagesChart entries={rangeAudit} from={fromTs} to={toTs} failed={auditFailed} />
             </div>
-            <SessionActivityChart entries={audit} rangeHours={rangeHours} />
-            <IssuesChart entries={audit} rangeHours={rangeHours} failed={auditFailed} />
+            <SessionActivityChart entries={rangeAudit} from={fromTs} to={toTs} />
+            <IssuesChart entries={rangeAudit} from={fromTs} to={toTs} failed={auditFailed} />
             <WorkersLoad workers={engineWorkers} />
           </div>
         </section>
