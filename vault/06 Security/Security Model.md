@@ -86,7 +86,9 @@ Applies to webhook delivery ([[Webhooks]]) and remote media/`file://`-style inpu
 
 1. **`WAHA_ALLOW_NO_AUTH` defaults to "true"** — with no `WAHA_API_KEY` set, the API is open. Boot logs a
    warning only when `WAHA_ALLOW_NO_AUTH=false` *and* no key is set (i.e. the fail-closed misconfiguration).
-   Always set `WAHA_API_KEY` in production.
+   Always set `WAHA_API_KEY` in production. The **MCP endpoint** honors the same switch — keyless calls are
+   refused once `WAHA_ALLOW_NO_AUTH=false` — and boot additionally warns whenever MCP is mounted without a
+   key; `MCP_ENABLED=false` unmounts MCP entirely.
 2. **Dashboard credentials are admin credentials.** There is no separate read-only dashboard role, and
    the frontend stores the Basic token in `localStorage` (`waha_dashboard_auth`).
 3. **The dashboard sends a hardcoded `x-api-key: waha`** alongside Basic auth (`frontend/src/lib/api.ts`).

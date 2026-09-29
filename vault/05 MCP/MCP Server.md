@@ -13,7 +13,7 @@ source: src/mcp/, src/api/mcp-config.routes.ts
 
 BunWa exposes WhatsApp as a **Model Context Protocol** server, so an AI agent (Claude Desktop,
 Zed, any MCP host) can send messages, manage sessions and inspect chats through a standard tool
-interface. **43 tools.** Upstream OpenWA has no MCP surface at all — this is a fork-only feature.
+interface. **53 tools.** Upstream OpenWA has no MCP surface at all — this is a fork-only feature.
 
 SDK: `@modelcontextprotocol/sdk` ^1.29.0. Tools are registered with `McpServer.registerTool`, with
 each descriptor's Zod schema passed straight through.
@@ -41,7 +41,7 @@ Two kinds of key:
 
 | Key | Scope |
 |---|---|
-| `WAHA_API_KEY` (global) | timing-safe compare; full access (subject to the session's MCP policy). If no global key is configured, the MCP endpoint is **open** |
+| `WAHA_API_KEY` (global) | timing-safe compare; full access (subject to the session's MCP policy). With no global key the endpoint is open unless `WAHA_ALLOW_NO_AUTH=false` — the same fail-closed switch the REST API honors; boot logs a loud warning while it is keyless. `MCP_ENABLED=false` unmounts it entirely (404) |
 | Per-session key `sk_mcp_<32 hex>` | minted by `POST /api/sessions/:session/mcp/generate-key`; only the **SHA-256 hash** is stored (`SessionConfig.mcp.apiKeyHash`), plaintext is shown once. Binds every call to that session |
 
 **Scoping rules** for per-session keys:

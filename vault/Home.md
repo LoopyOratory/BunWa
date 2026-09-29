@@ -58,7 +58,7 @@ extended with a Plus tier, an MCP server for AI agents, and a React dashboard.
 
 ### 🤖 MCP
 - [[MCP Server]] — transports, auth, per-session scoping, rate limits
-- [[MCP Tools Reference]] — all 43 tools
+- [[MCP Tools Reference]] — all 53 tools
 
 ### 🔐 Security & Quality
 - [[Security Model]] — auth layers, policies, SSRF, secret handling

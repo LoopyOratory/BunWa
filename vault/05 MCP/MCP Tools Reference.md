@@ -2,15 +2,15 @@
 type: note
 section: mcp
 tags: [bunwa, mcp, reference, ai]
-updated: 2026-09-14
+updated: 2026-09-29
 source: src/mcp/tools/*.ts
 status: shipped
-tools: 43
+tools: 53
 ---
 
 # 🧰 MCP Tools Reference
 
-All **43** tools, grouped by category, with the file each defines and its policy tier.
+All **53** tools, grouped by category, with the file each defines and its policy tier.
 Everything is `sessionScoped` **except `SessionList`**; `sessionId` is a parameter on every
 session-scoped tool.
 
@@ -78,7 +78,7 @@ Legend — Tier: `read` = `readOnlyHint`, filtered out by `MCP_READONLY`; `write
 | `StatusSendImage` | write | |
 | `StatusSendVoice` | write | duration computed by the engine |
 | `StatusSendVideo` | write | |
-| `StatusDelete` | write | ⚠️ **the only `destructive: true` tool** — blocked unless the session sets `destructiveOps: true` |
+| `StatusDelete` | write | ⚠️ destructive — blocked unless the session sets `destructiveOps: true` |
 | `StatusGenerateId` | read | |
 
 ## Presence — `src/mcp/tools/presence.tools.ts` (4)
@@ -90,6 +90,26 @@ Legend — Tier: `read` = `readOnlyHint`, filtered out by `MCP_READONLY`; `write
 | `PresenceGetForChat` | read | |
 | `PresenceSubscribe` | write | subscribe to a chat's presence updates |
 
+## Sending policy — `src/mcp/tools/policy.tools.ts` (3)
+
+| Tool | Tier | Scoped | Notes |
+|---|---|---|---|
+| `SendingPolicyGet` | read | ✅ | overrides + bypassed + live usage for a session |
+| `SendingPolicySet` | write ⚠️ | ✅ | replaces the session's overrides wholesale (send none to clear). Destructive: it can weaken anti-ban limits, so it needs `destructiveOps: true` |
+| `SendingPolicyUsage` | read | ✅ | sliding-window counts, effective caps, warm-up, next allowed times |
+
+## Templates — `src/mcp/tools/template.tools.ts` (7)
+
+| Tool | Tier | Scoped | Notes |
+|---|---|---|---|
+| `TemplateList` | read | ✅ | includes the `{{variables}}` each template needs |
+| `TemplateGet` | read | ✅ | by id or name |
+| `TemplateCreate` | write | ✅ | |
+| `TemplateUpdate` | write | ✅ | id only; only the fields sent change |
+| `TemplatePreview` | read | ✅ | render without sending |
+| `TemplateSend` | write | ✅ | render + send to a chat; session must be running |
+| `TemplateDelete` | write ⚠️ | ✅ | needs `destructiveOps: true` |
+
 ## Category gaps
 
 `ToolCategory` in the type definitions also declares **`'group'`** and **`'media'`**, but **no tool
@@ -98,6 +118,7 @@ uses them** — group management has no MCP surface today. That is the most obvi
 
 ## Policy recap
 
+- `MCP_ENABLED=false` → the endpoint is not mounted at all (404).
 - `MCP_READONLY=true` → only `tier: read` tools are registered.
 - `allowedTools` / `deniedTools` accept **tool names or category names**; deny wins; a non-empty
   allow-list turns into "only these".
