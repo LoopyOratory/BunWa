@@ -183,6 +183,16 @@ unusable anywhere Chrome isn't at a hardcoded system path.
 | Build fix | Hand-written `-webkit-backdrop-filter` pairs got collapsed to prefixed-only by LightningCSS (Chromium ignores it → computed none). Standard property only in source now; build autoprefixes. |
 | Verified | CDP: dock blur live, gradient glass computed everywhere, zero overflow light/dark/mobile; MiMo vision rate 7.5–9/10 on login/dashboard/sessions/dialog/mobile (was 3/10); flagged polish (empty state, dark contrast) fixed; `bun run test` 198/0, typecheck + oxlint clean. |
 
+## Dashboard insights (2026-09-29)
+
+| Item | Detail |
+|---|---|
+| Ask | "The dashboard should have graphical representation of data and the data should be filterable." |
+| Charts | Insights section with three recharts views on real data: SessionsDonut (status mix + center total), ActivityChart (audit events per hour/day, severity stacked, All/Issues toggle), WorkersLoad (horizontal bars with count labels, mint = connected). |
+| Filters | Status chips (multi, drive donut + sessions table), engine chips (NOWEB/WEBJS, drive sessions + workers), range chips (24h/7d/30d for the activity chart), Reset action. |
+| Data | `GET /api/audit` (limit 500) polled at 30s, bucketed client-side; `api.getAudit` + `AuditEntry` added to `lib/api.ts`. |
+| Verified | CDP: chips change sectors/rows/empty states as expected, range swaps axis labels, reset restores; zero overflow light/dark/mobile; MiMo 8-9/10 (bar count labels were the flagged fix); `bun run test` 198/0, typecheck + oxlint clean. |
+
 ## Related
 
 [[OpenWA Parity]] · [[Roadmap]] · [[Testing]] · [[Dashboard]] · [[Known Gaps and Stubs]]

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -33,9 +33,10 @@ import {
   Cog,
   Plus,
   RefreshCw,
+  FilterX,
   MoreHorizontal,
 } from "lucide-react"
-import { api, type ServerVersion, type Session, type Worker } from "@/lib/api"
+import { api, type AuditEntry, type ServerVersion, type Session, type Worker } from "@/lib/api"
 import { toast } from "sonner"
 import { PageLayout } from "@/components/page-layout"
 import {
@@ -50,6 +51,13 @@ import {
   StatusBadge,
   TableSkeleton,
 } from "@/components/primitives"
+import {
+  ActivityChart,
+  SessionsDonut,
+  STATUS_META,
+  STATUS_ORDER,
+  WorkersLoad,
+} from "@/components/dashboard-charts"
 import { SessionSettingsDialog } from "@/components/session-settings-dialog"
 import { CreateSessionDialog } from "@/components/create-session-dialog"
 import { SessionDetailDialog } from "@/pages/session-detail-dialog"
@@ -69,20 +77,38 @@ export function DashboardPage(_props?: DashboardPageProps) {
   const [workersError, setWorkersError] = useState<string | null>(null)
   const [sessionSearch, setSessionSearch] = useState("")
   const [workerSearch, setWorkerSearch] = useState("")
+  const [audit, setAudit] = useState<AuditEntry[]>([])
+  const [auditFailed, setAuditFailed] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set(STATUS_ORDER))
+  const [engineFilter, setEngineFilter] = useState<"all" | "NOWEB" | "WEBJS">("all")
+  const [rangeHours, setRangeHours] = useState<24 | 168 | 720>(24)
+  const lastAuditFetch = useRef(0)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showSettingsDialog, setShowSettingsDialog] = useState(false)
   const [settingsSession, setSettingsSession] = useState<Session | null>(null)
   const [showDetailDialog, setShowDetailDialog] = useState(false)
   const [detailSession, setDetailSession] = useState<Session | null>(null)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { force?: boolean }) => {
     // Each request fails on its own so one broken endpoint does not blank the
-    // whole overview.
-    const [sessionsResult, workersResult, versionResult] = await Promise.allSettled([
+    // whole overview. The audit log refreshes on a slower 30s cadence since it
+    // is only feeding the activity chart.
+    const now = Date.now()
+    const wantAudit = opts?.force === true || now - lastAuditFetch.current > 30_000
+    if (wantAudit) lastAuditFetch.current = now
+    const [sessionsResult, workersResult, versionResult, auditResult] = await Promise.allSettled([
       api.getSessions(),
       api.getWorkers(),
       api.getVersion(),
+      wantAudit ? api.getAudit({ limit: 500 }) : Promise.resolve<AuditEntry[] | null>(null),
     ])
+
+    if (auditResult.status === "fulfilled" && auditResult.value) {
+      setAudit(auditResult.value)
+      setAuditFailed(false)
+    } else if (auditResult.status === "rejected") {
+      setAuditFailed(true)
+    }
 
     if (sessionsResult.status === "fulfilled") {
       setSessions(sessionsResult.value)
@@ -112,7 +138,34 @@ export function DashboardPage(_props?: DashboardPageProps) {
   const attentionCount = sessions.filter((s) => s.status !== "WORKING" && s.status !== "STOPPED").length
   const connectedWorkers = workers.filter((w) => w.connected).length
 
-  const filteredSessions = sessions.filter((s) => {
+  /* ── Filters driving the insights row ───────────────────────────────
+     Status chips select which slices of the sessions data are in focus;
+     the engine filter applies to sessions and workers alike; the range
+     only shapes the audit activity chart. */
+  const engineOf = (s: Session) => (s.config?.engine ? String(s.config.engine).toUpperCase() : "NOWEB")
+
+  const engineSessions = sessions.filter((s) => engineFilter === "all" || engineOf(s) === engineFilter)
+  const chartSessions = engineSessions.filter((s) => statusFilter.has(s.status))
+  const engineWorkers = workers.filter(
+    (w) => engineFilter === "all" || String(w.engine || "").toUpperCase() === engineFilter,
+  )
+
+  const toggleStatus = (k: string) =>
+    setStatusFilter((prev) => {
+      const next = new Set(prev)
+      if (next.has(k)) next.delete(k)
+      else next.add(k)
+      return next
+    })
+
+  const filtersActive = statusFilter.size !== STATUS_ORDER.length || engineFilter !== "all" || rangeHours !== 24
+  const resetFilters = () => {
+    setStatusFilter(new Set(STATUS_ORDER))
+    setEngineFilter("all")
+    setRangeHours(24)
+  }
+
+  const filteredSessions = chartSessions.filter((s) => {
     if (!sessionSearch) return true
     const q = sessionSearch.toLowerCase()
     return (
@@ -123,7 +176,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
     )
   })
 
-  const filteredWorkers = workers.filter((w) => {
+  const filteredWorkers = engineWorkers.filter((w) => {
     if (!workerSearch) return true
     return w.name.toLowerCase().includes(workerSearch.toLowerCase())
   })
@@ -133,7 +186,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
       title="Dashboard"
       description="Overview of your sessions, workers, and system health"
       actions={
-        <Button variant="ghost" size="icon" onClick={load} title="Refresh" aria-label="Refresh">
+        <Button variant="ghost" size="icon" onClick={() => load({ force: true })} title="Refresh" aria-label="Refresh">
           <RefreshCw className="size-4" strokeWidth={1.75} />
         </Button>
       }
@@ -208,6 +261,64 @@ export function DashboardPage(_props?: DashboardPageProps) {
             </StaggerItem>
           </Stagger>
         )}
+
+        {/* Insights: filters drive the charts and the tables below */}
+        <section className="space-y-3">
+          <SectionHeading
+            title="Insights"
+            description="Live read of sessions, workers and event traffic"
+            action={
+              <Button variant="ghost" size="sm" onClick={resetFilters} disabled={!filtersActive}>
+                <FilterX className="size-4" strokeWidth={1.75} />
+                Reset filters
+              </Button>
+            }
+          />
+
+          <div className="glass-card flex flex-wrap items-center gap-x-6 gap-y-3 rounded-xl px-4 py-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="me-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Status</span>
+              {STATUS_ORDER.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  className="filter-chip"
+                  data-active={statusFilter.has(k)}
+                  onClick={() => toggleStatus(k)}
+                >
+                  <span className="filter-dot" style={{ background: STATUS_META[k].color }} />
+                  {STATUS_META[k].label}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="me-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Engine</span>
+              {(["all", "NOWEB", "WEBJS"] as const).map((k) => (
+                <button key={k} type="button" className="filter-chip" data-active={engineFilter === k} onClick={() => setEngineFilter(k)}>
+                  {k === "all" ? "All engines" : k}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="me-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Range</span>
+              {([[24, "24h"], [168, "7d"], [720, "30d"]] as const).map(([h, label]) => (
+                <button key={h} type="button" className="filter-chip" data-active={rangeHours === h} onClick={() => setRangeHours(h)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <SessionsDonut sessions={chartSessions} />
+            <div className="lg:col-span-2">
+              <ActivityChart entries={audit} rangeHours={rangeHours} failed={auditFailed} />
+            </div>
+            <div className="lg:col-span-3">
+              <WorkersLoad workers={engineWorkers} />
+            </div>
+          </div>
+        </section>
 
         {/* Workers */}
         <section className="space-y-3">
@@ -429,7 +540,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
                             <DropdownMenuItem
                               disabled={session.status !== "STOPPED"}
                               title={session.status !== "STOPPED" ? "Only a stopped session can be started" : undefined}
-                              onSelect={() => api.startSession(session.name).then(load).catch(() => toast.error("Start failed"))}
+                              onSelect={() => api.startSession(session.name).then(() => load()).catch(() => toast.error("Start failed"))}
                             >
                               <Play strokeWidth={1.75} />
                               Start
@@ -437,7 +548,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
                             <DropdownMenuItem
                               disabled={session.status === "STOPPED"}
                               title={session.status === "STOPPED" ? "The session is already stopped" : undefined}
-                              onSelect={() => api.restartSession(session.name).then(load).catch(() => toast.error("Restart failed"))}
+                              onSelect={() => api.restartSession(session.name).then(() => load()).catch(() => toast.error("Restart failed"))}
                             >
                               <RotateCcw strokeWidth={1.75} />
                               Restart
@@ -445,7 +556,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
                             <DropdownMenuItem
                               disabled={session.status === "STOPPED"}
                               title={session.status === "STOPPED" ? "The session is already stopped" : undefined}
-                              onSelect={() => api.stopSession(session.name).then(load).catch(() => toast.error("Stop failed"))}
+                              onSelect={() => api.stopSession(session.name).then(() => load()).catch(() => toast.error("Stop failed"))}
                             >
                               <Square strokeWidth={1.75} />
                               Stop
@@ -453,7 +564,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
                             <DropdownMenuItem
                               disabled={session.status === "STOPPED"}
                               title={session.status === "STOPPED" ? "The session is already stopped" : undefined}
-                              onSelect={() => api.logoutSession(session.name).then(load).catch(() => toast.error("Logout failed"))}
+                              onSelect={() => api.logoutSession(session.name).then(() => load()).catch(() => toast.error("Logout failed"))}
                             >
                               <LogOut strokeWidth={1.75} />
                               Logout
@@ -506,7 +617,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               variant="destructive"
-                              onSelect={() => api.deleteSession(session.name).then(load).catch(() => toast.error("Delete failed"))}
+                              onSelect={() => api.deleteSession(session.name).then(() => load()).catch(() => toast.error("Delete failed"))}
                             >
                               <Trash2 strokeWidth={1.75} />
                               Delete

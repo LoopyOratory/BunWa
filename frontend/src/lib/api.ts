@@ -24,6 +24,18 @@ export interface ServerVersion {
   tier: string
 }
 
+export interface AuditEntry {
+  id: string
+  action: string
+  severity: "info" | "warn" | "error" | string
+  sessionName?: string
+  apiKeyName?: string
+  ipAddress?: string
+  statusCode?: number
+  errorMessage?: string
+  createdAt: string
+}
+
 export interface QRCodeResponse {
   qr?: { raw: string }
 }
@@ -277,6 +289,13 @@ export const api = {
     }),
   getScreenshot: (name: string) => request<ScreenshotResponse>(`/api/${name}/screenshot`),
   getWorkers: () => request<Worker[]>("/api/workers"),
+  getAudit: (params?: { limit?: number; offset?: number; severity?: string }) => {
+    const q = new URLSearchParams()
+    q.set("limit", String(params?.limit ?? 200))
+    if (params?.offset) q.set("offset", String(params.offset))
+    if (params?.severity && params.severity !== "all") q.set("severity", params.severity)
+    return request<AuditEntry[]>(`/api/audit?${q}`)
+  },
 
   // ==================== CHATS ====================
   getChats: (session: string, limit = 50, offset = 0) =>

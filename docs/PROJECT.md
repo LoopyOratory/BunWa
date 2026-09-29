@@ -270,3 +270,15 @@ nothing shared a world. v2 moves the dream into the material itself.
 | Size + type | Stat metrics text-3xl→text-4xl, page titles text-3xl, section headings text-lg, sidebar wordmark text-xl, login headline text-4xl. |
 | Build fix | LightningCSS collapsed the hand-written standard+`-webkit-` backdrop-filter pairs to prefixed-only, which modern Chromium ignores (computed `backdrop-filter: none`). Source now declares only the standard property; the build autoprefixes. |
 | Verified | CDP pass: dock blur live (`blur(24px) saturate(1.5)`), 17 aurora layers, gradient glass computed on cards/fields, zero horizontal overflow light+dark+mobile; MiMo vision review of login/dashboard/sessions/dialog/mobile in both themes rated 7.5–9/10 (was 3/10), issues it flagged (empty-state presence, dark secondary-text contrast, ghost-icon contrast) then fixed; `bun run test` 198/0, typecheck + oxlint clean. |
+
+## 📊 Dashboard insights (2026-09-29)
+
+Ask: the dashboard should show the data graphically, and the data should be filterable.
+
+| Area | What changed |
+|---|---|
+| Insights section | New section between the stat cards and the tables: a filter bar plus three recharts views, all inside the glass material. |
+| Charts | `SessionsDonut` (status mix, center total, pastel slices), `ActivityChart` (audit log entries bucketed per hour for 24h and per day for 7d/30d, severity stacked with an All/Issues toggle), `WorkersLoad` (horizontal bars per worker with count labels, mint = connected). |
+| Filters | Status chips (multi-select, act as donut legend + filter the sessions table), engine chips (NOWALL/NOWEB/WEBJS, apply to sessions and workers), range chips (24h/7d/30d for the activity chart), plus a Reset filters action. Every group visibly drives the charts and the tables below it. |
+| Data | Only real API data: sessions/workers/version as before, plus `GET /api/audit` (limit 500) fetched on a 30s cadence (gated so the 5s poll does not hammer it) and bucketed client-side. New `api.getAudit` + `AuditEntry` type in `lib/api.ts`. |
+| Verified | CDP interaction pass: chips toggle donut sectors (2→1) and table rows (3→1), engine WEBJS filters workers to zero with proper empty states, range swaps axis labels (HH:00 ↔ dates), reset restores; zero horizontal overflow light/dark/mobile; MiMo vision 8-9/10; `bun run test` 198/0, typecheck + oxlint clean. |
