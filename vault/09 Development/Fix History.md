@@ -2,7 +2,7 @@
 type: note
 section: development
 tags: [bunwa, dev, history]
-updated: 2026-09-14
+updated: 2026-09-29
 source: git log
 status: shipped
 ---
@@ -11,6 +11,17 @@ status: shipped
 
 Recent commit history, grouped by theme — the "what changed and why" that a fresh clone doesn't tell you.
 Newest work first within each theme.
+
+## Postgres store bring-up (2026-09-29)
+
+The Postgres driver had never executed — no deployment, CI job or test touched it. The first run
+against a live server (PGlite; [[Postgres on PGlite]]) surfaced two hard blockers, both fixed:
+
+| Change | Detail |
+|---|---|
+| `pg` driver resolution | knex loads its driver with a bare `require('pg')` evaluated inside its own module directory. Under bun's isolated linker (`bunfig.toml`) that directory lives in the shared cache with no `pg` link — knex does not declare pg as a dependency — so every Postgres session start died with `Cannot find module 'pg'`. Fixed via `src/core/db/knex-postgres.ts`: a `BunPgClient` subclass whose `_driver()` returns the app-imported `pg`; both knex call sites (NOWEB store, template repository) now go through `makePostgresKnex()`. Pinned by `knex-postgres.test.ts`. |
+| `messages` upsert target | `.onConflict(['jid', 'id'])` referenced no unique index (only `messages_id_index` is unique), so every message write failed with `there is no unique or exclusion constraint matching the ON CONFLICT specification`. Now `.onConflict('id')` — matching the schema and the SQLite OR-REPLACE semantics. |
+| Repeatable verification | `bun run test:postgres` (`scripts/test-postgres.ts`) exercises all seven store repositories + the template repository against any live Postgres; `bun run postgres:dev` starts an embedded PGlite server (PostgreSQL 18.3 in WASM). First full pass: 10/10. |
 
 ## Bun 1.4.2 runtime adoption
 

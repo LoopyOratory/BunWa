@@ -67,6 +67,8 @@ See [[Session Stores]] for the driver matrix and the per-repository file list.
 
 So configuring Postgres from the dashboard page does **not** move session storage to Postgres by
 itself. Set `WAHA_DATABASE_DRIVER=postgres` and `WAHA_DATABASE_URL` for that ([[Configuration Reference]]).
+The Postgres path was verified end-to-end on 2026-09-29 ([[Postgres on PGlite]]); note it keeps **one
+global table set per database** — unlike SQLite, where each session gets its own file.
 
 `WHATSAPP_SESSIONS_MONGO_URL` and `WAHA_SQLITE_PATH` have getters in `WhatsappConfigService` but no
 runtime consumer.
@@ -75,6 +77,9 @@ runtime consumer.
 
 - **Session data** → back up `.sessions/` (or whatever `WAHA_LOCAL_STORE_BASE_DIR` points at) while
   the process is stopped; it holds the WhatsApp credentials, i.e. the account pairing.
+- **With `WAHA_DATABASE_DRIVER=postgres`** → the session store (chats, messages, contacts, labels, …)
+  lives in the Postgres database instead; include it in backups. The template repository follows the
+  same driver.
 - **Operational history** → `data/audit.db` and `data/templates.db`.
 - **Media** → ephemeral by design; only S3 storage produces durable URLs.
 - `src/core/export-import.service.ts` implements a tar.gz export/import with entry and size caps,

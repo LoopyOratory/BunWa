@@ -167,7 +167,7 @@ export class PostgresMessagesRepository implements IMessagesRepository {
         messageTimestamp: typeof timestamp === 'number' ? timestamp : parseInt(String(timestamp)),
         data: JSON.stringify(message),
       })
-      .onConflict(['jid', 'id'])
+      .onConflict('id')
       .merge();
   }
 
@@ -189,7 +189,7 @@ export class PostgresMessagesRepository implements IMessagesRepository {
 
     await this.knex('messages')
       .insert(rows)
-      .onConflict(['jid', 'id'])
+      .onConflict('id')
       .merge();
   }
 

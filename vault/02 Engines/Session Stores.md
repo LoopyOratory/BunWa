@@ -53,6 +53,12 @@ repository per entity: contacts, chats, groups, messages, labels, label associat
 
 - `PostgresStorage` on a Knex/pg pool; tables created with raw SQL; mirrors the sqlite repositories
   (`Postgres*Repository`, including `PostgresLidPNRepository`).
+- ✔ **Tested 2026-09-29** on PGlite (PostgreSQL 18.3): schema creation, all seven repositories,
+  template CRUD and session isolation — 10/10 ([[Postgres on PGlite]]). The first run also surfaced two
+  runtime bugs, both fixed ([[Fix History]]): driver resolution under the bun isolated linker
+  (`src/core/db/knex-postgres.ts`) and the `messages` upsert conflict target.
+- Tables are **global, not per-session** — the sqlite driver gets one file per session, Postgres keeps
+  one shared table set per database.
 - ⚠️ `runInTransaction()` is a **passthrough** — it calls the callback with no `BEGIN`/`COMMIT`
   ("best effort" per the source comment), so batch writes are not atomic on Postgres.
 
@@ -76,4 +82,4 @@ label-association repo, while `SqlChatMethods.ts` and `SqlMessagesMethods.ts` ar
 
 ## Related
 
-[[Data and Storage]] · [[NOWEB Engine]] · [[Configuration Reference]] · [[Known Gaps and Stubs]]
+[[Data and Storage]] · [[NOWEB Engine]] · [[Configuration Reference]] · [[Postgres on PGlite]] · [[Known Gaps and Stubs]]

@@ -2,26 +2,26 @@
 type: note
 section: ops
 tags: [bunwa, ops, dev, testing]
-updated: 2026-09-14
+updated: 2026-09-29
 source: src/__tests__/, bunfig.toml, .github/workflows/ci.yml
 status: shipped
 ---
 
 # 🧪 Testing
 
-`bun test` — **104 tests across 15 files** in `src/__tests__/`, preloaded with `setup.ts` via
-`bunfig.toml`:
+`bun test` — **176 tests across 22 files** in `src/__tests__/` (plus a live-database smoke script, see
+below), preloaded with `setup.ts` via `bunfig.toml`:
 
 ```toml
 [test]
 preload = ["./src/__tests__/setup.ts"]
 ```
 
-## Current state (verified 2026-09-14)
+## Current state (verified 2026-09-29)
 
 ```text
-104 tests · 205 expect() calls · 15 files
-104 pass · 0 fail        ← suite is green
+176 tests · 422 expect() calls · 22 files
+176 pass · 0 fail        ← suite is green
 ```
 
 The two long-standing failures (`Sessions API > creates/deletes a new session`) were a **test-harness**
@@ -31,7 +31,7 @@ constructor takes a path/DB handle, so tsyringe threw `TypeInfo not known for "O
 commit `30ac09c` applied to the webhook tests. Details in [[Dependency Injection]] and
 [[Bun Runtime Adoption]].
 
-## The 15 files
+## The 22 files
 
 | File | Covers |
 |---|---|
@@ -50,6 +50,13 @@ commit `30ac09c` applied to the webhook tests. Details in [[Dependency Injection
 | `infra-config.test.ts` | `PUT /api/infra/config` — `.env` rewrite preserving comments |
 | `di-container.test.ts` | container resolves `AuditService`/`TemplateService` without TypeInfo errors |
 | `webjs-engine.test.ts` | WEBJS engine wiring |
+| `button-types.test.ts` | button payload DTOs — one style per send |
+| `interactive-replies.test.ts` | inbound button/list/flow replies → structured `interactive` field |
+| `sending-policy.test.ts` | anti-ban policy service: caps, warm-up ramp, quiet hours, bypass |
+| `templates-store.test.ts` | template repository + driver switch (SQLite path) |
+| `policy-tools.test.ts` | MCP policy tools: get/set/usage + destructive gating |
+| `template-tools.test.ts` | MCP template tools: CRUD, preview, send gating |
+| `knex-postgres.test.ts` | Postgres client subclass — driver resolves regardless of node_modules layout |
 
 `setup.ts` is the preload: it points session storage at a temp dir so tests never touch a real
 `.sessions/`.
@@ -65,6 +72,22 @@ bun test --watch
 **Prerequisite:** a complete `bun install`. A stale `node_modules` is the most common cause of
 "failing" tests — e.g. after the `baileys rc13 → rc14` upgrade, `@whiskeysockets/baileys` was missing
 from `node_modules` and 7 tests errored with module-resolution failures until `bun install` ran.
+
+## Postgres smoke test (live database)
+
+`bun test` never touches the Postgres driver. `scripts/test-postgres.ts` covers it; it needs a live
+Postgres — real, Docker, or the embedded PGlite server ([[Postgres on PGlite]]):
+
+```bash
+bun run postgres:dev                              # PGlite on 127.0.0.1:5432
+WAHA_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/postgres \
+  bun run test:postgres
+```
+
+Ten checks: schema creation + one CRUD/upsert pass per repository (contacts, chats, messages, groups,
+labels, label associations, LID↔PN) + template CRUD with session isolation. First full pass
+2026-09-29 on PGlite 0.5.8 (PostgreSQL 18.3): **10/10**, after fixing two runtime bugs
+([[Fix History#Postgres store bring-up (2026-09-29)]]).
 
 ## CI
 

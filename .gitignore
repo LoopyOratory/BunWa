@@ -19,6 +19,7 @@ build/
 *.sqlite
 *.sqlite3
 data/
+.pglite/
 
 # ─── IDE / editor ──────────────────────────────────
 .idea/

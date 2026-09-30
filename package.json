@@ -11,6 +11,8 @@
     "build": "bun build src/main.ts --outdir dist --target bun",
     "build:frontend": "bash scripts/build-frontend.sh",
     "test": "bun test src/",
+    "test:postgres": "bun run scripts/test-postgres.ts",
+    "postgres:dev": "bun run scripts/pglite-dev.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src/",
     "lint-fix": "oxlint --fix src/",
@@ -48,6 +50,8 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-socket": "^0.2.11",
     "@types/async-lock": "^1.4.2",
     "@types/bun": "^1.3.14",
     "@types/lodash": "^4.14.194",
