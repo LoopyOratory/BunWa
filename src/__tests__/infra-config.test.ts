@@ -54,7 +54,7 @@ describe('Infra config — PUT persists to .env', () => {
       'WAHA_S3_BUCKET',
       'WAHA_S3_REGION',
       'WAHA_S3_ACCESS_KEY',
-      'WAHA_S3_SECRET_KEY',
+      'WAHA_S3_SECRET_KEY', // ggignore
     ]) {
       delete process.env[key];
     }

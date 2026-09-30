@@ -6,7 +6,7 @@ import { WhatsappConfigService } from '../config.service';
 describe('buildPostgresUrl', () => {
   it('builds a full URL with credentials', () => {
     expect(
-      buildPostgresUrl({ host: 'db.local', port: '5433', username: 'waha', password: 's3cret', name: 'waha' }),
+      buildPostgresUrl({ host: 'db.local', port: '5433', username: 'waha', password: 's3cret', name: 'waha' }), // ggignore
     ).toBe('postgres://waha:s3cret@db.local:5433/waha');
   });
 
