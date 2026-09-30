@@ -1,10 +1,10 @@
 ---
 tags: [project, bunwa, whatsapp, openwa, baileys, api]
-updated: 2026-08-22
+updated: 2026-09-29
 repo: https://github.com/LoopyOratory/BunWa
 upstream: https://github.com/rmyndharis/OpenWA
-runtime: Bun 1.4.0
-status: ACTIVE — 97/97 tests passing
+runtime: Bun 1.4.2
+status: ACTIVE — 198/198 tests passing (25 files)
 ---
 
 # 🟢 BunWa — WhatsApp HTTP API (Bun/Hono Edition)
@@ -24,7 +24,7 @@ status: ACTIVE — 97/97 tests passing
 |---|---|
 | Package name | `waha-bun` (v2026.5.1) |
 | Description | WhatsApp HTTP API — Bun/Hono Edition with Pro features |
-| Runtime | **Bun ≥1.4.0** (Rust core; Node v26.3.0 compat layer) |
+| Runtime | **Bun ≥1.4.2** (Rust core; Node v26.3.0 compat layer) |
 | Framework | Hono 4.x + Scalar API Reference at `/api-docs` |
 | WA engine | Baileys `@whiskeysockets/baileys 7.0.0-rc13` (noweb) + optional webjs/puppeteer |
 | Repo | github.com/LoopyOratory/BunWa |
@@ -159,6 +159,20 @@ scripts/                  # start.sh · dev.sh · build-frontend.sh
 - **Fresh-clone boot fix**: `AuditService` auto-creates `WAHA_STORAGE_DIR` (default `./data`)
   — kills the `SQLITE_CANTOPEN` crash on first run; `start.sh` also mkdir's it.
 - Verified: fresh clone → install (508 pkgs, 9.4s) → boot without manual steps → `97/97` tests.
+
+## 🆕 2026-09-29 — Bun 1.4.2 pin + adoption pass
+
+- **Pinned to Bun 1.4.2**: `engines.bun >=1.4.2`, `.bun-version`, CI `bun-version: "1.4.2"`,
+  Docker images `oven/bun:1.4.2` / `oven/bun:1.4.2-slim`; `@types/bun` / `bun-types` at 1.4.2.
+- **`--no-orphans`** on the production launch (`start.sh` + both Dockerfiles): when the server
+  exits, descendant processes die with it — notably the Chrome a WEBJS session spawns.
+- **`bun test --parallel`** is the `test` script now (worker processes; suite ≈2.2s).
+  `auth.test.ts` registers its own `AuditService` instance instead of relying on run order.
+- **CI hardened**: `bun install --frozen-lockfile` + `PUPPETEER_SKIP_DOWNLOAD=true`.
+- Lockfile stays **v1** for now: 1.4.2 reads/writes it fine; the v2 format (what fresh lockfiles
+  get) needs a full re-resolution (measured: 113 version bumps) — a dependency-refresh concern.
+- Evaluated and declined, with reasons: Bun.WebView, `Bun.cron`, HTTP/2 (h2c), `Bun.write`
+  streaming, ws pause/resume — see [[Bun Runtime Adoption]].
 
 ---
 

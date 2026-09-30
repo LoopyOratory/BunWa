@@ -140,6 +140,16 @@ unusable anywhere Chrome isn't at a hardcoded system path.
 | Verified | Start → `SCAN_QR_CODE` in ~15s via `CHROME_PATH` pointing at a local Chromium; `GET /api/:session/screenshot` → real WhatsApp Web PNG (1280×633). Event monitor streamed every `session.status` transition; audit log recorded create/start/QR/stop/delete ([[Audit Log]]). `bun test` 198/0, typecheck + lint clean. |
 | Tests | `webjs-chrome-path.test.ts` (env precedence), `webjs-screenshot.test.ts` (`pupPage` + fallback + failure modes) |
 
+## Bun 1.4.2 pin (2026-09-29)
+
+| Item | Detail |
+|---|---|
+| Pin | Runtime pinned to 1.4.2 across `engines.bun`, `.bun-version`, CI (`setup-bun`), and both Docker images (`oven/bun:1.4.2` / `:1.4.2-slim`); `@types/bun` + `bun-types` bumped to 1.4.2. |
+| Orphan cleanup | `--no-orphans` on the production launch: when the server exits it kills its descendants — e.g. a WEBJS session's Chrome (probed both ways: flag on → child killed; off → child survives). |
+| Latent test bug | `auth.test.ts` passed only because another test file happened to register `AuditService` into the DI container first; under `bun test --parallel` (fresh globals per file — now the default `test` script) the rejected-key path 500'd instead of 401. It now registers its own instance against a temp dir — same pattern as `sessions.test.ts`. |
+| CI hardening | `bun install --frozen-lockfile` and `PUPPETEER_SKIP_DOWNLOAD=true` in the CI job. |
+| Verified | On Bun 1.4.2: `bun run test` 198/0 (parallel), typecheck + lint clean, boot smoke test with `--no-orphans` and exit. Lockfile-format analysis and declined candidates: [[Bun Runtime Adoption#Bun 1.4.2 pin (2026-09-29)]]. |
+
 ## Related
 
 [[OpenWA Parity]] · [[Roadmap]] · [[Testing]] · [[Dashboard]] · [[Known Gaps and Stubs]]

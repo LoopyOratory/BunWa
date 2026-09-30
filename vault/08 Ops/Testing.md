@@ -67,10 +67,17 @@ commit `30ac09c` applied to the webhook tests. Details in [[Dependency Injection
 ## Running
 
 ```bash
-bun test                          # everything
+bun run test                      # everything — `bun test --parallel src/` (worker processes)
+bun test src/                     # serial fallback (single process, shared module registry)
 bun test src/__tests__/fetch.test.ts
 bun test --watch
 ```
+
+The `test` script runs files in **`--parallel` workers** (Bun ≥ 1.4; `--isolate` is implied, so each
+file gets fresh globals). Files must therefore not depend on run order or on registrations made by
+*other* files: `auth.test.ts` registers its own `AuditService` instance for exactly this reason —
+before that it only passed because another file happened to register first, and it failed every time
+under `--parallel`.
 
 **Prerequisite:** a complete `bun install`. A stale `node_modules` is the most common cause of
 "failing" tests — e.g. after the `baileys rc13 → rc14` upgrade, `@whiskeysockets/baileys` was missing

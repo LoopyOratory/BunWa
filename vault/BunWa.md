@@ -39,7 +39,7 @@ integrations work unchanged. On top of that it ships:
 | | |
 |---|---|
 | Package | `waha-bun` v `2026.5.1` — "WhatsApp HTTP API - Bun/Hono Edition with Pro features" |
-| Runtime | **Bun ≥ 1.4.0** (`engines.bun`), verified on Bun 1.4.2; `bunfig.toml` uses the isolated linker + global store |
+| Runtime | **Bun ≥ 1.4.2** (pinned via `engines.bun` + `.bun-version`; CI and Docker images pinned to 1.4.2); `bunfig.toml` uses the isolated linker + global store |
 | Framework | Hono 4.x (+ `@scalar/hono-api-reference`) |
 | DI / logging / validation | tsyringe · pino · Zod (with vestigial class-validator decorators) |
 | WhatsApp libs | `@whiskeysockets/baileys` `7.0.0-rc14` · `whatsapp-web.js` `^1.34.7` · `puppeteer` `^24.38.0` |
