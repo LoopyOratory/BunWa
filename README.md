@@ -79,7 +79,7 @@ Two WhatsApp engines are supported:
 <a id="features"></a>
 ## ✨ Features
 
-- **🚄 Fast** — Bun runtime, batch-loaded auth state, no cold starts
+- **🚄 Fast** — Bun runtime, batch-loaded auth state, fast startup
 - **🔌 Dual Engine** — NOWEB (Baileys) or WEBJS (whatsapp-web.js + Chrome), choose per session
 - **📱 Phone Pairing** — QR code scan or phone number pairing
 - **🔧 REST API** — Full WAHA-compatible API surface
@@ -87,10 +87,10 @@ Two WhatsApp engines are supported:
 - **🛡️ Auth** — API key + dashboard login + per-session MCP keys + policy-based access control
 - **☁️ Storage** — Local filesystem or S3-compatible object storage
 - **🗄️ Database** — SQLite (via `bun:sqlite`) or PostgreSQL with transaction support
-- **🧩 MCP Server** — Model Context Protocol with 40+ tools, stdio + HTTP transports, per-session keys
+- **🧩 MCP Server** — Model Context Protocol with 50+ tools, stdio + HTTP transports, per-session keys
 - **📊 Dashboard** — React + shadcn/ui dashboard with real-time chat, MCP key management
 - **📱 Mobile-first** — Responsive UI built for mobile
-- **🐳 Docker** — Multi-stage builds, Coolify-ready, ~200MB runtime image
+- **🐳 Docker** — Multi-stage builds, Coolify-ready, ~290MB runtime image
 
 <a id="quick-start"></a>
 ## 🚀 Quick Start
@@ -494,7 +494,7 @@ Full interactive API docs at **http://localhost:3000/api-docs/** when the server
 <a id="mcp-server-model-context-protocol"></a>
 ## 🧩 MCP Server (Model Context Protocol)
 
-BunWa exposes a [Model Context Protocol](https://modelcontextprotocol.io) server — AI assistants can send WhatsApp messages, manage sessions, query chats, and interact with groups through 40+ standardized MCP tools. **Two transports are supported:** Streamable HTTP (`POST /mcp`) and stdio (subprocess, for local clients).
+BunWa exposes a [Model Context Protocol](https://modelcontextprotocol.io) server — AI assistants can send WhatsApp messages, manage sessions, query chats, and interact with groups through 50+ standardized MCP tools. **Two transports are supported:** Streamable HTTP (`POST /mcp`) and stdio (subprocess, for local clients).
 
 ### Per-Session MCP Keys 🔑
 
@@ -661,7 +661,7 @@ graph TB
 
 | Category | Technology |
 |----------|-----------|
-| **Runtime** | [Bun](https://bun.sh) 1.3+ |
+| **Runtime** | [Bun](https://bun.sh) 1.4.2+ |
 | **API Framework** | [Hono](https://hono.dev) |
 | **Database** | SQLite (`bun:sqlite`) or [PostgreSQL](https://www.postgresql.org) |
 | **Storage** | Local filesystem or [S3-compatible](https://aws.amazon.com/s3/) (MinIO, R2, etc.) |
