@@ -202,7 +202,17 @@ unusable anywhere Chrome isn't at a hardcoded system path.
 | Ask | "Use this logo and the cards at the top of the dashboard should be uniform." |
 | Logo | Supplied mark adopted as `logo.jpg` (sidebar, login hero and og:image read it directly); `favicon.png` (64) + `apple-touch-icon.png` (180) regenerated from it; stale `favicon.svg` link and file removed. |
 | Cards | `h-full flex-col` shell for all five cards, grid `grid-cols-2 → lg:grid-cols-5` with the last card spanning both columns below lg, version-card footer normalized to a one-line hint (`NOWEB engine`), docs links moved to a "BunWa docs" line under the row. |
-| Verified | Five cards 205x215 identical at 1440px; mobile 2+2+1 full-width, zero overflow; MiMo 9/10 desktop + 9/10 mobile; logo approved on sidebar light/dark and login; `bun run test` 198/0, typecheck + oxlint clean. |
+| Verified | Five cards 205x215 identical at 1440px; mobile 2+2+1 full-width, zero overflow; MiMo 9/10 desktop + 9/10 mobile; logo re-verified on sidebar light/dark + login after the asset-cache fix (see below); `bun run test` 198/0, typecheck + oxlint clean. |
+
+## Asset caching fix (2026-09-30)
+
+| Item | Detail |
+|---|---|
+| Symptom | After the logo swap, browsers kept rendering the old mark. Screenshot "verification" misled because the test browser held a pre-swap copy of /logo.jpg; file-level checks (md5, sizes) were correct all along. |
+| Root cause | `serveStaticFile` gave every non-hashed file `max-age=86400`, so unhashed public assets (logo.jpg, favicon.png, apple-touch-icon.png) could stay stale for up to a day after a deploy. |
+| Fix | Unhashed public assets now send `no-cache` (revalidate per request; ETag makes the 304s cheap). Only content-hashed files stay `immutable`. |
+| Verified | `curl -I /logo.jpg` -> `Cache-Control: no-cache`; fresh browser pass: loaded logo naturalWidth 1280x1163 (stale old file) before `Network.clearBrowserCache`, 1254x1254 + 86028 bytes (the new mark) after; MiMo confirms the glossy 3D mark on sidebar light/dark and login. |
+| Lesson | When verifying an asset swap, check the file the browser actually resolved (naturalWidth/size), not just the bytes on disk. Unhashed assets must never be long-cached. |
 
 ## Related
 
