@@ -1,5 +1,6 @@
 import { injectable } from 'tsyringe';
 import { parseBool } from './helpers';
+import { buildPostgresUrl } from './core/db/postgres-url';
 import { WebhookConfig } from './structures/webhooks.config.dto';
 import { IgnoreJidConfig } from './core/utils/jids';
 
@@ -98,11 +99,43 @@ export class WhatsappConfigService {
   }
 
   getSessionPostgresUrl(): string | undefined {
-    return process.env.WHATSAPP_SESSIONS_POSTGRESQL_URL || process.env.WAHA_DATABASE_URL;
+    const explicit =
+      process.env.WHATSAPP_SESSIONS_POSTGRESQL_URL || process.env.WAHA_DATABASE_URL;
+    if (explicit) {
+      return explicit;
+    }
+    // Fall back to the dashboard's flat database fields when the
+    // Infrastructure page has Postgres selected: configs saved before the
+    // canonical switches were written still connect. A bare
+    // WAHA_DATABASE_DRIVER=postgres without dashboard fields keeps failing
+    // loudly in the factory instead of silently dialling localhost.
+    const type = (process.env.WAHA_DB_TYPE || '').trim().toLowerCase();
+    if (type === 'postgres' || type === 'postgresql') {
+      return buildPostgresUrl({
+        host: process.env.WAHA_DB_HOST,
+        port: process.env.WAHA_DB_PORT,
+        username: process.env.WAHA_DB_USERNAME,
+        password: process.env.WAHA_DB_PASSWORD,
+        name: process.env.WAHA_DB_NAME,
+        ssl: process.env.WAHA_DB_SSL === 'true',
+      });
+    }
+    return undefined;
   }
 
   getDatabaseDriver(): string {
-    return process.env.WAHA_DATABASE_DRIVER || 'sqlite';
+    const explicit = (process.env.WAHA_DATABASE_DRIVER || '').trim().toLowerCase();
+    if (explicit) {
+      return explicit;
+    }
+    // The Infrastructure page stores its selection as WAHA_DB_TYPE; honour it
+    // so a dashboard-configured Postgres actually drives the runtime even
+    // before any canonical driver key exists.
+    const type = (process.env.WAHA_DB_TYPE || '').trim().toLowerCase();
+    if (type === 'postgres' || type === 'postgresql') {
+      return 'postgres';
+    }
+    return 'sqlite';
   }
 
   getSqlitePath(): string {

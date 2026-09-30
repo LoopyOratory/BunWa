@@ -55,19 +55,22 @@ See [[Session Stores]] for the driver matrix and the per-repository file list.
 - Voice conversion shells out to **ffmpeg** (OGG/Opus, 32 kbps, 48 kHz mono) — required in the image,
   and `sendVoice` with `convert=true` fails without it.
 
-## Database switches — ⚠️ two of them
+## Database switches
 
-> **Watch out:** there are two similarly named settings and only one drives the runtime.
+> Two sets of variables describe "the database". They are wired together: the Infrastructure page
+> writes the canonical pair on save, and the `WAHA_DB_*` fields feed a runtime fallback.
 
-| Variable | Drives | Notes |
+| Variable | Role | Notes |
 |---|---|---|
-| `WAHA_DATABASE_DRIVER` | **the runtime** — NOWEB store selection | `sqlite` (default) or `postgres`/`postgresql`; read by `NowebStorageFactoryCore` |
-| `WAHA_DATABASE_URL` / `WHATSAPP_SESSIONS_POSTGRESQL_URL` | Postgres connection for the above | either name works |
-| `WAHA_DB_TYPE` (+ `WAHA_DB_HOST/PORT/USERNAME/NAME/SSL`) | **only** the dashboard's Infrastructure page and `/api/infra/config` | persisted to `.env`, not consumed by the runtime |
+| `WAHA_DATABASE_DRIVER` | **the runtime switch** — NOWEB store selection | `sqlite` (default) or `postgres`/`postgresql`; read by `NowebStorageFactoryCore` |
+| `WAHA_DATABASE_URL` / `WHATSAPP_SESSIONS_POSTGRESQL_URL` | Postgres connection for the above | either name works; an explicit URL wins |
+| `WAHA_DB_TYPE` + `WAHA_DB_HOST/PORT/USERNAME/PASSWORD/NAME/SSL` | the Infrastructure page's fields | saving writes the canonical keys too; if only these are set (older saves), they are honoured and the URL is built from the fields |
 
-So configuring Postgres from the dashboard page does **not** move session storage to Postgres by
-itself. Set `WAHA_DATABASE_DRIVER=postgres` and `WAHA_DATABASE_URL` for that ([[Configuration Reference]]).
-The Postgres path was verified end-to-end on 2026-09-29 ([[Postgres on PGlite]]); note it keeps **one
+The Infrastructure page is therefore a real switch: saving PostgreSQL writes
+`WAHA_DATABASE_DRIVER=postgres` + derives `WAHA_DATABASE_URL` from the form (credentials
+percent-encoded, `?sslmode=require` when SSL is on). Sessions **started after saving** use the new
+backend immediately; restart the server to apply it everywhere. Nothing is migrated between
+backends. Verified end-to-end on 2026-09-29 ([[Postgres on PGlite]]); note Postgres keeps **one
 global table set per database** — unlike SQLite, where each session gets its own file.
 
 `WHATSAPP_SESSIONS_MONGO_URL` and `WAHA_SQLITE_PATH` have getters in `WhatsappConfigService` but no

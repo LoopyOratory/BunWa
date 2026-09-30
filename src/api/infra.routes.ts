@@ -2,6 +2,10 @@ import { Hono } from 'hono';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 import pino from 'pino';
+import pg from 'pg';
+import { container } from 'tsyringe';
+import { WhatsappConfigService } from '../config.service';
+import { buildPostgresUrl } from '../core/db/postgres-url';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanServer, Action } from '../middleware/policies';
 
@@ -61,8 +65,30 @@ function configToEnv(body: any): Record<string, string> {
     set('WAHA_DB_HOST', body.database.host);
     set('WAHA_DB_PORT', body.database.port);
     set('WAHA_DB_USERNAME', body.database.username);
+    set('WAHA_DB_PASSWORD', body.database.password);
     set('WAHA_DB_NAME', body.database.name);
     set('WAHA_DB_SSL', body.database.ssl);
+
+    // Map the dashboard selection onto the canonical switches the runtime
+    // actually reads, so choosing a backend here really moves the session
+    // store. Applies to sessions started after saving; restart the server to
+    // apply everywhere (the app never migrates data between backends).
+    const type = String(body.database.type || '').trim().toLowerCase();
+    if (type === 'postgres' || type === 'postgresql') {
+      env.WAHA_DATABASE_DRIVER = 'postgres';
+      env.WAHA_DATABASE_URL = buildPostgresUrl({
+        host: body.database.host,
+        port: body.database.port,
+        username: body.database.username,
+        password: body.database.password,
+        name: body.database.name,
+        ssl: body.database.ssl === true || body.database.ssl === 'true',
+      });
+    } else if (type === 'sqlite') {
+      env.WAHA_DATABASE_DRIVER = 'sqlite';
+      // Any previously written WAHA_DATABASE_URL stays; the sqlite driver
+      // ignores it and it is reused if PostgreSQL is re-selected later.
+    }
   }
   if (body.storage) {
     set('WAHA_STORAGE_TYPE', body.storage.type);
@@ -96,6 +122,7 @@ export function createInfraRouter(): Hono {
   router.get('/infra/config',
     policiesMiddleware(CanServer(Action.Retrieve)),
     async (c) => {
+      const config = container.resolve(WhatsappConfigService);
       return c.json({
         database: {
           // Normalise casing so the value always matches the dashboard's
@@ -104,6 +131,7 @@ export function createInfraRouter(): Hono {
           host: process.env.WAHA_DB_HOST || 'localhost',
           port: process.env.WAHA_DB_PORT || '5432',
           username: process.env.WAHA_DB_USERNAME || '',
+          password: process.env.WAHA_DB_PASSWORD || '',
           name: process.env.WAHA_DB_NAME || './data/waha.sqlite',
           ssl: process.env.WAHA_DB_SSL === 'true',
         },
@@ -130,6 +158,12 @@ export function createInfraRouter(): Hono {
         // Uppercased to match the app's engine ids (NOWEB/WEBJS) and the
         // dashboard's engine cards.
         engine: (process.env.WHATSAPP_DEFAULT_ENGINE || 'NOWEB').toUpperCase(),
+        // What the runtime is ACTUALLY using right now (canonical switches,
+        // incl. the WAHA_DB_* fallback). The dashboard compares this with the
+        // saved selection to show a live "runtime" badge.
+        runtime: {
+          databaseDriver: config.getDatabaseDriver(),
+        },
       });
     }
   );
@@ -150,6 +184,35 @@ export function createInfraRouter(): Hono {
           { result: false, message: `Failed to write config: ${err.message}` },
           500,
         );
+      }
+    }
+  );
+
+  // POST /api/infra/database/test — try a real connection with the posted
+  // settings (before saving) so a bad host or password fails in the UI, not
+  // on the next session start.
+  router.post('/infra/database/test',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      const body = await c.req.json();
+      const url = buildPostgresUrl({
+        host: body.host,
+        port: body.port,
+        username: body.username,
+        password: body.password,
+        name: body.name,
+        ssl: body.ssl === true || body.ssl === 'true',
+      });
+      const client = new pg.Client({ connectionString: url, connectionTimeoutMillis: 5000 });
+      try {
+        await client.connect();
+        const result = await client.query('select version()');
+        const version: string = result.rows[0]?.version ?? '';
+        return c.json({ ok: true, version: version.slice(0, 120) });
+      } catch (err: any) {
+        return c.json({ ok: false, message: err.message });
+      } finally {
+        await client.end().catch(() => {});
       }
     }
   );

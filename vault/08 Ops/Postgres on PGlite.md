@@ -32,7 +32,7 @@ WAHA_DATABASE_URL=... bun run test:postgres   # 10 checks against any live Postg
 | All seven repositories | CRUD + upserts (`bun run test:postgres`, 10/10) |
 | Templates | `PostgresTemplateRepository`: REST create/list, session isolation, MCP `TemplateList` |
 | Engine boot | Session start reaches `SCAN_QR_CODE` — zero knex errors, tables created on the way up |
-| Fix regressions | `knex-postgres.test.ts` pins the driver-resolution fix; `bun test` 176/0 |
+| Fix regressions | `knex-postgres.test.ts` pins the driver-resolution fix; `bun test` 190/0 |
 
 Not covered by this pass: live message flow (needs a paired WhatsApp account) and label API routes
 (they require a WORKING session — use `test:postgres` to exercise those repositories instead).
@@ -78,6 +78,29 @@ it is single-machine only, and port 5432 conflicts with a real Postgres if one i
 - Postgres media storage and the Postgres/Mongo auth repositories remain intentionally unwired.
 - The driver only swaps the NOWEB session store and the template repository; policies, API keys and
   audit stay in the local SQLite files.
+
+## Switching from the dashboard (2026-09-29)
+
+The Infrastructure page is a real switch — it writes the canonical keys when you save:
+
+- Save writes `WAHA_DATABASE_DRIVER` + `WAHA_DATABASE_URL` (built from the form; credentials
+  percent-encoded, `?sslmode=require` when SSL is on).
+- Sessions **started after saving** use the new backend immediately; restart the server to apply it
+  everywhere. Nothing is migrated — each backend keeps its own data.
+- **Test connection** (`POST /api/infra/database/test`) round-trips `select version()` against the
+  posted settings (5s timeout) so bad credentials fail in the UI, not on the next session start.
+- A `WAHA_DB_TYPE=postgres` saved by an older build is honoured as a fallback: the URL is built from
+  the `WAHA_DB_*` fields when no explicit URL exists (a bare `WAHA_DATABASE_DRIVER=postgres` with no
+  fields still fails loudly — by design).
+
+Verified live: runtime flipped sqlite→postgres with no restart; the session started after the flip
+created all seven store tables in Postgres (PGlite); after flipping back, the next session wrote
+`.sessions/noweb/<name>/store.sqlite3`.
+
+> **Launch from the app directory.** `bun run src/main.ts` started from any other cwd compiles
+> without the repo's `tsconfig.json` (Bun resolves it from the working directory) and crashes at
+> import time (`reflect-metadata` TypeError in class-transformer). Run it from the repo root like
+> `scripts/start.sh` does, or link `tsconfig.json` into the cwd. Hit and re-verified 2026-09-29.
 
 ## Related
 

@@ -78,19 +78,20 @@ Everything is environment-driven; `.env` is read at boot and `PUT /api/infra/con
 | `WAHA_SESSION_CONFIG_IGNORE_CHANNELS` | false | ignore channels | ✅ |
 | `WAHA_SESSION_CONFIG_IGNORE_BROADCAST` | false | ignore broadcast lists | ✅ |
 
-## Two database switches
+## Database switches
 
-> **The single most confusing thing in this config surface** — two sets of variables describe "the
-> database", and only one of them is real at runtime.
+> Two sets of variables describe "the database". They are wired together now: the Infrastructure
+> page writes the canonical pair on save, and the `WAHA_DB_*` fields act as a runtime fallback.
 
 | Set | Consumed by | Effect |
 |---|---|---|
 | `WAHA_DATABASE_DRIVER` + `WAHA_DATABASE_URL` / `WHATSAPP_SESSIONS_POSTGRESQL_URL` | the **runtime** (NOWEB store factory) | actually chooses SQLite vs Postgres for session data |
-| `WAHA_DB_TYPE` + `WAHA_DB_HOST/PORT/USERNAME/NAME/SSL` | the **dashboard only** (`/api/infra/config`, Infrastructure page) | written to `.env` and displayed; nothing reads them at runtime |
+| `WAHA_DB_TYPE` + `WAHA_DB_HOST/PORT/USERNAME/PASSWORD/NAME/SSL` | the Infrastructure page (`/api/infra/config`) | saved to `.env`; saving also writes the canonical keys, and a Postgres selection here is honoured even without them |
 
-So flipping "Postgres" on the Infrastructure page does not move your session storage. Set
-`WAHA_DATABASE_DRIVER=postgres` **and** `WAHA_DATABASE_URL` for that. Details:
-[[Data and Storage#Database switches — ⚠️ two of them]].
+Saving "PostgreSQL" on the Infrastructure page really switches the session store: new sessions use
+it immediately, a restart applies it everywhere. Use **Test connection**
+(`POST /api/infra/database/test`) to check the settings against a live server before saving.
+Details: [[Data and Storage#Database switches]].
 
 ## Database & storage
 
@@ -101,7 +102,7 @@ So flipping "Postgres" on the Infrastructure page does not move your session sto
 | `WHATSAPP_SESSIONS_POSTGRESQL_URL` | — | alias for the above | ✅ |
 | `WHATSAPP_SESSIONS_MONGO_URL` | — | getter exists, unused | ⚠️ |
 | `WAHA_SQLITE_PATH` | .sessions/waha.db | getter exists, unused | ⚠️ |
-| `WAHA_DB_TYPE` + `WAHA_DB_HOST/PORT/USERNAME/NAME/SSL` | sqlite | **dashboard display + `.env` persistence only** | 🖥️ |
+| `WAHA_DB_TYPE` + `WAHA_DB_HOST/PORT/USERNAME/PASSWORD/NAME/SSL` | sqlite | Infrastructure page fields; saving writes the canonical keys + URL above | 🖥️✅ |
 | `WAHA_LOCAL_STORE_BASE_DIR` | .sessions | session auth data root | ✅ |
 | `WAHA_STORAGE_DIR` | ./data | audit + templates databases | ✅ |
 | `DATA_DIR` | ./data | export/import service (unwired) | ⚠️ |

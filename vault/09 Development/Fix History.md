@@ -119,6 +119,15 @@ Two real bugs surfaced and were fixed along the way:
 **Consequence:** `bun run typecheck` is now clean, which makes the CI's 1049-error cap obsolete
 ([[Docker and Deployment]], [[Roadmap]]).
 
+## Infrastructure page: the database switch became real (2026-09-29)
+
+| Item | Detail |
+|---|---|
+| The trap | The Infrastructure page saved only `WAHA_DB_*` keys, which the runtime never read — picking PostgreSQL silently kept SQLite. Saving now also writes `WAHA_DATABASE_DRIVER` + `WAHA_DATABASE_URL` (derived from the form), and an older build's `WAHA_DB_TYPE=postgres` is honoured as a runtime fallback. |
+| New | `POST /api/infra/database/test` — `select version()` round-trip against the posted settings (5s timeout). Dashboard: live "Runtime" badge, password field with reveal toggle, Test connection button. |
+| Pitfall found | Launching `bun run src/main.ts` from a cwd other than the repo root compiles without the repo `tsconfig.json` (Bun resolves it from the working directory) and crashes at import time (`reflect-metadata` TypeError in class-transformer). Run from the app directory, like `scripts/start.sh`. |
+| Verified | Live 2026-09-29: runtime flips without a restart; a session started after the flip created all seven store tables in Postgres (PGlite); flipping back wrote `store.sqlite3` for the next session; `bun test` 190/0. |
+
 ## Related
 
 [[OpenWA Parity]] · [[Roadmap]] · [[Testing]] · [[Dashboard]] · [[Known Gaps and Stubs]]
