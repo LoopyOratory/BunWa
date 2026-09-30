@@ -67,11 +67,13 @@ async function serveStaticFile(filePath: string, ifNoneMatch: string | null): Pr
     ETag: etag,
     'Last-Modified': fileStat.mtime.toUTCString(),
     'X-Content-Type-Options': 'nosniff',
+    // Unhashed public assets (logo, favicons) must revalidate so a deploy can
+    // replace them; only content-hashed files are safe to cache forever.
     'Cache-Control': isHtml
       ? 'no-cache'
       : IMMUTABLE_ASSET.test(filePath)
         ? 'public, max-age=31536000, immutable'
-        : 'public, max-age=86400',
+        : 'no-cache',
   };
 
   if (ifNoneMatch === etag) {
