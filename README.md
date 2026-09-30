@@ -88,6 +88,8 @@ Two WhatsApp engines are supported:
 - **☁️ Storage** — Local filesystem or S3-compatible object storage
 - **🗄️ Database** — SQLite (via `bun:sqlite`) or PostgreSQL with transaction support
 - **🧩 MCP Server** — Model Context Protocol with 50+ tools, stdio + HTTP transports, per-session keys
+- **📝 Templates** — message templates with variables: edit, preview, and send from the dashboard, the API, or MCP
+- **🚦 Safe Sending** — anti-ban per-session sending limits with usage counters and next-allowed times
 - **📊 Dashboard** — React + shadcn/ui dashboard with real-time chat, MCP key management
 - **📱 Mobile-first** — Responsive UI built for mobile
 - **🐳 Docker** — Multi-stage builds, Coolify-ready, ~290MB runtime image
@@ -760,8 +762,8 @@ cd integrations/n8n-nodes-bunwa
 npm install && npm run build && npm test
 ```
 
-Install it in n8n from *Community nodes → Install → `n8n-nodes-bunwa`*, or point
-`N8N_CUSTOM_EXTENSIONS` at the folder. The credential takes the BunWa **Base URL** and the
+Build it locally and point `N8N_CUSTOM_EXTENSIONS` at the folder. A release workflow is wired to
+publish it to npm as `n8n-nodes-bunwa` when tagged. The credential takes the BunWa **Base URL** and the
 **`WAHA_API_KEY`** value. Operation tables, workflow examples, and the endpoints it deliberately does
 not expose (chat mute, contact block, sticker send and others that fail on the server today) are in
 [`integrations/n8n-nodes-bunwa/README.md`](integrations/n8n-nodes-bunwa/README.md).
