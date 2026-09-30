@@ -295,3 +295,15 @@ The operator supplied a new logo and asked for the dashboard KPI cards to be uni
 | Pattern | The Server version card's footer was normalized to a one-line hint (`NOWEB engine`) like its siblings; its Changelog / How to update links moved to a "BunWa docs" line under the row. |
 | Cache | Unhashed public assets (logo, favicons) now serve `no-cache` and revalidate; a stale 24h cache had masked the logo swap in browsers that visited before the change. |
 | Verified | CDP: five cards render 205x215 pixel-identical at 1440px, mobile 2+2+1 full-width, zero horizontal overflow; MiMo vision 9/10 desktop and 9/10 mobile; logo re-verified after clearing the browser cache (natural size 1254x1254, 86028 bytes on sidebar light/dark and login); `bun run test` 198/0, typecheck + oxlint clean. |
+
+## 🌍 Phone inputs: country selector + @c.us (2026-09-30)
+
+The operator asked for a country selector on every phone-number field: the user types only the main number, the country code is prefixed and `@c.us` is added automatically.
+
+| Area | What changed |
+|---|---|
+| Component | New `PhoneInput` (`frontend/src/components/phone-input.tsx`): country selector + national-number field with a live "Resolves to ..." preview line. The trigger shows a compact flag + dial code (`🇬🇭 +233`); the menu lists flag, name and code. |
+| Data | `lib/phone-countries.ts` carries all 248 dial codes (flag + name + code), Ghana pinned first as the default; `lib/phone.ts` holds the resolution helpers (`toIntlDigits`, `toChatId`, `splitJid`). |
+| Applied | Every phone entry point: message tester, chat New chat dialog, templates preview/send dialog, session QR dialog Phone pairing (digits preview, no suffix there). |
+| Behaviour | Typing `201234567` with Ghana selected resolves to `233201234567@c.us` (with or without the local leading zero); pasting `+233 ...`, `00233 ...` or a full JID passes through untouched; opening `/messages/<jid>` splits the id back into country + local number so it stays editable. |
+| Verified | CDP on the live app: Ghana default `201234567` -> `233201234567@c.us`; switching to the US + `5551234567` -> `15551234567@c.us`; all paste variants resolve identically; `/messages/233201234567@c.us` prefills Ghana + `201234567`; chat, templates and pairing dialogs each verified with typed input + preview; 390px mobile row fits without overflow; MiMo vision 9/10 on the input row; `bun run test` 198/0, typecheck + oxlint clean. |

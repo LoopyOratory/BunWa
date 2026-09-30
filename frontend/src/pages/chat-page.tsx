@@ -23,6 +23,8 @@ import { ChatHeader } from "@/components/chat/chat-header"
 import { ChatComposerWrapper } from "@/components/chat/chat-composer-wrapper"
 import { TemplatePicker } from "@/components/chat/template-picker"
 import { mapMessage, resolveUserJid, showSendError } from "@/components/chat/helpers"
+import { PhoneInput } from "@/components/phone-input"
+import { toIntlDigits } from "@/lib/phone"
 
 /* ================================================================== */
 /*  STORE FAILURE HELPERS                                             */
@@ -148,6 +150,7 @@ function Segmented({ value, onChange, options }: {
 function NewChatDialog({ open, onOpenChange, session, onOpenChat }: {
   open: boolean; onOpenChange: (v: boolean) => void; session: string; onOpenChat: (chatId: string) => void
 }) {
+  const [country, setCountry] = useState("GH")
   const [phone, setPhone] = useState("")
   const [checking, setChecking] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -156,7 +159,7 @@ function NewChatDialog({ open, onOpenChange, session, onOpenChat }: {
     setChecking(true)
     setError(null)
     try {
-      const res = await api.checkNumberStatus(session, phone.replace(/\D/g, ""))
+      const res = await api.checkNumberStatus(session, toIntlDigits(country, phone))
       if (res.exists && res.number) { onOpenChat(`${res.number}@c.us`); onOpenChange(false); setPhone("") }
       else setError("That number is not registered on WhatsApp.")
     } catch {
@@ -181,12 +184,14 @@ function NewChatDialog({ open, onOpenChange, session, onOpenChat }: {
       }
     >
       <div className="space-y-2">
-        <Label className="text-xs text-muted-foreground">Phone number (with country code)</Label>
-        <Input
-          placeholder="+233 50 123 4567"
+        <Label className="text-xs text-muted-foreground">Phone number</Label>
+        <PhoneInput
+          country={country}
+          onCountryChange={setCountry}
           value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleCheck()}
+          onChange={setPhone}
+          placeholder="501234567"
+          onEnter={handleCheck}
         />
       </div>
       {error && (

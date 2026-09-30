@@ -1,4 +1,6 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
+import { PhoneInput } from "@/components/phone-input"
+import { toChatId } from "@/lib/phone"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -53,7 +55,10 @@ export function TemplatesPage() {
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null)
   const [formData, setFormData] = useState({ name: "", body: "", header: "", footer: "" })
   const [variableValues, setVariableValues] = useState<Record<string, string>>({})
-  const [chatId, setChatId] = useState("")
+  // The user types only the main number; country + suffix resolve the chat id.
+  const [country, setCountry] = useState("GH")
+  const [phone, setPhone] = useState("")
+  const chatId = useMemo(() => toChatId(country, phone), [country, phone])
   const [previewText, setPreviewText] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [sendLoading, setSendLoading] = useState(false)
@@ -132,7 +137,7 @@ export function TemplatesPage() {
     const values: Record<string, string> = {}
     extractVariables(template.body).forEach(v => { values[v] = "" })
     setVariableValues(values)
-    setChatId("")
+    setPhone("")
     setPreviewText(null)
     setDialogError(null)
     setPreviewTemplate(template)
@@ -413,12 +418,13 @@ export function TemplatesPage() {
               )}
 
               <div className="space-y-1.5 border-t border-border pt-4">
-                <Label htmlFor="template-chat-id">Chat ID</Label>
-                <Input
+                <Label htmlFor="template-chat-id">Phone number</Label>
+                <PhoneInput
                   id="template-chat-id"
-                  value={chatId}
-                  onChange={e => setChatId(e.target.value)}
-                  placeholder="15551234567@c.us"
+                  country={country}
+                  onCountryChange={setCountry}
+                  value={phone}
+                  onChange={setPhone}
                 />
               </div>
             </div>

@@ -214,6 +214,16 @@ unusable anywhere Chrome isn't at a hardcoded system path.
 | Verified | `curl -I /logo.jpg` -> `Cache-Control: no-cache`; fresh browser pass: loaded logo naturalWidth 1280x1163 (stale old file) before `Network.clearBrowserCache`, 1254x1254 + 86028 bytes (the new mark) after; MiMo confirms the glossy 3D mark on sidebar light/dark and login. |
 | Lesson | When verifying an asset swap, check the file the browser actually resolved (naturalWidth/size), not just the bytes on disk. Unhashed assets must never be long-cached. |
 
+## Country selector + @c.us on phone fields (2026-09-30)
+
+| Item | Detail |
+|---|---|
+| Ask | "The message tester should have a country selector which prefixes the country code and the @c.us should also be added, the user only adds the main number, implement this for everyplace where the user is to type or add a phone number." |
+| Component | New `PhoneInput` (country selector + national-number field + live "Resolves to ..." preview) built on `lib/phone.ts`; 248-country dial-code list in `lib/phone-countries.ts` with Ghana pinned as the default. Trigger shows a compact flag + dial code, the menu shows flag, name and code. |
+| Applied | Every phone entry point: message tester (was "Chat ID / phone number"), chat New chat dialog, templates preview/send dialog, session QR dialog Phone pairing (digits preview there, no @c.us). |
+| Behaviour | `201234567` + Ghana -> `233201234567@c.us` (local leading zero optional); `+233 ...`, `00233 ...` and full JIDs pass through; `/messages/<jid>` splits back into country + local number for editing. |
+| Verified | CDP: Ghana default and US switch both resolve correctly (`233201234567@c.us` / `15551234567@c.us`); paste variants identical; URL prefill works; chat, templates and pairing dialogs all verified with typed input + preview; mobile 390px no overflow; MiMo 9/10 on the input row; `bun run test` 198/0, typecheck + oxlint clean. |
+
 ## Related
 
 [[OpenWA Parity]] · [[Roadmap]] · [[Testing]] · [[Dashboard]] · [[Known Gaps and Stubs]]
