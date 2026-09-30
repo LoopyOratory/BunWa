@@ -2,7 +2,7 @@
 type: note
 section: engines
 tags: [bunwa, engine, webjs, puppeteer]
-updated: 2026-09-14
+updated: 2026-09-29
 source: src/core/engines/webjs/session.webjs.core.ts, src/core/session/session.browser.ts
 status: partial
 ---
@@ -18,8 +18,9 @@ Pick it per session with `engine: "WEBJS"` (or `WHATSAPP_DEFAULT_ENGINE=WEBJS`).
 ## Requirements
 
 - **A Chrome/Chromium binary.** Resolution order: `CHROME_PATH` → `PUPPETEER_EXECUTABLE_PATH` →
-  `/usr/bin/google-chrome`. The manager **checks the path exists before starting** and fails fast
-  if it doesn't.
+  `/usr/bin/google-chrome`, applied by **one shared helper** (`getBrowserExecutablePath()` in
+  `session.browser.ts`) for both the manager's pre-flight check and the engine. The manager
+  **checks the path exists before starting** and fails fast if it doesn't.
 - The Docker images set `PUPPETEER_SKIP_DOWNLOAD=true`, so WEBJS users must mount a Chrome binary
   into the container ([[Docker and Deployment]]).
 - `sessionConfig.webjs.authTimeout` controls the pairing-code timeout.
@@ -30,7 +31,7 @@ Pick it per session with `engine: "WEBJS"` (or `WHATSAPP_DEFAULT_ENGINE=WEBJS`).
 start()  →  buildClient()
               new Client({
                 authStrategy: new LocalAuth({ clientId: name, dataPath: <cwd>/.sessions/webjs }),
-                puppeteer:    { headless, args, executablePath: CHROME_PATH },
+                puppeteer:    { headless, args, executablePath: getBrowserExecutablePath() },
               })
               client.initialize()
 stop()   →  client.destroy()
@@ -67,6 +68,13 @@ Search-based reply/react/delete only look at the **last 100 messages** of a chat
 
 > ⚠️ Dead code in the file: `scheduleReadyReconcile()` is never called; `markReady()` only runs from
 > the `ready` event.
+
+## Verified live (2026-09-29)
+
+Started with `CHROME_PATH` pointing at a local Chromium build: `start()` reached `SCAN_QR_CODE` in
+~15s, the log showed a real QR received from WhatsApp, and `GET /api/:session/screenshot` returned a
+WhatsApp Web render (1280×633 PNG, verified). Full messaging needs a real phone scan and was not
+exercised. Two bug fixes that got it here: [[Fix History#WEBJS verified end-to-end (2026-09-29)]].
 
 ## Proxy
 

@@ -128,6 +128,18 @@ Two real bugs surfaced and were fixed along the way:
 | Pitfall found | Launching `bun run src/main.ts` from a cwd other than the repo root compiles without the repo `tsconfig.json` (Bun resolves it from the working directory) and crashes at import time (`reflect-metadata` TypeError in class-transformer). Run from the app directory, like `scripts/start.sh`. |
 | Verified | Live 2026-09-29: runtime flips without a restart; a session started after the flip created all seven store tables in Postgres (PGlite); flipping back wrote `store.sqlite3` for the next session; `bun test` 190/0. |
 
+## WEBJS verified end-to-end: two blocking bugs fixed (2026-09-29)
+
+Verifying the WEBJS engine with a real browser on the box surfaced two bugs that made WEBJS
+unusable anywhere Chrome isn't at a hardcoded system path.
+
+| Item | Detail |
+|---|---|
+| Bug 1 — pre-flight ignored env overrides | `getBrowserExecutablePath()` probed only four hardcoded system paths, so `start()` on a WEBJS session threw "requires Chrome/Chromium" even when `CHROME_PATH` pointed at a working binary — the engine read the env vars, the manager did not. Both now resolve through the one helper: `CHROME_PATH` → `PUPPETEER_EXECUTABLE_PATH` → system candidates. |
+| Bug 2 — screenshot used a dropped wwebjs accessor | `getScreenshot()` read `client.puppeteer.page`, which whatsapp-web.js removed (≥ 1.31 exposes `pupPage`), so every screenshot failed — masked as `400 Invalid request` by the route. Now reads `pupPage` (legacy fallback kept), and the route returns the engine's real error message. |
+| Verified | Start → `SCAN_QR_CODE` in ~15s via `CHROME_PATH` pointing at a local Chromium; `GET /api/:session/screenshot` → real WhatsApp Web PNG (1280×633). Event monitor streamed every `session.status` transition; audit log recorded create/start/QR/stop/delete ([[Audit Log]]). `bun test` 198/0, typecheck + lint clean. |
+| Tests | `webjs-chrome-path.test.ts` (env precedence), `webjs-screenshot.test.ts` (`pupPage` + fallback + failure modes) |
+
 ## Related
 
 [[OpenWA Parity]] · [[Roadmap]] · [[Testing]] · [[Dashboard]] · [[Known Gaps and Stubs]]

@@ -64,10 +64,10 @@ frontend/src/
 | `/apps` | Apps | Chatwoot app CRUD/enable |
 | `/templates` | Templates | per-session message templates with variables |
 | `/messages`, `/messages/:chatId` | Message Tester | send test messages, `checkNumberStatus` |
-| `/logs` | Audit Logs | `GET /api/audit` with filters + CSV export |
+| `/logs` | Audit Logs | `GET /api/audit` with filters + CSV export (live-verified 2026-09-29: rows rendered for a full session lifecycle) |
 | `/infrastructure` | Infrastructure | DB / storage / queue settings, save + restart |
 | `/queue` | Queue Monitor | ⚠️ placeholder data derived from `/api/workers` — no real queue is wired |
-| `/events` | Event Monitor | live `/ws` stream (500-entry buffer), filter, search, pause, download |
+| `/events` | Event Monitor | live `/ws` stream (500-entry buffer), filter, search, pause, download (live-verified 2026-09-29: streamed every `session.status` transition) |
 | `/docs` | Docs | iframe of `/api-docs/` |
 | `*` | Login | unauthenticated fallback |
 
