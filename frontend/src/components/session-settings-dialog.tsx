@@ -20,9 +20,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "sonner"
-import { api, type Session } from "@/lib/api"
+import { api, type Session, type SendingPolicyOverrides, type SendingPolicyState } from "@/lib/api"
 import { EmptyState, ErrorState, Skeleton } from "@/components/primitives"
-import { Plus, Trash2, X, ChevronDown, ChevronRight, Check, MessageCircle, Search, Webhook } from "lucide-react"
+import { Plus, Trash2, X, ChevronDown, ChevronRight, Check, MessageCircle, Search, Webhook, RefreshCw } from "lucide-react"
 
 const WEBHOOK_EVENTS = [
   { value: "*", label: "All events" },
@@ -77,6 +77,42 @@ const BROWSER_NAMES = [
   { value: "Safari", label: "Safari" },
   { value: "Edge", label: "Edge" },
 ]
+
+const POLICY_NUMBER_FIELDS = [
+  { key: "maxPerMinute", label: "Per minute" },
+  { key: "maxPerHour", label: "Per hour" },
+  { key: "maxPerDay", label: "Per 24 hours" },
+  { key: "newChatsPerDay", label: "New chats per day" },
+  { key: "reachoutMinIntervalSeconds", label: "Cold-outreach gap (seconds)" },
+  { key: "warmupDays", label: "Warm-up length (days)" },
+  { key: "warmupFloorPercent", label: "Warm-up floor (%)" },
+] as const
+
+function formatDuration(ms: number): string {
+  if (ms <= 0) return "now"
+  const seconds = Math.ceil(ms / 1000)
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ${minutes % 60}m`
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`
+}
+
+/** Human summary of every constraint currently blocking sends, or null. */
+function policyBlockLine(usage: SendingPolicyState["usage"]): string | null {
+  const next = (iso: string | null) =>
+    iso ? `in ${formatDuration(new Date(iso).getTime() - Date.now())}` : null
+  const parts: string[] = []
+  const { nextAllowedAt } = usage
+  if (nextAllowedAt.minuteCap) parts.push(`minute cap lifts ${next(nextAllowedAt.minuteCap)}`)
+  if (nextAllowedAt.hourCap) parts.push(`hour cap lifts ${next(nextAllowedAt.hourCap)}`)
+  if (nextAllowedAt.dayCap) parts.push(`daily cap lifts ${next(nextAllowedAt.dayCap)}`)
+  if (nextAllowedAt.newChatsPerDay) parts.push(`new-chat quota resets ${next(nextAllowedAt.newChatsPerDay)}`)
+  if (nextAllowedAt.reachout) parts.push(`cold-outreach timelock ends ${next(nextAllowedAt.reachout)}`)
+  if (nextAllowedAt.quietHours) parts.push(`quiet hours end ${next(nextAllowedAt.quietHours)}`)
+  return parts.length ? parts.join(" · ") : null
+}
 
 interface WebhookFilterCondition {
   field: string
@@ -179,7 +215,7 @@ function MultiSelect({
 
 export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: SessionSettingsDialogProps) {
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<"webhooks" | "proxy" | "engine" | "ignore" | "advanced" | "integrations" | "mcp">("webhooks")
+  const [activeTab, setActiveTab] = useState<"webhooks" | "proxy" | "engine" | "ignore" | "sending" | "advanced" | "integrations" | "mcp">("webhooks")
 
   const [webhooks, setWebhooks] = useState<WebhookConfig[]>([])
   const [proxyServer, setProxyServer] = useState("")
@@ -231,6 +267,20 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
   const [chatwootLoaded, setChatwootLoaded] = useState(false)
   const [chatwootError, setChatwootError] = useState(false)
   const [chatwootReload, setChatwootReload] = useState(0)
+
+  // Sending policy (anti-ban limits) — its own endpoint, separate from the session config
+  const [policyState, setPolicyState] = useState<SendingPolicyState | null>(null)
+  const [policyLoading, setPolicyLoading] = useState(false)
+  const [policyLoadError, setPolicyLoadError] = useState(false)
+  const [policyReload, setPolicyReload] = useState(0)
+  const [policySaving, setPolicySaving] = useState(false)
+  const [policyNum, setPolicyNum] = useState<Record<string, string>>({
+    maxPerMinute: "", maxPerHour: "", maxPerDay: "", newChatsPerDay: "",
+    reachoutMinIntervalSeconds: "", warmupDays: "", warmupFloorPercent: "",
+  })
+  const [policyQuietMode, setPolicyQuietMode] = useState<"inherit" | "custom" | "off">("inherit")
+  const [policyQuietValue, setPolicyQuietValue] = useState("")
+  const [policyEnabledMode, setPolicyEnabledMode] = useState<"inherit" | "on" | "off">("inherit")
 
   useEffect(() => {
     if (session?.config) {
@@ -316,6 +366,29 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
     }).finally(() => setMcpLoading(false))
   }, [open, session, mcpReload])
 
+  // Load the sending policy (overrides + live usage) for this session
+  useEffect(() => {
+    if (!open || !session) return
+    setPolicyLoading(true)
+    setPolicyLoadError(false)
+    api.getSendingPolicy(session.name).then((policy) => {
+      setPolicyState(policy)
+      const o = policy.overrides || {}
+      setPolicyNum({
+        maxPerMinute: o.maxPerMinute != null ? String(o.maxPerMinute) : "",
+        maxPerHour: o.maxPerHour != null ? String(o.maxPerHour) : "",
+        maxPerDay: o.maxPerDay != null ? String(o.maxPerDay) : "",
+        newChatsPerDay: o.newChatsPerDay != null ? String(o.newChatsPerDay) : "",
+        reachoutMinIntervalSeconds: o.reachoutMinIntervalSeconds != null ? String(o.reachoutMinIntervalSeconds) : "",
+        warmupDays: o.warmupDays != null ? String(o.warmupDays) : "",
+        warmupFloorPercent: o.warmupFloorPercent != null ? String(o.warmupFloorPercent) : "",
+      })
+      setPolicyQuietMode(o.quietHours === undefined ? "inherit" : o.quietHours === "" ? "off" : "custom")
+      setPolicyQuietValue(o.quietHours && o.quietHours !== "" ? o.quietHours : "")
+      setPolicyEnabledMode(o.enabled === undefined ? "inherit" : o.enabled ? "on" : "off")
+    }).catch(() => setPolicyLoadError(true)).finally(() => setPolicyLoading(false))
+  }, [open, session, policyReload])
+
   // Clear revealed key when dialog closes
   useEffect(() => {
     if (!open) {
@@ -324,6 +397,70 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
       setMcpConnection(null)
     }
   }, [open])
+
+  /** Build the overrides body from the form fields (throws on bad input). */
+  const buildPolicyOverrides = (): SendingPolicyOverrides => {
+    const overrides: SendingPolicyOverrides = {}
+    for (const { key } of POLICY_NUMBER_FIELDS) {
+      const raw = (policyNum[key] ?? "").trim()
+      if (!raw) continue
+      const value = Number(raw)
+      if (!Number.isFinite(value) || value < 0) {
+        throw new Error(`Sending limits: '${key}' must be a non-negative number`)
+      }
+      ;(overrides as Record<string, number>)[key] =
+        key === "reachoutMinIntervalSeconds" ? value : Math.floor(value)
+    }
+    if (policyQuietMode === "custom") {
+      const quiet = policyQuietValue.trim()
+      if (quiet && !/^\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}$/.test(quiet)) {
+        throw new Error("Sending limits: quiet hours must look like 21:00-08:00")
+      }
+      overrides.quietHours = quiet
+    } else if (policyQuietMode === "off") {
+      overrides.quietHours = ""
+    }
+    if (policyEnabledMode === "on") overrides.enabled = true
+    else if (policyEnabledMode === "off") overrides.enabled = false
+    return overrides
+  }
+
+  const savePolicy = async (announce: boolean) => {
+    if (!session) return
+    const result = await api.setSendingPolicy(session.name, buildPolicyOverrides())
+    setPolicyState((prev) => (prev ? { ...prev, overrides: result.overrides, usage: result.usage } : prev))
+    if (announce) toast.success("Sending limits saved")
+  }
+
+  const handleSavePolicy = async () => {
+    setPolicySaving(true)
+    try {
+      await savePolicy(true)
+    } catch (e: any) {
+      toast.error(e.message || "Failed to save sending limits")
+    } finally {
+      setPolicySaving(false)
+    }
+  }
+
+  const handleResetPolicy = async () => {
+    if (!session) return
+    if (!window.confirm("Clear all per-session overrides and fall back to the deployment defaults?")) return
+    setPolicySaving(true)
+    try {
+      const result = await api.setSendingPolicy(session.name, {})
+      setPolicyState((prev) => (prev ? { ...prev, overrides: result.overrides, usage: result.usage } : prev))
+      setPolicyNum({ maxPerMinute: "", maxPerHour: "", maxPerDay: "", newChatsPerDay: "", reachoutMinIntervalSeconds: "", warmupDays: "", warmupFloorPercent: "" })
+      setPolicyQuietMode("inherit")
+      setPolicyQuietValue("")
+      setPolicyEnabledMode("inherit")
+      toast.success("Sending limits reset to deployment defaults")
+    } catch (e: any) {
+      toast.error(e.message || "Failed to reset sending limits")
+    } finally {
+      setPolicySaving(false)
+    }
+  }
 
   const handleSave = async () => {
     if (!session) return
@@ -369,6 +506,10 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
         deniedTools: mcpDeniedTools.length > 0 ? mcpDeniedTools : undefined,
       }
       await api.updateSession(session.name, config)
+
+      // Sending limits live on their own endpoint; save them alongside so the
+      // global Save button never drops pending limit edits.
+      await savePolicy(false)
 
       // Save Chatwoot separately — failure shouldn't block or look like a settings failure
       try {
@@ -458,6 +599,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
     { id: "webhooks" as const, label: "Webhooks" },
     { id: "proxy" as const, label: "Proxy" },
     { id: "engine" as const, label: "Engine" },
+    { id: "sending" as const, label: "Sending limits" },
     { id: "ignore" as const, label: "Ignore" },
     { id: "mcp" as const, label: "MCP tools" },
     { id: "advanced" as const, label: "Advanced" },
@@ -701,6 +843,146 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                   <div className="flex items-center justify-between py-1"><Label>Broadcasts</Label><Switch checked={ignoreBroadcast} onCheckedChange={setIgnoreBroadcast} /></div>
                   <div className="flex items-center justify-between py-1"><Label>Direct messages</Label><Switch checked={ignoreDm} onCheckedChange={setIgnoreDm} /></div>
                 </div>
+              </div>
+            )}
+
+            {activeTab === "sending" && (
+              <div className="space-y-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <h4 className="text-sm font-medium">Anti-ban sending limits</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Caps how much this session can send, protects cold outreach and new chats, and eases a fresh number in with a warm-up ramp. Blocked sends answer 429 with a Retry-After.
+                    </p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setPolicyReload((n) => n + 1)} disabled={policyLoading}>
+                    <RefreshCw className={`size-3.5 ${policyLoading ? "animate-spin" : ""}`} strokeWidth={1.75} />
+                    Refresh
+                  </Button>
+                </div>
+
+                {policyLoadError && !policyState && (
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs">
+                    <span>Could not load the sending policy for this session.</span>
+                    <Button variant="outline" size="sm" onClick={() => setPolicyReload((n) => n + 1)}>Retry</Button>
+                  </div>
+                )}
+
+                {policyLoading && !policyState && (
+                  <div className="space-y-2">
+                    <Skeleton className="h-5 w-40" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                )}
+
+                {policyState && (
+                  <>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {policyState.bypassed ? (
+                        <Badge variant="destructive">Bypassed by SEND_POLICY_BYPASS_SESSIONS</Badge>
+                      ) : policyState.usage.effective.enabled ? (
+                        <Badge variant="secondary">Active</Badge>
+                      ) : (
+                        <Badge variant="outline">Disabled</Badge>
+                      )}
+                      {policyState.usage.warmup.firstSeenAt && policyState.usage.warmup.factor < 1 && (
+                        <Badge variant="outline">
+                          Warm-up ×{policyState.usage.warmup.factor} · day {Math.floor(policyState.usage.warmup.ageDays)} of {policyState.usage.effective.warmupDays}
+                        </Badge>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {[
+                        { label: "Last minute", value: policyState.usage.counts.lastMinute, cap: policyState.usage.effective.maxPerMinute },
+                        { label: "Last hour", value: policyState.usage.counts.lastHour, cap: policyState.usage.effective.maxPerHour },
+                        { label: "Last 24h", value: policyState.usage.counts.lastDay, cap: policyState.usage.effective.maxPerDay },
+                        { label: "New chats today", value: policyState.usage.counts.newChatsLastDay, cap: policyState.usage.effective.newChatsPerDay },
+                      ].map((tile) => (
+                        <div key={tile.label} className="border rounded-lg p-3">
+                          <div className="text-xs text-muted-foreground">{tile.label}</div>
+                          <div className="mt-1 text-lg font-semibold tabular-nums">
+                            {tile.value}
+                            <span className="text-xs font-normal text-muted-foreground"> / {tile.cap}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {policyBlockLine(policyState.usage) && (
+                      <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
+                        Blocked right now: {policyBlockLine(policyState.usage)}
+                      </div>
+                    )}
+
+                    <Separator />
+
+                    <div className="space-y-3">
+                      <div className="space-y-0.5">
+                        <h4 className="text-sm font-medium">Per-session overrides</h4>
+                        <p className="text-xs text-muted-foreground">
+                          Leave a field empty to inherit the deployment default. Overrides apply to this session only.
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {POLICY_NUMBER_FIELDS.map((field) => (
+                          <div key={field.key} className="space-y-2">
+                            <Label>{field.label}</Label>
+                            <Input
+                              inputMode="numeric"
+                              placeholder="Deployment default"
+                              value={policyNum[field.key] ?? ""}
+                              onChange={(e) => setPolicyNum({ ...policyNum, [field.key]: e.target.value })}
+                            />
+                          </div>
+                        ))}
+                        <div className="space-y-2">
+                          <Label>Quiet hours</Label>
+                          <div className="flex gap-2">
+                            <Select value={policyQuietMode} onValueChange={(v) => setPolicyQuietMode(v as typeof policyQuietMode)}>
+                              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="inherit">Inherit default</SelectItem>
+                                <SelectItem value="custom">Custom window</SelectItem>
+                                <SelectItem value="off">Off</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {policyQuietMode === "custom" && (
+                              <Input
+                                placeholder="21:00-08:00"
+                                value={policyQuietValue}
+                                onChange={(e) => setPolicyQuietValue(e.target.value)}
+                                className="max-w-[150px]"
+                              />
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Policy enabled</Label>
+                          <Select value={policyEnabledMode} onValueChange={(v) => setPolicyEnabledMode(v as typeof policyEnabledMode)}>
+                            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="inherit">Inherit default</SelectItem>
+                              <SelectItem value="on">On</SelectItem>
+                              <SelectItem value="off">Off</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" onClick={handleSavePolicy} disabled={policySaving}>
+                          {policySaving ? "Saving..." : "Save sending limits"}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={handleResetPolicy} disabled={policySaving}>
+                          Reset to deployment defaults
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Limits save through their own endpoint and apply immediately; the main Save button also applies them.
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 

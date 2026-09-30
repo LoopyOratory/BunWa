@@ -3,81 +3,11 @@ import { container } from 'tsyringe';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanSession, Action, FromParam } from '../middleware/policies';
 import { SessionManager } from '../core/manager.core';
-import { BadRequestException, NotFoundException } from '../core/exceptions';
+import { NotFoundException } from '../core/exceptions';
 import {
   SendingPolicyService,
-  SendingPolicyConfig,
-  parseQuietHours,
+  parseOverrides,
 } from '../core/sending-policy/sending-policy.service';
-
-const OVERRIDE_FIELDS = [
-  'maxPerMinute',
-  'maxPerHour',
-  'maxPerDay',
-  'newChatsPerDay',
-  'reachoutMinIntervalSeconds',
-  'warmupDays',
-  'warmupFloorPercent',
-  'quietHours',
-  'enabled',
-] as const;
-
-const NUMBER_FIELDS: ReadonlySet<string> = new Set([
-  'maxPerMinute',
-  'maxPerHour',
-  'maxPerDay',
-  'newChatsPerDay',
-  'reachoutMinIntervalSeconds',
-  'warmupDays',
-  'warmupFloorPercent',
-]);
-
-/**
- * Validate and normalize a per-session policy override body. Throws
- * BadRequestException on unknown or malformed fields.
- */
-export function parseOverrides(body: any): SendingPolicyConfig {
-  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
-    throw new BadRequestException('Body must be a JSON object with policy overrides');
-  }
-  const overrides: SendingPolicyConfig = {};
-  for (const [key, value] of Object.entries(body)) {
-    if (!OVERRIDE_FIELDS.includes(key as any)) {
-      throw new BadRequestException(`Unknown policy field '${key}'`);
-    }
-    if (value === null) {
-      continue;
-    }
-    if (NUMBER_FIELDS.has(key)) {
-      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
-        throw new BadRequestException(`Field '${key}' must be a non-negative number`);
-      }
-      (overrides as any)[key] = value;
-      continue;
-    }
-    if (key === 'quietHours') {
-      if (typeof value !== 'string') {
-        throw new BadRequestException("Field 'quietHours' must be a 'HH:MM-HH:MM' string or ''");
-      }
-      const trimmed = value.trim();
-      if (trimmed && !parseQuietHours(trimmed)) {
-        throw new BadRequestException(
-          "Field 'quietHours' must be a 'HH:MM-HH:MM' string or ''",
-        );
-      }
-      overrides.quietHours = trimmed;
-      continue;
-    }
-    if (key === 'enabled') {
-      if (typeof value !== 'boolean') {
-        throw new BadRequestException("Field 'enabled' must be a boolean");
-      }
-      overrides.enabled = value;
-      continue;
-    }
-  }
-  return overrides;
-}
 
 /**
  * Sending policy REST surface:

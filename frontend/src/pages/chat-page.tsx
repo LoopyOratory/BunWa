@@ -16,13 +16,13 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { ChatProvider, ChatMessages } from "@/components/ui/chat"
 import type { ChatUser, ChatMessageData } from "@/components/ui/chat"
 import { EmptyState, ErrorState, Metric, Skeleton } from "@/components/primitives"
-import { api, type Session, type ChatOverview, type Message, type Contact } from "@/lib/api"
+import { api, ApiError, type Session, type ChatOverview, type Message, type Contact } from "@/lib/api"
 import { useWebSocket } from "@/lib/use-websocket"
 import { ChatConversations } from "@/components/chat/chat-conversations"
 import { ChatHeader } from "@/components/chat/chat-header"
 import { ChatComposerWrapper } from "@/components/chat/chat-composer-wrapper"
 import { TemplatePicker } from "@/components/chat/template-picker"
-import { mapMessage, resolveUserJid } from "@/components/chat/helpers"
+import { mapMessage, resolveUserJid, showSendError } from "@/components/chat/helpers"
 
 /* ================================================================== */
 /*  STORE FAILURE HELPERS                                             */
@@ -267,9 +267,10 @@ function SendMediaDialog({ open, onOpenChange, type, session, chatId, onSent }: 
       onSent()
       onOpenChange(false)
       reset()
-    } catch {
-      setSendError("The message could not be sent. Check the file and try again.")
-      toast.error("Failed to send")
+    } catch (e) {
+      const blocked = e instanceof ApiError && e.status === 429
+      setSendError(blocked ? e.message : "The message could not be sent. Check the file and try again.")
+      if (!blocked) toast.error("Failed to send")
     }
     finally { setSending(false) }
   }
@@ -490,9 +491,10 @@ function StatusDialog({ open, onOpenChange, session, onSent }: { open: boolean; 
       onSent()
       onOpenChange(false)
       setText(""); setFile(null)
-    } catch {
-      setSendError("The status could not be posted. Try again.")
-      toast.error("Failed to post status")
+    } catch (e) {
+      const blocked = e instanceof ApiError && e.status === 429
+      setSendError(blocked ? e.message : "The status could not be posted. Try again.")
+      if (!blocked) toast.error("Failed to post status")
     }
     finally { setSending(false) }
   }
@@ -769,9 +771,9 @@ export function ChatPage({ initialSession }: ChatPageProps) {
       const sent = await api.sendText(selectedSession, selectedChat.id, text, replyToId)
       setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...optimistic, ...sent, id: sent?.id || tempId } : m)))
       loadChats()
-    } catch {
+    } catch (e) {
       setMessages((prev) => prev.filter((m) => m.id !== tempId))
-      toast.error("Failed to send")
+      showSendError(e, "Failed to send")
     }
   }
 
@@ -782,7 +784,7 @@ export function ChatPage({ initialSession }: ChatPageProps) {
       toast.success("Voice sent")
       loadMessages(selectedChat.id)
       loadChats()
-    } catch { toast.error("Failed to send voice") }
+    } catch (e) { showSendError(e, "Failed to send voice") }
   }, [selectedSession, selectedChat])
 
   const handleReactionAdd = async (messageId: string, emoji: string) => {

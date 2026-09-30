@@ -151,6 +151,7 @@ persisted by the Infrastructure page, but no queue implementation exists ([[Open
 
 | Variable | Default | Purpose | Wired |
 |---|---|---|---|
+| `MCP_ENABLED` | true | master switch for POST /mcp (false unmounts it) | ✅ |
 | `MCP_READONLY` | false | register only `tier: read` tools | ✅ |
 | `MCP_RATE_LIMIT_MAX` | 60 | requests per window per key | ✅ |
 | `MCP_RATE_LIMIT_WINDOW_MS` | 60000 | window size | ✅ |

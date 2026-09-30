@@ -280,10 +280,24 @@ async function bootstrap() {
   const chatwootAppService = container.resolve(ChatwootAppService);
   app.route('/webhook/chatwoot', createChatwootWebhookRouter(chatwootAppService));
 
-  // MCP (Model Context Protocol) server — stateless, new server per request
-  const mcpRouter = createMcpRouter(sessionManager);
-  app.route('/', mcpRouter);
-  log.info('MCP server available at POST /mcp');
+  // MCP (Model Context Protocol) server — stateless, new server per request.
+  // Mounted only when MCP_ENABLED is not false; when the server is keyless the
+  // exposure is logged loudly so it never comes as a surprise.
+  const mcpEnabled = !['false', '0', 'no', 'off'].includes(
+    (process.env.MCP_ENABLED ?? '').toLowerCase(),
+  );
+  if (mcpEnabled) {
+    const mcpRouter = createMcpRouter(sessionManager);
+    app.route('/', mcpRouter);
+    log.info('MCP server available at POST /mcp');
+    if (!apiKey && allowNoAuth) {
+      log.warn(
+        'MCP is reachable without authentication (no WAHA_API_KEY set). Set WAHA_API_KEY, WAHA_ALLOW_NO_AUTH=false, or MCP_ENABLED=false.',
+      );
+    }
+  } else {
+    log.info('MCP server disabled (MCP_ENABLED=false)');
+  }
 
   // Initialize Chatwoot app service (loads configs, subscribes to events)
   chatwootAppService.init(sessionManager).catch((err) => {

@@ -1,5 +1,6 @@
-import type { ChatOverview, Contact, Message } from "@/lib/api"
+import { ApiError, type ChatOverview, type Contact, type Message } from "@/lib/api"
 import type { ChatMessageData, SidebarConversation } from "@/components/ui/chat"
+import { toast } from "sonner"
 
 const AV_COLORS = [
   { bg: "#d1fae5", fg: "#065f46", darkBg: "#1a3020", darkFg: "#4ade80" },
@@ -91,6 +92,7 @@ export function mapMessage(msg: Message, contactsMap: Map<string, Contact>, curr
     replyTo: msg.replyTo ? { id: msg.replyTo as string, senderName: "", text: "" } : undefined,
     reactions: Array.from(reactionMap.values()),
     isEdited: false,
+    interactive: msg.interactive ?? undefined,
   }
 }
 
@@ -104,4 +106,19 @@ export function mapConversation(chat: ChatOverview, contactsMap: Map<string, Con
     lastMessageTime: chat.lastMessage ? formatTime(chat.lastMessage.timestamp) : undefined,
     unreadCount: chat.unreadCount || 0,
   }
+}
+
+/**
+ * Human message for a failed send. A 429 means the anti-ban sending policy
+ * blocked the request; the server message already names the reason and the
+ * retry delay, so surface it verbatim instead of a generic failure.
+ */
+export function sendErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError && error.status === 429) return error.message
+  return fallback
+}
+
+/** Toast for a failed send, policy-aware. */
+export function showSendError(error: unknown, fallback = "Failed to send"): void {
+  toast.error(sendErrorMessage(error, fallback))
 }

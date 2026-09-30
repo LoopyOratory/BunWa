@@ -58,6 +58,13 @@ export interface Message {
   ackName: string
   replyTo?: string | null
   reactions?: { key?: { id?: string; fromMe?: boolean; remoteJid?: string }; text?: string; senderTimestampMs?: number }[]
+  /** Structured selection from an interactive reply (button tap, list row or flow) */
+  interactive?: {
+    type: "button" | "list" | "flow"
+    selectedId: string | null
+    selectedText: string | null
+    repliedToMessageId: string | null
+  } | null
 }
 
 export interface Contact {
@@ -152,6 +159,19 @@ export function getApiAuthHeaders(): Record<string, string> {
   return headers
 }
 
+/** Error from the API that preserves status + Retry-After for policy-blocked sends. */
+export class ApiError extends Error {
+  readonly status: number
+  readonly retryAfterSeconds?: number
+
+  constructor(message: string, status: number, retryAfterSeconds?: number) {
+    super(message)
+    this.name = "ApiError"
+    this.status = status
+    this.retryAfterSeconds = retryAfterSeconds
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json", ...getApiAuthHeaders() }
 
@@ -161,7 +181,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     const error = await res.json().catch(() => ({ message: "Request failed" }))
-    throw new Error(error.message || `HTTP ${res.status}`)
+    const header = Number(res.headers.get("Retry-After"))
+    const retryAfterSeconds = typeof error.retryAfterSeconds === "number"
+      ? error.retryAfterSeconds
+      : Number.isFinite(header) && header > 0 ? header : undefined
+    throw new ApiError(error.message || `HTTP ${res.status}`, res.status, retryAfterSeconds)
   }
   return res.json()
 }
@@ -178,6 +202,50 @@ export async function fetchImageBlobUrl(imageUrl: string): Promise<string | null
   } catch {
     return null
   }
+}
+
+export interface SendingPolicyOverrides {
+  maxPerMinute?: number
+  maxPerHour?: number
+  maxPerDay?: number
+  newChatsPerDay?: number
+  reachoutMinIntervalSeconds?: number
+  warmupDays?: number
+  warmupFloorPercent?: number
+  /** 'HH:MM-HH:MM' local quiet window; '' disables quiet hours */
+  quietHours?: string
+  enabled?: boolean
+}
+
+export interface SendingPolicyUsage {
+  counts: { lastMinute: number; lastHour: number; lastDay: number; newChatsLastDay: number }
+  effective: {
+    maxPerMinute: number
+    maxPerHour: number
+    maxPerDay: number
+    newChatsPerDay: number
+    reachoutMinIntervalSeconds: number
+    warmupDays: number
+    warmupFloorPercent: number
+    quietHours: string
+    enabled: boolean
+  }
+  warmup: { firstSeenAt: string | null; ageDays: number; factor: number }
+  nextAllowedAt: {
+    minuteCap: string | null
+    hourCap: string | null
+    dayCap: string | null
+    newChatsPerDay: string | null
+    reachout: string | null
+    quietHours: string | null
+  }
+}
+
+export interface SendingPolicyState {
+  session: string
+  bypassed: boolean
+  overrides: SendingPolicyOverrides
+  usage: SendingPolicyUsage
 }
 
 export const api = {
@@ -504,6 +572,17 @@ export const api = {
     request<void>(`/api/sessions/${session}/webhooks/${id}`, { method: "DELETE" }),
   testWebhook: (session: string, id: string) =>
     request<any>(`/api/sessions/${session}/webhooks/${id}/test`, { method: "POST" }),
+
+  // ==================== SENDING POLICY ====================
+  /** Anti-ban sending policy for a session: overrides + live usage counters */
+  getSendingPolicy: (name: string) =>
+    request<SendingPolicyState>(`/api/sessions/${name}/policy`),
+  /** Replace the per-session policy overrides (an empty object clears them) */
+  setSendingPolicy: (name: string, overrides: SendingPolicyOverrides) =>
+    request<{ session: string; overrides: SendingPolicyOverrides; usage: SendingPolicyUsage }>(
+      `/api/sessions/${name}/policy`,
+      { method: "PUT", body: JSON.stringify(overrides) },
+    ),
 
   // ==================== MCP ====================
   /** Get all registered MCP tools with categories */
