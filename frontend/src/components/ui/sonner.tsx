@@ -31,7 +31,21 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-bg": "var(--popover)",
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
+          "--border-radius": "var(--radius-md)",
+          /* Pastel toast palette instead of sonner's default saturated set.
+             Values come from the semantic tokens, so both themes stay in step. */
+          "--success-bg": "var(--success-bg)",
+          "--success-text": "var(--success-foreground)",
+          "--success-border": "var(--success-border)",
+          "--error-bg": "var(--error-bg)",
+          "--error-text": "var(--error-foreground)",
+          "--error-border": "var(--error-border)",
+          "--warning-bg": "var(--warning-bg)",
+          "--warning-text": "var(--warning-foreground)",
+          "--warning-border": "var(--warning-border)",
+          "--info-bg": "var(--secondary)",
+          "--info-text": "var(--secondary-foreground)",
+          "--info-border": "var(--border)",
         } as React.CSSProperties
       }
       toastOptions={{

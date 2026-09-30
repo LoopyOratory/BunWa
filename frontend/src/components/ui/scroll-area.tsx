@@ -8,7 +8,7 @@ interface ScrollAreaProps extends React.ComponentProps<"div"> {
 function ScrollArea({ className, children, viewportRef, ...props }: ScrollAreaProps) {
   return (
     <div
-      className={cn("relative overflow-auto", className)}
+      className={cn("relative overflow-auto overscroll-contain", className)}
       {...props}
     >
       <div ref={viewportRef} className="h-full min-h-0">

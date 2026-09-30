@@ -656,11 +656,11 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Badge variant="secondary">Webhook {wi + 1}</Badge>
-                        {webhook.id && <span className="metric text-[10px] font-mono text-muted-foreground">{webhook.id}</span>}
+                        {webhook.id && <span className="metric text-xs font-mono text-muted-foreground">{webhook.id}</span>}
                       </div>
                       <div className="flex items-center gap-1">
                         <Button variant="ghost" size="sm" onClick={() => updateWebhook(wi, "enabled", webhook.enabled === false ? true : false)}
-                          className="text-xs h-7 px-2">
+                          className="h-7 px-2">
                           {webhook.enabled === false ? "Enable" : "Disable"}
                         </Button>
                         {session && webhook.id && (
@@ -671,7 +671,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                             } catch (e: any) {
                               toast.error("Test failed: " + (e.message || "unknown"))
                             }
-                          }} className="text-xs h-7 px-2">
+                          }} className="h-7 px-2">
                             Test
                           </Button>
                         )}
@@ -732,15 +732,15 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                     {/* Filters */}
                     <div className="space-y-2">
                       <Label className="text-muted-foreground">Filters</Label>
-                      <p className="text-[11px] text-muted-foreground">All conditions must match (AND logic)</p>
+                      <p className="text-xs text-muted-foreground">All conditions must match (AND logic)</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1">
                           <Label className="text-xs">Sender</Label>
-                          <Input placeholder="1234567890 (comma-separated)" value={getFilterValue(webhook, "sender")} onChange={(e) => setFilterValue(wi, "sender", e.target.value)} className="h-8 text-xs" />
+                          <Input placeholder="1234567890 (comma-separated)" value={getFilterValue(webhook, "sender")} onChange={(e) => setFilterValue(wi, "sender", e.target.value)} className="h-8" />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">Body contains</Label>
-                          <Input placeholder="Text to match" value={getFilterValue(webhook, "body")} onChange={(e) => setFilterValue(wi, "body", e.target.value)} className="h-8 text-xs" />
+                          <Input placeholder="Text to match" value={getFilterValue(webhook, "body")} onChange={(e) => setFilterValue(wi, "body", e.target.value)} className="h-8" />
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-3">
@@ -1084,7 +1084,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                               placeholder="Search tools..."
                               value={mcpToolSearch}
                               onChange={(e) => setMcpToolSearch(e.target.value)}
-                              className="h-8 pl-8 text-xs"
+                              className="h-8 pl-8"
                             />
                           </div>
                           <div className="space-y-1.5">
@@ -1109,16 +1109,16 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                                       {expanded
                                         ? <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
                                         : <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />}
-                                      <Badge variant="secondary" className="uppercase text-[10px] tracking-wider">
+                                      <Badge variant="secondary" className="uppercase tracking-wider">
                                         {category}
                                       </Badge>
-                                      <span className="metric text-[11px] text-muted-foreground">
+                                      <span className="metric text-xs text-muted-foreground">
                                         {enabledCount}/{allTools.length}
                                       </span>
                                     </button>
                                     <button
                                       type="button"
-                                      className="text-[10px] text-muted-foreground hover:text-foreground underline shrink-0"
+                                      className="text-xs text-muted-foreground hover:text-foreground underline shrink-0"
                                       onClick={() => {
                                         const allInCategory = allTools.map((t: any) => t.name)
                                         if (allDenied) {
@@ -1229,7 +1229,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                           Copy this key now. It will not be shown again.
                         </p>
                         <div className="flex items-center gap-2">
-                          <pre className="flex-1 rounded-lg bg-muted p-2.5 text-[11px] font-mono overflow-x-auto select-all">{mcpKey}</pre>
+                          <pre className="flex-1 rounded-lg bg-muted p-2.5 text-xs font-mono overflow-x-auto select-all">{mcpKey}</pre>
                           <Button
                             size="sm"
                             variant="outline"
@@ -1258,7 +1258,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                             Copy
                           </Button>
                         </div>
-                        <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">
+                        <pre className="rounded-lg bg-muted p-3 text-xs font-mono overflow-x-auto">
 {JSON.stringify({ mcpServers: { [`bunwa-${session.name}`]: mcpConnection.stdio } }, null, 2)}
                         </pre>
                       </div>
@@ -1278,7 +1278,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                             Copy
                           </Button>
                         </div>
-                        <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">
+                        <pre className="rounded-lg bg-muted p-3 text-xs font-mono overflow-x-auto">
 {JSON.stringify({ mcpServers: { [`bunwa-${session.name}`]: mcpConnection.http } }, null, 2)}
                         </pre>
                       </div>
@@ -1326,8 +1326,8 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                                   Copy
                                 </Button>
                               </div>
-                              <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">{httpCode}</pre>
-                              <p className="text-[11px] text-muted-foreground mt-1">Replace <code>your BunWa API key</code>, or generate a scoped key above.</p>
+                              <pre className="rounded-lg bg-muted p-3 text-xs font-mono overflow-x-auto">{httpCode}</pre>
+                              <p className="text-xs text-muted-foreground mt-1">Replace <code>your BunWa API key</code>, or generate a scoped key above.</p>
                             </div>
                             <div>
                               <div className="flex items-center justify-between mb-1">
@@ -1343,7 +1343,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                                   Copy
                                 </Button>
                               </div>
-                              <pre className="rounded-lg bg-muted p-3 text-[11px] font-mono overflow-x-auto">{inspectorCode}</pre>
+                              <pre className="rounded-lg bg-muted p-3 text-xs font-mono overflow-x-auto">{inspectorCode}</pre>
                             </div>
                           </div>
                         )
@@ -1467,8 +1467,8 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                     <div className="rounded-lg border border-border bg-muted/50 p-3">
                       <p className="text-xs text-muted-foreground">
                         <strong>Webhook URL:</strong> Configure Chatwoot to send{" "}
-                        <code className="text-[10px] bg-muted px-1 rounded">message_created</code> events to{" "}
-                        <code className="text-[10px] bg-muted px-1 rounded">http://YOUR_BUNWA_HOST:3001/webhook/chatwoot/{session?.name}</code>
+                        <code className="text-xs bg-muted px-1 rounded">message_created</code> events to{" "}
+                        <code className="text-xs bg-muted px-1 rounded">http://YOUR_BUNWA_HOST:3001/webhook/chatwoot/{session?.name}</code>
                       </p>
                     </div>
                   </>

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -33,9 +33,12 @@ import {
   Cog,
   Plus,
   RefreshCw,
+  FilterX,
   MoreHorizontal,
+  Send,
+  TriangleAlert,
 } from "lucide-react"
-import { api, type ServerVersion, type Session, type Worker } from "@/lib/api"
+import { api, type AuditEntry, type ServerVersion, type Session, type Worker } from "@/lib/api"
 import { toast } from "sonner"
 import { PageLayout } from "@/components/page-layout"
 import {
@@ -50,13 +53,34 @@ import {
   StatusBadge,
   TableSkeleton,
 } from "@/components/primitives"
+import {
+  IssuesChart,
+  MessagesChart,
+  SessionActivityChart,
+  SessionsDonut,
+  WorkersLoad,
+  isIssue,
+  issueCategoryOf,
+} from "@/components/dashboard-charts"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { SessionSettingsDialog } from "@/components/session-settings-dialog"
 import { CreateSessionDialog } from "@/components/create-session-dialog"
 import { SessionDetailDialog } from "@/pages/session-detail-dialog"
+import { CountUp, Stagger, StaggerItem } from "@/components/dream"
 
 interface DashboardPageProps {
   onNavigate?: (page: string, options?: { sessionName?: string }) => void
 }
+
+/** Local-date string (YYYY-MM-DD) for the range inputs. */
+const localDateStr = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 
 export function DashboardPage(_props?: DashboardPageProps) {
   const navigate = useNavigate()
@@ -68,20 +92,39 @@ export function DashboardPage(_props?: DashboardPageProps) {
   const [workersError, setWorkersError] = useState<string | null>(null)
   const [sessionSearch, setSessionSearch] = useState("")
   const [workerSearch, setWorkerSearch] = useState("")
+  const [audit, setAudit] = useState<AuditEntry[]>([])
+  const [auditFailed, setAuditFailed] = useState(false)
+  const [sessionFilter, setSessionFilter] = useState<string>("all")
+  const [engineFilter, setEngineFilter] = useState<"all" | "NOWEB" | "WEBJS">("all")
+  const [fromDate, setFromDate] = useState<string>(() => localDateStr(new Date()))
+  const [toDate, setToDate] = useState<string>(() => localDateStr(new Date()))
+  const lastAuditFetch = useRef(0)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showSettingsDialog, setShowSettingsDialog] = useState(false)
   const [settingsSession, setSettingsSession] = useState<Session | null>(null)
   const [showDetailDialog, setShowDetailDialog] = useState(false)
   const [detailSession, setDetailSession] = useState<Session | null>(null)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { force?: boolean }) => {
     // Each request fails on its own so one broken endpoint does not blank the
-    // whole overview.
-    const [sessionsResult, workersResult, versionResult] = await Promise.allSettled([
+    // whole overview. The audit log refreshes on a slower 30s cadence since it
+    // is only feeding the activity chart.
+    const now = Date.now()
+    const wantAudit = opts?.force === true || now - lastAuditFetch.current > 30_000
+    if (wantAudit) lastAuditFetch.current = now
+    const [sessionsResult, workersResult, versionResult, auditResult] = await Promise.allSettled([
       api.getSessions(),
       api.getWorkers(),
       api.getVersion(),
+      wantAudit ? api.getAudit({ limit: 500 }) : Promise.resolve<AuditEntry[] | null>(null),
     ])
+
+    if (auditResult.status === "fulfilled" && auditResult.value) {
+      setAudit(auditResult.value)
+      setAuditFailed(false)
+    } else if (auditResult.status === "rejected") {
+      setAuditFailed(true)
+    }
 
     if (sessionsResult.status === "fulfilled") {
       setSessions(sessionsResult.value)
@@ -111,7 +154,59 @@ export function DashboardPage(_props?: DashboardPageProps) {
   const attentionCount = sessions.filter((s) => s.status !== "WORKING" && s.status !== "STOPPED").length
   const connectedWorkers = workers.filter((w) => w.connected).length
 
-  const filteredSessions = sessions.filter((s) => {
+  /* ── Filters driving the insights row ───────────────────────────────
+     The session dropdown scopes the charts, KPIs and the sessions table;
+     the engine filter applies to sessions and workers alike; the date
+     range picks the window every time series reads. */
+  const engineOf = (s: Session) => (s.config?.engine ? String(s.config.engine).toUpperCase() : "NOWEB")
+
+  const engineSessions = sessions.filter((s) => engineFilter === "all" || engineOf(s) === engineFilter)
+  const dropdownSessions = engineSessions.filter((s) => sessionFilter === "all" || s.name === sessionFilter)
+  const engineWorkers = workers.filter(
+    (w) => engineFilter === "all" || String(w.engine || "").toUpperCase() === engineFilter,
+  )
+
+  // Drop back to "all" when the picked session disappears (deleted, or renamed).
+  useEffect(() => {
+    if (sessionFilter !== "all" && !sessions.some((s) => s.name === sessionFilter)) setSessionFilter("all")
+  }, [sessions, sessionFilter])
+
+  const fromTs = useMemo(() => Date.parse(`${fromDate}T00:00:00`), [fromDate])
+  const toTs = useMemo(() => Date.parse(`${toDate}T23:59:59.999`), [toDate])
+  const rangeAudit = useMemo(
+    () => (sessionFilter === "all" ? audit : audit.filter((e) => e.sessionName === sessionFilter)),
+    [audit, sessionFilter],
+  )
+
+  const todayStr = localDateStr(new Date())
+  const presetFrom = (days: number) => {
+    const n = new Date()
+    return localDateStr(new Date(n.getFullYear(), n.getMonth(), n.getDate() - (days - 1)))
+  }
+  const setQuickRange = (days: number) => {
+    setFromDate(presetFrom(days))
+    setToDate(todayStr)
+  }
+  const onFromChange = (v: string) => {
+    if (!v) return
+    if (toDate && v > toDate) setToDate(v)
+    setFromDate(v)
+  }
+  const onToChange = (v: string) => {
+    if (!v) return
+    if (fromDate && v < fromDate) setFromDate(v)
+    setToDate(v)
+  }
+
+  const filtersActive = sessionFilter !== "all" || engineFilter !== "all" || fromDate !== todayStr || toDate !== todayStr
+  const resetFilters = () => {
+    setSessionFilter("all")
+    setEngineFilter("all")
+    setFromDate(todayStr)
+    setToDate(todayStr)
+  }
+
+  const filteredSessions = dropdownSessions.filter((s) => {
     if (!sessionSearch) return true
     const q = sessionSearch.toLowerCase()
     return (
@@ -122,17 +217,46 @@ export function DashboardPage(_props?: DashboardPageProps) {
     )
   })
 
-  const filteredWorkers = workers.filter((w) => {
+  const filteredWorkers = engineWorkers.filter((w) => {
     if (!workerSearch) return true
     return w.name.toLowerCase().includes(workerSearch.toLowerCase())
   })
+
+  /* ── Aggregates from the audit log, for the KPI cards ─────────────── */
+  const auditStats = useMemo(() => {
+    let sent = 0
+    let failed = 0
+    const byCat = new Map<string, number>()
+    for (const e of rangeAudit) {
+      const t = Date.parse(e.createdAt)
+      if (Number.isNaN(t) || t < fromTs || t > toTs) continue
+      if (e.action === "message_sent") sent++
+      else if (e.action === "message_failed") failed++
+      if (isIssue(e)) {
+        const cat = issueCategoryOf(e) ?? "Other"
+        byCat.set(cat, (byCat.get(cat) ?? 0) + 1)
+      }
+    }
+    let issues = 0
+    let top = ""
+    let topN = 0
+    for (const [cat, n] of byCat) {
+      issues += n
+      if (n > topN) {
+        top = cat
+        topN = n
+      }
+    }
+    const total = sent + failed
+    return { sent, failed, issues, top, rate: total > 0 ? Math.round((failed / total) * 100) : 0, total }
+  }, [rangeAudit, fromTs, toTs])
 
   return (
     <PageLayout
       title="Dashboard"
       description="Overview of your sessions, workers, and system health"
       actions={
-        <Button variant="ghost" size="icon" onClick={load} title="Refresh" aria-label="Refresh">
+        <Button variant="ghost" size="icon" onClick={() => load({ force: true })} title="Refresh" aria-label="Refresh">
           <RefreshCw className="size-4" strokeWidth={1.75} />
         </Button>
       }
@@ -140,12 +264,13 @@ export function DashboardPage(_props?: DashboardPageProps) {
       <div className="space-y-6">
         {/* Stats */}
         {loading ? (
-          <StatRowSkeleton count={3} />
+          <StatRowSkeleton count={5} />
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-            <StatCard
-              label="Sessions"
-              value={sessionsError ? "-" : String(sessions.length)}
+          <Stagger className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
+            <StaggerItem>
+              <StatCard
+                label="Sessions"
+                value={sessionsError ? "-" : <CountUp value={sessions.length} />}
               tone={attentionCount > 0 ? "warning" : "neutral"}
               hint={
                 sessionsError ? (
@@ -162,10 +287,12 @@ export function DashboardPage(_props?: DashboardPageProps) {
               }
               icon={<MessageSquare strokeWidth={1.75} />}
             />
-            <StatCard
-              label="Workers"
-              value={workersError ? "-" : String(workers.length)}
-              tone={workersError ? "error" : "neutral"}
+            </StaggerItem>
+            <StaggerItem>
+              <StatCard
+                label="Workers"
+                value={workersError ? "-" : <CountUp value={workers.length} />}
+                tone={workersError ? "error" : "neutral"}
               hint={
                 workersError ? (
                   "Unavailable"
@@ -178,29 +305,148 @@ export function DashboardPage(_props?: DashboardPageProps) {
                 )
               }
               icon={<Server strokeWidth={1.75} />}
-            />
-            <StatCard
-              label="Server version"
-              value={version ? version.version : "-"}
-              hint={
-                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  {version?.engine ? (
-                    <EngineBadge engine={version.engine} />
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <StatCard
+                label="Messages"
+                value={auditFailed ? "-" : <CountUp value={auditStats.total} />}
+                tone={!auditFailed && auditStats.failed > 0 ? "warning" : "neutral"}
+                hint={
+                  auditFailed ? (
+                    "Unavailable"
+                  ) : auditStats.total === 0 ? (
+                    "No send attempts in this range"
                   ) : (
-                    <span>Version unavailable</span>
-                  )}
-                  <Link to="/docs" className="font-medium text-foreground underline-offset-4 hover:underline">
-                    Changelog
-                  </Link>
-                  <Link to="/docs" className="font-medium text-foreground underline-offset-4 hover:underline">
-                    How to update
-                  </Link>
-                </span>
-              }
+                    <>
+                      <Metric>{auditStats.failed}</Metric> failed, <Metric>{auditStats.rate}%</Metric> of attempts
+                    </>
+                  )
+                }
+                icon={<Send strokeWidth={1.75} />}
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <StatCard
+                label="Issues"
+                value={auditFailed ? "-" : <CountUp value={auditStats.issues} />}
+                tone={!auditFailed && auditStats.issues > 0 ? "error" : "neutral"}
+                hint={
+                  auditFailed ? (
+                    "Unavailable"
+                  ) : auditStats.issues === 0 ? (
+                    "All clear in this window"
+                  ) : (
+                    <>
+                      mostly <Metric>{auditStats.top}</Metric>
+                    </>
+                  )
+                }
+                icon={<TriangleAlert strokeWidth={1.75} />}
+              />
+            </StaggerItem>
+            <StaggerItem className="max-lg:col-span-2">
+              <StatCard
+                label="Server version"
+              value={version ? version.version : "-"}
+              hint={version?.engine ? <><Metric>{version.engine}</Metric> engine</> : "Version unavailable"}
               icon={<CloudDownload strokeWidth={1.75} />}
             />
-          </div>
+            </StaggerItem>
+          </Stagger>
         )}
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs text-muted-foreground">
+          <span>BunWa docs:</span>
+          <Link to="/docs" className="font-medium text-foreground underline-offset-4 hover:underline">
+            Changelog
+          </Link>
+          <Link to="/docs" className="font-medium text-foreground underline-offset-4 hover:underline">
+            How to update
+          </Link>
+        </p>
+
+        {/* Insights: filters drive the charts and the tables below */}
+        <section className="space-y-3">
+          <SectionHeading
+            title="Insights"
+            description="Charts read the latest 500 audit entries, scoped by session and range"
+            action={
+              <Button variant="ghost" size="sm" onClick={resetFilters} disabled={!filtersActive}>
+                <FilterX className="size-4" strokeWidth={1.75} />
+                Reset filters
+              </Button>
+            }
+          />
+
+          <div className="glass-card flex flex-wrap items-center gap-x-6 gap-y-3 rounded-xl px-4 py-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="me-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Session</span>
+              <Select value={sessionFilter} onValueChange={setSessionFilter}>
+                <SelectTrigger className="h-8 w-full sm:w-52" aria-label="Filter by session">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All sessions</SelectItem>
+                  {sessions.map((s) => (
+                    <SelectItem key={s.name} value={s.name}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="me-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Engine</span>
+              {(["all", "NOWEB", "WEBJS"] as const).map((k) => (
+                <button key={k} type="button" className="filter-chip" data-active={engineFilter === k} onClick={() => setEngineFilter(k)}>
+                  {k === "all" ? "All engines" : k}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="me-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Range</span>
+              <Input
+                type="date"
+                aria-label="From date"
+                value={fromDate}
+                max={toDate}
+                onChange={(e) => onFromChange(e.target.value)}
+                className="h-8 w-[9.5rem] [color-scheme:light] dark:[color-scheme:dark]"
+              />
+              <span className="text-xs text-muted-foreground">to</span>
+              <Input
+                type="date"
+                aria-label="To date"
+                value={toDate}
+                min={fromDate}
+                max={todayStr}
+                onChange={(e) => onToChange(e.target.value)}
+                className="h-8 w-[9.5rem] [color-scheme:light] dark:[color-scheme:dark]"
+              />
+              {([[1, "Today"], [7, "7d"], [30, "30d"]] as const).map(([days, label]) => (
+                <button
+                  key={days}
+                  type="button"
+                  className="filter-chip"
+                  data-active={fromDate === presetFrom(days) && toDate === todayStr}
+                  onClick={() => setQuickRange(days)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <SessionsDonut sessions={dropdownSessions} />
+            <div className="lg:col-span-2">
+              <MessagesChart entries={rangeAudit} from={fromTs} to={toTs} failed={auditFailed} />
+            </div>
+            <SessionActivityChart entries={rangeAudit} from={fromTs} to={toTs} />
+            <IssuesChart entries={rangeAudit} from={fromTs} to={toTs} failed={auditFailed} />
+            <WorkersLoad workers={engineWorkers} />
+          </div>
+        </section>
 
         {/* Workers */}
         <section className="space-y-3">
@@ -218,7 +464,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
                   aria-label="Search workers"
                   value={workerSearch}
                   onChange={(e) => setWorkerSearch(e.target.value)}
-                  className="h-8 w-full pl-8 text-xs sm:w-48"
+                  className="h-8 w-full pl-8 sm:w-48"
                 />
               </div>
             }
@@ -324,7 +570,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
                     aria-label="Search sessions"
                     value={sessionSearch}
                     onChange={(e) => setSessionSearch(e.target.value)}
-                    className="h-8 w-full pl-8 text-xs sm:w-60"
+                    className="h-8 w-full pl-8 sm:w-60"
                   />
                 </div>
                 <Button size="sm" onClick={() => setShowCreateDialog(true)}>
@@ -422,7 +668,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
                             <DropdownMenuItem
                               disabled={session.status !== "STOPPED"}
                               title={session.status !== "STOPPED" ? "Only a stopped session can be started" : undefined}
-                              onSelect={() => api.startSession(session.name).then(load).catch(() => toast.error("Start failed"))}
+                              onSelect={() => api.startSession(session.name).then(() => load()).catch(() => toast.error("Start failed"))}
                             >
                               <Play strokeWidth={1.75} />
                               Start
@@ -430,7 +676,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
                             <DropdownMenuItem
                               disabled={session.status === "STOPPED"}
                               title={session.status === "STOPPED" ? "The session is already stopped" : undefined}
-                              onSelect={() => api.restartSession(session.name).then(load).catch(() => toast.error("Restart failed"))}
+                              onSelect={() => api.restartSession(session.name).then(() => load()).catch(() => toast.error("Restart failed"))}
                             >
                               <RotateCcw strokeWidth={1.75} />
                               Restart
@@ -438,7 +684,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
                             <DropdownMenuItem
                               disabled={session.status === "STOPPED"}
                               title={session.status === "STOPPED" ? "The session is already stopped" : undefined}
-                              onSelect={() => api.stopSession(session.name).then(load).catch(() => toast.error("Stop failed"))}
+                              onSelect={() => api.stopSession(session.name).then(() => load()).catch(() => toast.error("Stop failed"))}
                             >
                               <Square strokeWidth={1.75} />
                               Stop
@@ -446,7 +692,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
                             <DropdownMenuItem
                               disabled={session.status === "STOPPED"}
                               title={session.status === "STOPPED" ? "The session is already stopped" : undefined}
-                              onSelect={() => api.logoutSession(session.name).then(load).catch(() => toast.error("Logout failed"))}
+                              onSelect={() => api.logoutSession(session.name).then(() => load()).catch(() => toast.error("Logout failed"))}
                             >
                               <LogOut strokeWidth={1.75} />
                               Logout
@@ -499,7 +745,7 @@ export function DashboardPage(_props?: DashboardPageProps) {
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               variant="destructive"
-                              onSelect={() => api.deleteSession(session.name).then(load).catch(() => toast.error("Delete failed"))}
+                              onSelect={() => api.deleteSession(session.name).then(() => load()).catch(() => toast.error("Delete failed"))}
                             >
                               <Trash2 strokeWidth={1.75} />
                               Delete

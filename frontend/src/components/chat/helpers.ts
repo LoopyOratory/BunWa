@@ -82,6 +82,19 @@ export function mapMessage(msg: Message, contactsMap: Map<string, Contact>, curr
     }
   }
 
+  /* Poll messages carry their question and choices in a `poll` field; option
+     entries are objects on some engines and plain strings on others. */
+  const rawPoll = (msg as unknown as { poll?: { name?: string; question?: string; options?: unknown[]; multipleAnswers?: boolean; selectableCount?: number } }).poll
+  const poll = rawPoll && typeof rawPoll === "object" && (rawPoll.name || rawPoll.question)
+    ? {
+        name: String(rawPoll.name || rawPoll.question),
+        options: (Array.isArray(rawPoll.options) ? rawPoll.options : [])
+          .map((o) => (typeof o === "string" ? o : String((o as { name?: string; text?: string })?.name ?? (o as { text?: string })?.text ?? "")))
+          .filter(Boolean),
+        multipleAnswers: !!(rawPoll.multipleAnswers ?? ((rawPoll.selectableCount ?? 1) > 1)),
+      }
+    : undefined
+
   return {
     id: msg.id,
     senderId,
@@ -93,6 +106,7 @@ export function mapMessage(msg: Message, contactsMap: Map<string, Contact>, curr
     reactions: Array.from(reactionMap.values()),
     isEdited: false,
     interactive: msg.interactive ?? undefined,
+    poll,
   }
 }
 

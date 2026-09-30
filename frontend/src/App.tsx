@@ -19,27 +19,15 @@ import { QueuePage } from "./pages/queue-page"
 import { DocsPage } from "./pages/docs-page"
 import { Toaster } from "@/components/ui/sonner"
 import { ErrorBoundary } from "./components/ErrorBoundary"
-
-function GlobalBackground() {
-  return (
-    <div
-      className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
-      style={{
-        background: `
-          radial-gradient(ellipse at 20% 0%, color-mix(in oklab, var(--primary) 5%, transparent) 0%, transparent 50%),
-          radial-gradient(ellipse at 80% 100%, color-mix(in oklab, var(--primary) 4%, transparent) 0%, transparent 50%)
-        `,
-      }}
-    />
-  )
-}
+import { Aurora } from "./components/dream"
 
 function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider defaultOpen={true}>
+      {/* One continuous sky behind sidebar and content alike. */}
+      <Aurora />
       <AppSidebar />
-      <SidebarInset className="relative overflow-hidden">
-        <GlobalBackground />
+      <SidebarInset className="relative z-10 overflow-hidden">
         <div className="relative z-10 flex min-h-dvh flex-col">{children}</div>
       </SidebarInset>
     </SidebarProvider>
@@ -86,7 +74,7 @@ function App() {
             <BrowserRouter>
               <AppRoutes />
             </BrowserRouter>
-            <Toaster richColors closeButton />
+            <Toaster richColors closeButton position="top-right" />
           </TooltipProvider>
         </AuthProvider>
       </ThemeProvider>

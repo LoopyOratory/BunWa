@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import type { RefObject } from "react"
 import { useParams } from "react-router-dom"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -17,6 +17,8 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { EmptyState, ErrorState, Metric } from "@/components/primitives"
 import { mapSessionStatus, type StatusKind } from "@/lib/status"
+import { PhoneInput } from "@/components/phone-input"
+import { splitJid, toChatId, DEFAULT_COUNTRY } from "@/lib/phone"
 
 const SESSION_DOT: Record<StatusKind, string> = {
   working: "bg-success",
@@ -76,7 +78,11 @@ export function MessageTesterPage() {
   const { chatId: urlChatId } = useParams()
   const [sessions, setSessions] = useState<Session[]>([])
   const [session, setSession] = useState("")
-  const [chatId, setChatId] = useState(urlChatId || "")
+  // The user types only the main number; country + suffix resolve the chat id.
+  const [urlParts] = useState(() => splitJid(urlChatId || ""))
+  const [country, setCountry] = useState(urlParts?.iso ?? DEFAULT_COUNTRY)
+  const [phone, setPhone] = useState(urlParts?.national ?? (urlChatId || ""))
+  const chatId = useMemo(() => toChatId(country, phone), [country, phone])
   const [text, setText] = useState("")
   const [sessionsError, setSessionsError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
@@ -202,13 +208,14 @@ export function MessageTesterPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="tester-chat-id">Chat ID / phone number</Label>
+                  <Label htmlFor="tester-chat-id">Phone number</Label>
                   <div className="flex gap-2">
-                    <Input
+                    <PhoneInput
                       id="tester-chat-id"
-                      value={chatId}
-                      onChange={e => setChatId(e.target.value)}
-                      placeholder="+1555555555@c.us"
+                      country={country}
+                      onCountryChange={setCountry}
+                      value={phone}
+                      onChange={setPhone}
                       className="flex-1"
                     />
                     <Button

@@ -150,6 +150,91 @@ unusable anywhere Chrome isn't at a hardcoded system path.
 | CI hardening | `bun install --frozen-lockfile` and `PUPPETEER_SKIP_DOWNLOAD=true` in the CI job. |
 | Verified | On Bun 1.4.2: `bun run test` 198/0 (parallel), typecheck + lint clean, boot smoke test with `--no-orphans` and exit. Lockfile-format analysis and declined candidates: [[Bun Runtime Adoption#Bun 1.4.2 pin (2026-09-29)]]. |
 
+## Dream UI pass (2026-09-29)
+
+| Item | Detail |
+|---|---|
+| Ask | Console "too serious and boring" → fun, dreamy, eye-candy UI with beautiful animations; every component touched. |
+| Palette | Bun-brand tokens: cream light theme (now the default) + plum dark theme; pastel status chips; aurora background; `.text-gradient`. |
+| Type | Fredoka + Nunito (`@fontsource-variable`); Oxanium retired. |
+| Motion | Stagger/CountUp/celebrate (`dream.tsx`), sliding tab + nav pills (Framer Motion `layoutId`), springy primitives, login orbs, chat send pop; `useReducedMotion` respected. |
+| Components | All ui/* primitives restyled; dialogs/sheets/menus softened; shimmer skeletons; pastel rich toasts; login rebuilt with password reveal toggle; sidebar IA regrouped Operate/Tools. |
+| Load path | `scripts/build-frontend.sh` → `frontend-dist` (untracked build artifact served by the API). |
+| Verified | Build clean; CDP screenshots light/dark + mobile (1440×900@2, 390×844@3); reveal toggle and theme toggle live-checked; `bun run test` 198/0; typecheck + lint clean. |
+
+## Desktop sizing and radius pass (2026-09-29)
+
+| | |
+|---|---|
+| Ask | "On desktop elements and components are too small and the border radius crops out elements." |
+| Root cause | Dream pass kept the original compact density: 28px inputs, `md:text-xs` shrinking text to 12px on desktop, 20px base radius oversized relative to content. |
+| Fix | Desktop-only root scale `@media (min-width: 1024px) { html { font-size: 18px } }` so all rem-based tokens grow together; control heights bumped (inputs h-8, selects h-8, badges h-6, tabs h-9, table heads h-11); base `--radius` 1.25rem→1rem; `--card-spacing` pinned to `--spacing(5)`; legacy `text-xs`/`text-[10-11px]` page overrides removed. |
+| Mobile | Unchanged: 16px root, compact rhythm preserved. |
+| Verified | CDP computed-style audit (root 18px, inputs 36px, card padding 22.5px), zero h-overflow on 6 pages, dialog + select menu inspected, `bun run test` 198/0, typecheck + oxlint clean. |
+
+## Dreamscape v2 (2026-09-29)
+
+| Item | Detail |
+|---|---|
+| Ask | User rated the first dream pass "3/10", asked for research + a genuinely eye-appealing, dreamy design. |
+| Insight | v1's dream was skin-deep: flat cards on a flat page, slab sidebar, aurora trapped inside the content inset so sidebar and content lived in different worlds. |
+| Fix | One fixed dreamscape layer behind the whole app (gradient sky + 4 aurora ribbons + bloom + sparkles/bokeh + dark starfield + veil + grain); glass material system (`.glass-card` / `.glass-frost` / `.glass-pop` / `.glass-field`) applied to cards, dock, menus, dialogs, sheets, fields, empty states, chips; floating glass dock (26px radius, 0.75rem inset, blur); bigger display type (stat metrics text-4xl, page titles text-3xl, login headline text-4xl). |
+| Blur budget | backdrop-filter only on fixed/sticky/overlay surfaces (dock, page header, menus, dialogs, login card); scrolling cards use translucent gradients (cheap on the 4 GiB box). |
+| Build fix | Hand-written `-webkit-backdrop-filter` pairs got collapsed to prefixed-only by LightningCSS (Chromium ignores it → computed none). Standard property only in source now; build autoprefixes. |
+| Verified | CDP: dock blur live, gradient glass computed everywhere, zero overflow light/dark/mobile; MiMo vision rate 7.5–9/10 on login/dashboard/sessions/dialog/mobile (was 3/10); flagged polish (empty state, dark contrast) fixed; `bun run test` 198/0, typecheck + oxlint clean. |
+
+## Dashboard insights (2026-09-29)
+
+| Item | Detail |
+|---|---|
+| Ask | "The dashboard should have graphical representation of data and the data should be filterable" + "These graphs dont cover enough important metrix." |
+| Charts | Insights section with five recharts views on real data: SessionsDonut (status mix + center total), MessagesChart (delivered vs failed per hour/day with totals + fail rate), SessionActivityChart (Created/Started/Stopped/QR), IssuesChart (warn+error by cause: Messages/Webhooks/Auth/Sessions/Other), WorkersLoad (horizontal bars with count labels). Stacked charts carry color legends; two new KPI cards (Messages, Issues) sit in the stat row. |
+| Filters | Session dropdown (scopes charts, KPIs and the sessions table to one session; All sessions releases), engine chips (NOWEB/WEBJS, drive sessions + workers), From/To date pickers for arbitrary ranges (hourly buckets up to 2 days, daily beyond; Today/7d/30d presets), Reset action. |
+| Rework | Replaced the status chips with the session dropdown and the 24h/7d/30d chips with the date range control. Routes no longer depend on status filtering; the bucket helper reads any [from, to] window. |
+| Data | `GET /api/audit` (limit 500) polled at 30s; message volume from `message_sent`/`message_failed` actions, issues from warn/error severities grouped by action. |
+| Bug fixed | Both stacked charts displayed the shared in-range event count (71) as their own total; the bucket helper now counts only entries each chart actually classifies. Caught by vision review. |
+| Verified | CDP on a seeded test store: totals match the KPI cards (22 events, 29 issues, 21/8 messages at 28%), tooltip renders (Delivered 1 / Failed 0 on hover), range swaps axis labels, zero overflow light/dark/mobile; MiMo 8-9/10; `bun run test` 198/0, typecheck + oxlint clean. |
+
+## Logo + uniform stat cards (2026-09-29)
+
+| Item | Detail |
+|---|---|
+| Ask | "Use this logo and the cards at the top of the dashboard should be uniform." |
+| Logo | Supplied mark adopted as `logo.jpg` (sidebar, login hero and og:image read it directly); `favicon.png` (64) + `apple-touch-icon.png` (180) regenerated from it; stale `favicon.svg` link and file removed. |
+| Cards | `h-full flex-col` shell for all five cards, grid `grid-cols-2 → lg:grid-cols-5` with the last card spanning both columns below lg, version-card footer normalized to a one-line hint (`NOWEB engine`), docs links moved to a "BunWa docs" line under the row. |
+| Verified | Five cards 205x215 identical at 1440px; mobile 2+2+1 full-width, zero overflow; MiMo 9/10 desktop + 9/10 mobile; logo re-verified on sidebar light/dark + login after the asset-cache fix (see below); `bun run test` 198/0, typecheck + oxlint clean. |
+
+## Asset caching fix (2026-09-30)
+
+| Item | Detail |
+|---|---|
+| Symptom | After the logo swap, browsers kept rendering the old mark. Screenshot "verification" misled because the test browser held a pre-swap copy of /logo.jpg; file-level checks (md5, sizes) were correct all along. |
+| Root cause | `serveStaticFile` gave every non-hashed file `max-age=86400`, so unhashed public assets (logo.jpg, favicon.png, apple-touch-icon.png) could stay stale for up to a day after a deploy. |
+| Fix | Unhashed public assets now send `no-cache` (revalidate per request; ETag makes the 304s cheap). Only content-hashed files stay `immutable`. |
+| Verified | `curl -I /logo.jpg` -> `Cache-Control: no-cache`; fresh browser pass: loaded logo naturalWidth 1280x1163 (stale old file) before `Network.clearBrowserCache`, 1254x1254 + 86028 bytes (the new mark) after; MiMo confirms the glossy 3D mark on sidebar light/dark and login. |
+| Lesson | When verifying an asset swap, check the file the browser actually resolved (naturalWidth/size), not just the bytes on disk. Unhashed assets must never be long-cached. |
+
+## Country selector + @c.us on phone fields (2026-09-30)
+
+| Item | Detail |
+|---|---|
+| Ask | "The message tester should have a country selector which prefixes the country code and the @c.us should also be added, the user only adds the main number, implement this for everyplace where the user is to type or add a phone number." |
+| Component | New `PhoneInput` (country selector + national-number field + live "Resolves to ..." preview) built on `lib/phone.ts`; 248-country dial-code list in `lib/phone-countries.ts` with Ghana pinned as the default. Trigger shows a compact flag + dial code, the menu shows flag, name and code. |
+| Applied | Every phone entry point: message tester (was "Chat ID / phone number"), chat New chat dialog, templates preview/send dialog, session QR dialog Phone pairing (digits preview there, no @c.us). |
+| Behaviour | `201234567` + Ghana -> `233201234567@c.us` (local leading zero optional); `+233 ...`, `00233 ...` and full JIDs pass through; `/messages/<jid>` splits back into country + local number for editing. |
+| Verified | CDP: Ghana default and US switch both resolve correctly (`233201234567@c.us` / `15551234567@c.us`); paste variants identical; URL prefill works; chat, templates and pairing dialogs all verified with typed input + preview; mobile 390px no overflow; MiMo 9/10 on the input row; `bun run test` 198/0, typecheck + oxlint clean. |
+
+## Chat redesign: collapsible rail + message features (2026-09-30)
+
+| Item | Detail |
+|---|---|
+| Ask | "The chat route should be redesigned and have a collapsable sidebar which when collapsed shows the chats icons and the features such as sending templates, polls liking, staring and reacting to messages should be properly implemented along with typing indicator, online indicator and so on." |
+| Sidebar | Conversations panel collapses to a 68px icon rail on desktop (expand / new chat / status buttons, per-chat avatars with unread badges + presence dots, session chip with working dot at the bottom). Persisted in `localStorage` (`bunwa.chat.sidebar`); mobile keeps the full panel (drawer layout, no collapse control). Rows got soft rounded hover/selected states. |
+| Message features | Star action added to the hover toolbar (`PUT /api/star`, optimistic + revert, filled star in the meta, per-chat persistence `bunwa.stars.<session>.<chat>`); poll payloads render a poll card (header, question, options, single/multi hint); reactions, reply, templates and send paths already existed and stay wired through the same toolbar. |
+| Presence + typing | Websocket now subscribes to `presence.update`; frames update a per-chat presence map (strongest of recording > composing > available > paused > unavailable) with a 12s typing expiry. Open chat: header shows `online` / `typing…` / `recording audio…` + green avatar dot; `<ChatMessages>` typingUsers renders the three-dot bubble; list and rail previews show `typing…`. On chat open the page calls `POST presence/:chatId/subscribe` + `GET presence/:chatId`; a full-list `GET presence` seeds the dots. |
+| Verified | The real components were exercised with fixture data in a scratch harness (vite on :5199, kept outside the repo): hover toolbar, star toggle, reaction picker + chip, poll card, typing bubble, online/typing header, 68px rail collapse with badges/dots, rail chat switch, mobile — zero console errors. On the live app (:3096): collapse -> 68px + `localStorage=collapsed`, survives reload, expand restores; ws URL carries `presence.update`; collapse control hidden at 390px; `bun run test` 198/0, typecheck + oxlint clean. |
+| Note | The local test store has no paired session, so live message traffic could not be exercised against a real phone; message-level behaviour is verified through the harness against the same components + API contract (`PUT /api/star`, presence routes). |
+
 ## Related
 
 [[OpenWA Parity]] · [[Roadmap]] · [[Testing]] · [[Dashboard]] · [[Known Gaps and Stubs]]

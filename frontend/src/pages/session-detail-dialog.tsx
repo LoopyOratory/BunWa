@@ -12,8 +12,9 @@ import { EngineBadge, Metric, Skeleton, StatusBadge } from "@/components/primiti
 import { api, type Session } from "@/lib/api"
 import { Smartphone, QrCode, Loader2, Copy, Phone } from "lucide-react"
 import { QRCodeDisplay } from "@/components/qr-code"
+import { PhoneInput } from "@/components/phone-input"
+import { toIntlDigits } from "@/lib/phone"
 import { toast } from "sonner"
-import { Input } from "@/components/ui/input"
 
 interface Props {
   session: Session | null
@@ -36,6 +37,7 @@ export function SessionDetailDialog({ session, open, onOpenChange }: Props) {
   const [qrError, setQrError] = useState<string | null>(null)
   const [loadingScreenshot, setLoadingScreenshot] = useState(false)
   const [loadingQr, setLoadingQr] = useState(false)
+  const [pairingCountry, setPairingCountry] = useState("GH")
   const [pairingPhone, setPairingPhone] = useState("")
   const [pairingCode, setPairingCode] = useState<string | null>(null)
   const [pairingError, setPairingError] = useState<string | null>(null)
@@ -115,8 +117,8 @@ export function SessionDetailDialog({ session, open, onOpenChange }: Props) {
 
   const handlePairingCode = async () => {
     if (!pairingPhone.trim() || !session) return
-    // Strip all non-digit characters for Baileys (no +, no spaces, no dashes)
-    const cleanPhone = pairingPhone.trim().replace(/\D/g, "")
+    // International digits for Baileys: country code + main number, no +, no spaces.
+    const cleanPhone = toIntlDigits(pairingCountry, pairingPhone)
     if (!cleanPhone) {
       toast.error("Enter a valid phone number")
       return
@@ -203,13 +205,16 @@ export function SessionDetailDialog({ session, open, onOpenChange }: Props) {
                 <Phone className="size-4 text-muted-foreground" strokeWidth={1.75} />
                 <span className="text-sm font-medium">Phone pairing</span>
               </div>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="+233 50 123 4567"
+              <div className="flex items-start gap-2">
+                <PhoneInput
+                  country={pairingCountry}
+                  onCountryChange={setPairingCountry}
                   value={pairingPhone}
-                  onChange={(e) => setPairingPhone(e.target.value)}
-                  className="min-h-[44px] flex-1"
-                  onKeyDown={(e) => e.key === "Enter" && !pairingLoading && handlePairingCode()}
+                  onChange={setPairingPhone}
+                  placeholder="501234567"
+                  preview="digits"
+                  onEnter={() => !pairingLoading && handlePairingCode()}
+                  className="flex-1"
                 />
                 <Button onClick={handlePairingCode} disabled={pairingLoading || !pairingPhone.trim()} className="min-h-[44px] rounded-md">
                   {pairingLoading ? <Loader2 className="size-4 animate-spin" strokeWidth={1.75} /> : "Get code"}

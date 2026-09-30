@@ -589,3 +589,25 @@
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
+
+/* ─── Dream polish (console pass) ──────────────────────────────────────
+   Small additive touches; each theme keeps its own palette. */
+.chat-bubble {
+  transition: transform 160ms var(--chat-ease, ease-out);
+}
+.chat-message:hover .chat-bubble {
+  transform: translateY(-1px);
+}
+@keyframes chat-send-pop {
+  0%   { transform: scale(0.6) rotate(-12deg); opacity: 0; }
+  60%  { transform: scale(1.08) rotate(2deg); }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+.chat-composer button[aria-label="Send message"],
+.chat-composer button[aria-label="Stop recording"] {
+  animation: chat-send-pop 220ms var(--chat-ease, ease-out);
+  box-shadow: 0 6px 18px -6px color-mix(in oklab, var(--chat-accent), transparent 45%);
+}
+.chat-composer button[aria-label="Send message"]:hover {
+  box-shadow: 0 8px 22px -6px color-mix(in oklab, var(--chat-accent), transparent 35%);
+}
