@@ -14,7 +14,7 @@ import {
 import { toast } from "sonner"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { ChatProvider, ChatMessages } from "@/components/ui/chat"
-import type { ChatUser, ChatMessageData } from "@/components/ui/chat"
+import type { ChatUser, ChatMessageData, TypingUser } from "@/components/ui/chat"
 import { EmptyState, ErrorState, Metric, Skeleton } from "@/components/primitives"
 import { api, ApiError, type Session, type ChatOverview, type Message, type Contact } from "@/lib/api"
 import { useWebSocket } from "@/lib/use-websocket"
@@ -22,7 +22,7 @@ import { ChatConversations } from "@/components/chat/chat-conversations"
 import { ChatHeader } from "@/components/chat/chat-header"
 import { ChatComposerWrapper } from "@/components/chat/chat-composer-wrapper"
 import { TemplatePicker } from "@/components/chat/template-picker"
-import { mapMessage, resolveUserJid, showSendError } from "@/components/chat/helpers"
+import { mapMessage, resolveUserJid, showSendError, chatName } from "@/components/chat/helpers"
 import { PhoneInput } from "@/components/phone-input"
 import { toIntlDigits } from "@/lib/phone"
 
@@ -49,6 +49,9 @@ function isStoreDisabledError(error: unknown): boolean {
 
 const STORE_DISABLED_TITLE = "Chat history is unavailable"
 const STORE_DISABLED_DESCRIPTION = "This session is running without a message store, so BunWa cannot read chats, messages or contacts. Enable the store in the session settings and restart the session. History backfill also needs full sync enabled."
+
+/** Ordering for picking the strongest presence among several participants. */
+const PRESENCE_RANK: Record<string, number> = { recording: 4, composing: 3, available: 2, paused: 1, unavailable: 0 }
 
 /* ================================================================== */
 /*  DIALOGS (ported from old chat-page)                                */
@@ -577,6 +580,13 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   const [newChatOpen, setNewChatOpen] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
   const [mediaDialog, setMediaDialog] = useState<{ open: boolean; type: "image" | "file" | "voice" | "video" | "location" | "poll" | "buttons" }>({ open: false, type: "image" })
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem("bunwa.chat.sidebar") === "collapsed" } catch { return false }
+  })
+  const [starred, setStarred] = useState<Set<string>>(new Set())
+  const [presences, setPresences] = useState<Map<string, string>>(new Map())
+  const [typingMap, setTypingMap] = useState<Map<string, string>>(new Map())
+  const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   const currentSession = sessions.find((s) => s.name === selectedSession)
   const isWorking = currentSession?.status === "WORKING"
@@ -669,6 +679,126 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   loadChatsRef.current = loadChats
   const chatsLoadPendingRef = useRef(false)
 
+  /* ── Sidebar collapse (persisted across visits) ── */
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev
+      try { localStorage.setItem("bunwa.chat.sidebar", next ? "collapsed" : "expanded") } catch { /* private mode */ }
+      return next
+    })
+  }, [])
+
+  /* ── Stars — per chat, persisted locally, mirrored to /api/star ── */
+  const starredRef = useRef(starred)
+  starredRef.current = starred
+  const starsKeyRef = useRef<string | null>(null)
+  starsKeyRef.current = selectedSession && selectedChat ? `bunwa.stars.${selectedSession}.${selectedChat.id}` : null
+  useEffect(() => {
+    const key = starsKeyRef.current
+    if (!key) { setStarred(new Set()); return }
+    try { setStarred(new Set(JSON.parse(localStorage.getItem(key) || "[]"))) } catch { setStarred(new Set()) }
+  }, [selectedSession, selectedChat])
+  const persistStars = useCallback((next: Set<string>) => {
+    const key = starsKeyRef.current
+    if (!key) return
+    try { localStorage.setItem(key, JSON.stringify([...next])) } catch { /* ignore */ }
+  }, [])
+  const handleStar = useCallback(async (messageId: string) => {
+    const session = selectedSessionRef.current
+    const chatId = selectedChatRef.current
+    if (!session || !chatId) return
+    const wasStarred = starredRef.current.has(messageId)
+    const next = new Set(starredRef.current)
+    if (wasStarred) next.delete(messageId); else next.add(messageId)
+    setStarred(next)
+    persistStars(next)
+    try {
+      await api.setStar(session, chatId, messageId, !wasStarred)
+      toast.success(wasStarred ? "Removed from starred" : "Starred")
+    } catch {
+      const revert = new Set(starredRef.current)
+      if (wasStarred) revert.add(messageId); else revert.delete(messageId)
+      setStarred(revert)
+      persistStars(revert)
+      toast.error("Could not update the star")
+    }
+  }, [persistStars])
+
+  /* ── Presence + typing ──────────────────────────────────────────── */
+  const setTypingForChat = useCallback((chatId: string, state: string | null) => {
+    const timers = typingTimersRef.current
+    const existing = timers.get(chatId)
+    if (existing) { clearTimeout(existing); timers.delete(chatId) }
+    if (state) {
+      setTypingMap((prev) => new Map(prev).set(chatId, state))
+      // Safety net: engines do not always send a "paused" after composing.
+      timers.set(chatId, setTimeout(() => {
+        timers.delete(chatId)
+        setTypingMap((prev) => { if (!prev.has(chatId)) return prev; const n = new Map(prev); n.delete(chatId); return n })
+      }, 12000))
+    } else {
+      setTypingMap((prev) => { if (!prev.has(chatId)) return prev; const n = new Map(prev); n.delete(chatId); return n })
+    }
+  }, [])
+  useEffect(() => () => {
+    for (const t of typingTimersRef.current.values()) clearTimeout(t)
+    typingTimersRef.current.clear()
+  }, [])
+
+  const applyPresences = useCallback((chatId: string, entries: Record<string, { lastKnownPresence?: string }> | undefined) => {
+    let state: string | null = null
+    for (const p of Object.values(entries || {})) {
+      const s = p?.lastKnownPresence
+      if (!s) continue
+      if (!state || (PRESENCE_RANK[s] ?? 0) > (PRESENCE_RANK[state] ?? 0)) state = s
+    }
+    if (!state) return
+    setPresences((prev) => new Map(prev).set(chatId, state as string))
+    if (state === "composing" || state === "recording") setTypingForChat(chatId, state)
+    else setTypingForChat(chatId, null)
+  }, [setTypingForChat])
+  const applyPresencesRef = useRef(applyPresences)
+  applyPresencesRef.current = applyPresences
+
+  /* Stream presence for the open chat + read its current state. */
+  useEffect(() => {
+    if (!selectedSession || !selectedChat || !isWorking) return
+    const chatId = selectedChat.id
+    api.subscribePresence(selectedSession, chatId).catch(() => {})
+    api.getPresence(selectedSession, chatId)
+      .then((res) => applyPresencesRef.current(chatId, (res as unknown as { presences?: Record<string, { lastKnownPresence?: string }> })?.presences))
+      .catch(() => {})
+  }, [selectedSession, selectedChat, isWorking])
+
+  /* Seed the list dots when the session becomes working. */
+  useEffect(() => {
+    if (!selectedSession || !isWorking) { setPresences(new Map()); return }
+    let cancelled = false
+    api.getPresences(selectedSession).then((list) => {
+      if (cancelled || !Array.isArray(list)) return
+      const next = new Map<string, string>()
+      for (const item of list as Array<{ id?: string; presences?: Record<string, { lastKnownPresence?: string }> }>) {
+        if (!item?.id) continue
+        let state: string | null = null
+        for (const p of Object.values(item.presences || {})) {
+          const s = p?.lastKnownPresence
+          if (!s) continue
+          if (!state || (PRESENCE_RANK[s] ?? 0) > (PRESENCE_RANK[state] ?? 0)) state = s
+        }
+        if (state) next.set(item.id, state)
+      }
+      if (next.size) setPresences((prev) => new Map([...prev, ...next]))
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [selectedSession, isWorking])
+
+  const typingUsers: TypingUser[] = useMemo(() => {
+    if (!selectedChat) return []
+    const state = typingMap.get(selectedChat.id)
+    if (!state) return []
+    return [{ id: selectedChat.id, name: chatName(selectedChat, contacts) }]
+  }, [typingMap, selectedChat, contacts])
+
   const handleWsMessage = useCallback((data: any) => {
     if (!data || typeof data !== "object") return
     const event = data.event as string | undefined
@@ -701,6 +831,9 @@ export function ChatPage({ initialSession }: ChatPageProps) {
           return { ...m, reactions: [...filtered, { text, key: { fromMe: payload.fromMe, remoteJid: reactor }, senderTimestampMs: (payload.timestamp || 0) * 1000 }] }
         }))
       }
+    } else if (event === "presence.update") {
+      const presenceChatId = payload.id as string | undefined
+      if (presenceChatId) applyPresencesRef.current(presenceChatId, payload.presences)
     } else {
       return
     }
@@ -712,7 +845,7 @@ export function ChatPage({ initialSession }: ChatPageProps) {
       setTimeout(() => { chatsLoadPendingRef.current = false; loadChatsRef.current() }, 2000)
     }
   }, [])
-  useWebSocket({ session: selectedSession || "*", events: "message,message.any,message.ack,message.reaction", onMessage: handleWsMessage })
+  useWebSocket({ session: selectedSession || "*", events: "message,message.any,message.ack,message.reaction,presence.update", onMessage: handleWsMessage })
 
   /* ── 5-second polling fallback for unread counts ── */
   useEffect(() => {
@@ -731,8 +864,8 @@ export function ChatPage({ initialSession }: ChatPageProps) {
 
   /* ── Mapped Messages ── */
   const mappedMessages: ChatMessageData[] = useMemo(
-    () => [...messages].reverse().map((m) => mapMessage(m, contacts, currentUserJid)),
-    [messages, contacts, currentUserJid]
+    () => [...messages].reverse().map((m) => ({ ...mapMessage(m, contacts, currentUserJid), isStarred: starred.has(m.id) })),
+    [messages, contacts, currentUserJid, starred]
   )
 
   /* ── Actions ── */
@@ -930,6 +1063,10 @@ export function ChatPage({ initialSession }: ChatPageProps) {
             onOpenStatus={() => setStatusOpen(true)}
             storeDisabled={storeDisabled}
             onRetryChats={loadChats}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={toggleSidebar}
+            presences={presences}
+            typingMap={typingMap}
           />
           <div className="chat-wallpaper hidden flex-1 items-center justify-center px-4 md:flex">
             {storeDisabled ? (
@@ -970,6 +1107,7 @@ export function ChatPage({ initialSession }: ChatPageProps) {
       onEdit={handleEdit}
       onDelete={handleDelete}
       onPin={handlePin}
+      onStar={handleStar}
     >
       <div className="flex h-full overflow-hidden bg-[var(--chat-bg-main)]">
         {/* Sidebar */}
@@ -991,6 +1129,10 @@ export function ChatPage({ initialSession }: ChatPageProps) {
             onOpenStatus={() => setStatusOpen(true)}
             storeDisabled={storeDisabled}
             onRetryChats={loadChats}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={toggleSidebar}
+            presences={presences}
+            typingMap={typingMap}
           />
         </div>
 
@@ -1000,6 +1142,8 @@ export function ChatPage({ initialSession }: ChatPageProps) {
             chat={selectedChat}
             contacts={contacts}
             picture={picture}
+            presence={presences.get(selectedChat.id)}
+            typing={typingMap.has(selectedChat.id)}
             onBack={() => { setSelectedChat(null); setMessages([]) }}
             onArchive={() => {
               if (selectedSession) api.archiveChat(selectedSession, selectedChat.id).then(() => { toast.success("Archived"); loadChats(); setSelectedChat(null) }).catch(() => toast.error("Could not archive the chat"))
@@ -1035,6 +1179,7 @@ export function ChatPage({ initialSession }: ChatPageProps) {
             ) : (
               <ChatMessages
                 messages={mappedMessages}
+                typingUsers={typingUsers}
                 hasMore={hasMoreMessages}
                 onLoadMore={handleLoadMore}
               />

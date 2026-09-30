@@ -16,6 +16,7 @@ import {
   MoreHorizontal,
   Pin,
   Pencil,
+  Star,
   Trash2,
   X,
   Paperclip,
@@ -73,6 +74,7 @@ interface ChatProviderProps {
   onEdit?: (message: ChatMessageData) => void
   onDelete?: (messageId: string) => void
   onPin?: (messageId: string) => void
+  onStar?: (messageId: string) => void
   children: React.ReactNode
   style?: React.CSSProperties
   className?: string
@@ -89,6 +91,7 @@ function ChatProvider({
   onEdit,
   onDelete,
   onPin,
+  onStar,
   children,
   style,
   className,
@@ -104,8 +107,9 @@ function ChatProvider({
       onEdit,
       onDelete,
       onPin,
+      onStar,
     }),
-    [currentUser, dateFormat, messageGroupingInterval, onReactionAdd, onReactionRemove, onReply, onEdit, onDelete, onPin]
+    [currentUser, dateFormat, messageGroupingInterval, onReactionAdd, onReactionRemove, onReply, onEdit, onDelete, onPin, onStar]
   )
 
   return (
@@ -164,7 +168,7 @@ interface ChatMessageActionsProps {
 }
 
 function ChatMessageActions({ message, isOutgoing }: ChatMessageActionsProps) {
-  const { onReply, onReactionAdd, onEdit, onDelete, onPin } = useChatContext()
+  const { onReply, onReactionAdd, onEdit, onDelete, onPin, onStar } = useChatContext()
   const [showReactions, setShowReactions] = React.useState(false)
   const [showMore, setShowMore] = React.useState(false)
 
@@ -204,6 +208,21 @@ function ChatMessageActions({ message, isOutgoing }: ChatMessageActionsProps) {
           </div>
         )}
       </div>
+
+      {/* Star — mirrors WhatsApp's starred messages */}
+      <button
+        onClick={() => onStar?.(message.id)}
+        className="flex size-7 items-center justify-center rounded-md text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-accent-soft)] hover:text-[var(--chat-text-primary)]"
+        aria-label={message.isStarred ? "Unstar message" : "Star message"}
+        aria-pressed={message.isStarred ? "true" : "false"}
+      >
+        <Star
+          className={cn(
+            "size-3.5",
+            message.isStarred && "fill-[var(--chat-orange)] text-[var(--chat-orange)]"
+          )}
+        />
+      </button>
 
       {/* More — dropdown */}
       <div className="relative">
@@ -419,6 +438,12 @@ function ChatMessage({
   // in the last line of text or as its own row under the content.
   const meta = (
     <>
+      {message.isStarred && (
+        <Star
+          className="size-3 fill-[var(--chat-orange)] text-[var(--chat-orange)]"
+          aria-label="Starred"
+        />
+      )}
       {message.isEdited && <span className="italic">edited</span>}
       <time className="tracking-[0.02em]">{formatTimestamp(timestamp)}</time>
       {isOutgoing && message.status && (
@@ -483,6 +508,38 @@ function ChatMessage({
                 replyTo={message.replyTo}
                 isOutgoing={isOutgoing}
               />
+            )}
+
+            {/* Poll card */}
+            {message.poll && (
+              <div className="chat-content-card mt-0.5 min-w-[230px] max-w-[320px] px-3 py-2">
+                <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-[var(--chat-text-tertiary)]">
+                  <BarChart3 className="size-3.5" />
+                  Poll
+                </div>
+                <p className="mt-1 text-[14px] font-semibold leading-[19px] text-[var(--chat-text-primary)]">
+                  {message.poll.name}
+                </p>
+                <div className="mt-2 flex flex-col gap-1">
+                  {message.poll.options.map((option, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-2 rounded-lg bg-[var(--chat-bg-input)] px-2.5 py-1.5"
+                    >
+                      <span
+                        className={cn(
+                          "size-3 shrink-0 border border-[var(--chat-text-tertiary)]",
+                          message.poll!.multipleAnswers ? "rounded-[3px]" : "rounded-full"
+                        )}
+                      />
+                      <span className="text-[13px] text-[var(--chat-text-primary)]">{option}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] text-[var(--chat-text-tertiary)]">
+                  {message.poll.multipleAnswers ? "Select one or more" : "Select one"}
+                </p>
+              </div>
             )}
 
             {/* Text content — the meta floats into the last line, like the

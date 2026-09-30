@@ -307,3 +307,17 @@ The operator asked for a country selector on every phone-number field: the user 
 | Applied | Every phone entry point: message tester, chat New chat dialog, templates preview/send dialog, session QR dialog Phone pairing (digits preview, no suffix there). |
 | Behaviour | Typing `201234567` with Ghana selected resolves to `233201234567@c.us` (with or without the local leading zero); pasting `+233 ...`, `00233 ...` or a full JID passes through untouched; opening `/messages/<jid>` splits the id back into country + local number so it stays editable. |
 | Verified | CDP on the live app: Ghana default `201234567` -> `233201234567@c.us`; switching to the US + `5551234567` -> `15551234567@c.us`; all paste variants resolve identically; `/messages/233201234567@c.us` prefills Ghana + `201234567`; chat, templates and pairing dialogs each verified with typed input + preview; 390px mobile row fits without overflow; MiMo vision 9/10 on the input row; `bun run test` 198/0, typecheck + oxlint clean. |
+
+## 💬 Chat redesign: collapsible rail + live message features (2026-09-30)
+
+The operator asked for a redesigned chat route: a collapsible conversations sidebar that shows chat icons when collapsed, with templates, polls, likes, stars and reactions properly wired, plus typing and online indicators.
+
+| Area | What changed |
+|---|---|
+| Sidebar | The conversations panel collapses to a 68px icon rail on desktop: expand + new chat + status buttons, one avatar per chat (unread badges, presence dots), and a session chip with a working/stopped dot at the bottom. The choice persists per browser (`bunwa.chat.sidebar`); mobile keeps the full-width panel, the rail is desktop-only. |
+| Header | Presence for the open chat: green dot on the avatar + `online`, `typing…`, `recording audio…`, falling back to the number when unknown. |
+| Typing | Inbound `presence.update` frames on the existing websocket feed a per-chat typing map (12s safety expiry); the open chat shows the three-dot typing bubble (`typingUsers` prop, previously unused) and row/rail previews show `typing…`. |
+| Presence | Opening a chat calls `POST /api/:session/presence/:chatId/subscribe` then `GET /api/:session/presence/:chatId`; a `GET /api/:session/presence` pass seeds the list dots. Strongest state wins (recording > composing > available > paused > unavailable); subscriptions are best-effort while the session is not working. |
+| Star | New star action in the hover toolbar (`PUT /api/star`), filled star in the message meta, optimistic with revert-on-failure; per-chat state persists locally (`bunwa.stars.<session>.<chat>`). |
+| Polls | Poll payloads now render a real poll card: header, question, options with radio/checkbox marks, single/multi hint. |
+| Verified | Scratch harness on :5199 rendering the real components with fixtures (not shipped): hover toolbar (reply/react/star/more) visible on hover, star toggle + meta marker, reaction picker + 👍 chip added, poll card, "Ama Mensah is typing" bubble, header online/typing states, collapse to 68px rail with badges + dots, rail chat switch, 390px mobile; zero console errors. On the running app: collapse -> 68px + `localStorage=collapsed`, survives reload, expand restores, websocket subscribes with `presence.update`; collapse control hidden on mobile; `bun run test` 198/0, typecheck + oxlint clean. |

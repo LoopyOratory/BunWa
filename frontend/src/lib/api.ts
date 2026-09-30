@@ -526,6 +526,14 @@ export const api = {
     }),
   getPresences: (session: string) =>
     request<Presence[]>(`/api/${session}/presence`),
+  /** Current presence for one chat (the chat id is usually the contact jid). */
+  getPresence: (session: string, chatId: string) =>
+    request<Presence>(`/api/${session}/presence/${encodeURIComponent(chatId)}`),
+  /** Ask the engine to stream presence updates for this chat (typing/online). */
+  subscribePresence: (session: string, chatId: string) =>
+    request<{ result: boolean }>(`/api/${session}/presence/${encodeURIComponent(chatId)}/subscribe`, {
+      method: "POST",
+    }),
 
   // ==================== STATUS ====================
   postTextStatus: (session: string, text: string) =>

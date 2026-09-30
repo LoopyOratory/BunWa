@@ -33,6 +33,15 @@ export interface ChatMessageData {
   isPinned?: boolean
   isSystem?: boolean
   systemEvent?: string
+  /** Starred by the current user (mirrors the server flag). */
+  isStarred?: boolean
+
+  /** Poll message — rendered as a poll card instead of plain text. */
+  poll?: {
+    name: string
+    options: string[]
+    multipleAnswers?: boolean
+  }
 
   /** Structured selection from an interactive reply (button tap, list row or flow) */
   interactive?: {
@@ -58,6 +67,7 @@ export interface ChatConfig {
   onEdit?: (message: ChatMessageData) => void
   onDelete?: (messageId: string) => void
   onPin?: (messageId: string) => void
+  onStar?: (messageId: string) => void
 }
 
 /** A group of consecutive messages from the same sender within the grouping interval */

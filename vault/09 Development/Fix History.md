@@ -224,6 +224,17 @@ unusable anywhere Chrome isn't at a hardcoded system path.
 | Behaviour | `201234567` + Ghana -> `233201234567@c.us` (local leading zero optional); `+233 ...`, `00233 ...` and full JIDs pass through; `/messages/<jid>` splits back into country + local number for editing. |
 | Verified | CDP: Ghana default and US switch both resolve correctly (`233201234567@c.us` / `15551234567@c.us`); paste variants identical; URL prefill works; chat, templates and pairing dialogs all verified with typed input + preview; mobile 390px no overflow; MiMo 9/10 on the input row; `bun run test` 198/0, typecheck + oxlint clean. |
 
+## Chat redesign: collapsible rail + message features (2026-09-30)
+
+| Item | Detail |
+|---|---|
+| Ask | "The chat route should be redesigned and have a collapsable sidebar which when collapsed shows the chats icons and the features such as sending templates, polls liking, staring and reacting to messages should be properly implemented along with typing indicator, online indicator and so on." |
+| Sidebar | Conversations panel collapses to a 68px icon rail on desktop (expand / new chat / status buttons, per-chat avatars with unread badges + presence dots, session chip with working dot at the bottom). Persisted in `localStorage` (`bunwa.chat.sidebar`); mobile keeps the full panel (drawer layout, no collapse control). Rows got soft rounded hover/selected states. |
+| Message features | Star action added to the hover toolbar (`PUT /api/star`, optimistic + revert, filled star in the meta, per-chat persistence `bunwa.stars.<session>.<chat>`); poll payloads render a poll card (header, question, options, single/multi hint); reactions, reply, templates and send paths already existed and stay wired through the same toolbar. |
+| Presence + typing | Websocket now subscribes to `presence.update`; frames update a per-chat presence map (strongest of recording > composing > available > paused > unavailable) with a 12s typing expiry. Open chat: header shows `online` / `typing…` / `recording audio…` + green avatar dot; `<ChatMessages>` typingUsers renders the three-dot bubble; list and rail previews show `typing…`. On chat open the page calls `POST presence/:chatId/subscribe` + `GET presence/:chatId`; a full-list `GET presence` seeds the dots. |
+| Verified | The real components were exercised with fixture data in a scratch harness (vite on :5199, kept outside the repo): hover toolbar, star toggle, reaction picker + chip, poll card, typing bubble, online/typing header, 68px rail collapse with badges/dots, rail chat switch, mobile — zero console errors. On the live app (:3096): collapse -> 68px + `localStorage=collapsed`, survives reload, expand restores; ws URL carries `presence.update`; collapse control hidden at 390px; `bun run test` 198/0, typecheck + oxlint clean. |
+| Note | The local test store has no paired session, so live message traffic could not be exercised against a real phone; message-level behaviour is verified through the harness against the same components + API contract (`PUT /api/star`, presence routes). |
+
 ## Related
 
 [[OpenWA Parity]] · [[Roadmap]] · [[Testing]] · [[Dashboard]] · [[Known Gaps and Stubs]]
