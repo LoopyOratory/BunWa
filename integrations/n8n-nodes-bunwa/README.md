@@ -6,22 +6,25 @@ n8n community nodes for the [BunWa](https://github.com/LoopyOratory/BunWa) Whats
 
 Community nodes need a self-hosted n8n instance. They are not available on n8n Cloud.
 
-### Through the n8n UI
+Install from a local build (works today). A release workflow publishes the package to npm as
+`n8n-nodes-bunwa` for a tagged release; once it is on npm, the n8n UI route below also works.
+
+### From a local build
+
+```sh
+cd integrations/n8n-nodes-bunwa
+npm install && npm run build
+mkdir -p ~/.n8n/custom
+cd ~/.n8n/custom
+npm install /path/to/BunWa/integrations/n8n-nodes-bunwa
+```
+
+### Through the n8n UI (after the npm release)
 
 1. Open your n8n instance.
 2. Go to Settings > Community nodes.
 3. Select Install, then enter `n8n-nodes-bunwa`.
 4. Confirm the installation and restart n8n if it asks you to.
-
-### Manually with npm
-
-Install the package into the n8n custom nodes folder:
-
-```sh
-mkdir -p ~/.n8n/custom
-cd ~/.n8n/custom
-npm install n8n-nodes-bunwa
-```
 
 If your custom nodes live somewhere else, set `N8N_CUSTOM_EXTENSIONS` to that folder before starting n8n. Restart n8n after installing or updating the package.
 
