@@ -1,516 +1,202 @@
 <div align="center">
-  <img src="frontend/public/logo.jpg" alt="BunWa Logo" width="180" height="160" style="border-radius: 16px;" />
   <h1>BunWa</h1>
-  <p><strong>WhatsApp HTTP API — Blazing-fast, Bun-powered alternative to WAHA</strong></p>
+  <p><strong>A WAHA-compatible WhatsApp HTTP API server built on Bun and Hono.</strong></p>
 
-  <!-- Badges -->
-  <img src="https://img.shields.io/badge/Bun-1.3%2B-14151a?style=flat-square&logo=bun" alt="Bun" />
-  <img src="https://img.shields.io/badge/License-BCL%20v1.0%20(Free%20OSS%20%2F%20%24200%2Fmo%20Commercial)-blue?style=flat-square" alt="License" />
-  <img src="https://img.shields.io/badge/WhatsApp%20API-1%3A1%20WAHA%20Compatible-25D366?style=flat-square&logo=whatsapp" alt="WAHA Compatible" />
-  <img src="https://img.shields.io/badge/PRs-Welcome-brightgreen?style=flat-square" alt="PRs Welcome" />
-  <a href="https://hub.docker.com/r/loopyoratory/bunwa">
-    <img src="https://img.shields.io/badge/Docker%20Hub-loopyoratory%2Fbunwa-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Hub" />
-  </a>
-  <br />
-  <a href="https://selar.com/showlove/loopyoratory">
-    <img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FF813F?style=flat-square&logo=buy-me-a-coffee&logoColor=white" alt="Buy Me A Coffee" />
-  </a>
+  <p>
+    <img src="https://img.shields.io/badge/version-2026.5.1-blue?style=flat-square" alt="Version" />
+    <img src="https://img.shields.io/badge/license-BCL%20v1.0-green?style=flat-square" alt="License" />
+    <img src="https://img.shields.io/badge/Bun-1.4.2%2B-14151a?style=flat-square&logo=bun" alt="Bun" />
+    <img src="https://img.shields.io/badge/tests-198%20passing-brightgreen?style=flat-square" alt="Tests" />
+    <a href="https://hub.docker.com/r/loopyoratory/bunwa">
+      <img src="https://img.shields.io/badge/Docker-loopyoratory%2Fbunwa-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Hub" />
+    </a>
+    <a href="vault/Home.md">
+      <img src="https://img.shields.io/badge/docs-vault-6E4AFF?style=flat-square" alt="Vault" />
+    </a>
+  </p>
 </div>
 
----
+## What is BunWa
 
-**BunWa** is a WhatsApp HTTP API server built on the [Bun](https://bun.sh) runtime with [Hono](https://hono.dev). It is a 1:1 API-compatible rewrite of WAHA (WhatsApp HTTP API) that delivers the same functionality at significantly lower resource usage.
+BunWa is a WhatsApp HTTP API server that keeps WAHA's route names and payloads, so existing WAHA
+scripts and SDKs work unchanged, but runs as a single Bun process on the Hono framework instead of
+Node.js. The default NOWEB engine uses Baileys and needs no browser; an optional WEBJS engine uses
+whatsapp-web.js with Chrome when you need it. Beyond the compatible surface, BunWa ships an MCP
+server for AI agents, a structured audit log, editable and sendable message templates, HMAC-signed
+webhooks with an SSRF guard, a per-session anti-ban sending policy, a React dashboard, and an n8n
+community node. It is a fork of [OpenWA](https://github.com/rmyndharis/OpenWA) and is developed
+independently for Bun. The project is at version 2026.5.1 and its test suite runs 198 tests across
+25 files.
 
-Two WhatsApp engines are supported:
-- **NOWEB** (default) — Uses [Baileys](https://github.com/WhiskeySockets/Baileys), lightweight, no browser required, faster
-- **WEBJS** — Uses [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) with Chrome/Puppeteer, full WhatsApp Web parity
+## Features
 
-<div align="center">
+| Group | What it covers |
+| --- | --- |
+| Sessions and engines | NOWEB (Baileys, default) and WEBJS (whatsapp-web.js + Chrome) selectable per session. QR scan or phone pairing, start, stop, restart, logout, force kill, delete, auto-start on boot, per-session proxy and session config. |
+| Messaging | Text, image, file, voice, video, location, poll, contact vCard, link preview, reply, forward, reaction, star, seen, typing and sticker. Buttons and lists through native flows (WhatsApp caps 3 buttons, and 10 list rows across 3 sections). Bulk batches with progress and cancel. Status and stories. Voice-note transcoding to OGG/Opus with ffmpeg. |
+| Chats and groups | Chat list, messages, archive, delete, mark read or unread, pin and unpin, reactions. Groups: create, leave, participants add, remove, promote and demote, invite codes, description, subject, join info, security settings. Channels, labels, LIDs, contacts and presence. |
+| Webhooks and events | Global and per-session subscriptions, HMAC-SHA256 signatures, idempotency keys, delivery ids, bounded retries with backoff, message filters, SSRF protection and a real test delivery endpoint. Webhook subscriptions and the `/ws` event monitor use the `WAHAEvents` list, which defines 30 event types. |
+| MCP | 53 tools over HTTP (`POST /mcp`) and stdio. Per-session keys scoped to one session, per-session allow and deny policies, a destructive-operations gate, rate limiting and a read-only mode. |
+| Templates and bulk send | Per-session templates with `{{variables}}` (including dotted paths), create, edit, delete, preview and send, addressed by id or name. Bulk sends return a batch id with sent, failed and remaining counts, and can be cancelled. |
+| Anti-ban sending policy | Per-session caps per minute, hour and day, a cold-outreach timelock between new chats, a new-chat daily quota, quiet hours, a warm-up ramp for new sessions, per-session overrides and a bypass list. Blocked sends answer 429 with a `Retry-After` header. |
+| Security | API key and dashboard Basic auth, per-session MCP keys stored as SHA-256 hashes, auth-exempt path list, audit log with retention, 10 MB request body cap, 200 requests per minute per IP on `/api/*`, and SSRF-hardened webhook delivery. |
+| Dashboard | React 19, Vite and Tailwind dashboard served by the same process: sessions and QR pairing, live chat, templates, message tester, audit logs, WebSocket event monitor, infrastructure settings, MCP key management, worker list and API docs. |
+| Integrations | n8n community node with 131 operations across 10 resources plus a webhook trigger, Chatwoot webhook app, and S3-compatible media storage. |
 
-[✨ Features](#features) · [🚀 Quick Start](#quick-start) · [📸 Dashboard](#dashboard) · [🔧 Configuration](#configuration) · [📡 API](#api) · [🧩 MCP](#mcp-server-model-context-protocol) · [🐳 Docker](#docker) · [🏗️ Architecture](#architecture) · [🛠️ Stack](#technology-stack) · [📖 Docs](#documentation)
+## Quick start (local)
 
-</div>
-
-<details>
-<summary><strong>📑 Table of Contents</strong></summary>
-
-- [✨ Features](#features)
-- [🚀 Quick Start](#quick-start)
-  - [🐳 Docker](#docker)
-  - [☁️ Coolify](#coolify)
-- [📸 Dashboard](#dashboard)
-- [🔧 Configuration](#configuration)
-  - [Server](#server)
-  - [Authentication](#authentication)
-  - [Dashboard (auth)](#dashboard-1)
-  - [API Docs (Swagger / Scalar)](#api-docs-swagger--scalar)
-  - [Logging](#logging)
-  - [WhatsApp Engine](#whatsapp-engine)
-  - [Client Config (NOWEB)](#client-config-noweb)
-  - [Session Management](#session-management)
-  - [Presence](#presence)
-  - [Chat Filtering](#chat-filtering-global-defaults)
-  - [Database](#database)
-  - [Media](#media)
-  - [Storage — Local](#storage--local)
-  - [Storage — S3](#storage--s3)
-  - [Webhook](#webhook)
-  - [Proxy](#proxy)
-  - [Queue / Redis](#queue--redis)
-  - [MCP](#mcp-model-context-protocol)
-  - [Chatwoot Integration](#chatwoot-integration)
-  - [Health Check](#health-check)
-- [📡 API](#api)
-- [🧩 MCP Server (Model Context Protocol)](#mcp-server-model-context-protocol)
-  - [Per-Session MCP Keys](#per-session-mcp-keys-)
-  - [Quick Connect](#quick-connect)
-  - [Available Tools](#available-tools)
-  - [Per-Session Tool Policies](#per-session-tool-policies)
-  - [Auth Model](#auth-model)
-  - [Test the MCP Server](#test-the-mcp-server)
-- [🏗️ Architecture](#architecture)
-- [🛠️ Technology Stack](#technology-stack)
-- [📖 Documentation](#documentation)
-- [⭐ Support](#support)
-- [📄 License](#license)
-
-</details>
-
-<a id="features"></a>
-## ✨ Features
-
-- **🚄 Fast** — Bun runtime, batch-loaded auth state, fast startup
-- **🔌 Dual Engine** — NOWEB (Baileys) or WEBJS (whatsapp-web.js + Chrome), choose per session
-- **📱 Phone Pairing** — QR code scan or phone number pairing
-- **🔧 REST API** — Full WAHA-compatible API surface
-- **🌐 Webhooks** — Event-driven with HMAC signing + SSRF protection
-- **🛡️ Auth** — API key + dashboard login + per-session MCP keys + policy-based access control
-- **☁️ Storage** — Local filesystem or S3-compatible object storage
-- **🗄️ Database** — SQLite (via `bun:sqlite`) or PostgreSQL with transaction support
-- **🧩 MCP Server** — Model Context Protocol with 50+ tools, stdio + HTTP transports, per-session keys
-- **📝 Templates** — message templates with variables: edit, preview, and send from the dashboard, the API, or MCP
-- **🚦 Safe Sending** — anti-ban per-session sending limits with usage counters and next-allowed times
-- **📊 Dashboard** — React + shadcn/ui dashboard with real-time chat, MCP key management
-- **📱 Mobile-first** — Responsive UI built for mobile
-- **🐳 Docker** — Multi-stage builds, Coolify-ready, ~290MB runtime image
-
-<a id="quick-start"></a>
-## 🚀 Quick Start
+Requirements: Bun 1.4.2 or newer (`engines.bun`, pinned in `.bun-version`). ffmpeg is needed for
+voice-note transcoding (`sendVoice` with `convert=true`). Chrome or Chromium is only needed for the
+WEBJS engine; point `CHROME_PATH` or `PUPPETEER_EXECUTABLE_PATH` at it.
 
 ```bash
-# Clone and enter
+# Clone and install
 git clone https://github.com/LoopyOratory/BunWa.git bunwa
 cd bunwa
+bun install
 
-# Requires Bun >= 1.4.2 (pinned in .bun-version + package.json engines) —
-# upgrade with `bun upgrade` if needed.
-# Install dependencies (skips Puppeteer Chromium download — use system Chrome for WEBJS)
-PUPPETEER_SKIP_DOWNLOAD=true bun install
-
-# ffmpeg is required for transcoding voice notes to OGG/Opus (WhatsApp voice
-# message format) — install it via your system package manager if not already
-# present (e.g. `apt-get install ffmpeg`, `brew install ffmpeg`). Already
-# included in the Docker images.
-
-# Copy and configure environment
+# Configure
 cp .env.example .env
-# Edit .env — at minimum set WAHA_API_KEY for production
+# Edit .env and set WAHA_API_KEY. In production also set WAHA_ALLOW_NO_AUTH=false.
 
-# Start the server
-bun run src/main.ts
+# Build the dashboard and start
+bun run setup            # installs dependencies and builds frontend-dist/
+bun run start            # production server on http://localhost:3000 (same as bash scripts/start.sh)
+
+# Or run in development
+bun run dev              # API on http://localhost:3001, Vite dev server with HMR on http://localhost:5173
 ```
 
-The dashboard opens at **http://localhost:3000** — the default login is `admin` / `admin` (change via `WAHA_DASHBOARD_USERNAME` / `WAHA_DASHBOARD_PASSWORD` in `.env`).
+The dashboard is served at `http://localhost:3000` and the default login is `admin` / `admin`
+(change it with `WAHA_DASHBOARD_USERNAME` and `WAHA_DASHBOARD_PASSWORD`).
 
-> **Production:** set `WAHA_API_KEY` to a strong random value and `WAHA_ALLOW_NO_AUTH=false`.
-> Without either, the API, dashboard, WebSocket, and MCP endpoint are reachable **without
-> authentication**.
+> Set `WAHA_API_KEY` to a strong random value and `WAHA_ALLOW_NO_AUTH=false`. With no API key and
+> the default `WAHA_ALLOW_NO_AUTH=true`, the API, dashboard, WebSocket and MCP endpoint all accept
+> unauthenticated requests.
 
-### Docker
+## Deploy
 
-A prebuilt multi-arch image (`linux/amd64`, `linux/arm64`) is published to Docker Hub by
-the [Docker Build & Push](.github/workflows/docker.yml) GitHub Action on every push to `main`
-and every `v*` tag:
+Four Compose files live at the repo root. All of them build the local image tagged with the version
+in `package.json`, run the container as UID/GID 1001 with a read-only root filesystem, read the root
+`.env` file, and refuse to start unless `WAHA_API_KEY` is set.
+
+| File | Audience | Database | Command |
+| --- | --- | --- | --- |
+| [`docker-compose.yml`](docker-compose.yml) | General single-node deployment behind your own reverse proxy. | SQLite (the built-in default, no database variables set). | `docker compose -f docker-compose.yml up -d` |
+| [`docker-compose.postgres.yml`](docker-compose.postgres.yml) | Self-contained BunWa plus PostgreSQL 17; also requires `POSTGRES_PASSWORD` in `.env`. | Postgres for the session store and templates; audit and the anti-ban ledger stay in local SQLite. | `docker compose -f docker-compose.postgres.yml up -d` |
+| [`docker-compose.coolify.yml`](docker-compose.coolify.yml) | Coolify's Docker Compose build pack. No published ports; Coolify's proxy routes to port 3000. | SQLite. | `docker compose -f docker-compose.coolify.yml up -d` |
+| [`docker-compose.1panel.yml`](docker-compose.1panel.yml) | 1Panel's Compose feature. Publishes on `127.0.0.1:${BUNWA_PORT:-3000}` for 1Panel's reverse proxy. | SQLite. | `docker compose -f docker-compose.1panel.yml up -d` |
+
+The SQLite and Postgres files publish the API on `127.0.0.1` only; terminate TLS in the reverse
+proxy you put in front. The Coolify and 1Panel files expect their platform proxy to handle routing
+and HTTPS.
+
+Persistent state lives in the `bunwa-sessions` and `bunwa-data` named volumes (plus `bunwa-media`
+in the Coolify and 1Panel files). If you replace them with host paths, the host directories must be
+writable by UID/GID 1001, the `waha` user inside the image:
 
 ```bash
-docker pull loopyoratory/bunwa:latest
+mkdir -p /data/bunwa/sessions /data/bunwa/data /data/bunwa/media
+chown -R 1001:1001 /data/bunwa
 ```
 
-Tags: `:latest` (main), `:1.2.3` / `:1.2` (release tags), `:sha-<short>` (any build).
+For `docker-compose.postgres.yml`, a host path for Postgres data must be writable by uid 70 (the
+`postgres` user in `postgres:17-alpine`): `mkdir -p /data/bunwa/postgres && chown -R 70:70 /data/bunwa/postgres`.
 
-To publish from your own fork, set two repository secrets under
-**Settings → Secrets and variables → Actions**:
-
-| Secret | Value |
-|--------|-------|
-| `DOCKERHUB_USERNAME` | Your Docker Hub account name |
-| `DOCKERHUB_TOKEN` | A Docker Hub access token with Read/Write scope ([create one](https://hub.docker.com/settings/security)) |
-
-Then edit `IMAGE_NAME` at the top of the workflow to point at your own `namespace/repo`.
-You can also trigger a build manually (Actions → Docker Build & Push → Run workflow) and
-choose which architectures to build.
-
-To build the image locally instead:
+To run the published multi-arch image (`linux/amd64`, `linux/arm64`) directly:
 
 ```bash
-# Build the image
-docker build -t bunwa:latest .
-
-# Create named volumes (survive container removal)
-docker volume create bunwa-sessions
-docker volume create bunwa-media
-
-# Run (NOWEB — no Chrome needed)
-docker run -d \
-  --name bunwa \
+docker run -d --name bunwa \
   -p 3000:3000 \
+  -e WAHA_API_KEY=change-me \
+  -e WAHA_ALLOW_NO_AUTH=false \
   -v bunwa-sessions:/app/.sessions \
+  -v bunwa-data:/app/data \
   -v bunwa-media:/app/.media \
-  -v $(pwd)/.env:/app/.env \
-  bunwa:latest
-
-# Run (WEBJS — mount Chrome binary and set CHROME_PATH)
-docker run -d \
-  --name bunwa-webjs \
-  -p 3000:3000 \
-  -v bunwa-sessions:/app/.sessions \
-  -v bunwa-media:/app/.media \
-  -v $(pwd)/.env:/app/.env \
-  -e CHROME_PATH=/usr/bin/google-chrome \
-  bunwa:latest
+  --restart unless-stopped \
+  loopyoratory/bunwa:latest
 ```
 
-### Coolify
+Tags: `latest` and `main` from the main branch, `2026.5.1` and `2026.5` from release tags, and
+`sha-<short>` for any build. See `.github/workflows/docker.yml` for the publishing details.
 
-BunWa includes a Coolify-optimized Dockerfile. In Coolify:
+## Core API tour
 
-1. **New Resource → Application**
-2. Connect your Git repo (or paste the URL)
-3. **Build Pack:** `Dockerfile`
-4. **Dockerfile Target:** `Dockerfile.coolify`
-5. Set the port to **3000**
-6. Go to **Volumes** (Storages) tab → add two persistent volumes. **Source Path is a host path or named volume, not the container path** — do not set it to `/app/.sessions`, since that directory won't exist on the host and Coolify will create it fresh (often root-owned), which loses your session on every redeploy:
-
-   | Source Path (host)      | Destination Path (container) |
-   |-------------------------|-------------------------------|
-   | `/data/bunwa/sessions`  | `/app/.sessions`               |
-   | `/data/bunwa/media`     | `/app/.media`                  |
-
-   The container runs as a non-root user (`waha`, UID/GID 1001) — if you use bind mounts to host paths (rather than letting Coolify manage a named volume), make sure those host directories are writable by UID 1001, e.g. `mkdir -p /data/bunwa/sessions /data/bunwa/media && chown -R 1001:1001 /data/bunwa`. Otherwise the app will fail to persist auth state (session shows as disconnected/needs re-scan after every redeploy) or, on stricter hosts, fail to start with an `EACCES: permission denied, mkdir` error.
-
-7. Go to **Environment** tab → add `WAHA_API_KEY` and `WAHA_ALLOW_NO_AUTH=false` (plus any others from [Configuration](#configuration))
-
-The Coolify image is smaller (pre-built frontend, no dev deps) and includes a health check.
-Coolify uses the health check to know when the container is ready.
-
-**Verify persistence after deploying** — a successful build/deploy in the Coolify logs does *not* confirm the volume is mounted correctly, since that's a host/compose setting outside the build. On the Coolify host, check:
-
-```bash
-# 1. Confirm the mount points at your real host path, not an anonymous volume
-docker inspect <container-name> --format '{{json .Mounts}}' | python3 -m json.tool
-# Look for Source: /data/bunwa/sessions (not a random volume ID) and Destination: /app/.sessions
-
-# 2. Confirm the host directory is owned by UID/GID 1001 (the `waha` user)
-ls -ld /data/bunwa/sessions /data/bunwa/media
-
-# 3. Confirm the container can actually write to it
-docker exec <container-name> touch /app/.sessions/.write-test && echo OK
-```
-
-If step 1 shows the wrong source, fix the volume's Source Path in Coolify and redeploy. If step 2 shows `root` instead of `1001`, run `chown -R 1001:1001 /data/bunwa` on the host. If step 3 fails, the ownership/permissions still don't match — re-check step 2.
-
-<a id="dashboard"></a>
-## 📸 Dashboard
-
-A full-featured web dashboard built with React 19, shadcn/ui, and Tailwind CSS:
-
-| Page | Description |
-|------|-------------|
-| **Dashboard** | Sessions overview, worker status, quick actions |
-| **Sessions** | Create, start, stop, restart, delete sessions |
-| **Chat** | Real-time messaging with reactions, status icons, file sharing |
-| **Session Settings** | Engine selection (NOWEB/WEBJS), proxy, webhooks, MCP tool policies, **MCP key generation**, per-session auto-start on boot |
-| **Apps** | Webhook integrations with external services (Chatwoot) |
-| **Logs** | Live log streaming with filtering |
-| **Events** | Real-time WebSocket event monitor |
-| **Infrastructure** | Database, storage, and server configuration |
-| **API Docs** | Interactive OpenAPI/Swagger documentation |
-
-<a id="configuration"></a>
-## 🔧 Configuration
-
-All configuration is via environment variables. Copy [`.env.example`](.env.example) to `.env`
-and edit — that file is the canonical source and mirrors every variable below. All variables
-are optional and fall back to the defaults shown; booleans accept `true/false/1/0/yes/no`.
-
-> **Production note:** set `WAHA_API_KEY` and `WAHA_ALLOW_NO_AUTH=false`. With neither set,
-> the API, dashboard, WebSocket, and MCP endpoint are reachable **without authentication**.
-
-### Server
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `3000` | HTTP port. Takes precedence over `WHATSAPP_API_PORT`. |
-| `WHATSAPP_API_PORT` | `3000` | Fallback port if `PORT` is unset. |
-| `WHATSAPP_API_SCHEMA` | `http` | URL scheme (`http` or `https`). |
-| `WHATSAPP_API_HOSTNAME` | `localhost` | Server hostname. |
-| `WAHA_BASE_URL` | — | Override the auto-generated `schema://hostname:port` base URL. |
-| `TRUSTED_PROXIES` | — | Comma-separated trusted proxy IPs. When set, the rate limiter reads `x-forwarded-for` for client IP. |
-| `WAHA_CORS_ORIGIN` | — | Comma-separated CORS origins. When set, credentialed CORS is enabled for those origins; empty = wildcard, no credentials. |
-
-### Authentication
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WAHA_API_KEY` | — | API key for programmatic access (header `X-Api-Key`). **Strongly recommended.** |
-| `WAHA_ALLOW_NO_AUTH` | `true` | When `false`, requests without an API key are rejected. **Set `false` in production.** |
-| `WHATSAPP_API_KEY_EXCLUDE_PATH` | — | Comma-separated API paths excluded from API-key auth (e.g. `/api/health,/api/version`). |
-
-### Dashboard
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WAHA_DASHBOARD_ENABLED` | `true` | Enable/disable the web dashboard UI. |
-| `WAHA_DASHBOARD_USERNAME` | `admin` | Dashboard Basic Auth username. |
-| `WAHA_DASHBOARD_PASSWORD` | `admin` | Dashboard Basic Auth password. |
-
-### API Docs (Swagger / Scalar)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WHATSAPP_SWAGGER_ENABLED` | `true` | Enable the interactive API docs at `/api-docs`. |
-| `WHATSAPP_SWAGGER_USERNAME` | `admin` | API-docs Basic Auth username. |
-| `WHATSAPP_SWAGGER_PASSWORD` | — | API-docs Basic Auth password (empty = no auth). |
-| `WHATSAPP_SWAGGER_TITLE` | `BUNWA - WhatsApp HTTP API` | API-docs page title. |
-| `WHATSAPP_SWAGGER_DESCRIPTION` | — | API-docs description. |
-| `WHATSAPP_SWAGGER_EXTERNAL_DOC_URL` | `https://bunwa.ekosystems.dev/` | External docs URL shown in the API docs. |
-| `WHATSAPP_SWAGGER_CONFIG_ADVANCED` | `false` | Enable advanced Swagger config options. |
-
-### Logging
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WAHA_LOG_LEVEL` | `info` | Log level: `trace`, `debug`, `info`, `warn`, `error`, `fatal`. |
-| `WAHA_HTTP_LOG_LEVEL` | `info` | HTTP request log level. |
-| `WAHA_LOG_FORMAT` | `PRETTY` | Log output format: `PRETTY` or `JSON`. |
-| `DEBUG` | — | Set to `1` for verbose Baileys debug output. |
-| `WAHA_DEBUG_MODE` | `false` | Enable extra diagnostics. |
-
-### WhatsApp Engine
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WHATSAPP_DEFAULT_ENGINE` | `NOWEB` | Default engine: `NOWEB` (Baileys) or `WEBJS` (whatsapp-web.js). |
-| `ENGINE_TYPE` | — | Alternative engine-type override. |
-| `WAHA_NAMESPACE` / `WAHA_SESSION_NAMESPACE` | engine name | Namespace prefix for session names. |
-| `CHROME_PATH` / `PUPPETEER_EXECUTABLE_PATH` | — | Path to Chrome/Chromium binary (**required for the WEBJS engine**). |
-| `WAHA_PRINT_QR` | `true` | Set `false` to suppress QR output in the console. |
-
-> ⚠️ The **WEBJS engine requires Chrome/Chromium** installed on the host (set via `CHROME_PATH`
-> or `PUPPETEER_EXECUTABLE_PATH`). The engine will fail with a clear error if Chrome is
-> missing — it never crashes with a raw module-not-found error.
-
-### Client Config (NOWEB)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WAHA_CLIENT_DEVICE_NAME` | — | Device name shown to WhatsApp. |
-| `WAHA_CLIENT_BROWSER_NAME` | — | Browser name shown to WhatsApp. |
-
-### Session Management
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WHATSAPP_START_SESSION` | — | Comma-separated session names to auto-start on boot. |
-| `WHATSAPP_RESTART_ALL_SESSIONS` | `false` | Restore and start all previously-running sessions on boot. |
-| `WAHA_AUTO_START_DELAY_SECONDS` | `0` | Delay before auto-starting sessions. |
-| `WAHA_WORKER_ID` | — | Worker ID for multi-worker deployments. |
-| `WAHA_WORKER_RESTART_SESSIONS` | `true` | Worker restores sessions on start. |
-| `WAHA_VERSION` | auto | Version override: `CORE` or `PLUS`. Defaults to `PLUS` (the `src/plus` directory ships with this repo) unless explicitly set to `CORE`. |
-
-Plus tier (the default) unlocks setting/removing the account's profile picture and sending media
-(image, video, PDF) by URL or base64 instead of only through the message-send endpoints' own file
-handling. Set `WAHA_VERSION=CORE` to run without it — those calls will then return a
-`AvailableInPlusVersion` error, same as upstream WAHA's free tier. The dashboard's
-[Workers](#dashboard) page and `GET /api/version` report the active tier.
-
-### Presence
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WAHA_PRESENCE_AUTO_ONLINE` | `true` | Mark session ONLINE on any message activity. |
-| `WAHA_PRESENCE_AUTO_ONLINE_DURATION_SECONDS` | `25` | Seconds to keep ONLINE after activity. |
-
-### Chat Filtering (global defaults)
-
-These set the **server-wide** ignore defaults. (Per-session ignore toggles in the dashboard
-are not yet applied by the engine — see [`plans/`](plans/).)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WAHA_SESSION_CONFIG_IGNORE_STATUS` | `false` | Ignore status/list messages. |
-| `WAHA_SESSION_CONFIG_IGNORE_GROUPS` | `false` | Ignore group chats. |
-| `WAHA_SESSION_CONFIG_IGNORE_CHANNELS` | `false` | Ignore channels. |
-| `WAHA_SESSION_CONFIG_IGNORE_BROADCAST` | `false` | Ignore broadcast lists. |
-
-### Database
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WAHA_DATABASE_DRIVER` | `sqlite` | Driver: `sqlite`, `postgres`, or `mongo`. |
-| `WAHA_SQLITE_PATH` | `.sessions/waha.db` | SQLite file path (driver `sqlite`). |
-| `WAHA_DATABASE_URL` | — | PostgreSQL connection string (driver `postgres`). |
-| `WHATSAPP_SESSIONS_POSTGRESQL_URL` | — | Alias for `WAHA_DATABASE_URL`. |
-| `WHATSAPP_SESSIONS_MONGO_URL` | — | MongoDB connection string for session storage. |
-| `WAHA_DB_TYPE` | `sqlite` | Database type reported by the infrastructure endpoint. |
-| `WAHA_DB_HOST` | `localhost` | Reported DB host. |
-| `WAHA_DB_PORT` | `5432` | Reported DB port. |
-| `WAHA_DB_USERNAME` | — | Reported DB username. |
-| `WAHA_DB_NAME` | `./data/waha.sqlite` | Reported DB name. |
-| `WAHA_DB_SSL` | `false` | Reported DB SSL flag. |
-
-### Media
-
-Downloaded media (images, voice notes, videos, documents from incoming messages) is persisted via
-the backend selected by `WAHA_STORAGE_TYPE` (see [Storage — Local](#storage--local) /
-[Storage — S3](#storage--s3) below) and served back at `GET /api/files/:session/:filename`
-(requires the same `X-Api-Key` as the rest of the API).
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WHATSAPP_FILES_FOLDER` | `/tmp/whatsapp-files` | Directory for downloaded media when `WAHA_STORAGE_TYPE=local` and `WAHA_STORAGE_LOCAL_PATH` is unset. |
-| `WHATSAPP_DOWNLOAD_MEDIA` | `true` | Enable automatic media download. |
-| `WHATSAPP_FILES_MIMETYPES` | — | Comma-separated allowed MIME types (empty = all). |
-| `WHATSAPP_HEALTH_MEDIA_FILES_THRESHOLD_MB` | `100` | Media-files health threshold (MB). |
-| `WHATSAPP_HEALTH_SESSION_FILES_THRESHOLD_MB` | `100` | Session-files health threshold (MB). |
-
-### Storage — Local
-
-The dashboard's **Infrastructure** page writes these `WAHA_`-prefixed variables, and they're what
-the running server actually reads to decide where downloaded message media is persisted (`local`
-disk or S3 — see [Media](#media) above):
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WAHA_STORAGE_TYPE` | `local` | Media storage backend: `local` or `s3`. |
-| `WAHA_STORAGE_LOCAL_PATH` | `/tmp/whatsapp-files` (falls back to `WHATSAPP_FILES_FOLDER`) | Local media storage path. |
-| `WAHA_LOCAL_STORE_BASE_DIR` | `.sessions` | Base directory for session auth data. |
-| `WAHA_STORAGE_DIR` | `./data` | Directory for internal databases (audit, templates). |
-| `AUDIT_RETENTION_DAYS` | `90` | Days to retain audit logs (`0` or negative disables). |
-
-The non-`WAHA_`-prefixed `STORAGE_TYPE` / `STORAGE_LOCAL_PATH` / `S3_*` / `DATA_DIR` /
-`EXPORT_IMPORT_MAX_BACKUPS` / `STORAGE_IMPORT_MAX_ENTRIES` / `STORAGE_IMPORT_MAX_BYTES` variables
-belong to a separate export/import backup service (`src/core/storage/storage.service.ts`) that
-isn't wired into any route yet — setting them currently has no effect.
-
-### Storage — S3
-
-Set `WAHA_STORAGE_TYPE=s3` (via the Infrastructure page or `.env`) and configure:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WAHA_S3_ENDPOINT` | — | S3-compatible endpoint URL (e.g. MinIO). Leave unset for real AWS S3. |
-| `WAHA_S3_ACCESS_KEY` | — | Access key ID. |
-| `WAHA_S3_SECRET_KEY` | — | Secret access key. |
-| `WAHA_S3_BUCKET` | — | Bucket name. |
-| `WAHA_S3_REGION` | `us-east-1` | Region. |
-
-### Webhook
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WAHA_WEBHOOK_URL` | — | Default webhook URL for all sessions (overridable per session). |
-| `WEBHOOK_SSRF_PROTECT` | `true` | Enable SSRF protection for webhook delivery. |
-| `SSRF_ALLOWED_HOSTS` | — | Comma-separated hosts/IPs allowed when SSRF protection is on. |
-
-### Proxy
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WHATSAPP_PROXY_SERVER` | — | Single proxy server (`protocol://host:port`). |
-| `WHATSAPP_PROXY_SERVER_LIST` | — | Comma-separated proxy list (overrides the single server). |
-| `WHATSAPP_PROXY_SERVER_INDEX_PREFIX` | — | Index prefix for mapping sessions to proxies. |
-| `WHATSAPP_PROXY_SERVER_USERNAME` / `WHATSAPP_PROXY_SERVER_PASSWORD` | — | Proxy authentication. |
-
-### Queue / Redis
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WAHA_QUEUE_ENABLED` | `false` | Redis-backed queue toggle. |
-| `WAHA_REDIS_HOST` | `localhost` | Redis host. |
-| `WAHA_REDIS_PORT` | `6379` | Redis port. |
-| `WAHA_REDIS_PASSWORD` | — | Redis password. |
-
-> ℹ️ These are currently **reported only** by the infrastructure endpoint — there is no active
-> queue backend bundled (the queue dependencies were removed). Setting them has no runtime effect yet.
-
-### MCP (Model Context Protocol)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MCP_READONLY` | `false` | When `true`, MCP tools operate in read-only mode. |
-| `MCP_RATE_LIMIT_MAX` | `60` | Max MCP requests per window. |
-| `MCP_RATE_LIMIT_WINDOW_MS` | `60000` | MCP rate-limit window (ms). |
-
-### Chatwoot Integration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MILO_API_URL` | `http://localhost:3003/api/webhooks/chatwoot/milo` | Milo API URL for Chatwoot webhook forwarding. |
-
-### Health Check
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WHATSAPP_HEALTH_MONGO_TIMEOUT_MS` | `3000` | MongoDB health-check timeout (ms). |
-
-<a id="api"></a>
-## 📡 API
-
-BunWa is **100% API compatible** with WAHA (WhatsApp HTTP API).
+All `/api` routes accept `X-Api-Key`. `/health` and `/ping` are public. The examples below assume
+`WAHA_API_KEY` is exported in your shell.
 
 ```bash
 # Create a session
 curl -X POST http://localhost:3000/api/sessions \
-  -H "Content-Type: application/json" \
+  -H "X-Api-Key: $WAHA_API_KEY" -H "Content-Type: application/json" \
   -d '{"name":"my-session"}'
 
 # Start it
-curl -X POST http://localhost:3000/api/sessions/my-session/start
+curl -X POST http://localhost:3000/api/sessions/my-session/start \
+  -H "X-Api-Key: $WAHA_API_KEY"
 
-# Send a message
+# Read the QR code (base64 PNG) once the status is SCAN_QR_CODE.
+# Add ?phoneNumber=15551234567 for a pairing code instead.
+curl "http://localhost:3000/api/my-session/auth/qr" -H "X-Api-Key: $WAHA_API_KEY"
+
+# Send a text message
 curl -X POST http://localhost:3000/api/sendText \
-  -H "Content-Type: application/json" \
+  -H "X-Api-Key: $WAHA_API_KEY" -H "Content-Type: application/json" \
+  -d '{"session":"my-session","chatId":"15551234567@c.us","text":"Hello from BunWa"}'
+
+# Send a message with reply buttons
+curl -X POST http://localhost:3000/api/sendButtons \
+  -H "X-Api-Key: $WAHA_API_KEY" -H "Content-Type: application/json" \
   -d '{
     "session": "my-session",
-    "chatId": "233501234567@c.us",
-    "text": "Hello from BunWa!"
+    "chatId": "15551234567@c.us",
+    "body": "How can we help?",
+    "buttons": [
+      {"type": "reply", "text": "Sales", "id": "sales"},
+      {"type": "reply", "text": "Support", "id": "support"}
+    ]
   }'
 
-# Get QR code (for new sessions)
-curl http://localhost:3000/api/sessions/my-session
+# List the session's templates
+curl http://localhost:3000/api/sessions/my-session/templates \
+  -H "X-Api-Key: $WAHA_API_KEY"
+
+# Render and send a template by name or id
+curl -X POST http://localhost:3000/api/sessions/my-session/templates/welcome-message/send \
+  -H "X-Api-Key: $WAHA_API_KEY" -H "Content-Type: application/json" \
+  -d '{"chatId":"15551234567@c.us","variables":{"name":"Ada"}}'
+
+# Read sending-policy usage counters and next-allowed times
+curl http://localhost:3000/api/sessions/my-session/policy/usage \
+  -H "X-Api-Key: $WAHA_API_KEY"
 ```
 
-Full interactive API docs at **http://localhost:3000/api-docs/** when the server is running.
+The interactive API reference is at `http://localhost:3000/api-docs/`. It is generated from the
+OpenAPI document in `src/swagger.ts`.
 
-<a id="mcp-server-model-context-protocol"></a>
-## 🧩 MCP Server (Model Context Protocol)
+## MCP
 
-BunWa exposes a [Model Context Protocol](https://modelcontextprotocol.io) server — AI assistants can send WhatsApp messages, manage sessions, query chats, and interact with groups through 50+ standardized MCP tools. **Two transports are supported:** Streamable HTTP (`POST /mcp`) and stdio (subprocess, for local clients).
+BunWa exposes a Model Context Protocol server with 53 tools for sessions, messaging, chats,
+contacts, presence, statuses, templates and the sending policy. Two transports are supported:
 
-### Per-Session MCP Keys 🔑
+- HTTP: `POST /mcp`, authenticated with `x-api-key: <key>` or `Authorization: Bearer <key>`.
+- stdio: `bun run src/mcp/stdio.ts`, authenticated with the `BUNWA_SESSION` and `BUNWA_MCP_KEY`
+  environment variables.
 
-Every session gets its own scoped MCP credential. From the **Dashboard → Session Settings → MCP** tab:
+The HTTP config for an MCP host:
 
-1. Click **Generate MCP Key**
-2. Copy the key and the ready-made connection config (stdio or HTTP — each has its own Copy button)
-3. Close the dialog — the key is **never shown again**. Only a SHA-256 hash is stored.
+```json
+{
+  "mcpServers": {
+    "bunwa": {
+      "url": "http://localhost:3000/mcp",
+      "headers": { "x-api-key": "your-api-key" }
+    }
+  }
+}
+```
 
-Per-session keys are **auto-scoped** — a key for session "support" can never access session "admin," even if the caller sends a different `sessionId`. Regenerate anytime to rotate (invalidates the old key instantly).
-
-### Quick Connect
-
-**stdio (recommended for local use — no network hop, works with all clients):**
+The stdio config, which is scoped to one session:
 
 ```json
 {
@@ -527,282 +213,369 @@ Per-session keys are **auto-scoped** — a key for session "support" can never a
 }
 ```
 
-**HTTP / SSE (for remote or Docker deployments):**
+Per-session keys are the intended way to connect agents. Generate one from **Dashboard, Session
+settings, MCP** or with `POST /api/sessions/:session/mcp/generate-key`; only the SHA-256 hash is
+stored, and the plaintext is shown once. A session key is forced to its own session on scoped tools
+and is denied on the one unscoped tool, `SessionList`.
 
-```json
-{
-  "mcpServers": {
-    "bunwa": {
-      "url": "http://localhost:3000/mcp",
-      "headers": { "X-Api-Key": "sk_mcp_..." }
-    }
-  }
-}
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `MCP_ENABLED` | `true` | Set to `false` to unmount `POST /mcp` (404). |
+| `MCP_READONLY` | `false` | Set to `true` to expose only read-tier tools. |
+| `MCP_RATE_LIMIT_MAX` | `60` | Maximum MCP requests per key per window. |
+| `MCP_RATE_LIMIT_WINDOW_MS` | `60000` | Rate-limit window in milliseconds. |
+
+The full tool list, per-tool tiers and policy behaviour are in
+[`vault/05 MCP/MCP Tools Reference.md`](vault/05%20MCP/MCP%20Tools%20Reference.md).
+
+## n8n
+
+[`integrations/n8n-nodes-bunwa`](integrations/n8n-nodes-bunwa/README.md) is a community node
+package that wraps this API: 131 operations across 10 resources (message, session, chat, group,
+contact, channel, label, presence, status, server), plus a **BunWa Trigger** node. The trigger
+registers its own webhook subscription on a session when the workflow is activated and removes it
+on deactivation. For button and list replies it flattens the tapped id and label into an
+`interactive` object (`type`, `selectedId`, `selectedText`, `repliedToMessageId`), so a workflow can
+route on `interactive.selectedId` without knowing the raw payload shape. Installation, operation
+tables, workflow examples and deliberately unsupported endpoints are documented in that package's
+README. Build it locally and point `N8N_CUSTOM_EXTENSIONS` at the package folder, or install it from
+npm once a release is published.
+
+## Compatibility with WAHA
+
+BunWa keeps WAHA's API surface: the same route names, the same session-in-body and session-in-path
+dialects, and the same webhook event names.
+
+| Area | Status |
+| --- | --- |
+| REST API | Route names, request bodies and response shapes follow WAHA, so existing clients and SDKs work unchanged. |
+| Sessions, messaging, chats, groups, channels, labels, presence, statuses | Present. |
+| MCP server | Fork-only. WAHA has no MCP surface. |
+| Redis / BullMQ queue | Not ported. Webhooks are delivered inline with bounded retries; `WAHA_QUEUE_*` variables are reported by the infrastructure endpoint only and have no runtime effect. |
+| Plugin marketplace and installer | Not ported. A plugin loader and hook manager exist in the tree but are not wired to any route. |
+| Prometheus metrics | Not present. Observability is `/health`, `/ping`, logs and the audit log. |
+| Docker module (container management) | Not ported. Use Coolify, 1Panel or your own orchestrator. |
+| WebSocket | `/ws` streams session events. `WAHAEvents` defines 30 event types. |
+
+<details>
+<summary><strong>Routes that are known to be broken or stubbed</strong></summary>
+
+These are mounted but cannot succeed today. They are listed so you do not build on them. The full,
+continuously updated list with causes is in
+[`vault/06 Security/Known Gaps and Stubs.md`](vault/06%20Security/Known%20Gaps%20and%20Stubs.md).
+
+| Route | Behaviour |
+| --- | --- |
+| `POST /api/send/buttons/reply` | Returns `{result: true}` and sends nothing. The engine method exists but has no caller. |
+| `POST /api/contacts/block`, `POST /api/contacts/unblock` | 500 on the NOWEB engine; the handlers are stubs. |
+| `DELETE /api/:session/groups/:id` | 500; the handler is a stub even though the engine has a delete method. |
+| `POST /api/:session/chats/:chatId/mute`, `/unmute` | 400; no engine implements `muteChat`. Channel mute works. |
+| `GET /api/contacts/about` | Returns an empty string. |
+| `POST /api/:session/events` | Returns a synthetic `{id, timestamp}`. |
+| `POST /api/:session/media/convert/video` | Returns a placeholder string. |
+| `GET /api/:session/channels/:id/messages/preview` | Returns `AvailableInPlusVersion`; the Argo decoder is missing. |
+
+Parsed message payloads never populate the `location` and `vCards` summary fields, because both
+waproto extractors return null. Sending a location or a contact card works, and the recipient
+receives it; only the summary fields on the returned message object are empty.
+
+</details>
+
+## Configuration
+
+All configuration is environment variables. [`.env.example`](.env.example) is the single source of
+truth: it mirrors every variable listed below with its default. Copy it to `.env` and edit. All
+variables are optional and fall back to the defaults shown; booleans accept
+`true/false/1/0/yes/no`.
+
+These are the essentials:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `3000` | HTTP port. Takes precedence over `WHATSAPP_API_PORT`. |
+| `WAHA_API_KEY` | unset | API key for `X-Api-Key` (and the MCP endpoint). Set it in production. |
+| `WAHA_ALLOW_NO_AUTH` | `true` | Set to `false` to reject requests without a key. |
+| `WAHA_DASHBOARD_USERNAME` / `WAHA_DASHBOARD_PASSWORD` | `admin` / `admin` | Dashboard login. |
+| `WHATSAPP_DEFAULT_ENGINE` | `NOWEB` | `NOWEB` (Baileys) or `WEBJS` (whatsapp-web.js + Chrome). |
+| `WAHA_DATABASE_DRIVER` | `sqlite` | `sqlite`, `postgres` or `mongo`. |
+| `WAHA_STORAGE_TYPE` | `local` | Media storage backend: `local` or `s3`. |
+| `WAHA_LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error` or `fatal`. |
+| `SEND_POLICY_ENABLED` | `true` | Master switch for the anti-ban sending policy. |
+| `MCP_ENABLED` | `true` | Set to `false` to unmount the MCP endpoint. |
+
+<details>
+<summary><strong>Server and CORS</strong></summary>
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `PORT` | `3000` | HTTP port. Takes precedence over `WHATSAPP_API_PORT`. |
+| `WHATSAPP_API_PORT` | `3000` | Fallback port if `PORT` is unset. |
+| `WHATSAPP_API_SCHEMA` | `http` | URL scheme (`http` or `https`). |
+| `WHATSAPP_API_HOSTNAME` | `localhost` | Server hostname. |
+| `WAHA_BASE_URL` | unset | Override the auto-generated `schema://hostname:port` base URL. |
+| `TRUSTED_PROXIES` | unset | Comma-separated trusted proxy IPs. When set, the rate limiter reads `x-forwarded-for` for the client IP. |
+| `WAHA_CORS_ORIGIN` | unset | Comma-separated CORS origins. When set, credentialed CORS is enabled for those origins; empty means wildcard without credentials. |
+
+</details>
+
+<details>
+<summary><strong>Authentication, dashboard and API docs</strong></summary>
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `WAHA_API_KEY` | unset | API key for programmatic access (header `X-Api-Key`). Strongly recommended. |
+| `WAHA_ALLOW_NO_AUTH` | `true` | When `false`, requests without an API key are rejected. Set to `false` in production. |
+| `WHATSAPP_API_KEY_EXCLUDE_PATH` | unset | Comma-separated API paths excluded from API-key auth, for example `/api/health,/api/version`. |
+| `WAHA_DASHBOARD_ENABLED` | `true` | Enable or disable the dashboard UI. |
+| `WAHA_DASHBOARD_USERNAME` | `admin` | Dashboard Basic Auth username. |
+| `WAHA_DASHBOARD_PASSWORD` | `admin` | Dashboard Basic Auth password. |
+| `WHATSAPP_SWAGGER_ENABLED` | `true` | Enable the interactive API docs at `/api-docs`. |
+| `WHATSAPP_SWAGGER_USERNAME` | `admin` | API docs Basic Auth username. |
+| `WHATSAPP_SWAGGER_PASSWORD` | empty | API docs Basic Auth password. Empty means no auth. |
+| `WHATSAPP_SWAGGER_TITLE` | `BUNWA - WhatsApp HTTP API` | API docs page title. |
+| `WHATSAPP_SWAGGER_DESCRIPTION` | empty | API docs description. |
+| `WHATSAPP_SWAGGER_EXTERNAL_DOC_URL` | `https://bunwa.ekosystems.dev/` | External docs URL shown in the API docs. |
+| `WHATSAPP_SWAGGER_CONFIG_ADVANCED` | `false` | Enable advanced Swagger config options. |
+
+The dashboard login endpoint is rate-limited to 10 attempts per minute. Dashboard Basic credentials
+are also accepted on API routes.
+
+</details>
+
+<details>
+<summary><strong>Logging</strong></summary>
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `WAHA_LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error` or `fatal`. |
+| `WAHA_HTTP_LOG_LEVEL` | `info` | HTTP request log level. |
+| `WAHA_LOG_FORMAT` | `PRETTY` | `PRETTY` or `JSON`. |
+| `DEBUG` | unset | Set to `1` for verbose Baileys debug output. |
+| `WAHA_DEBUG_MODE` | `false` | Enable extra diagnostics. |
+
+</details>
+
+<details>
+<summary><strong>Engines, sessions and presence</strong></summary>
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `WHATSAPP_DEFAULT_ENGINE` | `NOWEB` | `NOWEB` (Baileys) or `WEBJS` (whatsapp-web.js + Chrome). |
+| `ENGINE_TYPE` | unset | Alternative engine-type override. |
+| `WAHA_NAMESPACE` / `WAHA_SESSION_NAMESPACE` | engine name | Namespace prefix for session names. |
+| `CHROME_PATH` / `PUPPETEER_EXECUTABLE_PATH` | unset | Path to the Chrome or Chromium binary. Required for the WEBJS engine. |
+| `WAHA_PRINT_QR` | `true` | Set to `false` to suppress QR output in the console. |
+| `WAHA_CLIENT_DEVICE_NAME` | unset | Device name shown to WhatsApp (NOWEB). |
+| `WAHA_CLIENT_BROWSER_NAME` | unset | Browser name shown to WhatsApp (NOWEB). |
+| `WHATSAPP_START_SESSION` | unset | Comma-separated session names to auto-start on boot. |
+| `WHATSAPP_RESTART_ALL_SESSIONS` | `false` | Restore and start all previously running sessions on boot. |
+| `WAHA_AUTO_START_DELAY_SECONDS` | `0` | Delay before auto-starting sessions. |
+| `WAHA_WORKER_ID` | unset | Worker id for multi-worker deployments. |
+| `WAHA_WORKER_RESTART_SESSIONS` | `true` | Worker restores sessions on start. |
+| `WAHA_VERSION` | auto | `CORE` or `PLUS`. Defaults to `PLUS` unless explicitly set to `CORE`. Plus adds profile-picture writes, button header media and S3 media storage. |
+| `WAHA_PRESENCE_AUTO_ONLINE` | `true` | Mark the session ONLINE on any message activity. |
+| `WAHA_PRESENCE_AUTO_ONLINE_DURATION_SECONDS` | `25` | Seconds to keep the session ONLINE after activity. |
+| `WAHA_SESSION_CONFIG_IGNORE_STATUS` | `false` | Ignore status and list messages. |
+| `WAHA_SESSION_CONFIG_IGNORE_GROUPS` | `false` | Ignore group chats. |
+| `WAHA_SESSION_CONFIG_IGNORE_CHANNELS` | `false` | Ignore channels. |
+| `WAHA_SESSION_CONFIG_IGNORE_BROADCAST` | `false` | Ignore broadcast lists. |
+
+The WEBJS engine requires Chrome or Chromium on the host and fails with a clear error when it is
+missing. The Docker image does not bundle a browser.
+
+</details>
+
+<details>
+<summary><strong>Sending policy (anti-ban)</strong></summary>
+
+The policy gates every outbound message (REST, bulk and MCP) per session. Blocked sends answer 429
+with a `Retry-After` header, and counters persist in `${WAHA_STORAGE_DIR}/sending-limits.db`. Each
+limit can be overridden per session through `PUT /api/sessions/:session/policy`.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SEND_POLICY_ENABLED` | `true` | Master switch. Set to `false` to disable all checks. |
+| `SEND_POLICY_BYPASS_SESSIONS` | unset | Comma-separated session names that are never gated. |
+| `SEND_MAX_PER_MINUTE` | `20` | Maximum messages sent per sliding minute, per session. |
+| `SEND_MAX_PER_HOUR` | `200` | Maximum messages sent per sliding hour, per session. |
+| `SEND_MAX_PER_DAY` | `1000` | Maximum messages sent per sliding day, per session. |
+| `REACHOUT_MIN_INTERVAL_SECONDS` | `60` | Minimum interval between messages to distinct chats the session has never written to before. |
+| `NEW_CHATS_PER_DAY` | `100` | Maximum first-time chats a session may start per day. |
+| `SEND_QUIET_HOURS` | unset | Quiet-hours window in server-local time, format `HH:MM-HH:MM`, may wrap midnight. Empty disables. |
+| `SEND_WARMUP_DAYS` | `14` | Days over which a new session ramps from the warm-up floor to full caps, based on its first-seen date. |
+| `SEND_WARMUP_FLOOR_PERCENT` | `20` | Starting percentage of the caps for a new session. |
+
+</details>
+
+<details>
+<summary><strong>Database</strong></summary>
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `WAHA_DATABASE_DRIVER` | `sqlite` | `sqlite`, `postgres` or `mongo`. |
+| `WAHA_SQLITE_PATH` | `.sessions/waha.db` | Read by the config service getter only. The session store writes per-session `store.sqlite3` files under the local store directory. |
+| `WAHA_DATABASE_URL` | unset | PostgreSQL connection string (driver `postgres`). |
+| `WHATSAPP_SESSIONS_POSTGRESQL_URL` | unset | Alias for `WAHA_DATABASE_URL`. |
+| `WHATSAPP_SESSIONS_MONGO_URL` | unset | MongoDB connection string for session storage. |
+| `WAHA_DB_TYPE` | `sqlite` | Database type reported by the infrastructure endpoint. |
+| `WAHA_DB_HOST` | `localhost` | Reported DB host. |
+| `WAHA_DB_PORT` | `5432` | Reported DB port. |
+| `WAHA_DB_USERNAME` | unset | Reported DB username. |
+| `WAHA_DB_NAME` | `./data/waha.sqlite` | Reported DB name. |
+| `WAHA_DB_SSL` | `false` | Reported DB SSL flag. |
+
+</details>
+
+<details>
+<summary><strong>Media and storage</strong></summary>
+
+Downloaded media is persisted through the backend selected by `WAHA_STORAGE_TYPE` and served back
+at `GET /api/files/:session/:filename`, which requires the same API key as the rest of the API.
+Local media URLs expire after about 180 seconds; use S3 for durable links.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `WHATSAPP_FILES_FOLDER` | `/tmp/whatsapp-files` | Directory for downloaded media when `WAHA_STORAGE_TYPE=local` and `WAHA_STORAGE_LOCAL_PATH` is unset. |
+| `WHATSAPP_DOWNLOAD_MEDIA` | `true` | Enable automatic media download. |
+| `WHATSAPP_FILES_MIMETYPES` | unset | Comma-separated allowed MIME types. Empty means all. |
+| `WHATSAPP_HEALTH_MEDIA_FILES_THRESHOLD_MB` | `100` | Media-files health threshold in MB. |
+| `WHATSAPP_HEALTH_SESSION_FILES_THRESHOLD_MB` | `100` | Session-files health threshold in MB. |
+| `WAHA_STORAGE_TYPE` | `local` | Media storage backend: `local` or `s3`. |
+| `WAHA_STORAGE_LOCAL_PATH` | falls back to `WHATSAPP_FILES_FOLDER` and `/tmp/whatsapp-files` | Local media storage path. |
+| `WAHA_LOCAL_STORE_BASE_DIR` | `.sessions` | Base directory for session auth data. |
+| `WAHA_STORAGE_DIR` | `./data` | Directory for the internal SQLite databases (audit, templates, sending limits). |
+| `AUDIT_RETENTION_DAYS` | `90` | Days to retain audit logs. `0` or negative disables retention. |
+| `WAHA_S3_ENDPOINT` | unset | S3-compatible endpoint URL (for example MinIO). Leave unset for AWS S3. |
+| `WAHA_S3_ACCESS_KEY` | unset | Access key id. |
+| `WAHA_S3_SECRET_KEY` | unset | Secret access key. |
+| `WAHA_S3_BUCKET` | unset | Bucket name. |
+| `WAHA_S3_REGION` | `us-east-1` | Region. |
+
+</details>
+
+<details>
+<summary><strong>Webhooks, proxy, queue and health</strong></summary>
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `WAHA_WEBHOOK_URL` | unset | Default webhook URL for all sessions, overridable per session. |
+| `WEBHOOK_SSRF_PROTECT` | `true` | Enable SSRF protection for webhook delivery. |
+| `SSRF_ALLOWED_HOSTS` | unset | Comma-separated hosts or IPs allowed when SSRF protection is on. |
+| `WHATSAPP_PROXY_SERVER` | unset | Single proxy server, format `protocol://host:port`. Global proxy variables are not consumed by the runtime; configure the proxy per session in the dashboard or session config. |
+| `WHATSAPP_PROXY_SERVER_LIST` | unset | Comma-separated proxy list. |
+| `WHATSAPP_PROXY_SERVER_INDEX_PREFIX` | unset | Index prefix for mapping sessions to proxies. |
+| `WHATSAPP_PROXY_SERVER_USERNAME` / `WHATSAPP_PROXY_SERVER_PASSWORD` | unset | Proxy authentication. |
+| `WAHA_QUEUE_ENABLED` | `false` | Redis-backed queue toggle. Reported only; no queue backend is bundled. |
+| `WAHA_REDIS_HOST` | `localhost` | Reported Redis host. |
+| `WAHA_REDIS_PORT` | `6379` | Reported Redis port. |
+| `WAHA_REDIS_PASSWORD` | unset | Reported Redis password. |
+| `MILO_API_URL` | `http://localhost:3003/api/webhooks/chatwoot/milo` | Milo API URL for Chatwoot webhook forwarding. |
+| `WHATSAPP_HEALTH_MONGO_TIMEOUT_MS` | `3000` | MongoDB health-check timeout in milliseconds. |
+
+</details>
+
+<details>
+<summary><strong>Unwired and legacy variables</strong></summary>
+
+These are documented in `.env.example` but are read by nothing in the running server, or belong to
+an export/import storage service that is not wired to a route. Setting them has no effect today.
+
+| Variable | Default |
+| --- | --- |
+| `STORAGE_TYPE` | `local` |
+| `STORAGE_LOCAL_PATH` | `./data/media` |
+| `S3_ENDPOINT` | unset |
+| `S3_BUCKET` | `waha-bun` |
+| `S3_REGION` | `us-east-1` |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | unset |
+| `DATA_DIR` | `./data` |
+| `EXPORT_IMPORT_MAX_BACKUPS` | unset |
+| `STORAGE_IMPORT_MAX_BYTES` | `209715200` |
+| `STORAGE_IMPORT_MAX_ENTRIES` | `100000` |
+
+</details>
+
+## Architecture
+
+```text
+Browser          HTTP clients        MCP clients         n8n
+(dashboard)      (curl, SDKs)        (stdio or HTTP)     (community node)
+     \                |                   |                  /
+      +---------------+---------+---------+-----------------+
+                                |
+                     Bun.serve + Hono, port 3000
+        /api  ·  /ws  ·  /mcp  ·  /api-docs  ·  / (dashboard)
+                                |
+        +-----------------------+-----------------------+
+        |                       |                       |
+  Session manager         Webhooks (HMAC,        Templates, bulk send,
+  lifecycle, config       SSRF guard, retries)   audit log, sending policy
+  and proxy
+        |
+  +-----+----------------------+
+  |                            |
+NOWEB engine               WEBJS engine
+(Baileys)                  (whatsapp-web.js + Chrome)
+  |                            |
+  +------------+---------------+
+               |
+  SQLite / PostgreSQL · local disk / S3 · .sessions
 ```
 
-The dashboard generates both formats with your real key filled in — copy, paste, done.
+- One Bun process serves the REST API, the WebSocket stream, the MCP endpoint and the compiled
+  dashboard. Each session holds its WhatsApp engine connection in-process.
+- The API mounts 181 route registrations across 29 router modules, plus `/mcp` and `/ws`.
+- Auth state and the session index live in `.sessions`. Chats and messages go to SQLite (default,
+  `bun:sqlite`) or PostgreSQL. `audit.db` and `sending-limits.db` always stay in local SQLite.
+  Media goes to local disk or S3.
+- Session statuses are `STOPPED`, `STARTING`, `SCAN_QR_CODE`, `WORKING` and `FAILED`.
+- Webhooks are delivered inline with HMAC signing, idempotency keys, bounded retries and SSRF
+  protection. There is no Redis dependency.
 
-### Available Tools
+## Documentation
 
-| Category | Tools |
-|----------|-------|
-| **Session** | `SessionList`, `SessionGet`, `SessionStart`, `SessionStop`, `SessionRestart`, `SessionCheckNumber` |
-| **Messaging** | `MessageSendText`, `MessageSendImage`, `MessageSendFile`, `MessageSendVoice`, `MessageSendVideo`, `MessageSendLocation`, `MessageSendPoll`, `MessageSendContactVCard`, `MessageSendLinkPreview`, `MessageReply`, `MessageForward`, `MessageReact`, `MessageStar`, `MessageMarkRead`, `MessageStartTyping`, `MessageStopTyping`, `MessageVotePoll`, `MessageSendButtons`, `MessageSendList`, `MessageGenerateId` |
-| **Chats** | `ChatGetMessages`, `ChatGetMessage`, `ChatMarkMessagesRead`, `ChatPinMessage`, `ChatSetLabels` |
-| **Status (Stories)** | `StatusSendText`, `StatusSendImage`, `StatusSendVoice`, `StatusSendVideo`, `StatusDelete`, `StatusGenerateId` |
-| **Presence** | `PresenceGetAll`, `PresenceSet`, `PresenceGetForChat`, `PresenceSubscribe` |
-| **Contacts** | `ContactCheckNumber`, `ContactFindPhoneByLid` |
+- [`vault/Home.md`](vault/Home.md): the maintained documentation vault (architecture, engines,
+  endpoints, features, MCP tools, security model, known gaps and ops notes).
+- [`vault/03 API/REST API.md`](vault/03%20API/REST%20API.md): route modules, path dialects and
+  conventions.
+- [`integrations/n8n-nodes-bunwa/README.md`](integrations/n8n-nodes-bunwa/README.md): n8n node
+  installation, operations and workflow examples.
+- [`.env.example`](.env.example): every environment variable with its default.
+- `http://localhost:3000/api-docs/` while the server is running: interactive API reference.
 
-### Per-Session Tool Policies
-
-Every tool can be enabled or disabled per-session from the **Dashboard → Session Settings → MCP Tools** tab:
-
-- **Master toggle** — enable/disable MCP for the session entirely
-- **Destructive ops gate** — block all irreversible operations with a single switch
-- **Per-tool toggles** — disable individual tools or entire categories
-
-### Auth Model
-
-| Key type | Scope | How to get one |
-|----------|-------|---------------|
-| `WAHA_API_KEY` (global) | All sessions, admin | Set in `.env` |
-| Per-session `sk_mcp_...` | Single session, auto-scoped | Dashboard → Session Settings → MCP → Generate Key |
-
-Both are accepted by both transports. The global key is always admin. Per-session keys are
-validated by hashing the provided key and comparing to the stored SHA-256 hash — plaintext
-is never persisted.
-
-### Test the MCP Server
+## Development
 
 ```bash
-# List all tools (REST API)
-curl http://localhost:3000/api/mcp/tools | jq '.byCategory'
-
-# MCP Inspector (interactive testing)
-bunx @modelcontextprotocol/inspector http://localhost:3000/mcp
+bun run test             # bun test --parallel src/, 198 tests across 25 files
+bun run typecheck        # tsc --noEmit
+bun run lint             # oxlint src/
+bun run build:frontend   # install frontend deps, tsc -b, vite build, copy to frontend-dist/
+cd frontend && bun run build   # the same frontend build from the frontend package
 ```
 
-<a id="architecture"></a>
-## 🏗️ Architecture
+`bun run test:postgres` runs the Postgres store smoke test against the server in
+`WAHA_DATABASE_URL` (real Postgres, Docker, or PGlite), and `bun run postgres:dev` starts a local
+PGlite Postgres that speaks the wire protocol on `127.0.0.1:5432`.
 
-```mermaid
-graph TB
-    subgraph Clients["Clients"]
-        HTTP["HTTP Clients<br/><small>curl, Postman, Apps</small>"]
-        AI["AI Agents<br/><small>MCP Clients</small>"]
-        Browser["Browser<br/><small>Dashboard UI</small>"]
-    end
+## License
 
-    subgraph BunWa["BunWa Server (Bun Runtime)"]
-        subgraph API["API Layer"]
-            Hono["Hono REST API<br/><small>WAHA-compatible endpoints</small>"]
-            MCP["MCP Server<br/><small>Model Context Protocol</small>"]
-            MCAPI["MCP Config API<br/><small>GET /api/mcp/tools<br/>GET|PUT /mcp/per-session</small>"]
-            WS["WebSocket<br/><small>Real-time events</small>"]
-        end
+BunWa is released under the **BunWa Community License (BCL) v1.0**. It is free to use, copy, modify
+and self-host at no cost for personal projects, open-source projects, internal evaluation, learning,
+non-commercial research, and non-profit or educational use. No fee or registration is required.
 
-        subgraph MCPInternals["MCP Server Internals"]
-            TR["Tool Registry<br/><small>ToolDescriptor[]<br/>name, category, destructive</small>"]
-            PC["Permission Checker<br/><small>isToolAllowed()<br/>deny-list + destructive gate</small>"]
-            TH["Tool Handlers<br/><small>Session | Message | Contact</small>"]
-        end
+Commercial use, meaning running BunWa or a modified version as part of a product or service you
+sell, resell, sublicense or otherwise use to generate revenue, requires a BunWa Commercial License:
+**US $200 per month, per organization** (not per instance, server or seat), covering unlimited
+internal deployments within that organization.
 
-        subgraph Core["Core Layer"]
-            SM["Session Manager<br/><small>Lifecycle + State</small>"]
-            SC["Session Config<br/><small>webhooks, proxy, mcp, ...</small>"]
-            AM["Auth Manager<br/><small>API Keys + Basic Auth</small>"]
-            WH["Webhook Engine<br/><small>HMAC signing + SSRF guard</small>"]
-        end
+Contributions merged into this repository are licensed under the same terms and stay free and open
+source for everyone. Forks are welcome, but a public fork may not add proprietary closed-source
+features: that combination is what the commercial license covers.
 
-        subgraph Engines["WhatsApp Engines"]
-            NOWEB["NOWEB Engine<br/><small>Baileys (Lightweight)</small>"]
-            WEBJS["WEBJS Engine<br/><small>whatsapp-web.js + Puppeteer</small>"]
-        end
-
-        subgraph Data["Data Layer"]
-            DB[("Database<br/><small>SQLite / PostgreSQL</small>")]
-            ST[("Storage<br/><small>Local FS / S3-compatible</small>")]
-            SI[("Session Index<br/><small>.sessions-index.json</small>")]
-        end
-    end
-
-    HTTP --> Hono
-    AI --> MCP
-    Browser --> Hono
-    Browser --> WS
-    Browser --> MCAPI
-
-    Hono --> SM
-    Hono --> AM
-    MCP --> TR
-    TR --> TH
-    TH --> PC
-    PC -.->|lookup session mcp config| SC
-    MCP --> SM
-    WS --> SM
-    MCAPI --> SM
-    MCAPI -.->|read/write| SC
-
-    SM --> NOWEB
-    SM --> WEBJS
-
-    SM --> DB
-    SM --> ST
-    SM --> SI
-    SC --> SI
-    Hono --> WH
-    WH --> HTTP
-
-    NOWEB --> WhatsApp["WhatsApp WebSocket<br/><small>Baileys Signal Protocol</small>"]
-    WEBJS --> Chrome["Chrome / Puppeteer"]
-    Chrome --> WhatsAppWeb["WhatsApp Web"]
-```
-
-<a id="technology-stack"></a>
-## 🛠️ Technology Stack
-
-| Category | Technology |
-|----------|-----------|
-| **Runtime** | [Bun](https://bun.sh) 1.4.2+ |
-| **API Framework** | [Hono](https://hono.dev) |
-| **Database** | SQLite (`bun:sqlite`) or [PostgreSQL](https://www.postgresql.org) |
-| **Storage** | Local filesystem or [S3-compatible](https://aws.amazon.com/s3/) (MinIO, R2, etc.) |
-| **Frontend** | [React 19](https://react.dev) + [Vite](https://vite.dev) + [shadcn/ui](https://ui.shadcn.com) + [Tailwind CSS](https://tailwindcss.com) |
-| **WhatsApp Engine (NOWEB)** | [Baileys](https://github.com/WhiskeySockets/Baileys) |
-| **WhatsApp Engine (WEBJS)** | [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) + Puppeteer/Chrome |
-| **WebSockets** | [Hono WS](https://hono.dev/docs/helpers/websocket) + [RxJS](https://rxjs.dev) |
-| **MCP SDK** | [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk) |
-| **Auth** | API key + dashboard Basic Auth + per-session MCP keys (SHA-256 hashed) |
-| **Container** | [Docker](https://docker.com) multi-stage + [Coolify](https://coolify.io) ready |
-
-<a id="documentation"></a>
-## 📖 Documentation
-
-- **Interactive API Docs** — `http://localhost:3000/api-docs/` (Scalar/OpenAPI — embedded in the dashboard)
-- **MCP Connection** — Dashboard → Session Settings → MCP → Generate Key (one-click config generation)
-- **Phone Pairing** — QR scan or number pairing supported for both engines
-- **Proxy Support** — HTTP, HTTPS, SOCKS4, SOCKS5 proxy for WhatsApp connections
-- **CI** — GitHub Actions runs `bun test`, `oxlint`, and a TypeScript error ratchet on every push
-
-## ⭐ Support
-
-If BunWa helps you, consider supporting the project:
-
-<div align="center">
-  <a href="https://selar.com/showlove/loopyoratory">
-    <img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FF813F?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white" alt="Buy Me A Coffee" />
-  </a>
-  <br /><br />
-  <a href="#">
-    <img src="https://img.shields.io/badge/⭐%20Star%20on%20GitHub-2ea44f?style=for-the-badge" alt="Star on GitHub" />
-  </a>
-</div>
-
----
-
-## 📄 License
-
-### Project License — BunWa Community License (BCL) v1.0
-
-BunWa is **free and open source** for personal use, open-source projects, learning,
-research, and non-profit/educational use — no fee, no registration, no catch.
-
-**Commercial use** (running BunWa as part of a product or service you charge for) requires
-a commercial license: **US $200/month per organization**, covering unlimited internal
-deployments. Open an issue tagged `commercial-license` on GitHub or reach out to
-[@LoopyOratory](https://github.com/LoopyOratory) to arrange one.
-
-Any code contributed back to this repository is automatically licensed under the same
-terms — **contributions stay free and open source for everyone**. Forks are welcome, but a
-public fork may not bolt on proprietary, closed-source features; that's exactly what the
-commercial license exists for instead.
-
-Full terms: [**LICENSE.md**](./LICENSE.md)
-
-| Use case | Cost |
-|---|---|
-| Personal / hobby projects | Free |
-| Open-source projects | Free |
-| Learning, research, evaluation | Free |
-| Non-profit / education | Free |
-| Commercial / revenue-generating use | $200/month per organization |
-| Contributing code back | Free — and it stays free for everyone |
-
-### Third-Party Licenses & Attributions
-
-BunWa builds on several open-source projects. We are grateful for their work:
-
-| Dependency | License | Notes |
-|------------|---------|-------|
-| [Bun](https://bun.sh) | MIT + OSL-3.0 | JavaScript runtime |
-| [Hono](https://hono.dev) | MIT | Web framework |
-| [Baileys](https://github.com/WhiskeySockets/Baileys) | MIT | WhatsApp WebSocket library (NOWEB engine) |
-| [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) | Apache-2.0 | WhatsApp Web client (WEBJS engine) |
-| [React](https://react.dev) | MIT | Frontend UI library |
-| [shadcn/ui](https://ui.shadcn.com) | MIT | UI component library |
-| [Tailwind CSS](https://tailwindcss.com) | MIT | CSS framework |
-| [RxJS](https://rxjs.dev) | Apache-2.0 | Reactive extensions |
-| [AWS SDK v3](https://github.com/aws/aws-sdk-js-v3) | Apache-2.0 | S3 storage integration |
-| [class-validator](https://github.com/typestack/class-validator) | MIT | Request validation |
-| [tsyringe](https://github.com/microsoft/tsyringe) | MIT | Dependency injection |
-
-This project originated as a fork of [WAHA](https://waha.devlike.pro/) (WhatsApp HTTP API) and has been independently developed and optimized for the Bun runtime.
-
-## 🔗 Integrations
-
-### n8n community node
-
-`integrations/n8n-nodes-bunwa` is an n8n community node package that wraps this API: **128 operations
-across 10 resources** (message, session, chat, group, contact, channel, label, presence, status,
-server) plus a **BunWa Trigger** node that registers its own webhook subscription on a session and
-removes it on deactivation.
-
-```bash
-cd integrations/n8n-nodes-bunwa
-npm install && npm run build && npm test
-```
-
-Build it locally and point `N8N_CUSTOM_EXTENSIONS` at the folder. A release workflow is wired to
-publish it to npm as `n8n-nodes-bunwa` when tagged. The credential takes the BunWa **Base URL** and the
-**`WAHA_API_KEY`** value. Operation tables, workflow examples, and the endpoints it deliberately does
-not expose (chat mute, contact block, sticker send and others that fail on the server today) are in
-[`integrations/n8n-nodes-bunwa/README.md`](integrations/n8n-nodes-bunwa/README.md).
-
----
+Full terms: [LICENSE.md](LICENSE.md).
 
 <div align="center">
   <sub>Built with ❤️ using <a href="https://bun.sh">Bun</a> + <a href="https://hono.dev">Hono</a></sub>
   <br />
   <sub>WhatsApp HTTP API Server</sub>
 </div>
-
-## 🐳 Compose deployments
-
-Four ready-to-use Compose files live at the repo root. All of them build the local image tagged with the version in `package.json`, run the container as UID/GID 1001 with a read-only root filesystem, and expect a `.env` file (`cp .env.example .env`). `WAHA_API_KEY` must be set or Compose refuses to start.
-
-| File | Who it is for |
-|------|---------------|
-| `docker-compose.yml` | Single node deployment using the built-in SQLite driver (the default, no database variables set). |
-| `docker-compose.postgres.yml` | Self-contained BunWa plus PostgreSQL 17; the session store and templates use Postgres, while audit and the anti-ban ledger stay local SQLite. |
-| `docker-compose.coolify.yml` | Coolify's Docker Compose build pack; no published ports, Coolify's proxy routes to the exposed port 3000. |
-| `docker-compose.1panel.yml` | 1Panel's Compose feature; publishes to 127.0.0.1 for 1Panel's reverse proxy. |
-
-Required environment: `WAHA_API_KEY` for all four files, plus `POSTGRES_PASSWORD` for `docker-compose.postgres.yml`. Compose reads both from the root `.env` file.
-
-Persistent state lives in the `bunwa-sessions` and `bunwa-data` named volumes (plus `bunwa-media` in the Coolify and 1Panel files). If you replace them with host paths, the host directories must be writable by UID/GID 1001 (the `waha` user inside the image), otherwise the container fails with EACCES or loses session auth state on redeploy:
-
-```bash
-mkdir -p /data/bunwa/sessions /data/bunwa/data /data/bunwa/media
-chown -R 1001:1001 /data/bunwa
-```
-
-Start the deployment you chose (from the repo root, with `.env` in place):
-
-```bash
-docker compose -f docker-compose.yml up -d
-docker compose -f docker-compose.postgres.yml up -d
-docker compose -f docker-compose.coolify.yml up -d
-docker compose -f docker-compose.1panel.yml up -d
-```
-
-The SQLite and Postgres files publish the API on `127.0.0.1:${BUNWA_PORT:-3000}`; terminate TLS in the reverse proxy you put in front. The Coolify and 1Panel files expect their platform proxy to handle routing and HTTPS, as described in the comments of each file.
