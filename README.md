@@ -1,4 +1,6 @@
 <div align="center">
+  <img src="frontend/public/logo.jpg" alt="BunWa logo" width="96" />
+
   <h1>BunWa</h1>
   <p><strong>A WAHA-compatible WhatsApp HTTP API server built on Bun and Hono.</strong></p>
 
@@ -169,6 +171,22 @@ curl -X POST http://localhost:3000/api/sessions/my-session/templates/welcome-mes
 # Read sending-policy usage counters and next-allowed times
 curl http://localhost:3000/api/sessions/my-session/policy/usage \
   -H "X-Api-Key: $WAHA_API_KEY"
+```
+
+Buttons make a round trip. The engine wraps the interactive message in a view-once envelope, and
+the tap comes back as a `templateButtonReplyMessage` that BunWa parses into the `interactive`
+object with `selectedId`:
+
+```mermaid
+sequenceDiagram
+    API->>Engine: POST /api/sendButtons
+    Engine->>Engine: wrap in viewOnceMessageV2Extension
+    Engine->>WhatsApp: relayMessage with biz nodes
+    WhatsApp->>Customer: renders the reply buttons
+    Customer->>WhatsApp: taps a button
+    WhatsApp->>Engine: templateButtonReplyMessage
+    Engine->>Engine: extractInteractiveReply reads selectedId
+    Engine->>Webhook: message event with interactive.selectedId
 ```
 
 The interactive API reference is at `http://localhost:3000/api-docs/`. It is generated from the
@@ -497,29 +515,26 @@ an export/import storage service that is not wired to a route. Setting them has 
 
 ## Architecture
 
-```text
-Browser          HTTP clients        MCP clients         n8n
-(dashboard)      (curl, SDKs)        (stdio or HTTP)     (community node)
-     \                |                   |                  /
-      +---------------+---------+---------+-----------------+
-                                |
-                     Bun.serve + Hono, port 3000
-        /api  ·  /ws  ·  /mcp  ·  /api-docs  ·  / (dashboard)
-                                |
-        +-----------------------+-----------------------+
-        |                       |                       |
-  Session manager         Webhooks (HMAC,        Templates, bulk send,
-  lifecycle, config       SSRF guard, retries)   audit log, sending policy
-  and proxy
-        |
-  +-----+----------------------+
-  |                            |
-NOWEB engine               WEBJS engine
-(Baileys)                  (whatsapp-web.js + Chrome)
-  |                            |
-  +------------+---------------+
-               |
-  SQLite / PostgreSQL · local disk / S3 · .sessions
+```mermaid
+flowchart TD
+    clients["Dashboard, WAHA clients,<br/>AI agents, Chatwoot"]
+    serve["Bun.serve and Hono app"]
+    routers["REST routers"]
+    mcp["MCP server"]
+    ws["WebSocket endpoint /ws"]
+    core["SessionManager, webhook delivery,<br/>audit, templates, sending policy, media"]
+    noweb["NOWEB engine over Baileys"]
+    webjs["WEBJS engine over Puppeteer"]
+    store["Session store on SQLite or Postgres"]
+    disk["Media on local disk or S3"]
+    auth[".sessions auth state"]
+
+    clients --> serve
+    serve --> routers & mcp & ws
+    routers & mcp & ws --> core
+    core --> noweb & webjs
+    noweb & webjs --> store
+    store --> disk & auth
 ```
 
 - One Bun process serves the REST API, the WebSocket stream, the MCP endpoint and the compiled
@@ -531,6 +546,66 @@ NOWEB engine               WEBJS engine
 - Session statuses are `STOPPED`, `STARTING`, `SCAN_QR_CODE`, `WORKING` and `FAILED`.
 - Webhooks are delivered inline with HMAC signing, idempotency keys, bounded retries and SSRF
   protection. There is no Redis dependency.
+
+Requests walk this middleware chain, and a blocked send answers 429 with `Retry-After`:
+
+```mermaid
+sequenceDiagram
+    Client->>Hono app: POST /api/sendText
+    Hono app->>Middleware: logger, CORS, rate limit, 10 MB cap
+    Note over Middleware: error handler wraps the chain, then API key auth, policies, session resolver
+    alt missing or invalid credentials
+        Middleware-->>Client: 401 authentication required
+    else authorized
+        Middleware->>Engine: CanSession send check, session resolved
+        Engine->>Engine: sending policy gate
+        alt blocked by policy
+            Engine-->>Client: 429 with Retry-After
+        else allowed
+            Engine->>WhatsApp: send over the engine
+            Engine-->>Client: 200 message payload
+        end
+    end
+```
+
+Sessions move through the five `WAHASessionStatus` values under the manager's lifecycle operations:
+
+```mermaid
+stateDiagram-v2
+    [*] --> STOPPED
+    STOPPED --> STARTING: start or restart
+    STARTING --> SCAN_QR_CODE: QR code emitted
+    STARTING --> WORKING: connection opens
+    SCAN_QR_CODE --> WORKING: QR scanned
+    STARTING --> FAILED: start failure or stuck
+    SCAN_QR_CODE --> FAILED: closed before scan
+    WORKING --> STARTING: reconnect
+    WORKING --> STOPPED: stop, logout, force kill or restart
+    FAILED --> STARTING: auto retry
+    FAILED --> STOPPED: stop
+    STOPPED --> [*]: delete
+```
+
+Webhook delivery runs inline with the SSRF guard, HMAC signing and bounded retries:
+
+```mermaid
+sequenceDiagram
+    SessionManager->>WebhookDelivery: deliver event payload
+    WebhookDelivery->>SSRF guard: resolveSafeFetchTarget
+    alt blocked
+        SSRF guard-->>WebhookDelivery: SsrfBlockedError
+        WebhookDelivery->>Audit: webhook failed
+    else allowed
+        WebhookDelivery->>WebhookDelivery: HMAC-SHA256 signature, idempotency key
+        WebhookDelivery->>Target: POST with 10 s timeout
+        alt 5xx or network error
+            WebhookDelivery->>WebhookDelivery: retry with exponential backoff
+            WebhookDelivery->>Audit: webhook failed when retries run out
+        else delivered
+            WebhookDelivery->>Audit: webhook triggered
+        end
+    end
+```
 
 ## Documentation
 
