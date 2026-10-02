@@ -1,0 +1,76 @@
+# BunWa - Coolify deployment (Docker Compose build pack)
+# Use this file when Coolify builds the repository as a Docker Compose
+# resource. Coolify's proxy handles routing and TLS, so the container
+# publishes no host ports; it only exposes 3000 to the proxy.
+#
+# In the Coolify UI:
+#   - Build pack: Docker Compose, and point it at docker-compose.coolify.yml.
+#   - Set the FQDN (for example https://bunwa.example.com) and port 3000 on
+#     the resource; Coolify routes that FQDN to the exposed port.
+#   - Add WAHA_API_KEY (and WAHA_ALLOW_NO_AUTH=false) in the Environment tab.
+#     Coolify writes those values into a .env next to this file, which
+#     env_file and the ${...:?} guards below read.
+#   - Map the volumes below to host paths instead of leaving them as Docker
+#     managed volumes. Host directories must be owned by UID/GID 1001:
+#       mkdir -p /data/bunwa/sessions /data/bunwa/data /data/bunwa/media
+#       chown -R 1001:1001 /data/bunwa
+#
+# Local start:
+#   docker compose -f docker-compose.coolify.yml up -d
+
+services:
+  bunwa:
+    build:
+      context: .
+      dockerfile: Dockerfile.coolify
+    image: bunwa:2026.5.1  # repo version; bump with package.json, never use latest
+    env_file:
+      - .env
+    environment:
+      # Compose refuses to start when WAHA_API_KEY is unset or empty in .env.
+      WAHA_API_KEY: ${WAHA_API_KEY:?set WAHA_API_KEY in .env}
+    # No host ports: Coolify's proxy terminates TLS and forwards to 3000.
+    # Set the FQDN and the port in the Coolify UI, not here.
+    expose:
+      - "3000"
+    volumes:
+      # WhatsApp auth state, session index and per-session SQLite stores.
+      - bunwa-sessions:/app/.sessions
+      # audit.db, sending-limits.db and export/import artifacts.
+      - bunwa-data:/app/data
+      # Downloaded media; point Coolify at a host path if it must survive.
+      - bunwa-media:/app/.media
+    user: "1001:1001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      # Coolify uses this to decide when the container is ready.
+      test:
+        - CMD
+        - bun
+        - -e
+        - "const r=await fetch('http://localhost:'+(process.env.PORT||3000)+'/health');process.exit(r.ok?0:1)"
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
+
+volumes:
+  # Coolify should map these to host paths. Host directories must be writable
+  # by UID/GID 1001 (the waha user), otherwise session auth state and the
+  # databases fail to persist or the container fails with EACCES:
+  #   mkdir -p /data/bunwa/sessions /data/bunwa/data /data/bunwa/media
+  #   chown -R 1001:1001 /data/bunwa
+  bunwa-sessions:
+  bunwa-data:
+  bunwa-media:

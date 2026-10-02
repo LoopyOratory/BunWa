@@ -1,0 +1,119 @@
+# BunWa - WhatsApp HTTP API server with PostgreSQL
+# Self-contained deployment: BunWa plus postgres:17-alpine as the database.
+# WAHA_DATABASE_DRIVER=postgres makes the NOWEB session store (chats, messages,
+# contacts, labels, ...) and the template repository use PostgreSQL.
+#
+# Setup:
+#   cp .env.example .env    # set WAHA_API_KEY and POSTGRES_PASSWORD
+#   docker compose -f docker-compose.postgres.yml up -d
+#
+# The database publishes no ports; only bunwa can reach it on the compose
+# network. POSTGRES_PASSWORD is embedded in WAHA_DATABASE_URL, so use a
+# URL-safe value (or percent-encode reserved characters like @ : / ? #).
+#
+# The API port is published on 127.0.0.1 only. Put a reverse proxy (Caddy,
+# nginx, Traefik) in front to terminate TLS and expose it to the network.
+
+services:
+  bunwa:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bunwa:2026.5.1  # repo version; bump with package.json, never use latest
+    env_file:
+      - .env
+    environment:
+      # Compose refuses to start when WAHA_API_KEY is unset or empty in .env.
+      WAHA_API_KEY: ${WAHA_API_KEY:?set WAHA_API_KEY in .env}
+      # Downloaded media is ephemeral (about 180 s lifetime); keep it off the
+      # read-only root filesystem and in the tmpfs mounted below.
+      WHATSAPP_FILES_FOLDER: /tmp/whatsapp-files
+      # Session store and templates follow this driver.
+      WAHA_DATABASE_DRIVER: postgres
+      WAHA_DATABASE_URL: postgres://bunwa:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/bunwa
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # Localhost only. A reverse proxy should terminate TLS and forward here.
+      - "127.0.0.1:${BUNWA_PORT:-3000}:3000"
+    volumes:
+      # Auth state and the session index stay on disk regardless of the driver.
+      - bunwa-sessions:/app/.sessions
+      # audit.db and sending-limits.db are always local SQLite (neither follows
+      # WAHA_DATABASE_DRIVER); templates are in Postgres under this file, and
+      # templates.db would only appear here if the driver were sqlite.
+      - bunwa-data:/app/data
+    tmpfs:
+      # Size-capped scratch space for downloaded/outgoing media files.
+      - /tmp/whatsapp-files:size=512m,mode=1777
+    user: "1001:1001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      # Same check as the image HEALTHCHECK: unauthenticated /health endpoint.
+      test:
+        - CMD
+        - bun
+        - -e
+        - "const r=await fetch('http://localhost:'+(process.env.PORT||3000)+'/health');process.exit(r.ok?0:1)"
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
+
+  postgres:
+    image: postgres:17-alpine  # pinned major; upgrade to newer 17.x when ready
+    restart: unless-stopped
+    # Run directly as the image's postgres user. The official entrypoint runs
+    # as root and drops privileges with su-exec, which needs CAP_SETUID and
+    # CAP_SETGID; with cap_drop: ALL that step fails, so never run it as root.
+    user: "postgres"
+    environment:
+      POSTGRES_DB: bunwa
+      POSTGRES_USER: bunwa
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      # Named volume recommended. A host path must be writable by the postgres
+      # user (uid 70 in postgres:17-alpine):
+      #   mkdir -p /data/bunwa/postgres && chown -R 70:70 /data/bunwa/postgres
+      - bunwa-postgres:/var/lib/postgresql/data
+    # No ports: reachable only from bunwa on the compose network.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U bunwa -d bunwa
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 1m
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
+
+volumes:
+  # Named volumes are owned by UID/GID 1001 (the waha user) after the first
+  # mount. If you replace them with host paths, run:
+  #   mkdir -p /data/bunwa/sessions /data/bunwa/data
+  #   chown -R 1001:1001 /data/bunwa
+  bunwa-sessions:
+  bunwa-data:
+  # Postgres data directory; see the ownership note on the postgres service.
+  bunwa-postgres:

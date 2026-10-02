@@ -1,16 +1,29 @@
-# Dependencies
+# Build context slimming.
+#
+# Kept in context: src/, frontend/ (source, package.json, bun.lock, index.html,
+# vite/ts configs, public/), scripts/ (build-frontend.sh), package.json,
+# bun.lock, bunfig.toml, tsconfig.json and the Dockerfiles. Everything below is
+# not read by the build or the runtime image.
+
+# Dependencies (host trees; the image installs its own inside the builder)
 node_modules/
+**/node_modules/
+frontend/node_modules/
 
 # Build output (rebuilt during docker build)
 dist/
+frontend/dist/
 frontend-dist/
 
-# Runtime data (should be volumes, not baked into image)
+# Runtime data (mounted as volumes/ tmpfs, never baked into the image)
 .sessions/
 .media/
 data/
+*.db
+*.sqlite
+*.sqlite3
 
-# Environment (should be mounted or passed via -e)
+# Environment (passed via env_file / -e)
 .env
 .env.local
 .env.production
@@ -28,15 +41,33 @@ data/
 tests/
 src/__tests__/
 
-# Docs & plans
+# Docs, notes and plans
+vault/
 docs/
 plans/
+knowledgebase.txt
+bun-docs.txt
 *.md
 !README.md
+
+# Editor and OS junk
+.idea/
+.vscode/
+.obsidian/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+*.code-workspace
+
+# Integrations (n8n node package with its own node_modules)
+integrations/
 
 # Misc
 chatui/
 plugins/
+bunwa-audit-*/
 test-*
 *.txt
 *.html

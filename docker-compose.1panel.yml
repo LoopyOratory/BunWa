@@ -1,0 +1,68 @@
+# BunWa - 1Panel deployment (Compose feature)
+# Use this file with 1Panel's Compose (Docker) feature. The API port is
+# published on 127.0.0.1 only; point 1Panel's reverse proxy at that port and
+# enable HTTPS on the website there, instead of exposing 3000 directly.
+#
+# Setup:
+#   cp .env.example .env    # set WAHA_API_KEY (and WAHA_ALLOW_NO_AUTH=false)
+#   docker compose -f docker-compose.1panel.yml up -d
+#
+# Back the named volumes with explicit host paths in the 1Panel Compose editor
+# (for example /opt/bunwa/sessions) and make them writable by UID/GID 1001:
+#   mkdir -p /opt/bunwa/sessions /opt/bunwa/data /opt/bunwa/media
+#   chown -R 1001:1001 /opt/bunwa
+
+services:
+  bunwa:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bunwa:2026.5.1  # repo version; bump with package.json, never use latest
+    env_file:
+      - .env
+    environment:
+      # Compose refuses to start when WAHA_API_KEY is unset or empty in .env.
+      WAHA_API_KEY: ${WAHA_API_KEY:?set WAHA_API_KEY in .env}
+    ports:
+      # Localhost only: point the 1Panel reverse proxy here and enable HTTPS.
+      - "127.0.0.1:${BUNWA_PORT:-3000}:3000"
+    volumes:
+      # WhatsApp auth state, session index and per-session SQLite stores.
+      - bunwa-sessions:/app/.sessions
+      # audit.db, sending-limits.db and export/import artifacts.
+      - bunwa-data:/app/data
+      # Downloaded media; prefer a host path in the 1Panel Compose editor.
+      - bunwa-media:/app/.media
+    user: "1001:1001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      # Same check as the image HEALTHCHECK: unauthenticated /health endpoint.
+      test:
+        - CMD
+        - bun
+        - -e
+        - "const r=await fetch('http://localhost:'+(process.env.PORT||3000)+'/health');process.exit(r.ok?0:1)"
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
+
+volumes:
+  # Prefer explicit host paths in 1Panel (for example /opt/bunwa/sessions).
+  # Host directories must be writable by UID/GID 1001 (the waha user):
+  #   mkdir -p /opt/bunwa/sessions /opt/bunwa/data /opt/bunwa/media
+  #   chown -R 1001:1001 /opt/bunwa
+  bunwa-sessions:
+  bunwa-data:
+  bunwa-media:

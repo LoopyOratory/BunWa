@@ -775,3 +775,34 @@ not expose (chat mute, contact block, sticker send and others that fail on the s
   <br />
   <sub>WhatsApp HTTP API Server</sub>
 </div>
+
+## 🐳 Compose deployments
+
+Four ready-to-use Compose files live at the repo root. All of them build the local image tagged with the version in `package.json`, run the container as UID/GID 1001 with a read-only root filesystem, and expect a `.env` file (`cp .env.example .env`). `WAHA_API_KEY` must be set or Compose refuses to start.
+
+| File | Who it is for |
+|------|---------------|
+| `docker-compose.yml` | Single node deployment using the built-in SQLite driver (the default, no database variables set). |
+| `docker-compose.postgres.yml` | Self-contained BunWa plus PostgreSQL 17; the session store and templates use Postgres, while audit and the anti-ban ledger stay local SQLite. |
+| `docker-compose.coolify.yml` | Coolify's Docker Compose build pack; no published ports, Coolify's proxy routes to the exposed port 3000. |
+| `docker-compose.1panel.yml` | 1Panel's Compose feature; publishes to 127.0.0.1 for 1Panel's reverse proxy. |
+
+Required environment: `WAHA_API_KEY` for all four files, plus `POSTGRES_PASSWORD` for `docker-compose.postgres.yml`. Compose reads both from the root `.env` file.
+
+Persistent state lives in the `bunwa-sessions` and `bunwa-data` named volumes (plus `bunwa-media` in the Coolify and 1Panel files). If you replace them with host paths, the host directories must be writable by UID/GID 1001 (the `waha` user inside the image), otherwise the container fails with EACCES or loses session auth state on redeploy:
+
+```bash
+mkdir -p /data/bunwa/sessions /data/bunwa/data /data/bunwa/media
+chown -R 1001:1001 /data/bunwa
+```
+
+Start the deployment you chose (from the repo root, with `.env` in place):
+
+```bash
+docker compose -f docker-compose.yml up -d
+docker compose -f docker-compose.postgres.yml up -d
+docker compose -f docker-compose.coolify.yml up -d
+docker compose -f docker-compose.1panel.yml up -d
+```
+
+The SQLite and Postgres files publish the API on `127.0.0.1:${BUNWA_PORT:-3000}`; terminate TLS in the reverse proxy you put in front. The Coolify and 1Panel files expect their platform proxy to handle routing and HTTPS, as described in the comments of each file.

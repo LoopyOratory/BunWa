@@ -1,0 +1,68 @@
+# BunWa - WhatsApp HTTP API server (Bun + Hono)
+# General-purpose single-node deployment. SQLite is the built-in default, so
+# this file sets no WAHA_DATABASE_DRIVER / WAHA_DATABASE_URL variables.
+#
+# Setup:
+#   cp .env.example .env    # set WAHA_API_KEY (and WAHA_ALLOW_NO_AUTH=false)
+#   docker compose -f docker-compose.yml up -d
+#
+# The API port is published on 127.0.0.1 only. Put a reverse proxy (Caddy,
+# nginx, Traefik) in front to terminate TLS and expose it to the network.
+
+services:
+  bunwa:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bunwa:2026.5.1  # repo version; bump with package.json, never use latest
+    env_file:
+      - .env
+    environment:
+      # Compose refuses to start when WAHA_API_KEY is unset or empty in .env.
+      WAHA_API_KEY: ${WAHA_API_KEY:?set WAHA_API_KEY in .env}
+      # Downloaded media is ephemeral (about 180 s lifetime); keep it off the
+      # read-only root filesystem and in the tmpfs mounted below.
+      WHATSAPP_FILES_FOLDER: /tmp/whatsapp-files
+    ports:
+      # Localhost only. A reverse proxy should terminate TLS and forward here.
+      - "127.0.0.1:${BUNWA_PORT:-3000}:3000"
+    volumes:
+      # WhatsApp auth state, session index and per-session SQLite stores.
+      - bunwa-sessions:/app/.sessions
+      # audit.db, sending-limits.db and export/import artifacts.
+      - bunwa-data:/app/data
+    tmpfs:
+      # Size-capped scratch space for downloaded/outgoing media files.
+      - /tmp/whatsapp-files:size=512m,mode=1777
+    user: "1001:1001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      # Same check as the image HEALTHCHECK: unauthenticated /health endpoint.
+      test:
+        - CMD
+        - bun
+        - -e
+        - "const r=await fetch('http://localhost:'+(process.env.PORT||3000)+'/health');process.exit(r.ok?0:1)"
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
+
+volumes:
+  # Named volumes are owned by UID/GID 1001 (the waha user) after the first
+  # mount. If you replace them with host paths, run:
+  #   mkdir -p /data/bunwa/sessions /data/bunwa/data
+  #   chown -R 1001:1001 /data/bunwa
+  bunwa-sessions:
+  bunwa-data:
