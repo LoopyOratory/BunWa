@@ -1,38 +1,65 @@
 # BunWa - 1Panel deployment (Compose feature)
-# Use this file with 1Panel's Compose (Docker) feature. The API port is
-# published on 127.0.0.1 only; point 1Panel's reverse proxy at that port and
-# enable HTTPS on the website there, instead of exposing 3000 directly.
+# This file pulls the published image from Docker Hub instead of building from
+# source. For a local source build use docker-compose.yml.
+#
+# 1Panel notes:
+#   - Create this as a Compose project in the 1Panel Docker > Compose page.
+#     1Panel keeps the project in its data directory, by default under
+#     /opt/1panel/docker/compose/<project name>, and runs compose from there,
+#     so relative paths such as the default ./bunwa-data resolve inside it.
+#   - Point 1Panel's reverse proxy at 127.0.0.1:${BUNWA_PORT:-3000} and enable
+#     HTTPS on that website; the container publishes the port on localhost only.
+#   - Include the bind-mounted BUNWA_DATA_DIR directory in 1Panel's backup plan,
+#     otherwise sessions, audit logs and templates are not backed up.
+#   - The image is multi-arch (linux/amd64 and linux/arm64), so 1Panel uses the
+#     same tag on amd64 and arm64 hosts.
 #
 # Setup:
 #   cp .env.example .env    # set WAHA_API_KEY (and WAHA_ALLOW_NO_AUTH=false)
+#   mkdir -p bunwa-data/sessions bunwa-data/data
+#   chown -R 1001:1001 bunwa-data
 #   docker compose -f docker-compose.1panel.yml up -d
 #
-# Back the named volumes with explicit host paths in the 1Panel Compose editor
-# (for example /opt/bunwa/sessions) and make them writable by UID/GID 1001:
-#   mkdir -p /opt/bunwa/sessions /opt/bunwa/data /opt/bunwa/media
-#   chown -R 1001:1001 /opt/bunwa
+# Moving versions:
+#   The default tag is sha-ffd06de, a concrete immutable build of commit
+#   ffd06de published on 2026-10-02, not the moving latest tag. To move
+#   versions deliberately, set BUNWA_TAG in the project .env and run:
+#     docker compose pull && docker compose up -d
+#   Other tags that exist today: sha-67fb1c4 (2026-10-02) and sha-5284212
+#   (2026-10-02) pin those commits. main and latest move with the main branch,
+#   so do not pin them in production. Release tags (1.2.3, 1.2) are published
+#   by CI only when a v* git tag is pushed; use one of those once it exists.
 
 services:
   bunwa:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: bunwa:2026.5.1  # repo version; bump with package.json, never use latest
+    # Published image; select the tag with BUNWA_TAG instead of editing here.
+    image: loopyoratory/bunwa:${BUNWA_TAG:-sha-ffd06de}
     env_file:
       - .env
     environment:
       # Compose refuses to start when WAHA_API_KEY is unset or empty in .env.
       WAHA_API_KEY: ${WAHA_API_KEY:?set WAHA_API_KEY in .env}
+      # Downloaded media is ephemeral (about 180 s lifetime); keep it off the
+      # read-only root filesystem and in the tmpfs mounted below.
+      WHATSAPP_FILES_FOLDER: /tmp/whatsapp-files
     ports:
       # Localhost only: point the 1Panel reverse proxy here and enable HTTPS.
       - "127.0.0.1:${BUNWA_PORT:-3000}:3000"
     volumes:
+      # Bind mounts, not named volumes, so 1Panel's file manager and backup
+      # feature can reach the data. The image pre-creates /app/.sessions and
+      # /app/data with UID/GID 1001 ownership, but Docker creates a missing
+      # host directory as root, so chown the base directory once before the
+      # first start:
+      #   mkdir -p "${BUNWA_DATA_DIR:-./bunwa-data}"/sessions "${BUNWA_DATA_DIR:-./bunwa-data}"/data
+      #   chown -R 1001:1001 "${BUNWA_DATA_DIR:-./bunwa-data}"
       # WhatsApp auth state, session index and per-session SQLite stores.
-      - bunwa-sessions:/app/.sessions
+      - "${BUNWA_DATA_DIR:-./bunwa-data}/sessions:/app/.sessions"
       # audit.db, sending-limits.db and export/import artifacts.
-      - bunwa-data:/app/data
-      # Downloaded media; prefer a host path in the 1Panel Compose editor.
-      - bunwa-media:/app/.media
+      - "${BUNWA_DATA_DIR:-./bunwa-data}/data:/app/data"
+    tmpfs:
+      # Size-capped scratch space for downloaded/outgoing media files.
+      - /tmp/whatsapp-files:size=512m,mode=1777
     user: "1001:1001"
     read_only: true
     cap_drop:
@@ -57,12 +84,3 @@ services:
         limits:
           cpus: "1.0"
           memory: 1g
-
-volumes:
-  # Prefer explicit host paths in 1Panel (for example /opt/bunwa/sessions).
-  # Host directories must be writable by UID/GID 1001 (the waha user):
-  #   mkdir -p /opt/bunwa/sessions /opt/bunwa/data /opt/bunwa/media
-  #   chown -R 1001:1001 /opt/bunwa
-  bunwa-sessions:
-  bunwa-data:
-  bunwa-media:

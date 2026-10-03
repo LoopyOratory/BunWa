@@ -78,29 +78,34 @@ The dashboard is served at `http://localhost:3000` and the default login is `adm
 
 ## Deploy
 
-Four Compose files live at the repo root. All of them build the local image tagged with the version
-in `package.json`, run the container as UID/GID 1001 with a read-only root filesystem, read the root
-`.env` file, and refuse to start unless `WAHA_API_KEY` is set.
+Four Compose files live at the repo root. The general, Postgres and Coolify files build the local
+image tagged with the version in `package.json`; the 1Panel file pulls the published multi-arch image
+from Docker Hub. All of them run the container as UID/GID 1001 with a read-only root filesystem, read
+the `.env` file next to the compose file, and refuse to start unless `WAHA_API_KEY` is set.
 
-| File | Audience | Database | Command |
-| --- | --- | --- | --- |
-| [`docker-compose.yml`](docker-compose.yml) | General single-node deployment behind your own reverse proxy. | SQLite (the built-in default, no database variables set). | `docker compose -f docker-compose.yml up -d` |
-| [`docker-compose.postgres.yml`](docker-compose.postgres.yml) | Self-contained BunWa plus PostgreSQL 17; also requires `POSTGRES_PASSWORD` in `.env`. | Postgres for the session store and templates; audit and the anti-ban ledger stay in local SQLite. | `docker compose -f docker-compose.postgres.yml up -d` |
-| [`docker-compose.coolify.yml`](docker-compose.coolify.yml) | Coolify's Docker Compose build pack. No published ports; Coolify's proxy routes to port 3000. | SQLite. | `docker compose -f docker-compose.coolify.yml up -d` |
-| [`docker-compose.1panel.yml`](docker-compose.1panel.yml) | 1Panel's Compose feature. Publishes on `127.0.0.1:${BUNWA_PORT:-3000}` for 1Panel's reverse proxy. | SQLite. | `docker compose -f docker-compose.1panel.yml up -d` |
+| File | Audience | Database | Required env | Command |
+| --- | --- | --- | --- | --- |
+| [`docker-compose.yml`](docker-compose.yml) | General single-node deployment behind your own reverse proxy. | SQLite (the built-in default, no database variables set). | `WAHA_API_KEY` | `docker compose -f docker-compose.yml up -d` |
+| [`docker-compose.postgres.yml`](docker-compose.postgres.yml) | Self-contained BunWa plus PostgreSQL 17. | Postgres for the session store and templates; audit and the anti-ban ledger stay in local SQLite. | `WAHA_API_KEY`, `POSTGRES_PASSWORD` | `docker compose -f docker-compose.postgres.yml up -d` |
+| [`docker-compose.coolify.yml`](docker-compose.coolify.yml) | Coolify's Docker Compose build pack. No published ports; Coolify's proxy routes to port 3000. | SQLite. | `WAHA_API_KEY` | `docker compose -f docker-compose.coolify.yml up -d` |
+| [`docker-compose.1panel.yml`](docker-compose.1panel.yml) | 1Panel's Compose feature. Pulls the published `loopyoratory/bunwa` image instead of building; publishes on `127.0.0.1:${BUNWA_PORT:-3000}` for 1Panel's reverse proxy. | SQLite. | `WAHA_API_KEY`; `BUNWA_TAG` selects the image tag (default `sha-ffd06de`) | `docker compose -f docker-compose.1panel.yml up -d` |
 
 The SQLite and Postgres files publish the API on `127.0.0.1` only; terminate TLS in the reverse
 proxy you put in front. The Coolify and 1Panel files expect their platform proxy to handle routing
 and HTTPS.
 
 Persistent state lives in the `bunwa-sessions` and `bunwa-data` named volumes (plus `bunwa-media`
-in the Coolify and 1Panel files). If you replace them with host paths, the host directories must be
-writable by UID/GID 1001, the `waha` user inside the image:
+in the Coolify file). If you replace them with host paths, the host directories must be writable by
+UID/GID 1001, the `waha` user inside the image:
 
 ```bash
 mkdir -p /data/bunwa/sessions /data/bunwa/data /data/bunwa/media
 chown -R 1001:1001 /data/bunwa
 ```
+
+The 1Panel file always uses host paths: it bind-mounts `BUNWA_DATA_DIR` (default `./bunwa-data`
+inside the 1Panel compose project directory) at `/app/.sessions` and `/app/data`, so run the same
+`chown` on that base directory before the first start.
 
 For `docker-compose.postgres.yml`, a host path for Postgres data must be writable by uid 70 (the
 `postgres` user in `postgres:17-alpine`): `mkdir -p /data/bunwa/postgres && chown -R 70:70 /data/bunwa/postgres`.
@@ -119,8 +124,10 @@ docker run -d --name bunwa \
   loopyoratory/bunwa:latest
 ```
 
-Tags: `latest` and `main` from the main branch, `2026.5.1` and `2026.5` from release tags, and
-`sha-<short>` for any build. See `.github/workflows/docker.yml` for the publishing details.
+Tags: `latest` and `main` move with the main branch, `sha-<short>` pins any build, and release tags
+(`2026.5.1`, `2026.5`) are published from `v*` git tags when one is pushed. No release tag has been
+published yet, so pin `sha-<short>` for now. See `.github/workflows/docker.yml` for the publishing
+details.
 
 ## Core API tour
 
