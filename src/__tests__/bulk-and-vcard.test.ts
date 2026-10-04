@@ -9,7 +9,7 @@ import { toVcardV3 } from '../core/vcard';
 // provides: request-shaped engine calls, and media content dispatched to the
 // matching sender instead of being silently ignored.
 describe('BulkMessageService delivery', () => {
-  const recipient = { chatId: '233553919737@c.us' };
+  const recipient = { chatId: '15551234567@c.us' };
 
   it('delivers text through the text sender and records sent', async () => {
     const calls: Array<[string, string]> = [];
@@ -20,11 +20,11 @@ describe('BulkMessageService delivery', () => {
     const batch = service.createBatch('session-a', [recipient], { text: 'Bulk hello' });
     await service.processBatch(batch.id);
 
-    expect(calls).toEqual([['233553919737@c.us', 'Bulk hello']]);
+    expect(calls).toEqual([['15551234567@c.us', 'Bulk hello']]);
     expect(batch.sent).toBe(1);
     expect(batch.failed).toBe(0);
     expect(batch.status).toBe('completed');
-    expect(batch.results).toEqual([{ chatId: '233553919737@c.us', status: 'sent' }]);
+    expect(batch.results).toEqual([{ chatId: '15551234567@c.us', status: 'sent' }]);
   });
 
   it('dispatches base64 image content to the image sender', async () => {
@@ -44,7 +44,7 @@ describe('BulkMessageService delivery', () => {
     await service.processBatch(batch.id);
 
     expect(calls).toHaveLength(1);
-    expect(calls[0].chatId).toBe('233553919737@c.us');
+    expect(calls[0].chatId).toBe('15551234567@c.us');
     expect(calls[0].caption).toBe('Bulk image');
     expect(calls[0].bytes).toBe('drill image bytes'.length);
     expect(batch.sent).toBe(1);
@@ -92,10 +92,10 @@ describe('BulkMessageService delivery', () => {
 describe('toVcardV3 field mapping', () => {
   it('uses the documented fullName and phoneNumber fields', () => {
     const vcard = toVcardV3([
-      { fullName: 'Drill Contact', phoneNumber: '233553919737', organization: 'BunWa' },
+      { fullName: 'Drill Contact', phoneNumber: '15551234567', organization: 'BunWa' },
     ]);
     expect(vcard).toContain('FN:Drill Contact');
-    expect(vcard).toContain('TEL;TYPE=CELL:233553919737');
+    expect(vcard).toContain('TEL;TYPE=CELL:15551234567');
     expect(vcard).toContain('ORG:BunWa');
   });
 

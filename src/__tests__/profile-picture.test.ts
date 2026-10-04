@@ -3,7 +3,7 @@ import { describe, it, expect } from 'bun:test';
 import { WhatsappSessionNoWebCore } from '../core/engines/noweb/session.noweb.core';
 
 const CONTACT = '15550001111@c.us';
-const LID = '218734094458920@lid';
+const LID = '111111111111111@lid';
 const PICTURE_URL = 'https://pps.whatsapp.net/v/t61/test.jpg';
 
 interface LookupCall {

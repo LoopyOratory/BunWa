@@ -104,7 +104,7 @@ describe('WEBJS status codes', () => {
       };
       await expect(
         (session as any).sendImage({
-          chatId: '233553919737@c.us',
+          chatId: '15551234567@c.us',
           file: { data: Buffer.from('image-bytes').toString('base64'), mimetype: 'image/png' },
         }),
       ).rejects.toThrow("'WEBJS' engine");
@@ -116,15 +116,15 @@ describe('WEBJS status codes', () => {
         getChats: async () => [
           {
             fetchMessages: async () => [
-              { id: { fromMe: true, remote: '218734094458920@lid', id: 'ABC' }, forward: async () => { throw new Error("Cannot read properties of undefined (reading 'forwardMessages')"); } },
+              { id: { fromMe: true, remote: '111111111111111@lid', id: 'ABC' }, forward: async () => { throw new Error("Cannot read properties of undefined (reading 'forwardMessages')"); } },
             ],
           },
         ],
       };
       await expect(
         (session as any).forwardMessage({
-          chatId: '233553919737@c.us',
-          messageId: 'true_218734094458920@lid_ABC',
+          chatId: '15551234567@c.us',
+          messageId: 'true_111111111111111@lid_ABC',
         }),
       ).rejects.toThrow("'WEBJS' engine");
     });
@@ -134,14 +134,14 @@ describe('WEBJS status codes', () => {
       (session as any).client = {
         getChatById: async () => ({
           isGroup: true,
-          id: { _serialized: '120363427492440120@g.us' },
+          id: { _serialized: '120363000000000002@g.us' },
           getInviteCode: async () => {
             throw new Error("Cannot read properties of undefined (reading 'fetchMexGroupInviteCode')");
           },
         }),
       };
       await expect(
-        (session as any).getInviteCode('120363427492440120@g.us'),
+        (session as any).getInviteCode('120363000000000002@g.us'),
       ).rejects.toThrow("'WEBJS' engine");
     });
 
@@ -150,8 +150,8 @@ describe('WEBJS status codes', () => {
       (session as any).client = { getChats: async () => [] };
       await expect(
         (session as any).forwardMessage({
-          chatId: '233553919737@c.us',
-          messageId: 'true_218734094458920@lid_MISSING',
+          chatId: '15551234567@c.us',
+          messageId: 'true_111111111111111@lid_MISSING',
         }),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
@@ -205,14 +205,14 @@ describe('WEBJS status codes', () => {
     };
 
     it('DELETE /api/:session/chats/:chatId/messages answers 422 for a gated clear', async () => {
-      await expect422NamingWebjs(await send('DELETE', '/api/webjs-status-test/chats/233553919737@c.us/messages'));
+      await expect422NamingWebjs(await send('DELETE', '/api/webjs-status-test/chats/15551234567@c.us/messages'));
     });
 
     it('POST /api/contacts/block answers 422 for a gated block', async () => {
       await expect422NamingWebjs(
         await send('POST', '/api/contacts/block', {
           session: 'webjs-status-test',
-          contactId: '233553919737@c.us',
+          contactId: '15551234567@c.us',
         }),
       );
     });
@@ -221,14 +221,14 @@ describe('WEBJS status codes', () => {
       await expect422NamingWebjs(
         await send('POST', '/api/contacts/unblock', {
           session: 'webjs-status-test',
-          contactId: '233553919737@c.us',
+          contactId: '15551234567@c.us',
         }),
       );
     });
 
     it('PUT /api/:session/groups/:id/picture answers 422 for a gated update', async () => {
       await expect422NamingWebjs(
-        await send('PUT', '/api/webjs-status-test/groups/120363427492440120@g.us/picture', {
+        await send('PUT', '/api/webjs-status-test/groups/120363000000000002@g.us/picture', {
           data: 'aW1hZ2U=',
           mimetype: 'image/png',
         }),
@@ -239,8 +239,8 @@ describe('WEBJS status codes', () => {
       await expect422NamingWebjs(
         await send('PUT', '/api/star', {
           session: 'webjs-status-test',
-          chatId: '233553919737@c.us',
-          messageId: 'true_218734094458920@lid_ABC',
+          chatId: '15551234567@c.us',
+          messageId: 'true_111111111111111@lid_ABC',
           star: true,
         }),
       );

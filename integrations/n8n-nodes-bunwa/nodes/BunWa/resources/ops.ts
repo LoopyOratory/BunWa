@@ -173,7 +173,7 @@ const properties: INodeProperties[] = [
 	...forOperations(
 		[
 			chatIdField(
-				'Chat to deliver the rendered template to. Can be phone based (15551234567@c.us), LID based (218734094458920@lid, common on newer accounts and for inbound chats) or a group ending in @g.us.',
+				'Chat to deliver the rendered template to. Can be phone based (15551234567@c.us), LID based (111111111111111@lid, common on newer accounts and for inbound chats) or a group ending in @g.us.',
 			),
 		],
 		['sendTemplate'],

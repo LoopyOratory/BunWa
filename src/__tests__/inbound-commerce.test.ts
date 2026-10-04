@@ -11,8 +11,8 @@ import { evaluateFilters } from '../common/security/webhook-filters';
  * sends for a cart shared from a catalog and for a product card.
  */
 
-const BUYER = '233553919737@c.us';
-const BUSINESS = '233209933360@s.whatsapp.net';
+const BUYER = '15551234567@c.us';
+const BUSINESS = '15551234567@s.whatsapp.net';
 
 function makeSession(): WhatsappSessionNoWebCore {
   return new WhatsappSessionNoWebCore({
@@ -71,7 +71,7 @@ const PRODUCT_EVENT = {
         priceAmount1000: 49900,
         salePriceAmount1000: 39900,
         retailerId: 'TS-BLUE-M',
-        url: 'https://wa.me/p/1234567890123456/233209933360',
+        url: 'https://wa.me/p/1234567890123456/15551234567',
         productImageCount: 3,
       },
       businessOwnerJid: BUSINESS,
@@ -94,7 +94,7 @@ describe('inbound order message', () => {
       message:
         '2 items\n\nT-Shirt Blue M x1 R$ 49,90\nMug x1 R$ 29,90\nSubtotal: R$ 79,80',
       orderTitle: 'Order',
-      sellerJid: '233209933360@c.us',
+      sellerJid: '15551234567@c.us',
       token: 'AR4H2B7XQ1',
       totalAmount: 79.8,
       currencyCode: 'BRL',
@@ -135,8 +135,8 @@ describe('inbound product message', () => {
       price: 49.9,
       salePrice: 39.9,
       retailerId: 'TS-BLUE-M',
-      url: 'https://wa.me/p/1234567890123456/233209933360',
-      businessOwnerJid: '233209933360@c.us',
+      url: 'https://wa.me/p/1234567890123456/15551234567',
+      businessOwnerJid: '15551234567@c.us',
       body: 'Blue T-Shirt M',
       footer: 'Shop now',
     });

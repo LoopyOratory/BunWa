@@ -276,7 +276,7 @@ describe('NOWEB checkNumberStatus with a username', () => {
   it('reports a resolved handle as the LID, never as a phone number', async () => {
     const session = makeSession();
     const { sock, calls } = socketAnswering(
-      resolvedUsyncAnswer('ada.lovelace', '112795051946091@lid'),
+      resolvedUsyncAnswer('ada.lovelace', '111111111111114@lid'),
     );
     session.sock = sock as any;
 
@@ -285,11 +285,11 @@ describe('NOWEB checkNumberStatus with a username', () => {
       exists: true,
       isBusiness: false,
       canReceiveMessage: true,
-      number: '112795051946091@lid',
+      number: '111111111111114@lid',
       status: 'resolved',
       username: 'ada.lovelace',
       usernameState: 'active',
-      lid: '112795051946091@lid',
+      lid: '111111111111114@lid',
     });
     // A username lookup must not fall through to the phone check at all.
     expect(calls).toHaveLength(1);
@@ -298,11 +298,11 @@ describe('NOWEB checkNumberStatus with a username', () => {
 
   it('includes the locally stored display name for the LID when one is known', async () => {
     const session = makeSession();
-    const { sock } = socketAnswering(resolvedUsyncAnswer('ada.lovelace', '112795051946091@lid'));
+    const { sock } = socketAnswering(resolvedUsyncAnswer('ada.lovelace', '111111111111114@lid'));
     session.sock = sock as any;
     session.store = {
       getContactById: async (jid: string) => {
-        expect(jid).toBe('112795051946091@lid');
+        expect(jid).toBe('111111111111114@lid');
         return { id: jid, notify: 'Ada Lovelace' };
       },
     } as any;

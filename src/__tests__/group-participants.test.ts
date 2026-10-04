@@ -93,13 +93,13 @@ describe('NOWEB group participants', () => {
 
     await session.createGroup({
       name: 'Drill',
-      participants: ['233553919737@c.us', '233553919737'],
+      participants: ['15551234567@c.us', '15551234567'],
     });
 
     expect(received.name).toBe('Drill');
     expect(received.participants).toEqual([
-      '233553919737@s.whatsapp.net',
-      '233553919737@s.whatsapp.net',
+      '15551234567@s.whatsapp.net',
+      '15551234567@s.whatsapp.net',
     ]);
   });
 
@@ -162,12 +162,12 @@ describe('NOWEB group participants', () => {
       },
     };
 
-    await session.addParticipants('123@g.us', { participants: ['233553919737'] });
-    await session.removeParticipants('123@g.us', { participants: ['233553919737@c.us'] });
+    await session.addParticipants('123@g.us', { participants: ['15551234567'] });
+    await session.removeParticipants('123@g.us', { participants: ['15551234567@c.us'] });
 
     expect(calls).toEqual([
-      { id: '123@g.us', participants: ['233553919737@s.whatsapp.net'], action: 'add' },
-      { id: '123@g.us', participants: ['233553919737@s.whatsapp.net'], action: 'remove' },
+      { id: '123@g.us', participants: ['15551234567@s.whatsapp.net'], action: 'add' },
+      { id: '123@g.us', participants: ['15551234567@s.whatsapp.net'], action: 'remove' },
     ]);
   });
 
@@ -200,12 +200,12 @@ describe('WEBJS group participants', () => {
 
     await session.createGroup({
       name: 'Drill',
-      participants: ['233553919737', '233553919737@c.us', { id: '15551234567' } as any],
+      participants: ['15551234567', '15551234567@c.us', { id: '15551234567' } as any],
     });
 
     expect(received).toEqual([
-      '233553919737@c.us',
-      '233553919737@c.us',
+      '15551234567@c.us',
+      '15551234567@c.us',
       '15551234567@c.us',
     ]);
   });
@@ -232,19 +232,19 @@ describe('group detail shape', () => {
     const session = makeNowebSession();
     session.store = {
       getGroupById: async () => ({
-        id: '120363416106788489@g.us',
+        id: '120363000000000001@g.us',
         subject: 'BunWa Drill',
         desc: 'A description',
         announce: false,
         restrict: true,
         participants: [
-          { id: '218734094458920@lid', admin: 'superadmin', username: 'king_kow' },
+          { id: '111111111111111@lid', admin: 'superadmin', username: 'drill_user' },
         ],
       }),
-      findPNByLid: async () => '233553919737@s.whatsapp.net',
+      findPNByLid: async () => '15551234567@s.whatsapp.net',
     };
 
-    const info = await session.getGroup('120363416106788489@g.us');
+    const info = await session.getGroup('120363000000000001@g.us');
 
     // description comes from the engine's desc field, not the raw key
     expect(info.subject).toBe('BunWa Drill');
@@ -252,10 +252,10 @@ describe('group detail shape', () => {
     // the LID is resolved to a phone number through the store mapping
     expect(info.participants).toEqual([
       {
-        id: '218734094458920@lid',
-        pn: '233553919737@c.us',
+        id: '111111111111111@lid',
+        pn: '15551234567@c.us',
         role: 'superadmin',
-        username: 'king_kow',
+        username: 'drill_user',
       },
     ]);
     // the raw engine fields stay out of the contract
@@ -269,7 +269,7 @@ describe('group detail shape', () => {
       getGroupById: async () => ({
         id: '123@g.us',
         subject: 'Drill',
-        participants: [{ id: '218734094458920@lid', admin: null }],
+        participants: [{ id: '111111111111111@lid', admin: null }],
       }),
       findPNByLid: async () => null,
     };
@@ -287,7 +287,7 @@ describe('group detail shape', () => {
       getGroupById: async () => ({
         id: '123@g.us',
         participants: [
-          { id: '111@lid', phoneNumber: '233553919737@s.whatsapp.net', admin: 'admin' },
+          { id: '111@lid', phoneNumber: '15551234567@s.whatsapp.net', admin: 'admin' },
         ],
       }),
       findPNByLid: async () => {
@@ -300,7 +300,7 @@ describe('group detail shape', () => {
 
     expect(info.participants?.[0]).toEqual({
       id: '111@lid',
-      pn: '233553919737@c.us',
+      pn: '15551234567@c.us',
       role: 'admin',
       username: undefined,
     });
@@ -343,7 +343,7 @@ describe('group detail shape', () => {
       participants: [
         { id: { _serialized: '111@c.us' }, isAdmin: true },
         { id: { _serialized: '222@c.us' }, isSuperAdmin: true },
-        { id: { _serialized: '333@c.us' }, username: 'king_kow' },
+        { id: { _serialized: '333@c.us' }, username: 'drill_user' },
       ],
     });
 
@@ -357,6 +357,6 @@ describe('group detail shape', () => {
       'superadmin',
       'participant',
     ]);
-    expect(info.participants?.[2].username).toBe('king_kow');
+    expect(info.participants?.[2].username).toBe('drill_user');
   });
 });

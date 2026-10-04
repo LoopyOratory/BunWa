@@ -206,7 +206,7 @@ describe('Gated operations keep their engine status', () => {
   });
 
   it('DELETE /api/:session/groups/:id delegates to the engine', async () => {
-    const res = await fetchRoute('/api/gated-session/groups/120363427492440120@g.us', 'DELETE');
+    const res = await fetchRoute('/api/gated-session/groups/120363000000000002@g.us', 'DELETE');
     expect(res.status).toBe(200);
     const body: any = await res.json();
     expect(body.deleted).toBe(true);
@@ -218,7 +218,7 @@ describe('Gated operations keep their engine status', () => {
       throw new NotImplementedByEngineError('', 'NOWEB');
     };
     try {
-      const res = await fetchRoute('/api/gated-session/groups/120363427492440120@g.us', 'DELETE');
+      const res = await fetchRoute('/api/gated-session/groups/120363000000000002@g.us', 'DELETE');
       expect(res.status).toBe(422);
       const body: any = await res.json();
       expect(body.message).toContain("'NOWEB' engine");
