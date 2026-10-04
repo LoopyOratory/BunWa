@@ -5,19 +5,18 @@
 # 1Panel notes:
 #   - Create this as a Compose project in the 1Panel Docker > Compose page.
 #     1Panel keeps the project in its data directory, by default under
-#     /opt/1panel/docker/compose/<project name>, and runs compose from there,
-#     so relative paths such as the default ./bunwa-data resolve inside it.
+#     /opt/1panel/docker/compose/<project name>, and runs compose from there.
 #   - Point 1Panel's reverse proxy at 127.0.0.1:${BUNWA_PORT:-3000} and enable
 #     HTTPS on that website; the container publishes the port on localhost only.
-#   - Include the bind-mounted BUNWA_DATA_DIR directory in 1Panel's backup plan,
-#     otherwise sessions, audit logs and templates are not backed up.
+#   - Persistent data lives in the bunwa-sessions and bunwa-data named volumes.
+#     1Panel's file manager cannot browse those, so back them up with the
+#     commented host path alternative in the volumes section, or back up the
+#     Docker volume directory directly.
 #   - The image is multi-arch (linux/amd64 and linux/arm64), so 1Panel uses the
 #     same tag on amd64 and arm64 hosts.
 #
 # Setup:
 #   cp .env.example .env    # set WAHA_API_KEY (and WAHA_ALLOW_NO_AUTH=false)
-#   mkdir -p bunwa-data/sessions bunwa-data/data
-#   chown -R 1001:1001 bunwa-data
 #   docker compose -f docker-compose.1panel.yml up -d
 #
 # Moving versions:
@@ -46,17 +45,29 @@ services:
       # Localhost only: point the 1Panel reverse proxy here and enable HTTPS.
       - "127.0.0.1:${BUNWA_PORT:-3000}:3000"
     volumes:
-      # Bind mounts, not named volumes, so 1Panel's file manager and backup
-      # feature can reach the data. The image pre-creates /app/.sessions and
-      # /app/data with UID/GID 1001 ownership, but Docker creates a missing
-      # host directory as root, so chown the base directory once before the
-      # first start:
-      #   mkdir -p "${BUNWA_DATA_DIR:-./bunwa-data}"/sessions "${BUNWA_DATA_DIR:-./bunwa-data}"/data
-      #   chown -R 1001:1001 "${BUNWA_DATA_DIR:-./bunwa-data}"
+      # Named volumes. Docker fills an empty named volume from the image
+      # directory it mounts over, and the image pre-creates /app/.sessions and
+      # /app/data owned by UID/GID 1001, so the volumes are writable by the
+      # container user with no host preparation and no SELinux label.
       # WhatsApp auth state, session index and per-session SQLite stores.
-      - "${BUNWA_DATA_DIR:-./bunwa-data}/sessions:/app/.sessions"
+      - bunwa-sessions:/app/.sessions
       # audit.db, sending-limits.db and export/import artifacts.
-      - "${BUNWA_DATA_DIR:-./bunwa-data}/data:/app/data"
+      - bunwa-data:/app/data
+      #
+      # Commented out alternative for operators who want host paths, for example
+      # so 1Panel's file manager and path based backups can see the data.
+      # Comment out the two named volume mounts above, uncomment the two bind
+      # mounts below, and run the chown once before the first start. Docker
+      # creates a missing host path as root:root, which the container cannot
+      # write, so the chown is required. On SELinux hosts append :z to each
+      # mount so the container can label and read the path.
+      #   mkdir -p "${BUNWA_DATA_DIR:-./bunwa-data}/sessions" "${BUNWA_DATA_DIR:-./bunwa-data}/data"
+      #   chown -R 1001:1001 "${BUNWA_DATA_DIR:-./bunwa-data}"
+      # - "${BUNWA_DATA_DIR:-./bunwa-data}/sessions:/app/.sessions"
+      # - "${BUNWA_DATA_DIR:-./bunwa-data}/data:/app/data"
+      # SELinux variant of the same two mounts:
+      # - "${BUNWA_DATA_DIR:-./bunwa-data}/sessions:/app/.sessions:z"
+      # - "${BUNWA_DATA_DIR:-./bunwa-data}/data:/app/data:z"
     tmpfs:
       # Size-capped scratch space for downloaded/outgoing media files.
       - /tmp/whatsapp-files:size=512m,mode=1777
@@ -84,3 +95,13 @@ services:
         limits:
           cpus: "1.0"
           memory: 1g
+
+volumes:
+  # Docker creates an empty named volume from the image directory it mounts
+  # over, so these inherit UID/GID 1001 ownership from /app/.sessions and
+  # /app/data and need no host preparation. See the commented host path
+  # alternative on the service volumes above.
+  bunwa-sessions:
+    driver: local
+  bunwa-data:
+    driver: local

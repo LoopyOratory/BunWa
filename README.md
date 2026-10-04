@@ -104,9 +104,10 @@ mkdir -p /data/bunwa/sessions /data/bunwa/data /data/bunwa/media
 chown -R 1001:1001 /data/bunwa
 ```
 
-The 1Panel file always uses host paths: it bind-mounts `BUNWA_DATA_DIR` (default `./bunwa-data`
-inside the 1Panel compose project directory) at `/app/.sessions` and `/app/data`, so run the same
-`chown` on that base directory before the first start.
+The 1Panel file uses the same named volumes, so it needs no host preparation. If you want host paths
+instead, for example so 1Panel's file manager and path based backups can see the data, the file
+includes a commented out bind mount alternative with the required `chown -R 1001:1001` step and a
+note that SELinux hosts also need a `:z` suffix on each mount.
 
 For `docker-compose.postgres.yml`, a host path for Postgres data must be writable by uid 70 (the
 `postgres` user in `postgres:17-alpine`): `mkdir -p /data/bunwa/postgres && chown -R 70:70 /data/bunwa/postgres`.
