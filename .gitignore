@@ -66,3 +66,10 @@ whatsapp_redesign_v2.html
 # Large binaries
 bunwa
 bunwa2
+
+# Local dev environment and data
+.env.dev
+.dev-data/
+
+# whatsapp-web.js downloaded web assets
+.wwebjs_cache/
