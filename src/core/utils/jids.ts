@@ -70,6 +70,21 @@ export function toJID(chatId: any) {
   return number + '@s.whatsapp.net';
 }
 
+/**
+ * Read the chat id out of one entry of a participants payload. The API contract
+ * is a list of chat id strings (15551234567 or 15551234567@c.us); objects
+ * carrying an `id` are accepted too so callers can echo back an engine's own
+ * participant shape. Returns undefined for anything else, letting each engine
+ * report the malformed entry in its own terms.
+ */
+export function participantId(participant: unknown): string | undefined {
+  const raw =
+    typeof participant === 'string'
+      ? participant
+      : (participant as { id?: unknown } | null | undefined)?.id;
+  return typeof raw === 'string' && raw.length > 0 ? raw : undefined;
+}
+
 export function toCusFormat(remoteJid: any) {
   if (!remoteJid) {
     return remoteJid;

@@ -70,6 +70,7 @@ import { NowebAuthFactoryCore } from './NowebAuthFactoryCore';
 import { NowebInMemoryStore } from './store/NowebInMemoryStore';
 import {
   AvailableInPlusVersion,
+  BadRequestException,
   NotFoundException,
   NotImplementedByEngineError,
 } from '../../exceptions';
@@ -83,7 +84,7 @@ import { QR } from '../../QR';
 import { AckToStatus, StatusToAck } from '../../utils/acks';
 import { pairs } from '../../../utils/pairs';
 import { parseMessageIdSerialized } from '../../utils/ids';
-import { isJidNewsletter, normalizeJid, toCusFormat, toJID, JidFilter, jidsFromKey } from '../../utils/jids';
+import { isJidNewsletter, normalizeJid, participantId, toCusFormat, toJID, JidFilter, jidsFromKey } from '../../utils/jids';
 import { DistinctAck, DistinctMessages } from '../../utils/reactive';
 import { flipObject, splitAt } from '../../../helpers';
 import { PairingCodeResponse } from '../../../structures/auth.dto';
@@ -2568,7 +2569,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
    */
   @Activity()
   public createGroup(request: CreateGroupRequest) {
-    const participants = request.participants.map(getId);
+    const participants = (request.participants || []).map(toParticipantJid);
     return this.sock.groupCreate(request.name, participants);
   }
 
@@ -2707,25 +2708,25 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   public async addParticipants(id: any, request: ParticipantsRequest) {
-    const participants = request.participants.map(getId);
+    const participants = (request.participants || []).map(toParticipantJid);
     return this.sock.groupParticipantsUpdate(id, participants, 'add');
   }
 
   @Activity()
   public async removeParticipants(id: any, request: ParticipantsRequest) {
-    const participants = request.participants.map(getId);
+    const participants = (request.participants || []).map(toParticipantJid);
     return this.sock.groupParticipantsUpdate(id, participants, 'remove');
   }
 
   @Activity()
   public async promoteParticipantsToAdmin(id: any, request: ParticipantsRequest) {
-    const participants = request.participants.map(getId);
+    const participants = (request.participants || []).map(toParticipantJid);
     return this.sock.groupParticipantsUpdate(id, participants, 'promote');
   }
 
   @Activity()
   public async demoteParticipantsToUser(id: any, request: ParticipantsRequest) {
-    const participants = request.participants.map(getId);
+    const participants = (request.participants || []).map(toParticipantJid);
     return this.sock.groupParticipantsUpdate(id, participants, 'demote');
   }
 
@@ -4154,8 +4155,21 @@ export function buildMessageId({
   return parts.join('_');
 }
 
-function getId(object: any) {
-  return object.id;
+/**
+ * Resolve one entry of a participants payload into a Baileys user JID. The API
+ * contract is a list of chat ids (15551234567 or 15551234567@c.us); objects
+ * carrying an `id` are accepted too. A malformed entry is a bad request rather
+ * than a silent undefined participant, which Baileys would put into the group
+ * IQ and which WhatsApp answers with a malformed metadata response.
+ */
+function toParticipantJid(participant: unknown): string {
+  const id = participantId(participant);
+  if (!id) {
+    throw new BadRequestException(
+      'Each group participant must be a chat id like 15551234567@c.us, or an object with an id field.',
+    );
+  }
+  return toJID(id);
 }
 
 function isMine(message: any) {

@@ -68,12 +68,30 @@ import {
 import { WhatsappSession } from '../../session/session.abc';
 import { getBrowserExecutablePath } from '../../session/session.browser';
 import {
+  BadRequestException,
   NotImplementedByEngineError,
   NotFoundException,
   UnprocessableEntityException,
 } from '../../exceptions';
 import { fetchBuffer } from '../../../utils/fetch';
 import { isUsernameAddress } from '../../../common/security/wa-id';
+import { participantId } from '../../utils/jids';
+
+/**
+ * Resolve one entry of a participants payload into a whatsapp-web.js chat id.
+ * The API contract is a list of chat ids (15551234567 or 15551234567@c.us);
+ * objects carrying an `id` are accepted too, matching the NOWEB engine. A
+ * malformed entry is a bad request instead of an undefined participant.
+ */
+function toWebjsParticipantId(participant: unknown): string {
+  const id = participantId(participant);
+  if (!id) {
+    throw new BadRequestException(
+      'Each group participant must be a chat id like 15551234567@c.us, or an object with an id field.',
+    );
+  }
+  return id.includes('@') ? id : `${id}@c.us`;
+}
 
 // ---------------------------------------------------------------------------
 // Chrome path — resolved at launch time by the shared browser-path helper
@@ -864,9 +882,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
   async createGroup(request: CreateGroupRequest) {
     this.ensureClientReady();
-    const participants = request.participants.map((p) =>
-      p.includes('@') ? p : `${p}@c.us`,
-    );
+    const participants = (request.participants || []).map(toWebjsParticipantId);
     const result = await this.client!.createGroup(request.name, participants) as any;
     return {
       id: result.gid._serialized,
@@ -878,18 +894,14 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   async addParticipants(id: string, request: ParticipantsRequest) {
     this.ensureClientReady();
     const chat = await this.getGroupChatOrFail(id);
-    const ids = (request.participants || []).map((p) =>
-      p.includes('@') ? p : `${p}@c.us`,
-    );
+    const ids = (request.participants || []).map(toWebjsParticipantId);
     await (chat as any).addParticipants(ids);
   }
 
   async removeParticipants(id: string, request: ParticipantsRequest) {
     this.ensureClientReady();
     const chat = await this.getGroupChatOrFail(id);
-    const ids = (request.participants || []).map((p) =>
-      p.includes('@') ? p : `${p}@c.us`,
-    );
+    const ids = (request.participants || []).map(toWebjsParticipantId);
     await (chat as any).removeParticipants(ids);
   }
 
@@ -950,18 +962,14 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   async promoteParticipantsToAdmin(id: string, request: ParticipantsRequest) {
     this.ensureClientReady();
     const chat = await this.getGroupChatOrFail(id);
-    const ids = (request.participants || []).map((p) =>
-      p.includes('@') ? p : `${p}@c.us`,
-    );
+    const ids = (request.participants || []).map(toWebjsParticipantId);
     await (chat as any).promoteParticipants(ids);
   }
 
   async demoteParticipantsToUser(id: string, request: ParticipantsRequest) {
     this.ensureClientReady();
     const chat = await this.getGroupChatOrFail(id);
-    const ids = (request.participants || []).map((p) =>
-      p.includes('@') ? p : `${p}@c.us`,
-    );
+    const ids = (request.participants || []).map(toWebjsParticipantId);
     await (chat as any).demoteParticipants(ids);
   }
 
