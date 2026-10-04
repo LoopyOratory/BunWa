@@ -50,6 +50,7 @@ function makeSession(): WhatsappSessionNoWebCore {
     getGroups: async () => ({}),
   } as any;
   session.sock = {
+    generateMessageTag: () => 'test-tag',
     newsletterMetadata: async () => null,
     groupFetchAllParticipating: async () => ({}),
   } as any;
@@ -164,10 +165,28 @@ describe('Missing resource and unimplemented operation status codes', () => {
     expect(body.statusCode).toBe(422);
   });
 
-  it('GET /api/:session/channels answers 422 with the reason', async () => {
-    const res = await get('/api/resource-test/channels');
-    expect(res.status).toBe(422);
-    const body: any = await res.json();
-    expect(body.message).toContain('listing channels');
+  it('GET /api/:session/channels lists subscribed channels instead of answering 422', async () => {
+    const sock = session.sock as any;
+    const original = sock.query;
+    sock.query = async () => ({
+      tag: 'iq',
+      attrs: {},
+      content: [
+        {
+          tag: 'result',
+          attrs: {},
+          content: Buffer.from(
+            JSON.stringify({ data: { xwa2_newsletter_subscribed: [] } }),
+          ),
+        },
+      ],
+    });
+    try {
+      const res = await get('/api/resource-test/channels');
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual([]);
+    } finally {
+      sock.query = original;
+    }
   });
 });

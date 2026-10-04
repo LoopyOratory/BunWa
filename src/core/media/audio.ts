@@ -11,6 +11,7 @@ import { join } from 'path';
 import { randomBytes } from 'crypto';
 import { unlink } from 'fs/promises';
 import { resolveAndPinFetch } from '../../common/security/ssrf-guard';
+import { UnprocessableEntityException } from '../exceptions';
 
 /**
  * Turn a file input into a Buffer of raw bytes.
@@ -26,7 +27,11 @@ export async function materializeAudioBytes(file: Buffer | string): Promise<Buff
   if (/^https?:\/\//i.test(file)) {
     const res: any = await resolveAndPinFetch(file);
     if (!res.ok) {
-      throw new Error(`Failed to fetch audio from URL (${res.status} ${res.statusText})`);
+      // A caller-supplied URL the remote host refuses is a client facing
+      // result, not a server fault.
+      throw new UnprocessableEntityException(
+        `The audio file URL could not be downloaded: the remote host answered HTTP ${res.status} ${res.statusText ?? ''}`.trim(),
+      );
     }
     return Buffer.from(await res.arrayBuffer());
   }

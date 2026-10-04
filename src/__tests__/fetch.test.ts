@@ -78,10 +78,12 @@ describe('fetchBuffer', () => {
     expect([...buf]).toEqual([1, 2, 3]);
   });
 
-  it('throws on non-ok response', async () => {
+  it('throws a client facing 422 on a non-ok response', async () => {
     mockFetchFn = async () => new Response('nope', { status: 404, statusText: 'Not Found' });
 
-    await expect(fetchBuffer('https://example.com/missing.bin')).rejects.toThrow('HTTP 404: Not Found');
+    await expect(fetchBuffer('https://example.com/missing.bin')).rejects.toThrow(
+      'the remote host answered HTTP 404 Not Found',
+    );
   });
 
   it('rejects requests to blocked internal addresses (SSRF)', async () => {

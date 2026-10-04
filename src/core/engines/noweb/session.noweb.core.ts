@@ -62,6 +62,8 @@ import {
 } from './groups.noweb';
 import { randomId, sendButtonMessage, buildButtonBinaryNodes, wrapInteractiveMessage } from './noweb.buttons';
 import {
+  createNewsletter,
+  fetchSubscribedNewsletters,
   NOWEBNewsletterMetadata,
   searchNewsletterDirectoryByText,
   searchNewsletterDirectoryByView,
@@ -85,7 +87,7 @@ import { QR } from '../../QR';
 import { AckToStatus, StatusToAck } from '../../utils/acks';
 import { pairs } from '../../../utils/pairs';
 import { parseMessageIdSerialized } from '../../utils/ids';
-import { isJidNewsletter, normalizeJid, participantId, toCusFormat, toJID, JidFilter, jidsFromKey } from '../../utils/jids';
+import { isJidNewsletter, normalizeJid, participantId, toCusFormat, toJID, JidFilter, jidsFromKey, isJidBroadcast } from '../../utils/jids';
 import { DistinctAck, DistinctMessages } from '../../utils/reactive';
 import { flipObject, splitAt } from '../../../helpers';
 import { PairingCodeResponse } from '../../../structures/auth.dto';
@@ -179,6 +181,8 @@ import {
 import {
   WAMessage,
   WAMessageInteractiveReply,
+  WAMessageOrder,
+  WAMessageProduct,
   WAMessageReaction,
 } from '../../../structures/responses.dto';
 import { MeInfo } from '../../../structures/sessions.dto';
@@ -417,6 +421,38 @@ function parseUsernameUsyncAnswer(
 const UNSUPPORTED_FILE_INPUT =
   'Unsupported file input. Use a { data, mimetype } object, a data URL, a base64 string, an http(s) URL or a local file path.';
 
+/**
+ * Bound for one profile picture lookup. The server answers a resolvable id in
+ * about a second; for an id it will not answer it never responds at all, and
+ * Baileys would wait for the full query timeout (30 s) and log
+ * "timed out waiting for message".
+ */
+const PROFILE_PICTURE_LOOKUP_TIMEOUT_MS = 5_000;
+
+/**
+ * How long one unresolved profile picture lookup is remembered. The dashboard
+ * asks for one picture per contact, so without a negative cache every page
+ * load pays the lookup timeout again for the same unresolvable id.
+ */
+const PROFILE_PICTURE_MISS_TTL_SECONDS = 10 * 60;
+
+/** True when a profile picture lookup cannot produce a picture. */
+function isProfilePictureLookupMiss(error: any): boolean {
+  if (!error) {
+    return false;
+  }
+  // Baileys query() rejects with Boom "Timed Out" (statusCode 408) when the
+  // server never answers. item-not-found and not-authorized are WhatsApp's
+  // answers for "no picture" and "privacy hides it".
+  const statusCode = error.output?.statusCode ?? error.statusCode;
+  return (
+    statusCode === 408 ||
+    error.message === 'Timed Out' ||
+    error.message === 'item-not-found' ||
+    error.message === 'not-authorized'
+  );
+}
+
 /** True for absolute, relative, home or Windows-drive paths. */
 function isPathLike(value: string): boolean {
   return (
@@ -447,6 +483,12 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   private autoRestartJob: SinglePeriodicJobRunner;
   private msgRetryCounterCache: NodeCache;
   private placeholderResendCache: NodeCache;
+  /**
+   * Negative cache for profile picture lookups the server will not answer.
+   * Lives on the session so it survives across requests; the TTL keeps a
+   * dashboard page fast without hiding a picture that appears later for long.
+   */
+  private profilePictureMisses?: NodeCache;
   protected engineLogger: ILogger;
 
   private authNOWEBStore: any;
@@ -2485,17 +2527,39 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     return contacts.map(this.toWAContact);
   }
 
+  private getProfilePictureMisses(): NodeCache {
+    if (!this.profilePictureMisses) {
+      this.profilePictureMisses = new NodeCache({
+        stdTTL: PROFILE_PICTURE_MISS_TTL_SECONDS,
+        useClones: false,
+      });
+    }
+    return this.profilePictureMisses;
+  }
+
   @Activity()
   public async fetchContactProfilePicture(id: string): Promise<string | null> {
     const contact = this.ensureSuffix(id);
+    // A broadcast id (status@broadcast) has no profile picture and the server
+    // never answers the query, so do not send it at all.
+    if (isJidBroadcast(contact)) {
+      return null;
+    }
+    // A recent lookup for this id could not be resolved: answer from the
+    // negative cache instead of waiting for the timeout again.
+    if (this.getProfilePictureMisses().has(contact)) {
+      return null;
+    }
     try {
-      const url = await this.sock.profilePictureUrl(contact, 'image');
+      const url = await this.sock.profilePictureUrl(
+        contact,
+        'image',
+        PROFILE_PICTURE_LOOKUP_TIMEOUT_MS,
+      );
       return url ?? null;
     } catch (err: any) {
-      if (err.message == 'item-not-found') {
-        return null;
-      }
-      if (err.message == 'not-authorized') {
+      if (isProfilePictureLookupMiss(err)) {
+        this.getProfilePictureMisses().set(contact, true);
         return null;
       }
       throw err;
@@ -3124,14 +3188,21 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   }
 
   public async channelsList(query: ListChannelsQuery): Promise<Channel[]> {
-    throw this.notImplemented(
-      "NOWEB engine doesn't support listing channels.",
-    );
+    // Baileys 7.0.0-rc14 has no newsletterSubscribed, so the shared w:mex
+    // helper sends the subscribed query; a session that follows nothing
+    // answers an empty list rather than a not-implemented error.
+    const newsletters = await fetchSubscribedNewsletters(this.sock);
+    return newsletters
+      .map((newsletter) => this.toChannel(toNewsletterMetadata(newsletter)))
+      .filter((channel): channel is Channel => channel !== null);
   }
 
   @Activity()
   public async channelsCreateChannel(request: CreateChannelRequest) {
-    const newsletter = await this.sock.newsletterCreate(
+    // Goes through the shared helper instead of sock.newsletterCreate, whose
+    // response parser crashes on a channel created without a picture.
+    const newsletter = await createNewsletter(
+      this.sock,
       request.name,
       request.description,
     );
@@ -3144,13 +3215,15 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       newsletter = await this.sock.newsletterMetadata('jid', id);
     } catch (error) {
       // WhatsApp answers a metadata query for an id it cannot resolve with a
-      // GraphQL Bad Request. Normalize that lookup failure to a 404 naming the
-      // id; anything else (network, auth, rate limit) keeps its own status.
-      const lookupRejected =
-        typeof error === 'object' &&
-        error !== null &&
-        (error as any).isBoom === true &&
-        (error as any).output?.statusCode === 400;
+      // GraphQL Bad Request (400), and refuses an id the account does not
+      // follow with "Not Allowed" (405). Both mean the channel is not viewable
+      // from this account, so answer a 404 naming the id; anything else
+      // (network, auth, rate limit) keeps its own status.
+      const statusCode =
+        typeof error === 'object' && error !== null && (error as any).isBoom === true
+          ? (error as any).output?.statusCode
+          : undefined;
+      const lookupRejected = statusCode === 400 || statusCode === 405;
       if (lookupRejected) {
         throw new NotFoundException(`Channel with id '${id}' not found`);
       }
@@ -3803,6 +3876,11 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       body: body || null,
       to: toCusFormat(fromToParticipant.to),
       participant: toCusFormat(fromToParticipant.participant),
+      // Message kind and commerce payloads, so REST and webhook consumers can
+      // branch on an order or product without decoding _data.
+      type: extractMessageType(message.message),
+      order: extractOrder(message.message),
+      product: extractProduct(message.message),
       // Media
       hasMedia: Boolean(mediaContent),
       media: null,
@@ -4428,4 +4506,130 @@ export function extractBody(message: any): string | null {
   }
 
   return body;
+}
+
+/** Proto values can be number, Long or string; normalise to a number. */
+function toOptionalNumber(value: any): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+/**
+ * Canonical WhatsApp message kind for webhook filters and API consumers.
+ * Values match MESSAGE_TYPES in src/common/security/webhook-filters.ts. The
+ * commerce kinds (order, product) are named here so a workflow can branch on
+ * them without decoding the raw `_data` proto.
+ */
+export function extractMessageType(message: any): string {
+  const content = extractMessageContent(message);
+  if (!content) {
+    return 'unknown';
+  }
+  const type = getContentType(content);
+  switch (type) {
+    case 'conversation':
+    case 'extendedTextMessage':
+      return 'text';
+    case 'imageMessage':
+      return 'image';
+    case 'videoMessage':
+      return 'video';
+    case 'audioMessage':
+      return content.audioMessage?.ptt ? 'voice' : 'audio';
+    case 'documentMessage':
+    case 'documentWithCaptionMessage':
+      return 'document';
+    case 'stickerMessage':
+      return 'sticker';
+    case 'locationMessage':
+    case 'liveLocationMessage':
+      return 'location';
+    case 'contactMessage':
+    case 'contactsArrayMessage':
+      return 'contact';
+    case 'buttonsResponseMessage':
+    case 'templateButtonReplyMessage':
+    case 'interactiveResponseMessage':
+      return 'buttons_response';
+    case 'listResponseMessage':
+      return 'list_response';
+    case 'pollCreationMessage':
+    case 'pollCreationMessageV2':
+    case 'pollCreationMessageV3':
+      return 'poll';
+    case 'pollUpdateMessage':
+      return 'poll_vote';
+    case 'reactionMessage':
+      return 'reaction';
+    case 'orderMessage':
+      return 'order';
+    case 'productMessage':
+      return 'product';
+    default:
+      return 'unknown';
+  }
+}
+
+/** Parses an inbound orderMessage into the shape exposed on WAMessage.order. */
+export function extractOrder(message: any): WAMessageOrder | null {
+  const content = extractMessageContent(message);
+  const order = content?.orderMessage;
+  if (!order) {
+    return null;
+  }
+  const status =
+    order.status != null
+      ? proto.Message.OrderMessage.OrderStatus[order.status] ?? String(order.status)
+      : null;
+  const surface =
+    order.surface != null
+      ? proto.Message.OrderMessage.OrderSurface[order.surface] ?? String(order.surface)
+      : null;
+  const total = toOptionalNumber(order.totalAmount1000);
+  return {
+    orderId: order.orderId ?? null,
+    itemCount: toOptionalNumber(order.itemCount),
+    status: status,
+    surface: surface,
+    message: order.message ?? null,
+    orderTitle: order.orderTitle ?? null,
+    sellerJid: order.sellerJid ? toCusFormat(order.sellerJid) : null,
+    token: order.token ?? null,
+    // totalAmount1000 stores the decimal amount multiplied by 1000.
+    totalAmount: total !== null ? total / 1000 : null,
+    currencyCode: order.totalCurrencyCode ?? null,
+    messageVersion: toOptionalNumber(order.messageVersion),
+    catalogType: order.catalogType ?? null,
+  };
+}
+
+/** Parses an inbound productMessage into the shape exposed on WAMessage.product. */
+export function extractProduct(message: any): WAMessageProduct | null {
+  const content = extractMessageContent(message);
+  const product = content?.productMessage;
+  if (!product) {
+    return null;
+  }
+  const snapshot = product.product;
+  const price = toOptionalNumber(snapshot?.priceAmount1000);
+  const salePrice = toOptionalNumber(snapshot?.salePriceAmount1000);
+  return {
+    productId: snapshot?.productId ?? null,
+    title: snapshot?.title ?? null,
+    description: snapshot?.description ?? null,
+    currencyCode: snapshot?.currencyCode ?? null,
+    // *Amount1000 stores the decimal amount multiplied by 1000.
+    price: price !== null ? price / 1000 : null,
+    salePrice: salePrice !== null ? salePrice / 1000 : null,
+    retailerId: snapshot?.retailerId ?? null,
+    url: snapshot?.url ?? null,
+    businessOwnerJid: product.businessOwnerJid
+      ? toCusFormat(product.businessOwnerJid)
+      : null,
+    body: product.body ?? null,
+    footer: product.footer ?? null,
+  };
 }

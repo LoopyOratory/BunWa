@@ -31,6 +31,10 @@ export interface FieldDefinition {
 export const MESSAGE_TYPES = [
   'text', 'image', 'video', 'audio', 'voice', 'document',
   'sticker', 'location', 'contact', 'revoked', 'unknown',
+  // Interactive, polling and commerce kinds: messages carry these values on
+  // data.type, so a workflow can filter for an inbound order or product card.
+  'buttons_response', 'list_response', 'poll', 'poll_vote',
+  'reaction', 'order', 'product',
 ] as const;
 
 export const MAX_CONDITIONS = 20;

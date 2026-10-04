@@ -8,10 +8,11 @@
 #     /opt/1panel/docker/compose/<project name>, and runs compose from there.
 #   - Point 1Panel's reverse proxy at 127.0.0.1:${BUNWA_PORT:-3000} and enable
 #     HTTPS on that website; the container publishes the port on localhost only.
-#   - 1Panel's Compose actions run `docker compose` inside the project directory
-#     without -f, so that directory must contain a file under the default name.
-#     Keep docker-compose.yml (what the panel runs) and this file identical when
-#     the project is registered from a path.
+#   - Deploy by running docker compose inside the project directory, for example
+#     `docker compose -f docker-compose.1panel.yml up -d`. The panel's own
+#     Compose actions are not reliable for a project registered from a path:
+#     its runner does not execute in the project directory and does not pass
+#     -f either, so Up can answer "no configuration file provided".
 #   - Persistent data lives in the bunwa-sessions, bunwa-data and bunwa-media
 #     named volumes. 1Panel's file manager cannot browse those, so back them up
 #     with the commented host path alternative in the volumes section, or back

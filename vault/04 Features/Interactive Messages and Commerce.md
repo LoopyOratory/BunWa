@@ -31,6 +31,21 @@ over the **NOWEB (Baileys)** web protocol. Evidence is from the installed
 Both are also exposed to agents: MCP tools `MessageSendButtons` and `MessageSendList`
 ([[MCP Tools Reference]]).
 
+## Live commerce drill (2026-10-04, NOWEB `vivita`)
+
+Every interactive kind was sent to the test number and answered 200: all seven button types
+(`reply`, `url`, `call`, `copy`, `catalog`, `location`, `flow`), `sendList`, `sendPoll`,
+`sendContactVcard`, `sendLinkPreview`, `sendLocation`, `sendImage`, `sendFile` and `sendVoice`.
+The per minute sending policy stopped two of them with 429 and a `retryAfterSeconds`, which is the
+anti-ban layer working as designed; both went through after the cooldown.
+
+| Change from the drill | Detail |
+|---|---|
+| **Inbound order and product messages are typed** | `extractMessageType`, `extractOrder` and `extractProduct` now put `type` (`order`, `product`, `poll`, `buttons_response`, `list_response`, …), `order` and `product` on the message payload, and webhook filters accept the new type names, so a workflow can branch on an incoming cart without decoding `_data`. Covered by tests built from realistic inbound payloads; it cannot be exercised live without a real customer order. |
+| **Catalog and flow buttons are accepted by the API** | Both send. A `catalog` button only renders a storefront for a business account with a catalog, and a `flow` button without a `flow_id` is accepted but cannot launch anything. |
+| **Unfetchable media answers 422** | A file URL the host refuses, and a voice note that needs ffmpeg on a host without it, both used to answer a bare 500. Each now names its cause and the fix. |
+| **Voice notes need Ogg/Opus or ffmpeg** | An Ogg/Opus file is sent as is. Anything else is transcoded, which needs ffmpeg (present in both Docker images, absent from a bare dev host). |
+
 > **Missing validation:** WhatsApp silently drops messages that exceed its limits —
 > **≤ 3 buttons**, **≤ 10 list rows across ≤ 3 sections**. Nothing in the code checks this, so an
 > over-limit call returns success and the message never renders. Adding DTO validation (also to the
@@ -75,7 +90,7 @@ is still in `_data`, so nothing is lost — it just is not surfaced).
 | **Multi-select list** | ⚠️ experimental | Would be a native flow button named `multi_select` with a sections payload — plain JSON, so encodable; but WhatsApp renders multi-select mainly in business/catalog contexts. Needs a live test on a real account. | ~0.5 day + testing |
 | **Single product message** | ⚠️ needs catalog | `productMessage` exists in the proto (`product` snapshot, `businessOwnerJid`, `catalog`). Sending requires a product id from a **real business catalog** — the message is a card linking to an existing catalog entry. | ~0.5 day, only useful for business accounts |
 | **Catalog / storefront button** | ⚠️ needs catalog | `interactiveMessage.shopStorefrontMessage` and `.collectionMessage` exist in the proto — a "view catalog" CTA. Same catalog dependency. | ~0.5 day |
-| **Receiving carts / orders** | ✅ yes | `orderMessage` exists in the proto; incoming order messages are currently unparsed (same gap as §2 above). Parsing them into a typed event + webhook (`order.received`) needs no business setup. | ~0.5 day |
+| **Receiving carts / orders** | ✅ done | `orderMessage` is now parsed into a typed payload (`type: order`, `order: {...}`) and webhook filters accept the `order` type, so a workflow can branch on a cart. Still to add: a dedicated `order.received` event name. | done 2026-10-04 |
 | **Sending order confirmation** | ⚠️ experimental | `orderMessage` can be constructed, but whether WhatsApp relays an order-details message from a non-business web session is unverified. | test first |
 
 ## Not feasible (or not worth it)

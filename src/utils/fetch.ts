@@ -1,4 +1,5 @@
 import { resolveAndPinFetch } from '../common/security/ssrf-guard';
+import { UnprocessableEntityException } from '../core/exceptions';
 
 // Hardcoded user agents — replaces the 5.1 MB user-agents npm package.
 const USER_AGENTS = [
@@ -35,7 +36,12 @@ export async function fetchBuffer(url: string): Promise<Buffer> {
 
   const resAny = res as any; // bun-types/undici Response variance across versions
   if (!resAny.ok) {
-    throw new Error(`HTTP ${resAny.status}: ${resAny.statusText ?? ''}`);
+    // A caller-supplied URL the remote host refuses is a client facing result,
+    // not a server fault. The URL itself is not echoed so a presigned link
+    // never lands in a log or an error body.
+    throw new UnprocessableEntityException(
+      `The file URL could not be downloaded: the remote host answered HTTP ${resAny.status} ${resAny.statusText ?? ''}`.trim(),
+    );
   }
 
   const arrayBuffer = await resAny.arrayBuffer();

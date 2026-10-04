@@ -14,6 +14,26 @@ import pino from 'pino';
 
 const log = pino({ name: 'ErrorHandler' });
 
+/**
+ * Baileys and the raw w:mex directory queries reject with @hapi/boom errors.
+ * WhatsApp answering 4xx is a client-facing result (a directory filter it
+ * refuses, a forbidden action, rate limiting), not a server fault, so surface
+ * the status and reason instead of flattening it to a generic 500. 5xx Booms
+ * (session logged out, connection replaced) stay a generic 500 so no internals
+ * leak.
+ */
+function boomClientStatusCode(err: unknown): number | null {
+  const boom = err as any;
+  if (boom?.isBoom !== true) {
+    return null;
+  }
+  const statusCode = boom?.output?.statusCode;
+  if (typeof statusCode === 'number' && statusCode >= 400 && statusCode < 500) {
+    return statusCode;
+  }
+  return null;
+}
+
 export const globalErrorHandler: ErrorHandler = (err, c) => {
   if (err instanceof NotFoundException) {
     return c.json({ statusCode: 404, message: err.message }, 404);
@@ -49,6 +69,13 @@ export const globalErrorHandler: ErrorHandler = (err, c) => {
       { statusCode: 429, message: err.message, retryAfterSeconds },
       429,
     );
+  }
+
+  const boomStatus = boomClientStatusCode(err);
+  if (boomStatus !== null) {
+    const message =
+      err instanceof Error && err.message ? err.message : 'Request failed';
+    return c.json({ statusCode: boomStatus, message }, boomStatus as any);
   }
 
   // Bun's protocol-level body cap (maxRequestBodySize) rejects the request while

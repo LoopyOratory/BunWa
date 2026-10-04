@@ -61,6 +61,29 @@ describe('global error handler', () => {
     expect(body.message).not.toMatch(/!/);
   });
 
+  it('maps a client-side Boom (for example a GraphQL Bad Request) to its 4xx status', async () => {
+    const boom = Object.assign(new Error('GraphQL server error: Bad Request'), {
+      isBoom: true,
+      output: { statusCode: 400, payload: {} },
+    });
+    const res = await appThatThrows(boom).fetch(new Request('http://localhost/boom'));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.statusCode).toBe(400);
+    expect(body.message).toBe('GraphQL server error: Bad Request');
+  });
+
+  it('keeps a server-side Boom a generic 500', async () => {
+    const boom = Object.assign(new Error('Bad session'), {
+      isBoom: true,
+      output: { statusCode: 500, payload: {} },
+    });
+    const res = await appThatThrows(boom).fetch(new Request('http://localhost/boom'));
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.message).toBe('Internal server error');
+  });
+
   it('never exposes internal error details on unknown failures', async () => {
     const res = await appThatThrows(new Error('secret internal detail: db password xyz')).fetch(
       new Request('http://localhost/boom'),

@@ -3,6 +3,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { randomBytes } from 'crypto';
 import { unlink } from 'fs/promises';
+import { UnprocessableEntityException } from '../exceptions';
 
 export interface IMediaConverter {
   voice(content: Buffer): Promise<Buffer>;
@@ -31,8 +32,10 @@ async function runFfmpeg(input: Buffer, argsAfterInput: string[]): Promise<Buffe
       proc = spawnFfmpeg();
     } catch (e: any) {
       if (e?.code === 'ENOENT') {
-        throw new Error(
-          'ffmpeg is not installed in this environment — voice transcoding is unavailable. ' +
+        // A caller-supplied file the environment cannot convert is a client
+        // facing result, not a server fault: answer 422 with the fix.
+        throw new UnprocessableEntityException(
+          'ffmpeg is not installed in this environment, so voice transcoding is unavailable. ' +
           'Add ffmpeg to the image, send an OGG/Opus file, or use sendFile for a plain audio attachment.',
         );
       }
@@ -46,7 +49,10 @@ async function runFfmpeg(input: Buffer, argsAfterInput: string[]): Promise<Buffe
     ]);
 
     if (exitCode !== 0) {
-      throw new Error(`ffmpeg failed (exit ${exitCode}): ${stderr.trim().slice(0, 500)}`);
+      // The input could not be decoded or encoded: the file is the problem.
+      throw new UnprocessableEntityException(
+        `ffmpeg could not convert the supplied file (exit ${exitCode}): ${stderr.trim().slice(0, 500)}`,
+      );
     }
     return Buffer.from(stdout);
   } finally {

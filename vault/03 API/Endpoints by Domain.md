@@ -108,7 +108,7 @@ Session arrives **in the body** (`{ session, chatId, text, … }`) for the class
 | POST | `/api/:session/chats/:chatId/archive` · `/unarchive` · `/read` · `/unread` | |
 | POST | `/api/:session/chats/:chatId/mute` · `/unmute` | ⚠️ always 400 — no engine implements `muteChat` |
 | GET | `/api/:session/chats/:chatId/picture` | |
-| GET | `/api/contacts` · `/contacts/all` · `/contacts/check-exists` · `/contacts/profile-picture` | |
+| GET | `/api/contacts` · `/contacts/all` · `/contacts/check-exists` · `/contacts/profile-picture` | picture lookups carry a 5 s bound and a 10 minute negative cache, so an unresolvable id answers at once instead of holding the request for 30 s |
 | GET | `/api/contacts/about` | ⚠️ stub — returns `{about: ''}` |
 | POST | `/api/contacts/block` · `/contacts/unblock` | ⚠️ always 500 "not available in NOWEB" |
 | GET | `/api/:session/groups` · `/groups/count` · `/groups/:id` · `/groups/join-info` | `:id` answers the mapped `GroupInfo` (description, participants with `role`, `pn` and `username`) |
@@ -122,11 +122,11 @@ Session arrives **in the body** (`{ session, chatId, text, … }`) for the class
 | GET | `/api/:session/groups/:id/participants` · `/participants/v2` | |
 | POST | `/api/:session/groups/:id/participants/add` · `/remove` | chat id strings, same contract as create |
 | POST | `/api/:session/groups/:id/admin/promote` · `/demote` | chat id strings, same contract as create |
-| GET | `/api/:session/channels` · `/:id` · `/:id/messages/preview` | listing is 422 on NOWEB (engine does not implement it); preview is Plus-gated |
-| POST | `/api/:session/channels` | create |
+| GET | `/api/:session/channels` · `/:id` · `/:id/messages/preview` | listing answers the subscribed channels (verified live 2026-10-04); a channel the account does not follow answers 404; preview is Plus-gated |
+| POST | `/api/:session/channels` | create; goes through the shared helper so a channel created without a picture does not crash the response parser |
 | DELETE | `/api/:session/channels/:id` | |
-| POST | `/api/:session/channels/:id/follow` · `/unfollow` · `/mute` · `/unmute` | |
-| POST | `/api/:session/channels/search/by-view` · `/by-text` | `w:mex` directory search |
+| POST | `/api/:session/channels/:id/follow` · `/unfollow` · `/mute` · `/unmute` | all four verified live 2026-10-04 (follow 0 to 1, unfollow back to 0) |
+| POST | `/api/:session/channels/search/by-view` · `/by-text` | `by-text` works and returns real channels with invite and preview links; `by-view` is refused by WhatsApp's GraphQL with 400 for every view value tested, so it is effectively unusable against the current build; both name a missing field with 400 |
 | GET | `/api/:session/channels/search/views` · `/countries` · `/categories` | ⚠️ hardcoded `[]` stubs |
 | GET | `/api/:session/labels` · `/:labelId/chats` | |
 | POST | `/api/:session/labels` | create (colour mapping is faked) |
