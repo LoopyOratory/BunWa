@@ -10,15 +10,35 @@ feature rounds and the patch with fixes inside a round. See
 
 ### Added
 
-- WhatsApp username support: research and implementation in progress, covering
-  JID handling, send targets, docs, MCP tool descriptions and the console.
+- **WhatsApp username addressing.** Handles are recognised and validated in the
+  API, resolved to an address through a USync lookup and cached, accepted by every
+  send route, `reply`, `forwardMessage`, `checkNumberStatus` and the typing and
+  star routes, and surfaced on inbound messages as `username`. MCP parameter
+  descriptions, the console's target fields and the docs state where a handle is
+  accepted. Resolution is unit tested against a stubbed socket; it has not yet
+  been confirmed against a live account.
+- **Database conformance suite** covering session stores, templates, the sending
+  policy ledger and audit across SQLite and Postgres, run offline through in
+  process PGlite with a real Postgres available through
+  `BUNWA_TEST_POSTGRES_URL`. A skipped Postgres half reports itself as skipped
+  rather than passed.
+- **`scripts/verify-endpoints.ts`**: discovers the mounted routes and exercises
+  them read only by default, with a guarded write pass for a live session. It
+  exits non-zero on a 5xx so it can gate a deploy.
 
-### Fixed
+### Known issues
 
-- Chat route: an unreachable database is reported as a database problem instead
-  of the generic store message.
-- Sessions list: the account column populates from the session's `me` payload
-  instead of always showing a dash.
+- Four read only routes currently answer 500 when the target session is missing
+  or stopped: `GET /api/checkNumberStatus`, `GET /api/:session/new-message-id`,
+  `GET /api/contacts/check-exists` and `GET /api/contacts/profile-picture`. To be
+  confirmed against a running session.
+- Two cross driver divergences found by the conformance suite: SQLite
+  `deleteOne` for a chat label association is a no-op, and Postgres
+  `getAssociationsByChatId` ignores the association type where SQLite filters
+  `label_jid`.
+- The chat route still reports an unreachable database with the generic store
+  message, and the sessions list account column still shows a dash. Neither fix
+  has landed.
 
 ## [2026.10.0] - 2026-10-04
 
