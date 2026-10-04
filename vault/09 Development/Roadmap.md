@@ -45,7 +45,7 @@ Full analysis in [[Interactive Messages and Commerce]].
 | 9 | **Label colour mapping** — implement the hex ↔ 0–19 index conversion | three `TODO`s in the engine; labels currently lose their colour ([[Channels and Labels]]) |
 | 10 | **`waproto` location/vCard extraction** | outgoing location and vCard payloads are silently empty |
 | 11 | **Postgres `runInTransaction`** — real `BEGIN`/`COMMIT` | batch writes are non-atomic today ([[Session Stores]]) |
-| 12 | **Generate the OpenAPI document from the routes** (or at least a drift check in CI) | spec says 113 operations, code has 175 ([[API Docs]]) |
+| 12 | ~~**Generate the OpenAPI document from the routes** (or at least a drift check in CI)~~ **done 2026-10-04** | the spec documented 111 of 185 routes; route coverage now fills every gap at build time (190 operations live) and a test fails when a mounted route is undocumented ([[API Docs]]) |
 | 13 | **`docker-compose.yml`** for the documented self-host path | docs reference one; the repo doesn't have it |
 | 14 | **Auto-start the UI's default port correctly** — align `dev.sh`/Vite proxy port | `bun run dev` currently points the UI at a port the API isn't on ([[Runbook]]) |
 | 15 | **Delete dead code** listed in [[Known Gaps and Stubs]] §4 | reduces the "is this real?" tax on every new reader |

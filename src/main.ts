@@ -174,7 +174,9 @@ async function bootstrap() {
     }
 
     app.get('/api-docs', (c) => {
-      const spec = buildOpenApiSpec();
+      // The mounted route table is passed in so every route the process serves
+      // is documented, including ones added after the hand-written spec.
+      const spec = buildOpenApiSpec(app.routes as Array<{ method: string; path: string }>);
       return c.json(spec);
     });
 

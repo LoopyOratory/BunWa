@@ -28,19 +28,28 @@ The dashboard's **Docs** page simply embeds `/api-docs/` in an iframe ([[Dashboa
 
 ## ⚠️ The spec is hand-written, and it lags
 
-`src/swagger.ts` is a **statically authored** document — it is not generated from the Hono routes.
-It also auto-generates webhook payload schemas from the `WAHA_WEBHOOKS` list (first few lines of the
-file), which is the one part that stays honest automatically.
+`src/swagger.ts` is a **statically authored** document for the routes it describes, and
+`src/openapi/route-coverage.ts` fills in everything it does not. It also auto-generates webhook
+payload schemas from the `WAHA_WEBHOOKS` list (first few lines of the file).
 
 | | Spec | Reality |
 |---|---|---|
-| Operations documented | **113** | **175** route definitions (~173 mounted) |
-| Paths documented | 96 | 29 modules |
+| Operations documented | **190** | 185 routes in the mounted table |
+| Paths documented | 156 | 29 modules |
 
-Practical consequence: a route can work perfectly and be invisible in the docs, and a documented
-path can be stale. **For the truth, read [[Endpoints by Domain]] or the route modules themselves.**
+Until 2026-10-04 the spec documented 111 of the routes and nothing enforced the link, so a route
+could work and be invisible, and a documented path could be stale. Route coverage now runs at
+build time (`buildOpenApiSpec(app.routes)` in `src/main.ts`): every mounted route the hand-written
+spec does not describe is added with a curated summary, tag, path parameters and request body
+where one was written, and a derived summary otherwise. Existing entries are never overwritten.
 
-If you add an endpoint, edit `src/swagger.ts` too — nothing enforces the link.
+`src/__tests__/openapi-coverage.test.ts` is the drift check: it fails if any mounted route is
+undocumented, if an operation is missing a summary, tag or id, or if two operations share an id.
+Adding an endpoint is now covered by that test rather than by remembering to edit the spec.
+
+Measuring it also surfaced two defects that are now fixed: the spec carried a **duplicate
+`/api/contacts` path key** (the second silently won in the object literal, so "Get all contacts"
+was documented but unreachable in the reference) and two operations shared the id `getContacts`.
 
 ## Related
 

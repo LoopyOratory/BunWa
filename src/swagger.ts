@@ -1,7 +1,8 @@
 import { VERSION } from './version';
+import { applyRouteCoverage, type RouteLike } from './openapi/route-coverage';
 import { WAHA_WEBHOOKS } from './structures/webhooks';
 
-export function buildOpenApiSpec(): any {
+export function buildOpenApiSpec(routes?: RouteLike[]): any {
   const webhooks: Record<string, any> = {};
 
   for (const [event, description] of Object.entries(WAHA_WEBHOOKS)) {
@@ -33,7 +34,7 @@ export function buildOpenApiSpec(): any {
     };
   }
 
-  return {
+  const spec: any = {
     openapi: '3.1.0',
     info: {
       title: 'BUNWA - WhatsApp HTTP API',
@@ -437,13 +438,20 @@ export function buildOpenApiSpec(): any {
           },
         },
       },
-      '/api/contacts/': {
+      '/api/contacts': {
         get: {
           tags: ['👤 Contacts'],
-          summary: 'Get all contacts',
+          summary: 'Get all contacts, or one contact when contactId is given',
           operationId: 'getContacts',
           security: [{ apiKey: [] }],
           parameters: [
+            {
+              name: 'contactId',
+              in: 'query',
+              required: false,
+              schema: { type: 'string' },
+              description: 'Return only this contact when set',
+            },
             {
               name: 'session',
               in: 'query',
@@ -1562,25 +1570,12 @@ export function buildOpenApiSpec(): any {
         get: {
           tags: ['👤 Contacts'],
           summary: 'Get all contacts',
-          operationId: 'getContacts',
+          operationId: 'getAllContacts',
           security: [{ apiKey: [] }],
           parameters: [
             { name: 'session', in: 'query', required: true, schema: { type: 'string' } },
           ],
           responses: { '200': { description: 'List of contacts' } },
-        },
-      },
-      '/api/contacts': {
-        get: {
-          tags: ['👤 Contacts'],
-          summary: 'Get contact by ID',
-          operationId: 'getContact',
-          security: [{ apiKey: [] }],
-          parameters: [
-            { name: 'session', in: 'query', required: true, schema: { type: 'string' } },
-            { name: 'contactId', in: 'query', required: true, schema: { type: 'string' } },
-          ],
-          responses: { '200': { description: 'Contact details' } },
         },
       },
       '/api/contacts/check-exists': {
@@ -2321,4 +2316,8 @@ export function buildOpenApiSpec(): any {
     },
     webhooks,
   };
+
+  // Fill in every route the hand-written spec does not describe, so the
+  // reference always covers the API the process actually serves.
+  return routes ? applyRouteCoverage(spec, routes) : spec;
 }
