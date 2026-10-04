@@ -24,6 +24,19 @@ README driver tables corrected in the same round (2026-10-04): they now list `sq
 and `postgresql`, state that any other value (including `mongo`) fails the boot, and describe the
 `Storage:` report line and the fail-fast verification. `.env.example` already matched.
 
+## 0.1 Resolved 2026-10-04: two label association driver divergences
+
+Found by the SQLite/Postgres conformance suite and fixed the same day.
+
+| Item | Detail |
+|---|---|
+| SQLite chat label association delete was a no-op | `SqlLabelAssociationsMethods.deleteOne()` always put `messageId: association.messageId \|\| null` into the delete filters. A chat association has no `messageId`, so the statement filtered `"messageId" = NULL`, which never matches a row in SQL: the call reported success and removed nothing. The shared method now branches on the association type. A chat association deletes by type, `chatId` and `labelId`; a message association adds `messageId`. |
+| Postgres `getAssociationsByChatId()` ignored the association type | The Postgres repository filtered only on `chatId`, so message associations that share the chat id were returned next to chat associations, while SQLite filters on `label_jid`. `getChatLabels()` therefore reported message level labels as chat labels on Postgres. Postgres now filters `type = label_jid`, matching the SQLite contract. |
+
+Both fixes are pinned by `src/__tests__/conformance/conformance.shared.ts` (the
+"label associations: deleteOne removes its own row and is idempotent" case), which runs against
+both drivers.
+
 ## 1. Routes that can never succeed
 
 These are mounted and documented, but always fail:

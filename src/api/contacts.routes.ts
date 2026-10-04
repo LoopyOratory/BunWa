@@ -3,11 +3,12 @@ import { container } from 'tsyringe';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanSession, Action, FromQuery } from '../middleware/policies';
 import { SessionManager } from '../core/manager.core';
-import { NotFoundException, isClientFacingError } from '../core/exceptions';
+import { NotFoundException } from '../core/exceptions';
+import { workingSessionQueryResolver } from '../middleware/session-resolver';
 import { getSessionFromBody } from '../middleware/get-session-from-body';
 
-export function createContactsRouter(): Hono {
-  const router = new Hono();
+export function createContactsRouter(): Hono<{ Variables: { session: any } }> {
+  const router = new Hono<{ Variables: { session: any } }>();
 
   router.use('*', apiKeyAuthMiddleware());
 
@@ -56,23 +57,15 @@ export function createContactsRouter(): Hono {
 
   router.get('/contacts/check-exists',
     policiesMiddleware(CanSession(Action.Read, FromQuery('session'))),
+    workingSessionQueryResolver(),
     async (c) => {
-      const sessionName = c.req.query('session');
+      const session = c.get('session');
       const phone = c.req.query('phone');
-      if (!sessionName || !phone) {
+      if (!phone) {
         return c.json({ statusCode: 400, message: 'session and phone query params required' }, 400);
       }
-      const manager = container.resolve(SessionManager);
-      try {
-        const session = manager.getSession(sessionName);
-        const result = await (session as any).checkNumberStatus({ phone });
-        return c.json(result);
-      } catch (e: any) {
-        // Let mapped domain exceptions (a bad username, the sending policy)
-        // reach the global error handler instead of flattening into a 500.
-        if (isClientFacingError(e)) throw e;
-        return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
-      }
+      const result = await (session as any).checkNumberStatus({ phone });
+      return c.json(result);
     }
   );
 
@@ -85,20 +78,15 @@ export function createContactsRouter(): Hono {
 
   router.get('/contacts/profile-picture',
     policiesMiddleware(CanSession(Action.Read, FromQuery('session'))),
+    workingSessionQueryResolver(),
     async (c) => {
-      const sessionName = c.req.query('session');
+      const session = c.get('session');
       const contactId = c.req.query('contactId');
-      if (!sessionName || !contactId) {
+      if (!contactId) {
         return c.json({ statusCode: 400, message: 'session and contactId query params required' }, 400);
       }
-      const manager = container.resolve(SessionManager);
-      try {
-        const session = manager.getSession(sessionName);
-        const url = await (session as any).fetchContactProfilePicture(contactId);
-        return c.json({ profilePictureURL: url });
-      } catch (e: any) {
-        return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
-      }
+      const url = await (session as any).fetchContactProfilePicture(contactId);
+      return c.json({ profilePictureURL: url });
     }
   );
 

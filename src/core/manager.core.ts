@@ -18,7 +18,11 @@ import {
 import { DefaultMap } from '../utils/DefaultMap';
 import { getBrowserExecutablePath } from './session/session.browser';
 import { SwitchObservable } from '../utils/reactive/SwitchObservable';
-import { NotFoundException, BadRequestException } from './exceptions';
+import {
+  NotFoundException,
+  BadRequestException,
+  UnprocessableEntityException,
+} from './exceptions';
 import { LocalStoreCore } from './storage/LocalStoreCore';
 import { WebhookDelivery } from './webhook-delivery';
 import { AuditService, AuditAction } from './audit/audit.service';
@@ -349,12 +353,20 @@ export class SessionManager {
   }
 
   async getWorkingSession(name: string): Promise<WhatsappSession> {
-    const session = this.getSession(name);
-    const status = (session as any).status;
-    if (status !== WAHASessionStatus.WORKING) {
-      throw new NotFoundException(`Session ${name} is not working (status: ${status})`);
+    // Distinguish "unknown name" from "known but not connected" so callers can
+    // answer 404 and 422 respectively. A stopped session is known (the name is
+    // in the map with a null value), so it also reports as not connected.
+    if (!this.sessions.has(name)) {
+      throw new NotFoundException(`Session ${name} not found`);
     }
-    return session;
+    const session = this.sessions.get(name);
+    const status = (session as any)?.status || WAHASessionStatus.STOPPED;
+    if (status !== WAHASessionStatus.WORKING) {
+      throw new UnprocessableEntityException(
+        `Session ${name} is not connected (status: ${status}). Start the session and try again.`,
+      );
+    }
+    return session as WhatsappSession;
   }
 
   getSessionConfig(name: string): SessionConfig | undefined {

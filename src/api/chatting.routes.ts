@@ -3,7 +3,7 @@ import { BulkMessageService } from '../core/bulk-message.service';
 import { container } from 'tsyringe';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanSession, Action, FromParam, FromQuery } from '../middleware/policies';
-import { workingSessionResolver } from '../middleware/session-resolver';
+import { workingSessionResolver, workingSessionQueryResolver } from '../middleware/session-resolver';
 import { SessionManager } from '../core/manager.core';
 import { getSessionFromBody } from '../middleware/get-session-from-body';
 import { AuditService, AuditAction } from '../core/audit/audit.service';
@@ -426,23 +426,15 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
 
   router.get('/checkNumberStatus',
     policiesMiddleware(CanSession(Action.Read, FromBodySession)),
+    workingSessionQueryResolver(),
     async (c) => {
-      const sessionName = c.req.query('session');
+      const session = c.get('session');
       const phone = c.req.query('phone');
-      if (!sessionName || !phone) {
+      if (!phone) {
         return c.json({ statusCode: 400, message: 'session and phone query params required' }, 400);
       }
-      const manager = container.resolve(SessionManager);
-      try {
-        const session = manager.getSession(sessionName);
-        const result = await (session as any).checkNumberStatus({ phone });
-        return c.json(result);
-      } catch (e: any) {
-        // Let mapped domain exceptions (e.g. the 429 sending policy) reach
-        // the global error handler instead of flattening into a 500.
-        if (isClientFacingError(e)) throw e;
-        return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
-      }
+      const result = await (session as any).checkNumberStatus({ phone });
+      return c.json(result);
     }
   );
 
@@ -485,19 +477,11 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
 
   router.get('/:session/new-message-id',
     policiesMiddleware(CanSession(Action.Read, FromBodySession)),
+    workingSessionResolver(),
     async (c) => {
-      const sessionName = c.req.param('session');
-      const manager = container.resolve(SessionManager);
-      try {
-        const session = manager.getSession(sessionName);
-        const id = await (session as any).generateNewMessageId();
-        return c.json({ id });
-      } catch (e: any) {
-        // Let mapped domain exceptions (e.g. the 429 sending policy) reach
-        // the global error handler instead of flattening into a 500.
-        if (isClientFacingError(e)) throw e;
-        return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
-      }
+      const session = c.get('session');
+      const id = await (session as any).generateNewMessageId();
+      return c.json({ id });
     }
   );
 

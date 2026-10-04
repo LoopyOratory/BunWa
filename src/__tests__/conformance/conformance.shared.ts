@@ -268,6 +268,42 @@ export function runDriverConformance(driver: ConformanceDriver, skipReason?: str
       expect((await associations.getAssociationsByChatId(chatId)).length).toBe(0);
     });
 
+    it('label associations: deleteOne removes its own row and is idempotent', async () => {
+      const associations = harness.storage.getLabelAssociationRepository();
+      const chatId = id('chat') + '@s.whatsapp.net';
+      const labelId = id('label');
+      const messageId = id('message');
+
+      const chatAssociation: any = { type: 'label_jid', chatId, labelId };
+      const messageAssociation: any = { type: 'label_message', chatId, messageId, labelId };
+      await associations.save(chatAssociation);
+      await associations.save(messageAssociation);
+
+      // A chat query is chat-only: the message row shares the chat id but must
+      // not leak into the result. Both drivers return the same rows.
+      const chatRows = await associations.getAssociationsByChatId(chatId);
+      expect(chatRows.map((row: any) => row.type)).toEqual(['label_jid']);
+
+      // Deleting a chat association removes exactly that row. A second delete
+      // is a no-op: no error, and no other row is removed.
+      await associations.deleteOne(chatAssociation);
+      expect((await associations.getAssociationsByChatId(chatId)).length).toBe(0);
+      await associations.deleteOne(chatAssociation);
+      expect((await associations.getAssociationsByChatId(chatId)).length).toBe(0);
+      expect((await associations.getAssociationsByLabelId(labelId, 'label_message' as any)).length).toBe(1);
+
+      // The same holds for a message association, which is matched by its
+      // message id as well.
+      await associations.deleteOne(messageAssociation);
+      expect((await associations.getAssociationsByLabelId(labelId, 'label_message' as any)).length).toBe(0);
+      await associations.deleteOne(messageAssociation);
+      expect((await associations.getAssociationsByLabelId(labelId, 'label_message' as any)).length).toBe(0);
+
+      // Clean up the label itself.
+      await associations.deleteByLabelId(labelId);
+      expect((await associations.getAssociationsByChatId(chatId)).length).toBe(0);
+    });
+
     // ------------------------------------------------------------ templates
     it('templates: create, read, update, delete and session isolation', async () => {
       const templates = harness.templates;

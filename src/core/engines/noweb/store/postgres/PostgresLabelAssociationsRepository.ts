@@ -52,8 +52,10 @@ export class PostgresLabelAssociationsRepository implements ILabelAssociationRep
   }
 
   async getAssociationsByChatId(chatId: string): Promise<LabelAssociation[]> {
+    // Match the SQLite contract: only chat label associations, never the
+    // message rows that happen to share the chat id.
     const rows = await this.knex('labelAssociations')
-      .where({ chatId })
+      .where({ chatId, type: LabelAssociationType.Chat })
       .select('data');
     return rows.map((row) => JSON.parse(row.data));
   }

@@ -13,12 +13,23 @@ export class SqlLabelAssociationsMethods {
   constructor(private repository: KVRepositoryLike) {}
 
   async deleteOne(association: LabelAssociation): Promise<void> {
+    if (association.type === LabelAssociationType.Message) {
+      // A message association is identified by its type, chat, label and
+      // message id.
+      await this.repository.deleteBy({
+        type: association.type,
+        chatId: association.chatId,
+        labelId: association.labelId,
+        messageId: association.messageId,
+      });
+      return;
+    }
+    // A chat association has no messageId. Filtering on messageId = NULL never
+    // matches a row in SQL, so the predicate must leave it out entirely.
     await this.repository.deleteBy({
       type: association.type,
       chatId: association.chatId,
       labelId: association.labelId,
-      // @ts-ignore: messageId doesn't existing in ChatLabelAssociation
-      messageId: association.messageId || null,
     });
   }
 
