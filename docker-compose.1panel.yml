@@ -8,10 +8,22 @@
 #     /opt/1panel/docker/compose/<project name>, and runs compose from there.
 #   - Point 1Panel's reverse proxy at 127.0.0.1:${BUNWA_PORT:-3000} and enable
 #     HTTPS on that website; the container publishes the port on localhost only.
-#   - Persistent data lives in the bunwa-sessions and bunwa-data named volumes.
-#     1Panel's file manager cannot browse those, so back them up with the
-#     commented host path alternative in the volumes section, or back up the
-#     Docker volume directory directly.
+#   - 1Panel's Compose actions run `docker compose` inside the project directory
+#     without -f, so that directory must contain a file under the default name.
+#     Keep docker-compose.yml (what the panel runs) and this file identical when
+#     the project is registered from a path.
+#   - Persistent data lives in the bunwa-sessions, bunwa-data and bunwa-media
+#     named volumes. 1Panel's file manager cannot browse those, so back them up
+#     with the commented host path alternative in the volumes section, or back
+#     up the Docker volume directory directly.
+#   - The service joins the existing 1panel-network, so sibling 1Panel app
+#     containers resolve by name. With WAHA_DATABASE_DRIVER=postgres, point
+#     WAHA_DATABASE_URL at the database container's name on that network:
+#     postgresql://user:pass@<container name>:5432/<db>. For a 1Panel
+#     PostgreSQL app installed as "postgresql" that hostname is `postgresql`,
+#     not `postgres`. Declaring the network without attaching the service is
+#     the failure mode to avoid: the container then sits on its own default
+#     bridge and every boot dies with getaddrinfo ENOTFOUND <container name>.
 #   - The image is multi-arch (linux/amd64 and linux/arm64), so 1Panel uses the
 #     same tag on amd64 and arm64 hosts.
 #
@@ -46,13 +58,17 @@ services:
       - "127.0.0.1:${BUNWA_PORT:-3000}:3000"
     volumes:
       # Named volumes. Docker fills an empty named volume from the image
-      # directory it mounts over, and the image pre-creates /app/.sessions and
-      # /app/data owned by UID/GID 1001, so the volumes are writable by the
-      # container user with no host preparation and no SELinux label.
+      # directory it mounts over, and the image pre-creates /app/.sessions,
+      # /app/.media and /app/data owned by UID/GID 1001, so the volumes are
+      # writable by the container user with no host preparation and no SELinux
+      # label.
       # WhatsApp auth state, session index and per-session SQLite stores.
       - bunwa-sessions:/app/.sessions
       # audit.db, sending-limits.db and export/import artifacts.
       - bunwa-data:/app/data
+      # Downloaded media (about 180 s lifetime). Named so that recreating the
+      # container does not orphan an anonymous volume on every deploy.
+      - bunwa-media:/app/.media
       #
       # Commented out alternative for operators who want host paths, for example
       # so 1Panel's file manager and path based backups can see the data.
@@ -95,13 +111,27 @@ services:
         limits:
           cpus: "1.0"
           memory: 1g
+    networks:
+      # Required, and the reason to attach it explicitly: a compose file that
+      # only declares the network below leaves the container on the project's
+      # own default bridge, where sibling 1Panel containers (for example the
+      # `postgresql` app) cannot be resolved by name.
+      - 1panel-network
+
+networks:
+  # Shared network created by 1Panel; on a fresh host run
+  # `docker network create 1panel-network` or let 1Panel create it.
+  1panel-network:
+    external: true
 
 volumes:
   # Docker creates an empty named volume from the image directory it mounts
-  # over, so these inherit UID/GID 1001 ownership from /app/.sessions and
-  # /app/data and need no host preparation. See the commented host path
-  # alternative on the service volumes above.
+  # over, so these inherit UID/GID 1001 ownership from /app/.sessions,
+  # /app/.media and /app/data and need no host preparation. See the commented
+  # host path alternative on the service volumes above.
   bunwa-sessions:
     driver: local
   bunwa-data:
+    driver: local
+  bunwa-media:
     driver: local
