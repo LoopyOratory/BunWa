@@ -1,6 +1,6 @@
 {
   "name": "waha-bun",
-  "version": "2026.5.1",
+  "version": "2026.10.0",
   "description": "WhatsApp HTTP API - Bun/Hono Edition with Pro features",
   "type": "module",
   "scripts": {
