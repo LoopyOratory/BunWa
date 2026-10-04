@@ -159,7 +159,9 @@ export function ChatConversations({
   return (
     <aside
       className={cn(
-        "flex h-full w-full shrink-0 flex-col border-r border-[var(--chat-border)] bg-[var(--chat-bg-sidebar)] transition-[width,max-width,min-width] duration-200",
+        // No width transition: animating min/max/width reflows the message
+        // pane on every frame. The collapse swaps content instantly instead.
+        "flex h-full w-full shrink-0 flex-col border-r border-[var(--chat-border)] bg-[var(--chat-bg-sidebar)]",
         collapsed
           ? "md:w-[68px] md:min-w-[68px] md:max-w-[68px]"
           : "md:w-[30%] md:min-w-[320px] md:max-w-[440px]"

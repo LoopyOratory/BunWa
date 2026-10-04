@@ -207,11 +207,20 @@ export function TemplatePicker({ session, chatId, onSent }: TemplatePickerProps)
 
                 <div className="space-y-2">
                   <Button variant="outline" onClick={() => void runPreview()} disabled={previewLoading || sendLoading}>
-                    {previewLoading ? (
-                      <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
-                    ) : (
-                      <Eye strokeWidth={1.75} />
-                    )}
+                    {/* Both icons stay mounted in a fixed slot so the label
+                        never shifts when the loading state flips. */}
+                    <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
+                      <Loader2
+                        className={`absolute size-4 transition-opacity ${previewLoading ? "animate-spin opacity-100" : "opacity-0"}`}
+                        strokeWidth={1.75}
+                        aria-hidden={!previewLoading}
+                      />
+                      <Eye
+                        className={`absolute size-4 transition-opacity ${previewLoading ? "opacity-0" : "opacity-100"}`}
+                        strokeWidth={1.75}
+                        aria-hidden={previewLoading}
+                      />
+                    </span>
                     Preview
                   </Button>
                   {previewText !== null && (
@@ -288,7 +297,18 @@ export function TemplatePicker({ session, chatId, onSent }: TemplatePickerProps)
                 disabled={!target || sendLoading}
                 title={!target ? "Open a chat first to send this template" : undefined}
               >
-                {sendLoading ? <Loader2 className="size-4 animate-spin" strokeWidth={1.75} /> : <Send strokeWidth={1.75} />}
+                <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
+                  <Loader2
+                    className={`absolute size-4 transition-opacity ${sendLoading ? "animate-spin opacity-100" : "opacity-0"}`}
+                    strokeWidth={1.75}
+                    aria-hidden={!sendLoading}
+                  />
+                  <Send
+                    className={`absolute size-4 transition-opacity ${sendLoading ? "opacity-0" : "opacity-100"}`}
+                    strokeWidth={1.75}
+                    aria-hidden={sendLoading}
+                  />
+                </span>
                 Send to this chat
               </Button>
             </DialogFooter>

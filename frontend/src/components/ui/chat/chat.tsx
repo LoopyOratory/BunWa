@@ -823,7 +823,7 @@ function ChatMessageReactions({
       <div className="relative">
         <button
           onClick={() => setShowPicker(!showPicker)}
-          className="flex size-6 items-center justify-center rounded-full border border-dashed border-[var(--chat-border-strong)] bg-[var(--chat-bg-composer)] text-[var(--chat-text-tertiary)] opacity-0 transition-all hover:border-[var(--chat-accent)] hover:text-[var(--chat-accent)] group-hover/message:opacity-100"
+          className="flex size-6 items-center justify-center rounded-full border border-dashed border-[var(--chat-border-strong)] bg-[var(--chat-bg-composer)] text-[var(--chat-text-tertiary)] opacity-0 transition-[opacity,border-color,color] hover:border-[var(--chat-accent)] hover:text-[var(--chat-accent)] group-hover/message:opacity-100"
           aria-label="Add reaction"
         >
           <SmilePlus className="size-3" />
@@ -1158,7 +1158,7 @@ function ChatMessages({
       <button
         onClick={() => scrollToBottom("smooth")}
         className={cn(
-          "absolute bottom-4 right-4 z-5 flex size-10 items-center justify-center rounded-full border border-[var(--chat-border-strong)] bg-[var(--chat-bg-composer)] shadow-[var(--chat-shadow-md)] transition-all duration-200",
+          "absolute bottom-4 right-4 z-5 flex size-10 items-center justify-center rounded-full border border-[var(--chat-border-strong)] bg-[var(--chat-bg-composer)] shadow-[var(--chat-shadow-md)] transition-[opacity,transform] duration-200",
           isAtBottom
             ? "pointer-events-none translate-y-2 opacity-0"
             : "translate-y-0 opacity-100"
@@ -1219,7 +1219,7 @@ function ChatFilePreview({
       {/* Progress bar */}
       {item.progress !== undefined && item.progress < 100 && (
         <div className="absolute bottom-0 left-0 h-[3px] w-full bg-[var(--chat-border)]">
-          <div className="h-full bg-[var(--chat-accent)] transition-all" style={{ width: `${item.progress}%` }} />
+          <div className="h-full origin-left bg-[var(--chat-accent)] transition-transform" style={{ transform: `scaleX(${item.progress / 100})` }} />
         </div>
       )}
       {/* Remove button */}
@@ -1511,7 +1511,7 @@ function ChatComposer({
               <button
                 onClick={() => { if (isRecording) { cancelVoiceRecording(); return }; setShowMicConfirm(false); setShowEmoji(false); setShowAttachMenu(!showAttachMenu) }}
                 className={cn(
-                  "flex size-9 items-center justify-center rounded-full transition-all",
+                  "flex size-9 items-center justify-center rounded-full transition-[background-color,color,transform]",
                   isRecording
                     ? "text-red-500 hover:bg-red-500/10"
                     : "text-[var(--chat-text-secondary)] hover:bg-[var(--chat-bg-hover)] hover:text-[var(--chat-text-primary)]",
@@ -1608,25 +1608,47 @@ function ChatComposer({
               </div>
             )}
 
-            {/* Mic when the field is empty, send when there is text */}
-            {isRecording ? (
-              <button onClick={stopVoiceRecording} className="flex size-10 shrink-0 items-center justify-center rounded-full bg-red-500 text-white transition-colors hover:bg-red-600" aria-label="Stop recording">
-                <Square className="size-4" />
-              </button>
-            ) : hasContent ? (
-              <button onClick={handleSend} disabled={disabled} className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--chat-accent)] text-white transition-transform hover:scale-105 active:scale-95 disabled:opacity-50" aria-label="Send message">
-                <ArrowUp className="size-5" strokeWidth={1.75} />
-              </button>
-            ) : (
-              <button
-                onClick={() => { setShowAttachMenu(false); setShowEmoji(false); if (onVoiceRecorded) setShowMicConfirm(true); else onVoiceRecord?.() }}
-                disabled={disabled || (!onVoiceRecord && !onVoiceRecorded)}
-                className="flex size-10 shrink-0 items-center justify-center rounded-full text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-bg-hover)] hover:text-[var(--chat-text-primary)] disabled:opacity-40"
-                aria-label="Record voice message"
+            {/* One button for record, send and stop. Keeping the element
+                mounted (only the icons cross-fade) stops the send pop and the
+                hover transform from replaying on every content change. */}
+            <button
+              onClick={
+                isRecording
+                  ? stopVoiceRecording
+                  : hasContent
+                    ? handleSend
+                    : () => { setShowAttachMenu(false); setShowEmoji(false); if (onVoiceRecorded) setShowMicConfirm(true); else onVoiceRecord?.() }
+              }
+              disabled={isRecording ? false : hasContent ? disabled : disabled || (!onVoiceRecord && !onVoiceRecorded)}
+              className={cn(
+                "relative flex size-10 shrink-0 items-center justify-center rounded-full transition-[background-color,color,transform] duration-150",
+                isRecording
+                  ? "bg-red-500 text-white hover:bg-red-600"
+                  : hasContent
+                    ? "bg-[var(--chat-accent)] text-white hover:scale-105 active:scale-95 disabled:opacity-50"
+                    : "text-[var(--chat-text-secondary)] hover:bg-[var(--chat-bg-hover)] hover:text-[var(--chat-text-primary)] disabled:opacity-40"
+              )}
+              aria-label={isRecording ? "Stop recording" : hasContent ? "Send message" : "Record voice message"}
+            >
+              <span
+                className={cn("absolute inset-0 flex items-center justify-center transition-[opacity,transform] duration-150", isRecording ? "scale-75 opacity-0" : "scale-100 opacity-100")}
+                aria-hidden={isRecording}
               >
                 <Mic className="size-5" strokeWidth={1.75} />
-              </button>
-            )}
+              </span>
+              <span
+                className={cn("absolute inset-0 flex items-center justify-center transition-[opacity,transform] duration-150", !isRecording && hasContent ? "scale-100 opacity-100" : "scale-75 opacity-0")}
+                aria-hidden={isRecording || !hasContent}
+              >
+                <ArrowUp className="size-5" strokeWidth={1.75} />
+              </span>
+              <span
+                className={cn("absolute inset-0 flex items-center justify-center transition-[opacity,transform] duration-150", isRecording ? "scale-100 opacity-100" : "scale-75 opacity-0")}
+                aria-hidden={!isRecording}
+              >
+                <Square className="size-4" strokeWidth={1.75} />
+              </span>
+            </button>
           </div>
         </div>
       </div>

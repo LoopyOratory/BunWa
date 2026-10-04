@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -69,6 +69,49 @@ interface SessionsPageProps {
   onNavigate?: (page: string, options?: { sessionName?: string }) => void
 }
 
+type SessionAccount = NonNullable<Session["me"]>
+
+/* The list route (GET /api/sessions) returns SessionInfo without `me`; only
+   the detail route (GET /api/sessions/:session) carries the account. The
+   account is fetched once per working session and cached by name, so the 3s
+   list poll stays one request. */
+function useSessionAccounts() {
+  const cacheRef = useRef(new Map<string, SessionAccount>())
+  const lastStatusRef = useRef(new Map<string, Session["status"]>())
+
+  return useCallback(async (list: Session[]): Promise<Session[]> => {
+    const cache = cacheRef.current
+    for (const session of list) {
+      const previous = lastStatusRef.current.get(session.name)
+      // A stop or restart can unlink the account; drop the cached value so a
+      // dash stays truthful until the session reports one again.
+      if (previous !== undefined && previous !== session.status && session.status !== "WORKING") {
+        cache.delete(session.name)
+      }
+      lastStatusRef.current.set(session.name, session.status)
+    }
+
+    const missing = list.filter((s) => s.status === "WORKING" && !s.me && !cache.has(s.name))
+    if (missing.length > 0) {
+      const details = await Promise.allSettled(missing.map((s) => api.getSession(s.name)))
+      details.forEach((result, index) => {
+        if (result.status === "fulfilled" && result.value.me) cache.set(missing[index].name, result.value.me)
+      })
+    }
+
+    return list.map((s) =>
+      s.me || s.status !== "WORKING" || !cache.has(s.name) ? s : { ...s, me: cache.get(s.name) }
+    )
+  }, [])
+}
+
+/** Why the account column is empty, for the dash's title attribute. */
+function accountEmptyHint(status: Session["status"]): string {
+  return status === "WORKING" || status === "STARTING"
+    ? "The session has not reported its account details yet."
+    : "No account is linked while the session is not connected."
+}
+
 export function SessionsPage(_props?: SessionsPageProps) {
   const navigate = useNavigate()
   const [sessions, setSessions] = useState<Session[]>([])
@@ -82,17 +125,18 @@ export function SessionsPage(_props?: SessionsPageProps) {
   const [showDetailDialog, setShowDetailDialog] = useState(false)
   const [detailSession, setDetailSession] = useState<Session | null>(null)
 
+  const withAccounts = useSessionAccounts()
   const loadSessions = useCallback(async () => {
     try {
       const data = await api.getSessions()
-      setSessions(data)
+      setSessions(await withAccounts(data))
       setError(null)
     } catch {
       setError("Could not load sessions from the API.")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [withAccounts])
 
   useEffect(() => {
     loadSessions()
@@ -302,12 +346,20 @@ export function SessionsPage(_props?: SessionsPageProps) {
                         </div>
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
-                        {session.me?.pushName ||
-                          (session.me?.id ? (
-                            <Metric>{session.me.id}</Metric>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          ))}
+                        {session.me ? (
+                          <div className="min-w-0">
+                            {session.me.pushName && (
+                              <div className="truncate font-medium">{session.me.pushName}</div>
+                            )}
+                            <Metric className="block truncate text-xs text-muted-foreground">
+                              {session.me.id}
+                            </Metric>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground" title={accountEmptyHint(session.status)}>
+                            -
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
                         <EngineBadge engine={session.config?.engine} />

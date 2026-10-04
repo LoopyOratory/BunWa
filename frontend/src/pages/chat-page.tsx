@@ -30,6 +30,18 @@ import { toChatId } from "@/lib/phone"
 /*  STORE FAILURE HELPERS                                             */
 /* ================================================================== */
 
+/* Collect the human-readable text of an error from any of the shapes the API
+   client or the server can hand back. */
+function errorText(error: unknown): string {
+  if (typeof error === "string") return error
+  if (error instanceof Error) return error.message
+  if (error && typeof error === "object") {
+    const body = error as { message?: unknown; error?: unknown; detail?: unknown }
+    return [body.message, body.error, body.detail].filter((v): v is string => typeof v === "string").join(" ")
+  }
+  return ""
+}
+
 /*
  * A session with the message store disabled rejects every store read with a
  * 400 that names the two settings to change. Recognise it in an error message
@@ -37,18 +49,27 @@ import { toChatId } from "@/lib/phone"
  * generic failure.
  */
 function isStoreDisabledError(error: unknown): boolean {
-  let text = ""
-  if (typeof error === "string") text = error
-  else if (error instanceof Error) text = error.message
-  else if (error && typeof error === "object") {
-    const body = error as { message?: unknown; error?: unknown; detail?: unknown }
-    text = [body.message, body.error, body.detail].filter((v): v is string => typeof v === "string").join(" ")
-  }
+  const text = errorText(error)
   return /enable noweb store/i.test(text) || /noweb\.store\.enabled/i.test(text)
+}
+
+/*
+ * The message store lives in the configured database, so a refused or timed
+ * out database connection arrives here as the reason every store read failed.
+ * Match the socket and Postgres connection errors the drivers surface.
+ */
+const DATABASE_UNREACHABLE_PATTERN =
+  /ECONNREFUSED|ECONNRESET|ETIMEDOUT|getaddrinfo|ENOTFOUND|connection refused|connection terminated|could not connect to server|the database system is starting up|remaining connection slots/i
+
+function isDatabaseUnreachableError(error: unknown): boolean {
+  return DATABASE_UNREACHABLE_PATTERN.test(errorText(error))
 }
 
 const STORE_DISABLED_TITLE = "Chat history is unavailable"
 const STORE_DISABLED_DESCRIPTION = "This session is running without a message store, so BunWa cannot read chats, messages or contacts. Enable the store in the session settings and restart the session. History backfill also needs full sync enabled."
+
+const DATABASE_UNREACHABLE_TITLE = "The database is unreachable"
+const DATABASE_UNREACHABLE_DESCRIPTION = "BunWa cannot reach the database that stores chats and messages. Check that WAHA_DATABASE_URL points at the right server and that the database service is running, then retry."
 
 /** Ordering for picking the strongest presence among several participants. */
 const PRESENCE_RANK: Record<string, number> = { recording: 4, composing: 3, available: 2, paused: 1, unavailable: 0 }
@@ -185,7 +206,9 @@ function NewChatDialog({ open, onOpenChange, session, onOpenChat }: {
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={handleCheck} disabled={checking || !phone.trim()} className="rounded-md">
-            {checking && <RefreshCw className="mr-2 size-4 animate-spin" strokeWidth={1.75} />}
+            {/* Always mounted: toggling visibility keeps the label from
+                shifting when the request starts and stops. */}
+            <RefreshCw className={`mr-2 size-4 ${checking ? "animate-spin" : "opacity-0"}`} strokeWidth={1.75} aria-hidden={!checking} />
             Start chat
           </Button>
         </>
@@ -338,7 +361,7 @@ function SendMediaDialog({ open, onOpenChange, type, session, chatId, onSent }: 
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={handleSend} disabled={sending || !canSend} className="rounded-md">
-            {sending && <RefreshCw className="mr-2 size-4 animate-spin" strokeWidth={1.75} />}
+            <RefreshCw className={`mr-2 size-4 ${sending ? "animate-spin" : "opacity-0"}`} strokeWidth={1.75} aria-hidden={!sending} />
             Send
           </Button>
         </>
@@ -521,7 +544,7 @@ function StatusDialog({ open, onOpenChange, session, onSent }: { open: boolean; 
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={handleSend} disabled={sending || (statusType === "text" ? !text.trim() : !file)} className="rounded-md">
-            {sending && <RefreshCw className="mr-2 size-4 animate-spin" strokeWidth={1.75} />}
+            <RefreshCw className={`mr-2 size-4 ${sending ? "animate-spin" : "opacity-0"}`} strokeWidth={1.75} aria-hidden={!sending} />
             Post status
           </Button>
         </>
@@ -576,6 +599,7 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   const [loadingChats, setLoadingChats] = useState(false)
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [storeDisabled, setStoreDisabled] = useState(false)
+  const [databaseUnreachable, setDatabaseUnreachable] = useState(false)
   const [replyingTo, setReplyingTo] = useState<ChatMessageData | null>(null)
   const [editingMessage, setEditingMessage] = useState<ChatMessageData | null>(null)
   const [hasMoreMessages, setHasMoreMessages] = useState(false)
@@ -600,11 +624,14 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   /* ── Data Loading ── */
   const loadSessions = useCallback(async () => {
     try { setSessions(await api.getSessions()); setSessionsError(false) }
-    catch { setSessionsError(true) }
+    catch (error) {
+      if (isDatabaseUnreachableError(error)) setDatabaseUnreachable(true)
+      setSessionsError(true)
+    }
   }, [])
   useEffect(() => { loadSessions(); const iv = setInterval(loadSessions, 30000); return () => clearInterval(iv) }, [loadSessions])
   useEffect(() => { if (sessions.length > 0 && !selectedSession) setSelectedSession(initialSession || sessions[0].name) }, [sessions, selectedSession, initialSession])
-  useEffect(() => { setSelectedChat(null); setMessages([]); setStoreDisabled(false) }, [selectedSession])
+  useEffect(() => { setSelectedChat(null); setMessages([]); setStoreDisabled(false); setDatabaseUnreachable(false) }, [selectedSession])
 
   useEffect(() => {
     if (!selectedSession) { setUserPicture(null); setPictureError(false); return }
@@ -634,7 +661,10 @@ export function ChatPage({ initialSession }: ChatPageProps) {
       const list = await api.getContacts(selectedSession, 500, 0)
       setContacts(new Map(list.map((c) => [c.id, c])))
       setContactsError(false)
-    } catch { setContactsError(true) }
+    } catch (error) {
+      if (isDatabaseUnreachableError(error)) setDatabaseUnreachable(true)
+      else setContactsError(true)
+    }
   }, [selectedSession, isWorking])
   useEffect(() => { loadContacts() }, [loadContacts])
 
@@ -650,25 +680,42 @@ export function ChatPage({ initialSession }: ChatPageProps) {
       setChats(await api.getChatsOverview(selectedSession))
       chatsLoadedForSessionRef.current = selectedSession
       setStoreDisabled(false)
+      setDatabaseUnreachable(false)
     }
     catch (error) {
-      if (isStoreDisabledError(error)) setStoreDisabled(true)
+      if (isDatabaseUnreachableError(error)) { setDatabaseUnreachable(true); setStoreDisabled(false) }
+      else if (isStoreDisabledError(error)) setStoreDisabled(true)
       else toast.error("Failed to load chats")
     }
     finally { if (isFirstLoad) setLoadingChats(false) }
   }, [selectedSession, isWorking])
   useEffect(() => { loadChats() }, [loadChats])
 
+  // Latest message list for callers that run outside a render (fetch races).
+  const messagesRef = useRef<Message[]>([])
+  useEffect(() => { messagesRef.current = messages }, [messages])
+
   const loadMessages = useCallback(async (chatId: string) => {
     if (!selectedSession) return
     setLoadingMessages(true)
+    const listedBeforeFetch = messagesRef.current
     try {
       const msgs = await api.getMessages(selectedSession, chatId, 50, 0)
-      setMessages(msgs)
+      // The socket can append while the request is in flight. Keep those
+      // arrivals (de-duplicated by id) instead of letting the fetched page
+      // drop them, so both update paths converge on one list.
+      setMessages((prev) => {
+        const arrived = prev.filter((m) => !listedBeforeFetch.some((old) => old.id === m.id))
+        if (arrived.length === 0) return msgs
+        const known = new Set(msgs.map((m) => m.id))
+        return [...arrived.filter((m) => !known.has(m.id)), ...msgs]
+      })
       setHasMoreMessages(msgs.length === 50)
+      setDatabaseUnreachable(false)
       api.sendSeen(selectedSession, chatId).catch(() => {})
     } catch (error) {
-      if (isStoreDisabledError(error)) setStoreDisabled(true)
+      if (isDatabaseUnreachableError(error)) { setDatabaseUnreachable(true); setStoreDisabled(false) }
+      else if (isStoreDisabledError(error)) setStoreDisabled(true)
       else toast.error("Failed to load messages")
     }
     finally { setLoadingMessages(false) }
@@ -682,7 +729,21 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   selectedChatRef.current = selectedChat?.id
   const loadChatsRef = useRef(loadChats)
   loadChatsRef.current = loadChats
-  const chatsLoadPendingRef = useRef(false)
+
+  /* One debounced refresh path for the conversation list: socket events and
+     the 5s fallback poll both go through it, so they cannot stack requests
+     or fight over the list state. */
+  const chatsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const scheduleChatsRefresh = useCallback(() => {
+    if (chatsRefreshTimerRef.current) return
+    chatsRefreshTimerRef.current = setTimeout(() => {
+      chatsRefreshTimerRef.current = null
+      loadChatsRef.current()
+    }, 2000)
+  }, [])
+  useEffect(() => () => {
+    if (chatsRefreshTimerRef.current) clearTimeout(chatsRefreshTimerRef.current)
+  }, [])
 
   /* ── Sidebar collapse (persisted across visits) ── */
   const toggleSidebar = useCallback(() => {
@@ -735,7 +796,7 @@ export function ChatPage({ initialSession }: ChatPageProps) {
     const existing = timers.get(chatId)
     if (existing) { clearTimeout(existing); timers.delete(chatId) }
     if (state) {
-      setTypingMap((prev) => new Map(prev).set(chatId, state))
+      setTypingMap((prev) => (prev.get(chatId) === state ? prev : new Map(prev).set(chatId, state)))
       // Safety net: engines do not always send a "paused" after composing.
       timers.set(chatId, setTimeout(() => {
         timers.delete(chatId)
@@ -758,7 +819,9 @@ export function ChatPage({ initialSession }: ChatPageProps) {
       if (!state || (PRESENCE_RANK[s] ?? 0) > (PRESENCE_RANK[state] ?? 0)) state = s
     }
     if (!state) return
-    setPresences((prev) => new Map(prev).set(chatId, state as string))
+    // Presence events are chatty and often repeat; keep the previous map when
+    // nothing changed so they do not force a re-render each time.
+    setPresences((prev) => (prev.get(chatId) === state ? prev : new Map(prev).set(chatId, state as string)))
     if (state === "composing" || state === "recording") setTypingForChat(chatId, state)
     else setTypingForChat(chatId, null)
   }, [setTypingForChat])
@@ -817,12 +880,19 @@ export function ChatPage({ initialSession }: ChatPageProps) {
 
     if (event === "message" || event === "message.any") {
       if (belongsToOpenChat) {
+        // message and message.any can both deliver the same payload.
         setMessages((prev) => (prev.some((m) => m.id === payload.id) ? prev : [payload, ...prev]))
         api.sendSeen(selectedSessionRef.current, openChatId!).catch(() => {})
       }
     } else if (event === "message.ack") {
       if (belongsToOpenChat) {
-        setMessages((prev) => prev.map((m) => (m.id === payload.id ? { ...m, ack: payload.ack, ackName: payload.ackName } : m)))
+        setMessages((prev) => {
+          const index = prev.findIndex((m) => m.id === payload.id)
+          if (index === -1 || prev[index].ack === payload.ack) return prev
+          const next = prev.slice()
+          next[index] = { ...next[index], ack: payload.ack, ackName: payload.ackName }
+          return next
+        })
       }
     } else if (event === "message.reaction") {
       const messageId = payload.reaction?.messageId
@@ -845,19 +915,16 @@ export function ChatPage({ initialSession }: ChatPageProps) {
 
     // Sidebar refresh (last-message preview / unread badges) — debounced,
     // still needed for chats other than the one currently open.
-    if (!chatsLoadPendingRef.current) {
-      chatsLoadPendingRef.current = true
-      setTimeout(() => { chatsLoadPendingRef.current = false; loadChatsRef.current() }, 2000)
-    }
-  }, [])
+    scheduleChatsRefresh()
+  }, [scheduleChatsRefresh])
   useWebSocket({ session: selectedSession || "*", events: "message,message.any,message.ack,message.reaction,presence.update", onMessage: handleWsMessage })
 
   /* ── 5-second polling fallback for unread counts ── */
   useEffect(() => {
     if (!isWorking) return
-    const iv = setInterval(loadChats, 5000)
+    const iv = setInterval(scheduleChatsRefresh, 5000)
     return () => clearInterval(iv)
-  }, [loadChats, isWorking])
+  }, [scheduleChatsRefresh, isWorking])
 
   /* ── Current User for ChatProvider ── */
   const chatUser: ChatUser = useMemo(() => ({
@@ -1025,7 +1092,15 @@ export function ChatPage({ initialSession }: ChatPageProps) {
             <SidebarTrigger />
           </div>
           <div className="flex flex-1 items-center justify-center px-4">
-            {sessionsError ? (
+            {databaseUnreachable ? (
+              <div className="w-full max-w-md">
+                <ErrorState
+                  title={DATABASE_UNREACHABLE_TITLE}
+                  description={DATABASE_UNREACHABLE_DESCRIPTION}
+                  onRetry={loadSessions}
+                />
+              </div>
+            ) : sessionsError ? (
               <div className="w-full max-w-md">
                 <ErrorState
                   title="Could not load sessions"
@@ -1074,7 +1149,15 @@ export function ChatPage({ initialSession }: ChatPageProps) {
             typingMap={typingMap}
           />
           <div className="chat-wallpaper hidden flex-1 items-center justify-center px-4 md:flex">
-            {storeDisabled ? (
+            {databaseUnreachable ? (
+              <div className="w-full max-w-md">
+                <ErrorState
+                  title={DATABASE_UNREACHABLE_TITLE}
+                  description={DATABASE_UNREACHABLE_DESCRIPTION}
+                  onRetry={loadChats}
+                />
+              </div>
+            ) : storeDisabled ? (
               <div className="w-full max-w-md">
                 <ErrorState
                   title={STORE_DISABLED_TITLE}
@@ -1159,13 +1242,21 @@ export function ChatPage({ initialSession }: ChatPageProps) {
           />
 
           <div className="flex min-h-0 flex-col overflow-hidden">
-            {(contactsError || pictureError) && !storeDisabled && (
+            {(contactsError || pictureError) && !storeDisabled && !databaseUnreachable && (
               <div role="alert" className="mx-3 mt-3 flex items-center gap-2 rounded-md border border-error-border bg-error-bg px-3 py-2 text-xs text-error-foreground">
                 <TriangleAlert className="size-3.5 shrink-0" strokeWidth={1.75} />
                 Some contact details could not be loaded. Names and photos may be missing.
               </div>
             )}
-            {storeDisabled ? (
+            {databaseUnreachable ? (
+              <div className="min-h-0 overflow-y-auto p-4">
+                <ErrorState
+                  title={DATABASE_UNREACHABLE_TITLE}
+                  description={DATABASE_UNREACHABLE_DESCRIPTION}
+                  onRetry={() => { loadMessages(selectedChat.id); loadChats() }}
+                />
+              </div>
+            ) : storeDisabled ? (
               <div className="min-h-0 overflow-y-auto p-4">
                 <ErrorState
                   title={STORE_DISABLED_TITLE}
