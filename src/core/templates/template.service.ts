@@ -31,15 +31,42 @@ function generateId(): string {
 @injectable()
 export class TemplateService {
   private readonly repository: ITemplateRepository;
-  /** Resolves once the repository schema exists; every operation awaits it. */
-  private readonly ready: Promise<void>;
+  /**
+   * Resolves once the repository schema exists; every operation awaits it.
+   * Cleared on failure so a transient database outage is retried instead of
+   * poisoning the service for the lifetime of the process.
+   */
+  private initPromise: Promise<void> | null = null;
 
   constructor(dbOrPath?: Database | string) {
     this.repository = new TemplateRepositoryFactory().create(dbOrPath);
-    this.ready = this.repository.init();
-    // The constructor stays synchronous, so a rejected init would otherwise be
-    // an unhandled rejection before the first operation observes it.
-    this.ready.catch(() => {});
+    // Kick off schema creation eagerly, but never leave an unhandled
+    // rejection: init() and every operation observe the real error, and boot
+    // verification awaits it in main.ts.
+    void this.ensureReady().catch((err) => {
+      logger.error(
+        { err },
+        'Template storage initialization failed; the next request will retry',
+      );
+    });
+  }
+
+  /**
+   * Create the templates table and indexes if they do not exist. Called by
+   * boot verification; a failed attempt is retried on the next call.
+   */
+  init(): Promise<void> {
+    return this.ensureReady();
+  }
+
+  private ensureReady(): Promise<void> {
+    if (!this.initPromise) {
+      this.initPromise = this.repository.init().catch((err) => {
+        this.initPromise = null;
+        throw err;
+      });
+    }
+    return this.initPromise;
   }
 
   /**
@@ -103,7 +130,7 @@ export class TemplateService {
     };
 
     try {
-      await this.ready;
+      await this.ensureReady();
       await this.repository.create(template);
       logger.info({ sessionId, templateId: template.id, name: template.name }, 'Template created');
       return template;
@@ -119,7 +146,7 @@ export class TemplateService {
    * Find all templates for a session.
    */
   async findBySession(sessionId: string): Promise<Template[]> {
-    await this.ready;
+    await this.ensureReady();
     return this.repository.findBySession(sessionId);
   }
 
@@ -127,7 +154,7 @@ export class TemplateService {
    * Find a template by id within a session.
    */
   async findOne(sessionId: string, id: string): Promise<Template> {
-    await this.ready;
+    await this.ensureReady();
     const template = await this.repository.findOne(sessionId, id);
 
     if (!template) {
@@ -151,7 +178,7 @@ export class TemplateService {
     }
 
     if (templateName) {
-      await this.ready;
+      await this.ensureReady();
       const template = await this.repository.findByName(sessionId, templateName);
 
       if (!template) {

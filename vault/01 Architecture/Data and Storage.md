@@ -2,8 +2,8 @@
 type: note
 section: architecture
 tags: [bunwa, architecture, storage, ops]
-updated: 2026-09-14
-source: src/core/storage/, src/core/engines/noweb/store/, src/core/media/, src/config.service.ts
+updated: 2026-10-04
+source: src/core/storage/ (incl. storage-report.ts, storage-bootstrap.ts), src/core/engines/noweb/store/, src/core/media/, src/config.service.ts
 ---
 
 # 🗄️ Data and Storage
@@ -66,6 +66,20 @@ See [[Session Stores]] for the driver matrix and the per-repository file list.
 | `WAHA_DATABASE_URL` / `WHATSAPP_SESSIONS_POSTGRESQL_URL` | Postgres connection for the above | either name works; an explicit URL wins |
 | `WAHA_DB_TYPE` + `WAHA_DB_HOST/PORT/USERNAME/PASSWORD/NAME/SSL` | the Infrastructure page's fields | saving writes the canonical keys too; if only these are set (older saves), they are honoured and the URL is built from the fields |
 
+**Unknown driver values are startup errors (loud, no fallback).** `getDatabaseDriver()` accepts only
+`sqlite`, `postgres` and `postgresql` (trimmed, case-insensitive) plus an unset default of `sqlite`.
+Any other value — a typo like `pg`, or `mongo`, which is not implemented — throws naming the value
+received and the accepted values. The factories have no SQLite fallback path. Same for an
+unrecognised `WAHA_DB_TYPE`. Don't set `mongo`: it fails the boot with "MongoDB is not implemented".
+
+**Boot is self-diagnosing and fail-fast.** Right after config load, `src/main.ts` logs one line:
+`Storage: driver=... sessions-auth=... sessions-chat=... templates=... audit=... sending-policy=...`
+with the concrete target of each store (SQLite paths, or the Postgres URL with the password
+replaced by `***`). `verifyStorageAtBoot()` then connects for the configured driver, creates the
+NOWEB store tables and the templates table (or the SQLite templates table), and exits with the real
+error when the URL, database or driver is bad — instead of failing on the first session start or
+template read.
+
 The Infrastructure page is therefore a real switch: saving PostgreSQL writes
 `WAHA_DATABASE_DRIVER=postgres` + derives `WAHA_DATABASE_URL` from the form (credentials
 percent-encoded, `?sslmode=require` when SSL is on). Sessions **started after saving** use the new
@@ -74,7 +88,8 @@ backends. Verified end-to-end on 2026-09-29 ([[Postgres on PGlite]]); note Postg
 global table set per database** — unlike SQLite, where each session gets its own file.
 
 `WHATSAPP_SESSIONS_MONGO_URL` and `WAHA_SQLITE_PATH` have getters in `WhatsappConfigService` but no
-runtime consumer.
+runtime consumer; setting `WAHA_DATABASE_DRIVER=mongo` now stops startup instead of silently
+running SQLite.
 
 ## Backup / migration
 

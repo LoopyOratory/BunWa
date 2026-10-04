@@ -21,6 +21,8 @@ import { SessionManager } from './core/manager.core';
 import { ChatwootAppService } from './apps/chatwoot/services/ChatwootAppService';
 import { shutdownService } from './core/shutdown.service';
 import { createChatwootWebhookRouter } from './apps/chatwoot/api/chatwoot-webhook.routes';
+import { describeStorage } from './core/storage/storage-report';
+import { verifyStorageAtBoot } from './core/storage/storage-bootstrap';
 import { Scalar } from '@scalar/hono-api-reference';
 import pino from 'pino';
 import { timingSafeEqual } from 'crypto';
@@ -109,6 +111,16 @@ async function bootstrap() {
   const swaggerConfig = container.resolve(SwaggerConfigServiceCore);
   const sessionManager = container.resolve(SessionManager);
   setSessionManager(sessionManager);
+
+  // Resolved storage, before anything touches a database: the driver and each
+  // subsystem's concrete target. Passwords are redacted by describeStorage.
+  log.info(describeStorage(config));
+
+  // Fail fast: create the schema for the configured driver now, so a bad URL,
+  // missing database or unloadable driver stops startup with the real error
+  // instead of surfacing on the first session start or template read.
+  await verifyStorageAtBoot(config);
+  log.info('Storage verified');
 
   // Warn if running without API key in fail-closed mode
   const apiKey = config.getApiKey();

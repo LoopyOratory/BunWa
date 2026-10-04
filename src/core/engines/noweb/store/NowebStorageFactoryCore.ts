@@ -11,16 +11,20 @@ export class NowebStorageFactoryCore {
     const config = container.resolve(WhatsappConfigService);
     const driver = config.getDatabaseDriver();
 
-    if (driver === 'postgresql' || driver === 'postgres') {
+    if (driver === 'postgres') {
       return this.buildStoragePostgres(name);
     }
 
-    // Default to SQLite
-    if (store instanceof LocalStore) {
-      return this.buildStorageSqlite3(store, name);
+    if (driver === 'sqlite') {
+      if (store instanceof LocalStore) {
+        return this.buildStorageSqlite3(store, name);
+      }
+      throw new Error(`Unsupported store type '${store.constructor.name}' for the sqlite driver`);
     }
-    
-    throw new Error(`Unsupported store type '${store.constructor.name}'`);
+
+    // getDatabaseDriver() rejects unknown values, so this is unreachable; it
+    // exists only so a future driver cannot silently degrade to SQLite.
+    throw new Error(`Unsupported database driver '${driver}'`);
   }
 
   private buildStorageSqlite3(store: LocalStore, name: string) {

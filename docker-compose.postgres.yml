@@ -3,6 +3,11 @@
 # WAHA_DATABASE_DRIVER=postgres makes the NOWEB session store (chats, messages,
 # contacts, labels, ...) and the template repository use PostgreSQL.
 #
+# At startup BunWa logs the resolved storage (driver plus each target, password
+# redacted) and connects to create the store and templates tables, so a bad URL
+# or password stops the container with the real error instead of failing on the
+# first session start.
+#
 # Setup:
 #   cp .env.example .env    # set WAHA_API_KEY and POSTGRES_PASSWORD
 #   docker compose -f docker-compose.postgres.yml up -d

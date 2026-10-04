@@ -2,7 +2,7 @@
 type: note
 section: security
 tags: [bunwa, gap, reference]
-updated: 2026-09-29
+updated: 2026-10-04
 source: whole-repo audit (see each row)
 status: gap
 ---
@@ -11,6 +11,14 @@ status: gap
 
 The honest list. Everything here was verified against the code — this note exists so nobody
 rediscovers it the hard way.
+
+## 0. Resolved 2026-10-04: silent driver fallback left the app on SQLite
+
+| Item | Detail |
+|---|---|
+| Root cause | `WhatsappConfigService.getDatabaseDriver()` returned any non-empty `WAHA_DATABASE_DRIVER` verbatim, and both `NowebStorageFactoryCore` and `TemplateRepositoryFactory` treated every value other than `postgres`/`postgresql` as SQLite. A misspelling (`pg`, `postgresq`), `mongo` (advertised in the README at the time), or an unknown `WAHA_DB_TYPE` therefore ran SQLite with no log line saying so. Postgres schema creation was also lazy (session start / first template read) and `TemplateService` swallowed a failed init (`this.ready.catch(() => {})`), so failures surfaced as request errors, not startup errors. |
+| New behaviour | Unknown drivers and unknown `WAHA_DB_TYPE` values throw at startup naming the accepted values (`sqlite`, `postgres`, `postgresql`) and the value received; `mongo` reports "MongoDB is not implemented". There is no fallback to SQLite. Boot logs one `Storage: driver=...` line with the driver and each store's concrete target (Postgres password redacted), then `verifyStorageAtBoot()` connects and creates the session store and templates schema before serving; a bad URL or database exits with the real error. `TemplateService.init()` is retryable and logs failures at error level. |
+| Verified | `src/__tests__/storage-driver.test.ts` (accepted/misspelled drivers, redaction, eager SQLite schema, guarded `BUNWA_TEST_POSTGRES_URL` integration) and live boot checks on SQLite, local Postgres 18, an unreachable URL and a `pg` typo. |
 
 ## 1. Routes that can never succeed
 
@@ -76,6 +84,7 @@ Full subsystems, written and tested in places, with **zero call sites**:
 | Document | Says | Reality |
 |---|---|---|
 | `README.md` / `docs/PROJECT.md` | docker-compose provided | **no `docker-compose.yml` in the repo** |
+| `README.md` (driver tables, 2 places) | `WAHA_DATABASE_DRIVER` accepts `sqlite`, `postgres` or `mongo` | mongo is **not implemented**; the runtime now rejects it at startup. Accepted: `sqlite`, `postgres`, `postgresql` (`.env.example` updated) |
 | `.github/workflows/ci.yml` | "max 1049 TypeScript errors" | typecheck is **clean (0 errors)** — the cap is a leftover from the type-cleanup campaign |
 | `src/swagger.ts` | 113 operations / 96 paths | **175** route definitions (~173 mounted) — [[API Docs]] |
 | `docs/PROJECT.md` | "97/97 tests passing" | 97 tests exist; 95 pass, 2 fail for a test-harness reason (below) |

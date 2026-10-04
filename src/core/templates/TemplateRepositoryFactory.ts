@@ -10,7 +10,8 @@ import { Sqlite3TemplateRepository } from './sqlite3/Sqlite3TemplateRepository';
  * selects the session store driver:
  *
  *   WAHA_DATABASE_DRIVER=postgres|postgresql → PostgreSQL
- *   anything else (or unset)                 → SQLite
+ *   WAHA_DATABASE_DRIVER=sqlite (or unset)   → SQLite
+ *   anything else                            → startup error (no silent fallback)
  *
  * An explicitly injected Database handle or directory path always means SQLite:
  * callers that pass one (tests, embedded use) keep the old local-file
@@ -25,12 +26,17 @@ export class TemplateRepositoryFactory {
     const config = container.resolve(WhatsappConfigService);
     const driver = config.getDatabaseDriver();
 
-    if (driver === 'postgresql' || driver === 'postgres') {
+    if (driver === 'postgres') {
       return this.buildPostgres();
     }
 
-    // Default to SQLite
-    return new Sqlite3TemplateRepository();
+    if (driver === 'sqlite') {
+      return new Sqlite3TemplateRepository();
+    }
+
+    // getDatabaseDriver() rejects unknown values, so this is unreachable; it
+    // exists only so a future driver cannot silently degrade to SQLite.
+    throw new Error(`Unsupported database driver '${driver}'`);
   }
 
   private buildPostgres(): ITemplateRepository {

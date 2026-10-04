@@ -4,6 +4,20 @@ import { buildPostgresUrl } from './core/db/postgres-url';
 import { WebhookConfig } from './structures/webhooks.config.dto';
 import { IgnoreJidConfig } from './core/utils/jids';
 
+/** Driver values the runtime can actually serve. */
+export type DatabaseDriver = 'sqlite' | 'postgres';
+
+/** Values accepted in configuration; anything else is a startup error. */
+export const ACCEPTED_DATABASE_DRIVERS = ['sqlite', 'postgres', 'postgresql'] as const;
+
+function unknownDriverError(key: string, received: string): Error {
+  return new Error(
+    `Unsupported ${key} value '${received}'. ` +
+      `Accepted values: ${ACCEPTED_DATABASE_DRIVERS.join(', ')}. ` +
+      'Refusing to fall back to sqlite.',
+  );
+}
+
 @injectable()
 export class WhatsappConfigService {
   get schema() {
@@ -109,8 +123,7 @@ export class WhatsappConfigService {
     // canonical switches were written still connect. A bare
     // WAHA_DATABASE_DRIVER=postgres without dashboard fields keeps failing
     // loudly in the factory instead of silently dialling localhost.
-    const type = (process.env.WAHA_DB_TYPE || '').trim().toLowerCase();
-    if (type === 'postgres' || type === 'postgresql') {
+    if (this.getDashboardDatabaseType() === 'postgres') {
       return buildPostgresUrl({
         host: process.env.WAHA_DB_HOST,
         port: process.env.WAHA_DB_PORT,
@@ -123,19 +136,63 @@ export class WhatsappConfigService {
     return undefined;
   }
 
-  getDatabaseDriver(): string {
-    const explicit = (process.env.WAHA_DATABASE_DRIVER || '').trim().toLowerCase();
-    if (explicit) {
-      return explicit;
+  /**
+   * Resolve the database driver.
+   *
+   * `WAHA_DATABASE_DRIVER` wins over the dashboard's `WAHA_DB_TYPE` fallback.
+   * Only sqlite, postgres and postgresql are accepted; any other value is a
+   * startup error so a typo can never silently leave the app on SQLite.
+   * Unset means the sqlite default.
+   */
+  getDatabaseDriver(): DatabaseDriver {
+    const raw = (process.env.WAHA_DATABASE_DRIVER || '').trim();
+    if (raw) {
+      const normalized = raw.toLowerCase();
+      if (normalized === 'sqlite') {
+        return 'sqlite';
+      }
+      if (normalized === 'postgres' || normalized === 'postgresql') {
+        return 'postgres';
+      }
+      if (normalized === 'mongo' || normalized === 'mongodb') {
+        throw new Error(
+          `Unsupported WAHA_DATABASE_DRIVER value '${raw}': MongoDB is not implemented. ` +
+            `Accepted values: ${ACCEPTED_DATABASE_DRIVERS.join(', ')}. ` +
+            'Refusing to fall back to sqlite.',
+        );
+      }
+      throw unknownDriverError('WAHA_DATABASE_DRIVER', raw);
     }
     // The Infrastructure page stores its selection as WAHA_DB_TYPE; honour it
     // so a dashboard-configured Postgres actually drives the runtime even
     // before any canonical driver key exists.
-    const type = (process.env.WAHA_DB_TYPE || '').trim().toLowerCase();
-    if (type === 'postgres' || type === 'postgresql') {
+    return this.getDashboardDatabaseType() ?? 'sqlite';
+  }
+
+  /**
+   * Normalise `WAHA_DB_TYPE` (the Infrastructure page's field). Returns
+   * undefined when unset, throws for values the runtime cannot serve.
+   */
+  private getDashboardDatabaseType(): DatabaseDriver | undefined {
+    const raw = (process.env.WAHA_DB_TYPE || '').trim();
+    if (!raw) {
+      return undefined;
+    }
+    const normalized = raw.toLowerCase();
+    if (normalized === 'sqlite') {
+      return 'sqlite';
+    }
+    if (normalized === 'postgres' || normalized === 'postgresql') {
       return 'postgres';
     }
-    return 'sqlite';
+    if (normalized === 'mongo' || normalized === 'mongodb') {
+      throw new Error(
+        `Unsupported WAHA_DB_TYPE value '${raw}': MongoDB is not implemented. ` +
+          `Accepted values: ${ACCEPTED_DATABASE_DRIVERS.join(', ')}. ` +
+          'Refusing to fall back to sqlite.',
+      );
+    }
+    throw unknownDriverError('WAHA_DB_TYPE', raw);
   }
 
   getSqlitePath(): string {
