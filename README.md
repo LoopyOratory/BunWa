@@ -8,7 +8,7 @@
     <img src="https://img.shields.io/badge/version-2026.5.1-blue?style=flat-square" alt="Version" />
     <img src="https://img.shields.io/badge/license-BCL%20v1.0-green?style=flat-square" alt="License" />
     <img src="https://img.shields.io/badge/Bun-1.4.2%2B-14151a?style=flat-square&logo=bun" alt="Bun" />
-    <img src="https://img.shields.io/badge/tests-198%20passing-brightgreen?style=flat-square" alt="Tests" />
+    <img src="https://img.shields.io/badge/tests-222%20passing-brightgreen?style=flat-square" alt="Tests" />
     <a href="https://hub.docker.com/r/loopyoratory/bunwa">
       <img src="https://img.shields.io/badge/Docker-loopyoratory%2Fbunwa-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Hub" />
     </a>
@@ -27,8 +27,8 @@ whatsapp-web.js with Chrome when you need it. Beyond the compatible surface, Bun
 server for AI agents, a structured audit log, editable and sendable message templates, HMAC-signed
 webhooks with an SSRF guard, a per-session anti-ban sending policy, a React dashboard, and an n8n
 community node. It is a fork of [OpenWA](https://github.com/rmyndharis/OpenWA) and is developed
-independently for Bun. The project is at version 2026.5.1 and its test suite runs 198 tests across
-25 files.
+independently for Bun. The project is at version 2026.5.1; its recorded gate at commit 3391e17 is
+222 tests passing with 1 skipped, across 26 test files.
 
 ## Features
 
@@ -324,7 +324,7 @@ These are the essentials:
 | `WAHA_ALLOW_NO_AUTH` | `true` | Set to `false` to reject requests without a key. |
 | `WAHA_DASHBOARD_USERNAME` / `WAHA_DASHBOARD_PASSWORD` | `admin` / `admin` | Dashboard login. |
 | `WHATSAPP_DEFAULT_ENGINE` | `NOWEB` | `NOWEB` (Baileys) or `WEBJS` (whatsapp-web.js + Chrome). |
-| `WAHA_DATABASE_DRIVER` | `sqlite` | `sqlite`, `postgres` or `mongo`. |
+| `WAHA_DATABASE_DRIVER` | `sqlite` | `sqlite`, `postgres` or `postgresql`. An unrecognised value, including `mongo`, fails the boot. |
 | `WAHA_STORAGE_TYPE` | `local` | Media storage backend: `local` or `s3`. |
 | `WAHA_LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error` or `fatal`. |
 | `SEND_POLICY_ENABLED` | `true` | Master switch for the anti-ban sending policy. |
@@ -416,8 +416,10 @@ missing. The Docker image does not bundle a browser.
 <summary><strong>Sending policy (anti-ban)</strong></summary>
 
 The policy gates every outbound message (REST, bulk and MCP) per session. Blocked sends answer 429
-with a `Retry-After` header, and counters persist in `${WAHA_STORAGE_DIR}/sending-limits.db`. Each
-limit can be overridden per session through `PUT /api/sessions/:session/policy`.
+with a `Retry-After` header, and counters persist in `${WAHA_STORAGE_DIR}/sending-limits.db`. The
+REST surface is `GET /api/sessions/:session/policy` for the effective configuration and usage,
+`PUT /api/sessions/:session/policy` for per-session overrides, and
+`GET /api/sessions/:session/policy/usage` for counters and next-allowed times.
 
 | Variable | Default | Description |
 | --- | --- | --- |
@@ -437,14 +439,23 @@ limit can be overridden per session through `PUT /api/sessions/:session/policy`.
 <details>
 <summary><strong>Database</strong></summary>
 
+The driver is validated at boot. `WAHA_DATABASE_DRIVER` accepts `sqlite`, `postgres` and
+`postgresql` (trimmed, case-insensitive); unset still means `sqlite`. Any other value fails startup
+naming the value received and the accepted list, and `mongo` fails with "MongoDB is not
+implemented". There is no silent fallback to SQLite. Boot then logs one `Storage:` line naming the
+driver and the concrete target of each store (the Postgres URL with its password redacted), connects
+and creates the templates table and, on Postgres, the session store tables before serving. If the
+database is unreachable, startup stops with the real error, so a bad URL or missing database fails
+at startup instead of on the first chat or template read (commit `3391e17`).
+
 | Variable | Default | Description |
 | --- | --- | --- |
-| `WAHA_DATABASE_DRIVER` | `sqlite` | `sqlite`, `postgres` or `mongo`. |
+| `WAHA_DATABASE_DRIVER` | `sqlite` | `sqlite`, `postgres` or `postgresql`. Any other value, including `mongo`, fails the boot. |
 | `WAHA_SQLITE_PATH` | `.sessions/waha.db` | Read by the config service getter only. The session store writes per-session `store.sqlite3` files under the local store directory. |
 | `WAHA_DATABASE_URL` | unset | PostgreSQL connection string (driver `postgres`). |
 | `WHATSAPP_SESSIONS_POSTGRESQL_URL` | unset | Alias for `WAHA_DATABASE_URL`. |
-| `WHATSAPP_SESSIONS_MONGO_URL` | unset | MongoDB connection string for session storage. |
-| `WAHA_DB_TYPE` | `sqlite` | Database type reported by the infrastructure endpoint. |
+| `WHATSAPP_SESSIONS_MONGO_URL` | unset | Read by the config service getter only. MongoDB session storage is not implemented, so setting it has no runtime effect. |
+| `WAHA_DB_TYPE` | `sqlite` | Dashboard database selection. Used as the driver when `WAHA_DATABASE_DRIVER` is unset; an unrecognised value fails the boot. |
 | `WAHA_DB_HOST` | `localhost` | Reported DB host. |
 | `WAHA_DB_PORT` | `5432` | Reported DB port. |
 | `WAHA_DB_USERNAME` | unset | Reported DB username. |
@@ -627,10 +638,18 @@ sequenceDiagram
 - [`.env.example`](.env.example): every environment variable with its default.
 - `http://localhost:3000/api-docs/` while the server is running: interactive API reference.
 
+## Troubleshooting
+
+If chat or templates fail to load, check `WAHA_DATABASE_URL` first. A container that points at
+`127.0.0.1` instead of the database service name (for example `postgres` in
+`docker-compose.postgres.yml`) cannot reach the database. Since commit `3391e17` the boot validates
+the driver and verifies the connection, so a current build exits at startup with the connection
+error; an image built before that fix starts and fails later, when a chat or template is first read.
+
 ## Development
 
 ```bash
-bun run test             # bun test --parallel src/, 198 tests across 25 files
+bun run test             # bun test --parallel src/, 222 pass and 1 skip across 26 files (commit 3391e17)
 bun run typecheck        # tsc --noEmit
 bun run lint             # oxlint src/
 bun run build:frontend   # install frontend deps, tsc -b, vite build, copy to frontend-dist/
