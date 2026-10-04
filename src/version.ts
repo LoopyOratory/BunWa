@@ -1,6 +1,23 @@
 import { getEngineName } from './config';
 import { WAHAEngine } from './structures/enums.dto';
 import { WAHAEnvironment } from './structures/environment.dto';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+/**
+ * Version comes from package.json so a release only bumps one place. Reads the
+ * file next to the running code rather than importing it, which keeps the
+ * compiler output out of the picture and works the same in the Docker image.
+ */
+function packageVersion(): string {
+  try {
+    const pkg = JSON.parse(readFileSync(join(import.meta.dir, '..', 'package.json'), 'utf8'));
+    return typeof pkg.version === 'string' ? pkg.version : 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 import { existsSync } from 'fs';
 
 export enum WAHAVersion {
@@ -31,7 +48,7 @@ function getPlatform() {
 }
 
 export const VERSION: WAHAEnvironment = {
-  version: '2026.5.1',
+  version: packageVersion(),
   engine: getEngineName(),
   tier: getWAHAVersion(),
   browser: null,
