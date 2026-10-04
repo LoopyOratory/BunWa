@@ -19,11 +19,17 @@ export function avColor(id: string, isDark: boolean) {
   return isDark ? { bg: c.darkBg, fg: c.darkFg } : { bg: c.bg, fg: c.fg }
 }
 
+/* The contacts route maps the stored `notify` field to `pushname` before the
+   payload reaches the client, so a name lookup must accept both spellings. */
+type ContactWithPushname = Contact & { pushname?: string | null }
+
 export function chatName(chat: ChatOverview, contactsMap?: Map<string, Contact>): string {
   if (chat.name) return chat.name
   if (contactsMap) {
     for (const [, contact] of contactsMap) {
-      if (contact.id === chat.id) return contact.name || contact.notify || chatAddress(chat, contactsMap)
+      if (contact.id !== chat.id) continue
+      const named = contact as ContactWithPushname
+      return named.name || named.notify || named.pushname || chatAddress(chat, contactsMap)
     }
   }
   return chatAddress(chat, contactsMap)
@@ -32,7 +38,8 @@ export function chatName(chat: ChatOverview, contactsMap?: Map<string, Contact>)
 /** The address line for a chat: its WhatsApp username when one is known,
  *  otherwise the local part of the JID (the phone number or LID). */
 export function chatAddress(chat: ChatOverview, contactsMap?: Map<string, Contact>): string {
-  const username = chat.username || contactsMap?.get(chat.id)?.username
+  const contact = contactsMap?.get(chat.id) as ContactWithPushname | undefined
+  const username = chat.username || contact?.username
   if (username) return `@${username.replace(/^@/, "")}`
   return chat.id.split("@")[0] || chat.id
 }
@@ -44,13 +51,62 @@ export function chatInitials(chat: ChatOverview, contactsMap?: Map<string, Conta
   return name.slice(0, 2).toUpperCase()
 }
 
-function formatTime(ts: number): string {
-  const d = new Date(ts * 1000)
+/*
+ * Timestamps arrive in more than one shape: the WhatsApp protocol measures in
+ * seconds, the browser engine in milliseconds, and a stored row may hand the
+ * number over as a string. Values below the millisecond epoch threshold are
+ * therefore treated as seconds, so a seconds value is never read as 1970 and a
+ * millisecond value is never multiplied a second time. Returns null when the
+ * value is absent or unparseable so callers can omit the label instead of
+ * printing Invalid Date.
+ */
+export function toEpochMs(value: unknown): number | null {
+  if (value === null || value === undefined) return null
+  let numeric: number
+  if (value instanceof Date) numeric = value.getTime()
+  else if (typeof value === "number") numeric = value
+  else if (typeof value === "string") {
+    const text = value.trim()
+    if (!text) return null
+    if (/^-?\d+(\.\d+)?$/.test(text)) numeric = Number(text)
+    else {
+      const parsed = Date.parse(text)
+      return Number.isFinite(parsed) ? parsed : null
+    }
+  } else return null
+  if (!Number.isFinite(numeric) || numeric <= 0) return null
+  // 1e12 ms is 2001; protocol seconds (~1e9) sit far below it.
+  return numeric < 1e12 ? Math.round(numeric * 1000) : Math.round(numeric)
+}
+
+/** Row label: clock time for today, "Yesterday", a short absolute date otherwise. */
+export function formatChatTime(value: unknown): string | null {
+  const ms = toEpochMs(value)
+  if (ms === null) return null
+  const date = new Date(ms)
   const now = new Date()
-  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  const diff = Math.floor((now.getTime() - d.getTime()) / 86400000)
-  if (diff < 7) return d.toLocaleDateString([], { weekday: "short" })
-  return d.toLocaleDateString([], { month: "short", day: "numeric" })
+  if (date.toDateString() === now.toDateString()) {
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  }
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday"
+  return date.toLocaleDateString([], { day: "2-digit", month: "2-digit", year: "numeric" })
+}
+
+/* The overview exposes the last message in engine-specific shapes: normalized
+   clients set `timestamp`, while the raw noweb row names it
+   `messageTimestamp`. Accept either so the row still gets a label. */
+type RawLastMessage = {
+  messageTimestamp?: unknown
+  pushName?: string | null
+  key?: { remoteJidUsername?: string | null; participantUsername?: string | null }
+}
+
+export function lastMessageTimeMs(last: ChatOverview["lastMessage"] | null | undefined): number | null {
+  if (!last) return null
+  const raw = last as ChatOverview["lastMessage"] & RawLastMessage
+  return toEpochMs(raw.timestamp) ?? toEpochMs(raw.messageTimestamp)
 }
 
 const statusMap: Record<number, "sending" | "sent" | "delivered" | "read" | "failed"> = {
@@ -68,10 +124,15 @@ export function resolveUserJid(session: { me?: { id?: string } }): string {
 
 export function mapMessage(msg: Message, contactsMap: Map<string, Contact>, currentUserJid: string): ChatMessageData {
   const senderId = msg.fromMe ? currentUserJid : msg.from
-  const sender = contactsMap.get(msg.from)
+  const sender = contactsMap.get(msg.from) as ContactWithPushname | undefined
+  // The raw stored message still carries the sender's push name for senders
+  // the contacts store has not resolved yet.
+  const raw = (msg as Message & { _data?: RawLastMessage })._data
+  const rawUsername = raw?.key?.remoteJidUsername || raw?.key?.participantUsername
+  const username = msg.username || (typeof rawUsername === "string" ? rawUsername : undefined)
   const senderName = msg.fromMe
     ? "You"
-    : sender?.name || sender?.notify || (msg.username ? `@${msg.username.replace(/^@/, "")}` : msg.from.split("@")[0])
+    : sender?.name || sender?.notify || sender?.pushname || raw?.pushName || (username ? `@${username.replace(/^@/, "")}` : msg.from.split("@")[0])
 
   const reactionMap = new Map<string, { emoji: string; userIds: string[]; count: number }>()
   for (const r of msg.reactions || []) {
@@ -121,12 +182,13 @@ export function mapMessage(msg: Message, contactsMap: Map<string, Contact>, curr
 
 export function mapConversation(chat: ChatOverview, contactsMap: Map<string, Contact>): SidebarConversation {
   const name = chatName(chat, contactsMap)
+  const lastMessageMs = lastMessageTimeMs(chat.lastMessage)
   return {
     id: chat.id,
     title: name,
     avatar: chat.picture,
     lastMessage: chat.lastMessage?.body,
-    lastMessageTime: chat.lastMessage ? formatTime(chat.lastMessage.timestamp) : undefined,
+    lastMessageTime: lastMessageMs !== null ? formatChatTime(lastMessageMs) ?? undefined : undefined,
     unreadCount: chat.unreadCount || 0,
   }
 }

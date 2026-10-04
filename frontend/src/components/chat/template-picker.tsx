@@ -37,6 +37,9 @@ interface TemplatePickerProps {
   chatId?: string | null
   /** Called after a template is sent, e.g. to refresh the conversation. */
   onSent?: () => void
+  /** Open state, owned by the composer's attach menu item. */
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }
 
 /*
@@ -52,8 +55,7 @@ function extractVariables(text: string): string[] {
 
 /* ── TemplatePicker ─────────────────────────────────────────────────── */
 
-export function TemplatePicker({ session, chatId, onSent }: TemplatePickerProps) {
-  const [open, setOpen] = useState(false)
+export function TemplatePicker({ session, chatId, onSent, open, onOpenChange }: TemplatePickerProps) {
   const [templates, setTemplates] = useState<Template[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -91,13 +93,8 @@ export function TemplatePicker({ session, chatId, onSent }: TemplatePickerProps)
     }
   }
 
-  function openPicker() {
-    setOpen(true)
-    void loadTemplates()
-  }
-
   function handleOpenChange(next: boolean) {
-    setOpen(next)
+    onOpenChange(next)
     if (!next) resetForm()
   }
 
@@ -167,154 +164,147 @@ export function TemplatePicker({ session, chatId, onSent }: TemplatePickerProps)
   }
 
   return (
-    <>
-      <Button type="button" variant="outline" size="sm" className="gap-1.5 rounded-md" onClick={openPicker}>
-        <FileText className="size-4" strokeWidth={1.75} />
-        Templates
-      </Button>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-md" onOpenAutoFocus={() => void loadTemplates()}>
+        <DialogHeader>
+          <DialogTitle>{selected ? `Preview and send: ${selected.name}` : "Templates"}</DialogTitle>
+          <DialogDescription>
+            {selected
+              ? "Fill in the variable values, preview the rendered message and send it to the chat that is open."
+              : "Pick a template to send to the chat that is open."}
+          </DialogDescription>
+        </DialogHeader>
 
-      <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{selected ? `Preview and send: ${selected.name}` : "Templates"}</DialogTitle>
-            <DialogDescription>
-              {selected
-                ? "Fill in the variable values, preview the rendered message and send it to the chat that is open."
-                : "Pick a template to send to the chat that is open."}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="max-h-[70vh] space-y-3 overflow-y-auto py-2">
-            {selected ? (
-              <>
-                {Object.keys(variables).length === 0 ? (
-                  <p className="text-sm text-muted-foreground">This template does not use any variables.</p>
-                ) : (
-                  <div className="max-h-56 space-y-3 overflow-y-auto pe-1">
-                    {Object.keys(variables).map((name) => (
-                      <div key={name} className="space-y-1.5">
-                        <Label htmlFor={`template-picker-${name}`} className="font-mono text-xs">{name}</Label>
-                        <Input
-                          id={`template-picker-${name}`}
-                          value={variables[name]}
-                          onChange={(e) => setVariables((values) => ({ ...values, [name]: e.target.value }))}
-                          placeholder={`Value for ${name}`}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <Button variant="outline" onClick={() => void runPreview()} disabled={previewLoading || sendLoading}>
-                    {/* Both icons stay mounted in a fixed slot so the label
-                        never shifts when the loading state flips. */}
-                    <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
-                      <Loader2
-                        className={`absolute size-4 transition-opacity ${previewLoading ? "animate-spin opacity-100" : "opacity-0"}`}
-                        strokeWidth={1.75}
-                        aria-hidden={!previewLoading}
+        <div className="max-h-[70vh] space-y-3 overflow-y-auto py-2">
+          {selected ? (
+            <>
+              {Object.keys(variables).length === 0 ? (
+                <p className="text-sm text-muted-foreground">This template does not use any variables.</p>
+              ) : (
+                <div className="max-h-56 space-y-3 overflow-y-auto pe-1">
+                  {Object.keys(variables).map((name) => (
+                    <div key={name} className="space-y-1.5">
+                      <Label htmlFor={`template-picker-${name}`} className="font-mono text-xs">{name}</Label>
+                      <Input
+                        id={`template-picker-${name}`}
+                        value={variables[name]}
+                        onChange={(e) => setVariables((values) => ({ ...values, [name]: e.target.value }))}
+                        placeholder={`Value for ${name}`}
                       />
-                      <Eye
-                        className={`absolute size-4 transition-opacity ${previewLoading ? "opacity-0" : "opacity-100"}`}
-                        strokeWidth={1.75}
-                        aria-hidden={previewLoading}
-                      />
-                    </span>
-                    Preview
-                  </Button>
-                  {previewText !== null && (
-                    <div className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border border-border bg-muted/40 p-3 text-sm">
-                      {previewText}
                     </div>
-                  )}
+                  ))}
                 </div>
+              )}
 
-                {formError && (
-                  <p role="alert" className="rounded-md border border-error-border bg-error-bg px-3 py-2 text-xs text-error-foreground">
-                    {formError}
-                  </p>
-                )}
-              </>
-            ) : loading ? (
-              <div className="space-y-2" aria-hidden>
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="rounded-lg border border-border p-3">
-                    <Skeleton className="h-4 w-28" />
-                    <Skeleton className="mt-2 h-3 w-full" />
-                  </div>
-                ))}
-              </div>
-            ) : error ? (
-              <ErrorState
-                compact
-                title="Could not load templates"
-                description={error}
-                onRetry={() => void loadTemplates()}
-              />
-            ) : templates.length === 0 ? (
-              <EmptyState
-                compact
-                icon={<FileText className="size-5" strokeWidth={1.75} />}
-                title="No templates yet"
-                description="Create a reusable message template on the Templates page, then send it from here."
-              />
-            ) : (
               <div className="space-y-2">
-                {templates.map((template) => {
-                  const count = template.variables?.length ?? 0
-                  return (
-                    <button
-                      key={template.id}
-                      type="button"
-                      onClick={() => selectTemplate(template)}
-                      className="w-full rounded-lg border border-border p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="truncate text-sm font-medium">{template.name}</span>
-                        {count > 0 && (
-                          <span className="shrink-0 text-xs text-muted-foreground">
-                            <Metric>{count}</Metric> {count === 1 ? "variable" : "variables"}
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{template.body}</p>
-                    </button>
-                  )
-                })}
+                <Button variant="outline" onClick={() => void runPreview()} disabled={previewLoading || sendLoading}>
+                  {/* Both icons stay mounted in a fixed slot so the label
+                      never shifts when the loading state flips. */}
+                  <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
+                    <Loader2
+                      className={`absolute size-4 transition-opacity ${previewLoading ? "animate-spin opacity-100" : "opacity-0"}`}
+                      strokeWidth={1.75}
+                      aria-hidden={!previewLoading}
+                    />
+                    <Eye
+                      className={`absolute size-4 transition-opacity ${previewLoading ? "opacity-0" : "opacity-100"}`}
+                      strokeWidth={1.75}
+                      aria-hidden={previewLoading}
+                    />
+                  </span>
+                  Preview
+                </Button>
+                {previewText !== null && (
+                  <div className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border border-border bg-muted/40 p-3 text-sm">
+                    {previewText}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          {selected && (
-            <DialogFooter>
-              <Button variant="outline" onClick={resetForm} disabled={sendLoading}>
-                <ArrowLeft strokeWidth={1.75} />
-                Back
-              </Button>
-              <Button
-                onClick={() => void sendTemplate()}
-                disabled={!target || sendLoading}
-                title={!target ? "Open a chat first to send this template" : undefined}
-              >
-                <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
-                  <Loader2
-                    className={`absolute size-4 transition-opacity ${sendLoading ? "animate-spin opacity-100" : "opacity-0"}`}
-                    strokeWidth={1.75}
-                    aria-hidden={!sendLoading}
-                  />
-                  <Send
-                    className={`absolute size-4 transition-opacity ${sendLoading ? "opacity-0" : "opacity-100"}`}
-                    strokeWidth={1.75}
-                    aria-hidden={sendLoading}
-                  />
-                </span>
-                Send to this chat
-              </Button>
-            </DialogFooter>
+              {formError && (
+                <p role="alert" className="rounded-md border border-error-border bg-error-bg px-3 py-2 text-xs text-error-foreground">
+                  {formError}
+                </p>
+              )}
+            </>
+          ) : loading ? (
+            <div className="space-y-2" aria-hidden>
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="rounded-lg border border-border p-3">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="mt-2 h-3 w-full" />
+                </div>
+              ))}
+            </div>
+          ) : error ? (
+            <ErrorState
+              compact
+              title="Could not load templates"
+              description={error}
+              onRetry={() => void loadTemplates()}
+            />
+          ) : templates.length === 0 ? (
+            <EmptyState
+              compact
+              icon={<FileText className="size-5" strokeWidth={1.75} />}
+              title="No templates yet"
+              description="Create a reusable message template on the Templates page, then send it from here."
+            />
+          ) : (
+            <div className="space-y-2">
+              {templates.map((template) => {
+                const count = template.variables?.length ?? 0
+                return (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => selectTemplate(template)}
+                    className="w-full rounded-lg border border-border p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="truncate text-sm font-medium">{template.name}</span>
+                      {count > 0 && (
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          <Metric>{count}</Metric> {count === 1 ? "variable" : "variables"}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{template.body}</p>
+                  </button>
+                )
+              })}
+            </div>
           )}
-        </DialogContent>
-      </Dialog>
-    </>
+        </div>
+
+        {selected && (
+          <DialogFooter>
+            <Button variant="outline" onClick={resetForm} disabled={sendLoading}>
+              <ArrowLeft strokeWidth={1.75} />
+              Back
+            </Button>
+            <Button
+              onClick={() => void sendTemplate()}
+              disabled={!target || sendLoading}
+              title={!target ? "Open a chat first to send this template" : undefined}
+            >
+              <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
+                <Loader2
+                  className={`absolute size-4 transition-opacity ${sendLoading ? "animate-spin opacity-100" : "opacity-0"}`}
+                  strokeWidth={1.75}
+                  aria-hidden={!sendLoading}
+                />
+                <Send
+                  className={`absolute size-4 transition-opacity ${sendLoading ? "opacity-0" : "opacity-100"}`}
+                  strokeWidth={1.75}
+                  aria-hidden={sendLoading}
+                />
+              </span>
+              Send to this chat
+            </Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -10,7 +10,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { api, fetchImageBlobUrl, type Session, type ChatOverview, type Contact } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { SessionSelector } from "./session-selector"
-import { avColor, chatName, chatInitials } from "./helpers"
+import { avColor, chatName, chatInitials, formatChatTime, lastMessageTimeMs } from "./helpers"
 
 interface ChatConversationsProps {
   sessions: Session[]
@@ -48,18 +48,6 @@ const FILTERS: { value: ChatFilter; label: string }[] = [
   { value: "favourites", label: "Favourites" },
   { value: "groups", label: "Groups" },
 ]
-
-function formatTime(ts: number): string {
-  const d = new Date(ts * 1000)
-  const now = new Date()
-  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  const yesterday = new Date(now)
-  yesterday.setDate(now.getDate() - 1)
-  if (d.toDateString() === yesterday.toDateString()) return "Yesterday"
-  const diff = Math.floor((now.getTime() - d.getTime()) / 86400000)
-  if (diff < 7) return d.toLocaleDateString([], { weekday: "long" })
-  return d.toLocaleDateString([], { day: "2-digit", month: "2-digit", year: "numeric" })
-}
 
 /** Human label for a live typing state, shown in rows, rails and tooltips. */
 function typingLabel(state?: string): string | undefined {
@@ -440,6 +428,7 @@ export function ChatConversations({
                 const unread = chat.unreadCount ?? 0
                 const online = presences?.get(chat.id) === "available"
                 const tLabel = typingLabel(typingMap?.get(chat.id))
+                const lastMessageTime = lastMessageTimeMs(chat.lastMessage)
                 return (
                   <button
                     key={chat.id}
@@ -467,9 +456,9 @@ export function ChatConversations({
                         <span className="truncate text-[15px] font-normal leading-[21px] text-[var(--chat-text-primary)]">
                           {name}
                         </span>
-                        {chat.lastMessage && (
+                        {lastMessageTime !== null && (
                           <span className="metric shrink-0 text-[12px] leading-[21px] text-[var(--chat-text-secondary)]">
-                            {formatTime(chat.lastMessage.timestamp)}
+                            {formatChatTime(lastMessageTime)}
                           </span>
                         )}
                       </div>

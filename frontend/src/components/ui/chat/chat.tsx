@@ -21,6 +21,7 @@ import {
   X,
   Paperclip,
   Image as ImageIcon,
+  FileText,
   Upload,
   Plus,
   Play,
@@ -31,6 +32,7 @@ import {
   BarChart3,
   MousePointerClick,
   Square,
+  UserRound,
 } from "lucide-react"
 import { createPortal } from "react-dom"
 import type {
@@ -140,7 +142,7 @@ function QuickReactionPicker({
 }) {
   return (
     <div
-      className="chat-toolbar-enter grid w-[220px] grid-cols-6 gap-0.5 rounded-[12px] border border-[var(--chat-border-strong)] bg-[var(--chat-bg-sidebar)] p-1.5 shadow-[var(--chat-shadow-toolbar)]"
+      className="chat-toolbar-enter grid w-[220px] grid-cols-6 gap-0.5 overflow-hidden rounded-[12px] border border-[var(--chat-border-strong)] bg-[var(--chat-bg-sidebar)] p-1.5 shadow-[var(--chat-shadow-toolbar)]"
       onMouseLeave={onClose}
     >
       {QUICK_REACTIONS.map((emoji) => (
@@ -328,6 +330,13 @@ function ChatMessageReply({
 
 // ─── ChatMessage ──────────────────────────────────────────────────────────────
 
+/* A sender still stored as a raw address (a LID or phone number) has no real
+   initial, so show a neutral person glyph rather than an arbitrary digit. */
+function senderInitial(name: string): string | null {
+  const first = name.trim().charAt(0)
+  return first && /\p{L}/u.test(first) ? first.toUpperCase() : null
+}
+
 interface ChatMessageProps {
   message: ChatMessageData
   isOutgoing: boolean
@@ -428,6 +437,7 @@ function ChatMessage({
   const timestamp = new Date(message.timestamp)
   const { currentUser } = useChatContext()
   const radiusClass = getBubbleRadius(isOutgoing, position)
+  const avatarInitial = senderInitial(message.senderName)
   const [lightboxImage, setLightboxImage] = React.useState<string | null>(null)
   // An image with nothing else inside the bubble: the media fills the bubble.
   const mediaFillsBubble =
@@ -472,7 +482,7 @@ function ChatMessage({
             />
           ) : showAvatar ? (
             <div className="flex size-8 items-center justify-center rounded-full bg-[var(--chat-bubble-incoming)] text-[11px] font-semibold text-[var(--chat-text-secondary)]">
-              {message.senderName.charAt(0).toUpperCase()}
+              {avatarInitial ?? <UserRound className="size-4" strokeWidth={1.75} />}
             </div>
           ) : null}
         </div>
@@ -1012,7 +1022,7 @@ function ChatTypingIndicator({ users, className }: ChatTypingIndicatorProps) {
             className="size-full rounded-full object-cover"
           />
         ) : (
-          users[0].name.charAt(0).toUpperCase()
+          senderInitial(users[0].name) ?? <UserRound className="size-4" strokeWidth={1.75} />
         )}
       </div>
 
@@ -1236,13 +1246,19 @@ function ChatFilePreview({
 
 // ─── ChatComposer ─────────────────────────────────────────────────────────────
 
+type AttachMenuMediaType = "image" | "file" | "voice" | "video" | "location" | "poll" | "buttons"
+/* The attach menu hosts the media dialogs plus actions the host supplies,
+   such as opening the template picker. */
+type AttachMenuItemType = AttachMenuMediaType | "templates"
+
 interface ChatComposerProps {
   onSend?: (text: string) => void
   onTyping?: (isTyping: boolean) => void
   onFileUpload?: (files: File[]) => void
   onVoiceRecord?: () => void
   onVoiceRecorded?: (base64: string, mimetype: string) => void
-  onOpenMediaDialog?: (type: "image" | "file" | "voice" | "video" | "location" | "poll" | "buttons") => void
+  onOpenMediaDialog?: (type: AttachMenuMediaType) => void
+  onOpenTemplates?: () => void
   placeholder?: string
   disabled?: boolean
   replyingTo?: ChatMessageData | null
@@ -1257,6 +1273,7 @@ function ChatComposer({
   onVoiceRecord,
   onVoiceRecorded,
   onOpenMediaDialog,
+  onOpenTemplates,
   placeholder = "Message",
   disabled = false,
   replyingTo,
@@ -1464,13 +1481,15 @@ function ChatComposer({
     { label: "Location", icon: MapPin, type: "location" },
     { label: "Poll", icon: BarChart3, type: "poll" },
     { label: "Buttons", icon: MousePointerClick, type: "buttons" },
+    { label: "Templates", icon: FileText, type: "templates" },
   ] as const
 
-  const handleMediaSelect = React.useCallback((type: "image" | "file" | "voice" | "video" | "location" | "poll" | "buttons") => {
+  const handleMediaSelect = React.useCallback((type: AttachMenuItemType) => {
     setShowAttachMenu(false)
+    if (type === "templates") { onOpenTemplates?.(); return }
     if (type === "voice" && onVoiceRecorded) { setShowMicConfirm(true); return }
     onOpenMediaDialog?.(type)
-  }, [onVoiceRecorded, onOpenMediaDialog])
+  }, [onOpenTemplates, onVoiceRecorded, onOpenMediaDialog])
 
   /* ── Timer format ── */
   const timerStr = `${String(Math.floor(recordingTime / 60)).padStart(2, "0")}:${String(recordingTime % 60).padStart(2, "0")}`

@@ -608,6 +608,7 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   const [contactPictures, setContactPictures] = useState<Map<string, string>>(new Map())
   const [newChatOpen, setNewChatOpen] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
   const [mediaDialog, setMediaDialog] = useState<{ open: boolean; type: "image" | "file" | "voice" | "video" | "location" | "poll" | "buttons" }>({ open: false, type: "image" })
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem("bunwa.chat.sidebar") === "collapsed" } catch { return false }
@@ -1282,16 +1283,8 @@ export function ChatPage({ initialSession }: ChatPageProps) {
             )}
           </div>
 
-          {/* Composer toolbar: template picker above the input, visible on
-              mobile where the sidebar is hidden. */}
+          {/* Composer toolbar: templates open from the composer's attach menu. */}
           <div className="border-t border-[var(--chat-border)] bg-[var(--chat-bg-composer)] backdrop-blur-[20px]">
-            <div className="flex items-center gap-2 px-3 pt-2">
-              <TemplatePicker
-                session={selectedSession}
-                chatId={selectedChat.id}
-                onSent={() => { loadMessages(selectedChat.id); loadChats() }}
-              />
-            </div>
             <ChatComposerWrapper
               onSend={handleSend}
               onTyping={handleTyping}
@@ -1301,6 +1294,7 @@ export function ChatPage({ initialSession }: ChatPageProps) {
               onCancelReply={() => { setReplyingTo(null); setEditingMessage(null) }}
               onOpenMediaDialog={(type) => setMediaDialog({ open: true, type })}
               onVoiceRecorded={handleVoiceRecorded}
+              onOpenTemplates={() => setTemplatesOpen(true)}
             />
           </div>
         </main>
@@ -1308,6 +1302,13 @@ export function ChatPage({ initialSession }: ChatPageProps) {
         {/* Dialogs */}
         <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} session={selectedSession} onOpenChat={handleNewChatOpen} />
         <StatusDialog open={statusOpen} onOpenChange={setStatusOpen} session={selectedSession} onSent={loadChats} />
+        <TemplatePicker
+          session={selectedSession}
+          chatId={selectedChat.id}
+          onSent={() => { loadMessages(selectedChat.id); loadChats() }}
+          open={templatesOpen}
+          onOpenChange={setTemplatesOpen}
+        />
         <SendMediaDialog open={mediaDialog.open} onOpenChange={(v) => setMediaDialog((p) => ({ ...p, open: v }))} type={mediaDialog.type} session={selectedSession} chatId={selectedChat.id} onSent={() => { loadMessages(selectedChat.id); loadChats() }} />
       </div>
     </ChatProvider>

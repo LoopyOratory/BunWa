@@ -11,6 +11,8 @@ interface ChatComposerWrapperProps {
   onCancelReply?: () => void
   onOpenMediaDialog: (type: "image" | "file" | "voice" | "video" | "location" | "poll" | "buttons") => void
   onVoiceRecorded?: (base64: string, mimetype: string) => void
+  /** Opens the template picker from the attach menu. */
+  onOpenTemplates?: () => void
 }
 
 export function ChatComposerWrapper({
@@ -23,6 +25,7 @@ export function ChatComposerWrapper({
   onCancelReply,
   onOpenMediaDialog,
   onVoiceRecorded,
+  onOpenTemplates,
 }: ChatComposerWrapperProps) {
   return (
     <div className="relative">
@@ -36,6 +39,7 @@ export function ChatComposerWrapper({
         onCancelReply={onCancelReply}
         onOpenMediaDialog={onOpenMediaDialog}
         onVoiceRecorded={onVoiceRecorded}
+        onOpenTemplates={onOpenTemplates}
       />
     </div>
   )
