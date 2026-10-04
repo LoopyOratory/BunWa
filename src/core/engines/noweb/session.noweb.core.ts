@@ -411,6 +411,26 @@ function parseUsernameUsyncAnswer(
   };
 }
 
+const UNSUPPORTED_FILE_INPUT =
+  'Unsupported file input. Use a { data, mimetype } object, a data URL, a base64 string, an http(s) URL or a local file path.';
+
+/** True for absolute, relative, home or Windows-drive paths. */
+function isPathLike(value: string): boolean {
+  return (
+    value.startsWith('/') ||
+    value.startsWith('./') ||
+    value.startsWith('../') ||
+    value.startsWith('~/') ||
+    value.startsWith('\\\\') ||
+    /^[A-Za-z]:[\\/]/.test(value)
+  );
+}
+
+/** True for a syntactically valid base64 string (not a file path). */
+function isBase64(value: string): boolean {
+  return value.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(value);
+}
+
 export class WhatsappSessionNoWebCore extends WhatsappSession {
   private START_ATTEMPT_DELAY_SECONDS = 2;
   private AUTO_RESTART_AFTER_SECONDS = 28 * 60;
@@ -1593,20 +1613,67 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   }
 
   /**
-   * Convert file data to a Buffer for Baileys.
-   * Handles: URL strings, base64 strings, and { mimetype, filename, data } objects.
+   * Normalize a file input into the shape Baileys expects: either raw bytes
+   * (Buffer) or a single string it can resolve as a URL / data URL / local
+   * path. Accepts the same shapes for chat messages and statuses:
+   *   - a { data, mimetype } object (data as base64 or a data URL)
+   *   - a { url } object
+   *   - a data URL ("data:image/png;base64,...")
+   *   - a bare base64 string
+   *   - an http(s) URL
+   *   - a local file path
+   * Anything else is a client error: throwing here keeps a bad input from
+   * reaching Baileys, where a non-string value becomes a filesystem path and
+   * surfaces as an opaque 500.
    */
-  private fileToBuffer(file: any): Buffer | string {
-    if (typeof file === 'string') {
-      // URL or raw base64 string
+  private fileToBuffer(file: any): Buffer | string | { url: string } {
+    if (Buffer.isBuffer(file)) {
       return file;
     }
-    if (file && typeof file === 'object' && file.data) {
-      // { mimetype, filename, data: "data:image/png;base64,..." }
-      const base64 = file.data.includes(',') ? file.data.split(',')[1] : file.data;
-      return Buffer.from(base64, 'base64');
+    if (typeof file === 'string') {
+      if (file.startsWith('data:')) {
+        const comma = file.indexOf(',');
+        if (comma === -1) {
+          throw new UnprocessableEntityException(UNSUPPORTED_FILE_INPUT);
+        }
+        return Buffer.from(file.slice(comma + 1), 'base64');
+      }
+      if (/^https?:\/\//i.test(file)) {
+        return file;
+      }
+      // A bare base64 string. Baileys would otherwise treat it as a local
+      // path and fail with ENOENT, so decode it into bytes here. Checked
+      // before path-like strings: a base64 JPEG starts with "/9j/", which
+      // would otherwise look like an absolute path.
+      const compact = file.replace(/\s+/g, '');
+      if (isBase64(compact)) {
+        return Buffer.from(compact, 'base64');
+      }
+      if (isPathLike(file)) {
+        return file;
+      }
+      if (!file) {
+        throw new UnprocessableEntityException(UNSUPPORTED_FILE_INPUT);
+      }
+      // A relative path with no path separators (for example "photo.png").
+      return file;
     }
-    return file;
+    if (file && typeof file === 'object') {
+      if (typeof file.data === 'string' && file.data) {
+        // { mimetype, filename, data: "data:image/png;base64,..." }
+        const base64 = file.data.includes(',') ? file.data.split(',')[1] : file.data;
+        return Buffer.from(base64, 'base64');
+      }
+      if (Buffer.isBuffer(file.data) && file.data.length > 0) {
+        return file.data;
+      }
+      if (typeof file.url === 'string' && file.url) {
+        // { mimetype, filename, url } - pass through so Baileys keeps the
+        // declared mimetype / filename, exactly as the chat sends do.
+        return file;
+      }
+    }
+    throw new UnprocessableEntityException(UNSUPPORTED_FILE_INPUT);
   }
 
   @Activity()
@@ -1649,6 +1716,18 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     }
   }
 
+  /**
+   * Like fileToBuffer, but for paths that must be read into memory (voice
+   * transcoding). A { url } object is reduced to its URL string.
+   */
+  private fileToAudioSource(file: any): string | Buffer {
+    const fileData = this.fileToBuffer(file);
+    if (typeof fileData === 'object' && !Buffer.isBuffer(fileData)) {
+      return fileData.url;
+    }
+    return fileData;
+  }
+
   @Activity()
   async sendVoice(request: MessageVoiceRequest) {
     const chatId = await this.resolveAndGate(request.chatId);
@@ -1660,7 +1739,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       if (convert) {
         // WhatsApp voice notes must be OGG/Opus. Materialize the bytes, skip if
         // already Opus, otherwise transcode via ffmpeg.
-        const input = await materializeAudioBytes(fileData);
+        const input = await materializeAudioBytes(this.fileToAudioSource(request.file));
         const opus = isOggOpus(input) ? input : await this.mediaConverter.voice(input);
         const seconds = await getAudioDurationSeconds(opus);
         message = { audio: opus, mimetype: 'audio/ogg; codecs=opus', ptt: true, seconds };
@@ -2758,8 +2837,9 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   public async sendImageStatus(status: ImageStatus) {
-    const message = {
-      image: { url: status.file },
+    const fileData = this.fileToBuffer(status.file);
+    const message: any = {
+      image: typeof fileData === 'string' ? { url: fileData } : fileData,
       caption: status.caption,
     };
     const jids = await this.prepareJidsForStatus(status.contacts);
@@ -2787,7 +2867,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     if (convert) {
       // WhatsApp voice notes must be OGG/Opus — same requirement for status
       // voice clips as for chat voice notes.
-      const input = await materializeAudioBytes(fileData);
+      const input = await materializeAudioBytes(this.fileToAudioSource(status.file));
       const opus = isOggOpus(input) ? input : await this.mediaConverter.voice(input);
       // Explicitly computed rather than left for Baileys to auto-detect: its
       // own detection is a best-effort, catch-and-warn step, and while a chat
@@ -2819,8 +2899,9 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   public async sendVideoStatus(status: VideoStatus) {
-    const message = {
-      video: { url: status.file },
+    const fileData = this.fileToBuffer(status.file);
+    const message: any = {
+      video: typeof fileData === 'string' ? { url: fileData } : fileData,
       caption: status.caption,
     };
     const jids = await this.prepareJidsForStatus(status.contacts);

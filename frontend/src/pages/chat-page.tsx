@@ -532,9 +532,11 @@ function StatusDialog({ open, onOpenChange, session, onSent }: { open: boolean; 
       onOpenChange(false)
       setText(""); setFile(null)
     } catch (e) {
-      const blocked = e instanceof ApiError && e.status === 429
-      setSendError(blocked ? e.message : "The status could not be posted. Try again.")
-      if (!blocked) toast.error("Failed to post status")
+      // Let the server's client-facing reasons through (a blocked send, an
+      // unsupported file shape); anything else keeps the generic fallback.
+      const clientFacing = e instanceof ApiError && (e.status === 400 || e.status === 422 || e.status === 429)
+      setSendError(clientFacing ? e.message : "The status could not be posted. Try again.")
+      if (!clientFacing) toast.error("Failed to post status")
     }
     finally { setSending(false) }
   }
