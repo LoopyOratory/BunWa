@@ -1131,28 +1131,39 @@ export function ChatPage({ initialSession }: ChatPageProps) {
     return (
       <ChatProvider currentUser={chatUser} theme="whatsapp" className="h-dvh" messageGroupingInterval={120}>
         <div className="flex h-full overflow-hidden bg-[var(--chat-bg-main)]">
-          <ChatConversations
-            sessions={sessions}
-            selectedSession={selectedSession}
-            onSessionChange={setSelectedSession}
-            onStartSession={handleStartSession}
-            onStopSession={handleStopSession}
-            isWorking={isWorking}
-            chats={chats}
-            contacts={contacts}
-            selectedChatId={null}
-            onSelectChat={handleSelectChat}
-            loadingChats={loadingChats}
-            userPicture={userPicture}
-            onOpenNewChat={() => setNewChatOpen(true)}
-            onOpenStatus={() => setStatusOpen(true)}
-            storeDisabled={storeDisabled}
-            onRetryChats={loadChats}
-            collapsed={sidebarCollapsed}
-            onToggleCollapse={toggleSidebar}
-            presences={presences}
-            typingMap={typingMap}
-          />
+          {/* The sidebar keeps one width formula in both chat states, so
+              opening a conversation no longer resizes it or leaves a gutter
+              between the divider and the pane. */}
+          <div
+            className={`min-h-0 min-w-0 w-full shrink-0 ${
+              sidebarCollapsed
+                ? "md:w-[var(--chat-sidebar-rail-width)]"
+                : "md:w-[var(--chat-sidebar-width)]"
+            }`}
+          >
+            <ChatConversations
+              sessions={sessions}
+              selectedSession={selectedSession}
+              onSessionChange={setSelectedSession}
+              onStartSession={handleStartSession}
+              onStopSession={handleStopSession}
+              isWorking={isWorking}
+              chats={chats}
+              contacts={contacts}
+              selectedChatId={null}
+              onSelectChat={handleSelectChat}
+              loadingChats={loadingChats}
+              userPicture={userPicture}
+              onOpenNewChat={() => setNewChatOpen(true)}
+              onOpenStatus={() => setStatusOpen(true)}
+              storeDisabled={storeDisabled}
+              onRetryChats={loadChats}
+              collapsed={sidebarCollapsed}
+              onToggleCollapse={toggleSidebar}
+              presences={presences}
+              typingMap={typingMap}
+            />
+          </div>
           <div className="chat-wallpaper hidden flex-1 items-center justify-center px-4 md:flex">
             {databaseUnreachable ? (
               <div className="w-full max-w-md">
@@ -1202,9 +1213,13 @@ export function ChatPage({ initialSession }: ChatPageProps) {
       onPin={handlePin}
       onStar={handleStar}
     >
-      <div className="flex h-full overflow-hidden bg-[var(--chat-bg-main)]">
-        {/* Sidebar */}
-        <div className="hidden md:flex">
+      <div
+        className="chat-shell h-full overflow-hidden bg-[var(--chat-bg-main)]"
+        data-sidebar={sidebarCollapsed ? "rail" : "expanded"}
+      >
+        {/* Sidebar: rows 1-2, so the composer row below is free to run the
+            bottom band across this column as well. */}
+        <div className="hidden min-h-0 min-w-0 md:col-start-1 md:row-start-1 md:row-span-2 md:flex">
           <ChatConversations
             sessions={sessions}
             selectedSession={selectedSession}
@@ -1229,8 +1244,8 @@ export function ChatPage({ initialSession }: ChatPageProps) {
           />
         </div>
 
-        {/* Main Panel */}
-        <main className="grid min-w-0 flex-1 bg-[var(--chat-bg-main)]" style={{ gridTemplateRows: "auto 1fr auto" }}>
+        {/* Chat pane header: row 1 is the shared band track. */}
+        <div className="col-start-2 row-start-1 min-w-0">
           <ChatHeader
             chat={selectedChat}
             contacts={contacts}
@@ -1245,63 +1260,72 @@ export function ChatPage({ initialSession }: ChatPageProps) {
               if (selectedSession) api.unreadChat(selectedSession, selectedChat.id).then(() => toast.success("Marked unread")).catch(() => toast.error("Could not mark the chat unread"))
             }}
           />
+        </div>
 
-          <div className="flex min-h-0 flex-col overflow-hidden">
-            {(contactsError || pictureError) && !storeDisabled && !databaseUnreachable && (
-              <div role="alert" className="mx-3 mt-3 flex items-center gap-2 rounded-md border border-error-border bg-error-bg px-3 py-2 text-xs text-error-foreground">
-                <TriangleAlert className="size-3.5 shrink-0" strokeWidth={1.75} />
-                Some contact details could not be loaded. Names and photos may be missing.
-              </div>
-            )}
-            {databaseUnreachable ? (
-              <div className="min-h-0 overflow-y-auto p-4">
-                <ErrorState
-                  title={DATABASE_UNREACHABLE_TITLE}
-                  description={DATABASE_UNREACHABLE_DESCRIPTION}
-                  onRetry={() => { loadMessages(selectedChat.id); loadChats() }}
-                />
-              </div>
-            ) : storeDisabled ? (
-              <div className="min-h-0 overflow-y-auto p-4">
-                <ErrorState
-                  title={STORE_DISABLED_TITLE}
-                  description={STORE_DISABLED_DESCRIPTION}
-                  onRetry={() => { loadMessages(selectedChat.id); loadChats() }}
-                />
-              </div>
-            ) : loadingMessages && mappedMessages.length === 0 ? (
-              <div className="flex flex-col gap-4 p-4" aria-hidden>
-                {[0, 1, 2, 3].map((i) => (
-                  <div key={i} className={i % 2 === 0 ? "flex justify-start" : "flex justify-end"}>
-                    <Skeleton className={`h-16 rounded-2xl ${i % 2 === 0 ? "w-3/5" : "w-2/5"}`} />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <ChatMessages
-                messages={mappedMessages}
-                typingUsers={typingUsers}
-                hasMore={hasMoreMessages}
-                onLoadMore={handleLoadMore}
+        <div className="col-start-2 row-start-2 flex min-h-0 min-w-0 flex-col overflow-hidden">
+          {(contactsError || pictureError) && !storeDisabled && !databaseUnreachable && (
+            <div role="alert" className="mx-3 mt-3 flex items-center gap-2 rounded-md border border-error-border bg-error-bg px-3 py-2 text-xs text-error-foreground">
+              <TriangleAlert className="size-3.5 shrink-0" strokeWidth={1.75} />
+              Some contact details could not be loaded. Names and photos may be missing.
+            </div>
+          )}
+          {databaseUnreachable ? (
+            <div className="min-h-0 overflow-y-auto p-4">
+              <ErrorState
+                title={DATABASE_UNREACHABLE_TITLE}
+                description={DATABASE_UNREACHABLE_DESCRIPTION}
+                onRetry={() => { loadMessages(selectedChat.id); loadChats() }}
               />
-            )}
-          </div>
-
-          {/* Composer toolbar: templates open from the composer's attach menu. */}
-          <div className="border-t border-[var(--chat-border)] bg-[var(--chat-bg-composer)] backdrop-blur-[20px]">
-            <ChatComposerWrapper
-              onSend={handleSend}
-              onTyping={handleTyping}
-              placeholder={editingMessage ? "Edit message" : "Type a message"}
-              disabled={!isWorking}
-              replyingTo={editingMessage || replyingTo}
-              onCancelReply={() => { setReplyingTo(null); setEditingMessage(null) }}
-              onOpenMediaDialog={(type) => setMediaDialog({ open: true, type })}
-              onVoiceRecorded={handleVoiceRecorded}
-              onOpenTemplates={() => setTemplatesOpen(true)}
+            </div>
+          ) : storeDisabled ? (
+            <div className="min-h-0 overflow-y-auto p-4">
+              <ErrorState
+                title={STORE_DISABLED_TITLE}
+                description={STORE_DISABLED_DESCRIPTION}
+                onRetry={() => { loadMessages(selectedChat.id); loadChats() }}
+              />
+            </div>
+          ) : loadingMessages && mappedMessages.length === 0 ? (
+            <div className="flex flex-col gap-4 p-4" aria-hidden>
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className={i % 2 === 0 ? "flex justify-start" : "flex justify-end"}>
+                  <Skeleton className={`h-16 rounded-2xl ${i % 2 === 0 ? "w-3/5" : "w-2/5"}`} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <ChatMessages
+              messages={mappedMessages}
+              typingUsers={typingUsers}
+              hasMore={hasMoreMessages}
+              onLoadMore={handleLoadMore}
             />
-          </div>
-        </main>
+          )}
+        </div>
+
+        {/* Composer row: the same surface and top hairline run across the
+            conversations column too, so the composer reads as one bar that
+            spans both panes. The band's height follows the composer because
+            both are items of this shared row. */}
+        <div
+          aria-hidden
+          className="hidden border-r border-t border-[var(--chat-border)] bg-[var(--chat-bg-composer)] md:col-start-1 md:row-start-3 md:block"
+        />
+
+        {/* Composer toolbar: templates open from the composer's attach menu. */}
+        <div className="col-start-2 row-start-3 min-w-0 border-t border-[var(--chat-border)] bg-[var(--chat-bg-composer)] backdrop-blur-[20px]">
+          <ChatComposerWrapper
+            onSend={handleSend}
+            onTyping={handleTyping}
+            placeholder={editingMessage ? "Edit message" : "Type a message"}
+            disabled={!isWorking}
+            replyingTo={editingMessage || replyingTo}
+            onCancelReply={() => { setReplyingTo(null); setEditingMessage(null) }}
+            onOpenMediaDialog={(type) => setMediaDialog({ open: true, type })}
+            onVoiceRecorded={handleVoiceRecorded}
+            onOpenTemplates={() => setTemplatesOpen(true)}
+          />
+        </div>
 
         {/* Dialogs */}
         <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} session={selectedSession} onOpenChat={handleNewChatOpen} />

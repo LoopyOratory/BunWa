@@ -40,7 +40,7 @@ export function ChatHeader({
   const showRecording = !showTyping && presence === "recording"
 
   return (
-    <header className="z-10 flex items-center gap-3 border-b border-[var(--chat-border)] bg-[var(--chat-bg-header)] px-3 py-2 md:px-4">
+    <header className="z-10 flex h-[var(--chat-header-height)] shrink-0 items-center gap-3 border-b border-[var(--chat-border)] bg-[var(--chat-bg-header)] px-3 md:px-4">
       <button
         onClick={onBack}
         aria-label="Back to conversations"

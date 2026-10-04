@@ -149,29 +149,33 @@ export function ChatConversations({
       className={cn(
         // No width transition: animating min/max/width reflows the message
         // pane on every frame. The collapse swaps content instantly instead.
-        "flex h-full w-full shrink-0 flex-col border-r border-[var(--chat-border)] bg-[var(--chat-bg-sidebar)]",
-        collapsed
-          ? "md:w-[68px] md:min-w-[68px] md:max-w-[68px]"
-          : "md:w-[30%] md:min-w-[320px] md:max-w-[440px]"
+        // The width itself comes from the shell (chat-page renders a 30%
+        // clamp / rail track), so the divider lands on a definite coordinate
+        // instead of a percentage resolved against an intrinsic wrapper.
+        "flex h-full w-full shrink-0 flex-col border-r border-[var(--chat-border)] bg-[var(--chat-bg-sidebar)]"
       )}
     >
       {/* ── Collapsed rail: chat icons only (desktop) ── */}
       {collapsed && (
-        <div className="hidden h-full w-full flex-col items-center gap-1 py-2 md:flex">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                aria-label="Expand sidebar"
-                variant="ghost"
-                size="icon"
-                className="size-9 shrink-0 rounded-full text-[var(--chat-text-secondary)] hover:bg-[var(--chat-bg-hover)] hover:text-[var(--chat-text-primary)]"
-                onClick={onToggleCollapse}
-              >
-                <PanelLeftOpen className="size-[18px]" strokeWidth={1.75} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Expand sidebar</TooltipContent>
-          </Tooltip>
+        <div className="hidden h-full w-full flex-col items-center gap-1 pb-2 md:flex">
+          {/* Same top band as the expanded row and the chat header, so the
+              divider and its hairline cross the rail at the same y. */}
+          <div className="flex h-[var(--chat-header-height)] w-full shrink-0 items-center justify-center border-b border-[var(--chat-border)] bg-[var(--chat-bg-header)]">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  aria-label="Expand sidebar"
+                  variant="ghost"
+                  size="icon"
+                  className="size-9 shrink-0 rounded-full text-[var(--chat-text-secondary)] hover:bg-[var(--chat-bg-hover)] hover:text-[var(--chat-text-primary)]"
+                  onClick={onToggleCollapse}
+                >
+                  <PanelLeftOpen className="size-[18px]" strokeWidth={1.75} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Expand sidebar</TooltipContent>
+            </Tooltip>
+          </div>
 
           <Tooltip>
             <TooltipTrigger asChild>
@@ -286,8 +290,10 @@ export function ChatConversations({
 
       {/* ── Expanded panel ── */}
       <div className={cn("flex h-full w-full min-w-0 flex-col", collapsed && "md:hidden")}>
-        {/* Header: account row plus the panel actions */}
-        <div className="flex items-center gap-0.5 px-2 py-1.5">
+        {/* Header: account row plus the panel actions. Fixed to the shared
+            header height and painted with the header surface so this row and
+            the chat header read as one band across the divider. */}
+        <div className="flex h-[var(--chat-header-height)] shrink-0 items-center gap-0.5 border-b border-[var(--chat-border)] bg-[var(--chat-bg-header)] px-2">
           <SidebarTrigger className="md:hidden shrink-0" />
           <div className="min-w-0 flex-1">
             <SessionSelector

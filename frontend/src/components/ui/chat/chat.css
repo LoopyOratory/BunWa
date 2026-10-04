@@ -25,6 +25,33 @@
   --chat-wallpaper-image:     none;
   /* Tail mask for themes that draw a bubble tail (WhatsApp). */
   --chat-tail-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 13'%3E%3Cpath fill='%23fff' d='M5.188 0H0v11.193l6.467-8.625C7.526 1.156 6.958 0 5.188 0z'/%3E%3C/svg%3E");
+
+  /* ─── Shared shell metrics ─────────────────────────────────────────
+     One height for the top band on both panes (conversations header row
+     and chat header) so their bottom borders land on the same baseline,
+     and one width formula for the conversations side of the shell.
+     The height is the header's natural box: 2.5rem avatar, 1rem of
+     vertical padding and the 1px hairline; it scales with the rem-based
+     desktop comfort scale in index.css. */
+  --chat-header-height:       calc(3.5rem + 1px);
+  --chat-sidebar-width:       clamp(320px, 30%, 440px);
+  --chat-sidebar-rail-width:  68px;
+}
+
+/* ─── Shell grid ───────────────────────────────────────────────────────
+   The conversations sidebar and the chat pane live in one grid so the
+   header row, the content row and the composer row are shared tracks.
+   That makes the sidebar's bottom band exactly as tall as the composer,
+   even while the composer grows (reply preview, attachments), and keeps
+   the two headers the same height on the same baseline. */
+.chat-shell {
+  display: grid;
+  grid-template-columns: 0 minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+@media (min-width: 48rem) {
+  .chat-shell { grid-template-columns: var(--chat-sidebar-width) minmax(0, 1fr); }
+  .chat-shell[data-sidebar="rail"] { grid-template-columns: var(--chat-sidebar-rail-width) minmax(0, 1fr); }
 }
 
 /* ═══ THEME 5: WHATSAPP WEB (Default) ════════════════════════════════ */
