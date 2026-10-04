@@ -737,6 +737,16 @@ cd frontend && bun run build   # the same frontend build from the frontend packa
 `WAHA_DATABASE_URL` (real Postgres, Docker, or PGlite), and `bun run postgres:dev` starts a local
 PGlite Postgres that speaks the wire protocol on `127.0.0.1:5432`.
 
+The driver conformance suite (`src/__tests__/conformance/`) runs the same assertions against SQLite
+and PostgreSQL. The Postgres half starts an embedded PGlite server by default, so `bun run test`
+needs no database service; set `BUNWA_TEST_POSTGRES_URL=postgres://user:pass@host:5432/db` to use a
+real PostgreSQL or Docker service instead, or `BUNWA_TEST_EMBEDDED_PGLITE=0` to disable the embedded
+server. When no server is available the half prints `SKIPPED` and is not a pass.
+
+`scripts/verify-endpoints.ts` checks every route of a running server
+(`BUNWA_URL=... BUNWA_API_KEY=... bun run scripts/verify-endpoints.ts`); it is read-only unless
+`--include-writes --session <name> --confirm-live` is passed.
+
 ## License
 
 BunWa is released under the **BunWa Community License (BCL) v1.0**. It is free to use, copy, modify
