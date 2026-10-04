@@ -26,19 +26,42 @@ feature rounds and the patch with fixes inside a round. See
   them read only by default, with a guarded write pass for a live session. It
   exits non-zero on a 5xx so it can gate a deploy.
 
+### Fixed
+
+- **The chat page reconnected its socket in a loop.** The hook's cleanup closed
+  a socket whose `onclose` then armed a reconnect timer, so an unowned socket was
+  opened every three seconds and retries could run alongside a connecting one.
+  The socket now has a single owner per session, reconnects only for a connection
+  lost while mounted, and its events share one de-duplicated refresh path with
+  the poll. A hook test mounts, re-renders and unmounts, and asserts exactly one
+  socket is constructed.
+- **Animation jitter on the chat route.** The composer remounted an icon on every
+  content change, transitions ran on `width` and `transition-all`, the sidebar
+  animated its own width and reflowed the message pane, and dialog spinners
+  shifted their labels. Icons now cross fade in a fixed slot, the progress bar
+  scales instead of resizing, and transitions name their properties.
+- **Four routes answered 500 without a session:** `checkNumberStatus`,
+  `new-message-id`, `contacts/check-exists` and `contacts/profile-picture`. An
+  unknown session is a 404 naming it, a known but not connected session is a 422
+  telling the caller to start it, applied through the shared session guard so
+  every route using it benefits.
+- **Two cross driver data bugs:** SQLite never deleted a chat label association
+  because it filtered `messageId = NULL`, and Postgres ignored the association
+  type where SQLite filters it. Both now match the SQLite contract, covered by
+  the shared conformance suite.
+- The chat route reports an unreachable database as a database problem and points
+  at `WAHA_DATABASE_URL`, instead of the generic store message.
+- The sessions list account column populates from the session detail payload
+  rather than always showing a dash.
+
 ### Known issues
 
-- Four read only routes currently answer 500 when the target session is missing
-  or stopped: `GET /api/checkNumberStatus`, `GET /api/:session/new-message-id`,
-  `GET /api/contacts/check-exists` and `GET /api/contacts/profile-picture`. To be
-  confirmed against a running session.
-- Two cross driver divergences found by the conformance suite: SQLite
-  `deleteOne` for a chat label association is a no-op, and Postgres
-  `getAssociationsByChatId` ignores the association type where SQLite filters
-  `label_jid`.
-- The chat route still reports an unreachable database with the generic store
-  message, and the sessions list account column still shows a dash. Neither fix
-  has landed.
+- Handle resolution for WhatsApp usernames is unit tested against a stubbed
+  socket but not yet confirmed against a live account.
+- The verifier's write pass has not been run against a paired session.
+- The dashboard fetches each working session's detail once per poll to fill the
+  account column. Adding `me` to the sessions list payload would remove those
+  requests.
 
 ## [2026.10.0] - 2026-10-04
 
