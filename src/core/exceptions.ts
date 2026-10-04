@@ -5,8 +5,16 @@ export const DOCS_URL = 'https://waha.devlike.pro/';
 const engine = getEngineName();
 
 export class NotImplementedByEngineError extends Error {
-  constructor(msg = '') {
-    let error = `The method is not implemented by '${engine}' engine. Check the docs and try another engine: ${DOCS_URL}`;
+  /**
+   * @param msg extra reason shown before the standard sentence
+   * @param engineName engine that refused the operation; defaults to the
+   *   process default engine, callers that know their session engine (the
+   *   session base class) should pass it so the message names the engine that
+   *   actually answered instead of the configured default.
+   */
+  constructor(msg = '', engineName?: string) {
+    const engineName_ = engineName || engine;
+    let error = `The method is not implemented by '${engineName_}' engine. Check the docs and try another engine: ${DOCS_URL}`;
     if (msg) {
       error = `${msg} ${error}`;
     }
@@ -89,12 +97,16 @@ export class TooManyRequestsException extends Error {
  * Errors the global error handler already maps to a client-facing 4xx
  * response. Route handlers rethrow these instead of flattening them into a
  * generic 500, so the reason (a blocked send, a bad target, a username that
- * cannot be resolved) reaches the caller.
+ * cannot be resolved, an operation the engine does not implement) reaches the
+ * caller.
  */
 export function isClientFacingError(error: unknown): boolean {
   return (
     error instanceof BadRequestException ||
     error instanceof UnprocessableEntityException ||
-    error instanceof TooManyRequestsException
+    error instanceof TooManyRequestsException ||
+    error instanceof NotImplementedByEngineError ||
+    error instanceof AvailableInPlusVersion ||
+    error instanceof AvailableInPlusVersionAll
   );
 }

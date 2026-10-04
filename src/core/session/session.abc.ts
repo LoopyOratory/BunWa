@@ -432,8 +432,17 @@ export abstract class WhatsappSession {
    * START - Methods for API
    */
 
+  /**
+   * Refuse an operation this engine does not implement. Every throw site goes
+   * through here so the 422 message names the engine of this session, not the
+   * process-wide default engine.
+   */
+  protected notImplemented(message = ''): never {
+    throw new NotImplementedByEngineError(message, this.engine);
+  }
+
   public browserTrace(query: BrowserTraceQuery): Promise<string> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   /**
@@ -441,11 +450,11 @@ export abstract class WhatsappSession {
    */
 
   public getQR(): QR {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public requestCode(phoneNumber: string, method: string, params?: any) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   abstract getScreenshot(): Promise<Buffer>;
@@ -458,11 +467,11 @@ export abstract class WhatsappSession {
    * Profile methods
    */
   public setProfileName(name: string): Promise<boolean> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public setProfileStatus(status: string): Promise<boolean> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public async updateProfilePicture(
@@ -499,18 +508,18 @@ export abstract class WhatsappSession {
   }
 
   protected setProfilePicture(file: BinaryFile | RemoteFile): Promise<boolean> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   protected deleteProfilePicture(): Promise<boolean> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   /**
    * Other methods
    */
   generateNewMessageId(): Promise<string> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   abstract checkNumberStatus(request: CheckNumberStatusQuery): Promise<any>;
@@ -518,27 +527,27 @@ export abstract class WhatsappSession {
   abstract sendText(request: MessageTextRequest): Promise<any>;
 
   sendContactVCard(request: MessageContactVcardRequest) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   sendPoll(request: MessagePollRequest) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   sendPollVote(request: MessagePollVoteRequest) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   abstract sendLocation(request: MessageLocationRequest): Promise<any>;
 
   sendLinkPreview(request: MessageLinkPreviewRequest) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   sendLinkCustomPreview(
     request: MessageLinkCustomPreviewRequest,
   ): Promise<any> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   abstract forwardMessage(request: MessageForwardRequest): Promise<WAMessage>;
@@ -550,19 +559,19 @@ export abstract class WhatsappSession {
   abstract sendVoice(request: MessageVoiceRequest): Promise<any>;
 
   sendVideo(request: MessageVideoRequest) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   sendButtons(request: SendButtonsRequest) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   sendList(request: SendListRequest): Promise<any> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   sendButtonsReply(request: MessageButtonReply) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   abstract reply(request: MessageReplyRequest): Promise<any>;
@@ -645,37 +654,37 @@ export abstract class WhatsappSession {
   abstract setReaction(request: MessageReactionRequest): Promise<any>;
 
   setStar(request: MessageStarRequest): Promise<void> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   sendEvent(request: EventMessageRequest): Promise<WAMessage> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   cancelEvent(eventId: string): Promise<WAMessage> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public rejectCall(from: string, id: string): Promise<void> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   /**
    * Chats methods
    */
   public getChats(pagination: PaginationParams) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public getChatsOverview(
     pagination: PaginationParams,
     filter?: OverviewFilter,
   ): Promise<ChatSummary[]> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public deleteChat(chatId: any) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public getChatMessages(
@@ -683,7 +692,7 @@ export abstract class WhatsappSession {
     query: GetChatMessagesQuery,
     filter: GetChatMessagesFilter,
   ): Promise<WAMessage[]> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   abstract readChatMessages(
@@ -716,7 +725,7 @@ export abstract class WhatsappSession {
     messageId: string,
     query: GetChatMessageQuery,
   ): Promise<null | WAMessage> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public pinMessage(
@@ -724,15 +733,15 @@ export abstract class WhatsappSession {
     messageId: string,
     duration: number,
   ): Promise<boolean> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public unpinMessage(chatId: string, messageId: string): Promise<boolean> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public deleteMessage(chatId: string, messageId: string) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public editMessage(
@@ -740,23 +749,23 @@ export abstract class WhatsappSession {
     messageId: string,
     request: EditMessageRequest,
   ) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public clearMessages(chatId: any) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public chatsArchiveChat(chatId: string): Promise<any> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public chatsUnarchiveChat(chatId: string): Promise<any> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public chatsUnreadChat(chatId: string): Promise<any> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   /**
@@ -768,50 +777,50 @@ export abstract class WhatsappSession {
   }
 
   public getLabels(): Promise<Label[]> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public async createLabel(label: LabelDTO): Promise<Label> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public async updateLabel(label: Label): Promise<Label> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public async deleteLabel(label: Label): Promise<void> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public getChatsByLabelId(labelId: string) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public getChatLabels(chatId: string): Promise<Label[]> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public putLabelsToChat(chatId: string, labels: LabelID[]) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   /**
    * Contacts methods
    */
   public upsertContact(chatId: string, body: ContactUpdateBody): Promise<void> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public getContact(query: ContactQuery) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public getContacts(pagination: PaginationParams) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public getContactAbout(query: ContactQuery): Promise<{ about: string }> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   /**
@@ -820,21 +829,21 @@ export abstract class WhatsappSession {
   public async getAllLids(
     pagination: PaginationParams,
   ): Promise<Array<LidToPhoneNumber>> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public async getLidsCount(): Promise<number> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public async findPNByLid(lid: string): Promise<LidToPhoneNumber> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public async findLIDByPhoneNumber(
     phoneNumber: string,
   ): Promise<LidToPhoneNumber> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   /**
@@ -883,30 +892,30 @@ export abstract class WhatsappSession {
   }
 
   public blockContact(request: ContactRequest) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public unblockContact(request: ContactRequest) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   /**
    * Group methods
    */
   public createGroup(request: CreateGroupRequest) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public joinGroup(code: string): Promise<string | undefined> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public joinInfoGroup(code: string): Promise<any> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public getGroups(pagination: PaginationParams): Promise<any> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public filterGroupsFields(data: any, fields: GroupsListFields) {
@@ -922,43 +931,43 @@ export abstract class WhatsappSession {
   }
 
   public refreshGroups(): Promise<boolean> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public getGroup(id: any) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public getGroupParticipants(id: string): Promise<GroupParticipant[]> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public getInfoAdminsOnly(id: any): Promise<SettingsSecurityChangeInfo> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public setInfoAdminsOnly(id: any, value: any) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public getMessagesAdminsOnly(id: any): Promise<SettingsSecurityChangeInfo> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public setMessagesAdminsOnly(id: any, value: any) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public deleteGroup(id: any) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public leaveGroup(id: any) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public setDescription(id: any, description: any) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public async updateGroupPicture(
@@ -991,62 +1000,62 @@ export abstract class WhatsappSession {
     id: string,
     file: BinaryFile | RemoteFile,
   ): Promise<boolean> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   protected deleteGroupPicture(id: string): Promise<boolean> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public setSubject(id: any, description: any) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public getInviteCode(id: any): Promise<string | undefined> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public revokeInviteCode(id: any): Promise<string | undefined> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public getParticipants(id: any) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public addParticipants(id: any, request: ParticipantsRequest) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public removeParticipants(id: any, request: ParticipantsRequest) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public promoteParticipantsToAdmin(id: any, request: ParticipantsRequest) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public demoteParticipantsToUser(id: any, request: ParticipantsRequest) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public setPresence(
     presence: WAHAPresenceStatus,
     chatId?: string,
   ): Promise<void> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public getPresences(): Promise<WAHAChatPresences[]> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public getPresence(id: string): Promise<WAHAChatPresences> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public subscribePresence(id: string): Promise<any> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   /**
@@ -1055,65 +1064,65 @@ export abstract class WhatsappSession {
   public searchChannelsByView(
     query: ChannelSearchByView,
   ): Promise<ChannelListResult> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public searchChannelsByText(
     query: ChannelSearchByText,
   ): Promise<ChannelListResult> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public async previewChannelMessages(
     inviteCode: string,
     query: PreviewChannelMessages,
   ): Promise<ChannelMessage[]> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public channelsList(query: ListChannelsQuery): Promise<Channel[]> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public channelsCreateChannel(
     request: CreateChannelRequest,
   ): Promise<Channel | null> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public channelsGetChannel(id: string): Promise<Channel | null> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public channelsGetChannelByInviteCode(inviteCode: string): Promise<Channel | null> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public channelsDeleteChannel(id: string): Promise<void> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public channelsFollowChannel(id: string): Promise<void> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public channelsUnfollowChannel(id: string): Promise<void> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public channelsMuteChannel(id: string): Promise<void> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public channelsUnmuteChannel(id: string): Promise<void> {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   /**
    * Status methods
    */
   public sendTextStatus(status: TextStatus) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   public sendImageStatus(status: ImageStatus) {
@@ -1129,7 +1138,7 @@ export abstract class WhatsappSession {
   }
 
   public deleteStatus(request: DeleteStatusRequest) {
-    throw new NotImplementedByEngineError();
+    throw this.notImplemented();
   }
 
   /**

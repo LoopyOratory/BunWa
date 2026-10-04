@@ -2,14 +2,14 @@
 type: note
 section: engines
 tags: [bunwa, engine, webjs, puppeteer]
-updated: 2026-09-29
+updated: 2026-10-04
 source: src/core/engines/webjs/session.webjs.core.ts, src/core/session/session.browser.ts
 status: partial
 ---
 
 # 🖥️ WEBJS Engine
 
-**`src/core/engines/webjs/session.webjs.core.ts`** (≈960 lines) drives a real headless Chrome through
+**`src/core/engines/webjs/session.webjs.core.ts`** (≈1190 lines) drives a real headless Chrome through
 `whatsapp-web.js` → `web.whatsapp.com`. Heavier and narrower than [[NOWEB Engine|NOWEB]], but it is
 the fallback for edge cases where the raw Baileys protocol doesn't cover what you need.
 
@@ -46,35 +46,61 @@ Events bridged onto the WAHA event bus: `qr`, `authenticated`, `auth_failure`, `
 > `WAHA_LOCAL_STORE_BASE_DIR` — the NOWEB manager's base dir does not apply here. If you relocate
 > session storage, WEBJS will not follow.
 
-## Supported operations
+## Verified capability (2026-10-04, live session `loopy`)
 
-| Area | Supported |
+Checked against a live paired WEBJS session: `scripts/verify-endpoints.ts` read pass
+(70 routes checked, 38 works, 2 needs a parameter, 29 not applicable, 0 errors) plus a
+direct feature drill on the safe test chat. For comparison, the same verifier against the
+NOWEB session gave 50 works, 3 needs a parameter, 13 not applicable, 4 verifier-input
+timeouts. The WEBJS work surface is smaller, but nothing answered 5xx.
+
+### Works
+
+| Area | Verified live |
 |---|---|
-| Messages | text, image, file, voice, video, location, forward, reply, `sendSeen`, typing, reactions, `deleteMessage` |
-| Chats | get chats, get chat messages / single message, `readChatMessages`, `checkNumberStatus` |
-| Contacts | get/list, profile picture |
-| Groups | get/list/create, participants add/remove/promote/demote, leave, description, subject, invite code + revoke |
-| Presence | chat typing state only |
-| Misc | `getScreenshot()` (the dashboard's screenshot button), `getQR()` |
+| Messages | text (body, timestamp, `fromMe` read back), location, reply, reaction, `sendSeen`, start/stopTyping, delete a sent message |
+| Chats | chats list, chat messages, single message, read messages, `checkNumberStatus` for a number |
+| Contacts | get/list, contact profile picture |
+| Groups | get/list/count, group info, participants, one real group |
+| Misc | screenshot (JSON `{screenshot: "<base64 PNG>"}`), QR flow (not re-run: the session was already paired) |
 
-## Not supported (inherited `NotImplementedByEngineError`)
+### Gated: 422 with the engine's own reason, never 500
 
-No labels, no channels/newsletters, no LID mapping, no statuses/stories, no chat overview,
-no message edit/star/pin, no `clearMessages`/archive, no block/unblock, no `getPresence`/`getPresences`,
-no profile or group picture updates, and no media **download** manager — outgoing media is sent as
-base64 through `MessageMedia` rather than the `MediaManager` pipeline.
+| Family | What the caller sees |
+|---|---|
+| labels, channels/newsletters, LID mapping, statuses/stories, chat overview, message edit, pin | `The method is not implemented by 'WEBJS' engine...` from the base `notImplemented()` helper |
+| star | same, after the route catch was taught to rethrow engine errors instead of flattening them |
+| archive, clear messages, block/unblock | same; the route stubs now delegate to the engine instead of a hardcoded 500 (block/unblock) or a silent 200 (clear messages) |
+| presence getters | same; WEBJS no longer pretends with empty lists |
+| profile and group picture updates | same |
+| media download | `Downloading media through the media manager is not implemented by the WEBJS engine...` |
+| `checkNumberStatus` for a username handle | `The WEBJS engine cannot look up a WhatsApp username...` |
+| missing chat or group | 404 `Chat <id> not found` / `Group <id> not found` |
 
-Search-based reply/react/delete only look at the **last 100 messages** of a chat.
+### Broken upstream: clean 422, not gated by design
 
-> ⚠️ Dead code in the file: `scheduleReadyReconcile()` is never called; `markReady()` only runs from
+whatsapp-web.js 1.34.7 is incompatible with the current WhatsApp Web build in these
+paths. The engine catches the library error and answers 422 with the reason instead of a
+500. These need a newer whatsapp-web.js or a different implementation:
+
+- `sendImage` / `sendFile` / `sendVoice` / `sendVideo`: `Sending media is not supported by the installed whatsapp-web.js version...` (WhatsApp Web refuses to key the internal media message model)
+- `forwardMessage`: `Forwarding is not supported...` (`WAWebChatForwardMessage` no longer exists)
+- group invite code and revoke: `Group invite codes are not supported...` (`WAWebMexFetchGroupInviteCodeJob` no longer exists)
+
+### Compatibility shims in the engine
+
+- `getChatModel`: the last-message lookup throws an IndexedDB DataError on this build; the shim resolves the last message from the loaded collection instead. Without it the chats list, message history and groups answered 500.
+- `sendMessage`: the library looks the sent message up with a key spelling this build no longer uses and returns undefined; the shim returns the newly added collection entry.
+- Message id normalization: `Message.id._serialized` is filled from the build's `$1` form so delete, forward and reply quoting can address messages.
+
+### Outstanding
+
+- `DELETE /api/:session/groups/:id` is still a hardcoded 500 ("Delete group not available in NOWEB engine"). It is not part of the verified families and was left as is.
+- Group create/leave/description/subject and participant add/remove/promote/demote are implemented but were not exercised live, to avoid mutating the only real group.
+- Search-based reply/react/delete only look at the last 100 messages of a chat.
+
+> Dead code in the file: `scheduleReadyReconcile()` is never called; `markReady()` only runs from
 > the `ready` event.
-
-## Verified live (2026-09-29)
-
-Started with `CHROME_PATH` pointing at a local Chromium build: `start()` reached `SCAN_QR_CODE` in
-~15s, the log showed a real QR received from WhatsApp, and `GET /api/:session/screenshot` returned a
-WhatsApp Web render (1280×633 PNG, verified). Full messaging needs a real phone scan and was not
-exercised. Two bug fixes that got it here: [[Fix History#WEBJS verified end-to-end (2026-09-29)]].
 
 ## Proxy
 

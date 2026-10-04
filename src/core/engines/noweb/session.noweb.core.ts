@@ -2704,7 +2704,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     }
     const enginePresence = ToEnginePresenceStatus[presence];
     if (!enginePresence) {
-      throw new NotImplementedByEngineError(
+      throw this.notImplemented(
         `NOWEB engine doesn't support '${presence}' presence.`,
       );
     }
@@ -3043,7 +3043,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   }
 
   public async channelsList(query: ListChannelsQuery): Promise<Channel[]> {
-    throw new NotImplementedByEngineError(
+    throw this.notImplemented(
       "NOWEB engine doesn't support listing channels.",
     );
   }

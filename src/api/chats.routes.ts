@@ -159,6 +159,9 @@ export function createChatsRouter(): Hono<{ Variables: { session: any; body: any
     policiesMiddleware(CanSession(Action.Send, FromParam('session'))),
     workingSessionResolver(),
     async (c) => {
+      const session = c.get('session');
+      const chatId = c.req.param('chatId');
+      await (session as any).clearMessages(chatId);
       return c.json({ result: true });
     }
   );

@@ -120,7 +120,11 @@ export function createGroupsRouter(): Hono<{ Variables: { session: any; body: an
     policiesMiddleware(CanSession(Action.Send, FromParam('session'))),
     workingSessionResolver(),
     async (c) => {
-      return c.json({ statusCode: 500, message: 'Set group picture not available' }, 500);
+      const session = c.get('session');
+      const id = c.req.param('id');
+      const file = await c.req.json();
+      const result = await (session as any).updateGroupPicture(id, file);
+      return c.json({ result });
     }
   );
 
@@ -128,7 +132,10 @@ export function createGroupsRouter(): Hono<{ Variables: { session: any; body: an
     policiesMiddleware(CanSession(Action.Send, FromParam('session'))),
     workingSessionResolver(),
     async (c) => {
-      return c.json({ statusCode: 500, message: 'Delete group picture not available' }, 500);
+      const session = c.get('session');
+      const id = c.req.param('id');
+      const result = await (session as any).updateGroupPicture(id, null);
+      return c.json({ result });
     }
   );
 

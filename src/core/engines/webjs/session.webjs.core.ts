@@ -16,6 +16,7 @@ import {
   MessageMedia,
   WAState,
 } from 'whatsapp-web.js';
+import * as wwebjsRuntime from 'whatsapp-web.js';
 import NodeCache from 'node-cache';
 import { Subject } from 'rxjs';
 import {
@@ -68,6 +69,7 @@ import { WhatsappSession } from '../../session/session.abc';
 import { getBrowserExecutablePath } from '../../session/session.browser';
 import {
   NotImplementedByEngineError,
+  NotFoundException,
   UnprocessableEntityException,
 } from '../../exceptions';
 import { fetchBuffer } from '../../../utils/fetch';
@@ -78,6 +80,29 @@ import { isUsernameAddress } from '../../../common/security/wa-id';
 // (CHROME_PATH → PUPPETEER_EXECUTABLE_PATH → system candidates).
 // ---------------------------------------------------------------------------
 const WEBJS_SESSIONS_DIR = path.join(process.cwd(), '.sessions', 'webjs');
+
+/**
+ * The current WhatsApp Web build exposes a message key's serialized form as
+ * `$1` and not `_serialized`, while whatsapp-web.js stores the raw model id on
+ * Message instances untouched. Library methods that address a message by
+ * `this.id._serialized` (delete, forward, reply quoting, media download) then
+ * pass undefined and fail. Normalize the serialized form once per instance.
+ */
+function installMessageIdShim(): void {
+  const messageClass = (wwebjsRuntime as any).Message;
+  if (!messageClass || messageClass.__bunwaSerializedIdShim) return;
+  const originalPatch = messageClass.prototype._patch;
+  messageClass.prototype._patch = function (data: any) {
+    originalPatch.call(this, data);
+    const id = this.id;
+    if (id && typeof id === 'object' && !id._serialized) {
+      if (id.$1) id._serialized = id.$1;
+      else if (id.id) id._serialized = `${id.fromMe}_${id.remote}_${id.id}`;
+    }
+  };
+  messageClass.__bunwaSerializedIdShim = true;
+}
+installMessageIdShim();
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -237,9 +262,18 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       this.status = WAHASessionStatus.FAILED;
     });
 
-    this.client.on('ready', () => {
+    this.client.on('ready', async () => {
       this.logger.info('Client ready — session is WORKING');
+      await this.installChatModelShim();
       this.markReady();
+    });
+
+    // WhatsApp Web can reload the page (for example after a version change),
+    // which drops the injected shim; reinstall it once the page reconnects.
+    this.client.on('change_state', (state: string) => {
+      if (state === 'CONNECTED' && this.status === WAHASessionStatus.WORKING) {
+        void this.installChatModelShim();
+      }
     });
 
     this.client.on('disconnected', (reason: WAState) => {
@@ -277,7 +311,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     // Message acknowledgements
     this.client.on('message_ack', (msg: any, ack: number) => {
       msgAck$.next({
-        id: msg.id._serialized,
+        id: this.messageIdSerialized(msg.id),
         from: msg.from,
         to: msg.to,
         ack,
@@ -424,6 +458,33 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   // Messaging
   // ------------------------------------------------------------------
 
+  /**
+   * Send a MessageMedia instance. whatsapp-web.js builds an internal WhatsApp
+   * Web message model for media that the current web build refuses to key, so
+   * every media send rejects with "Data passed to getter must include an id
+   * property". The installed library version cannot send media against this
+   * WhatsApp Web build; answer 422 with that reason instead of a generic 500.
+   * Other errors keep their own handling.
+   */
+  private async sendMedia(
+    chatId: string,
+    media: MessageMedia,
+    options: Record<string, any>,
+  ): Promise<WAMessage> {
+    try {
+      const msg = await this.client!.sendMessage(chatId, media, options);
+      return this.wrapMessage(msg);
+    } catch (err: any) {
+      const reason = err?.message || String(err);
+      if (reason.includes('Data passed to getter must include an id property')) {
+        this.notImplemented(
+          'Sending media is not supported by the installed whatsapp-web.js version against the current WhatsApp Web build.',
+        );
+      }
+      throw err;
+    }
+  }
+
   async sendText(request: MessageTextRequest) {
     this.ensureClientReady();
     const chatId = this.ensureSuffix(request.chatId);
@@ -444,10 +505,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       request.file?.mimetype || 'image/png',
       buf.toString('base64'),
     );
-    const msg = await this.client!.sendMessage(chatId, media, {
-      caption: request.caption,
-    });
-    return this.wrapMessage(msg);
+    return this.sendMedia(chatId, media, { caption: request.caption });
   }
 
   async sendFile(request: MessageFileRequest) {
@@ -464,10 +522,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       buf.toString('base64'),
       request.file?.filename || 'file',
     );
-    const msg = await this.client!.sendMessage(chatId, media, {
-      caption: request.caption,
-    });
-    return this.wrapMessage(msg);
+    return this.sendMedia(chatId, media, { caption: request.caption });
   }
 
   async sendVoice(request: MessageVoiceRequest) {
@@ -483,10 +538,9 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       request.file?.mimetype || 'audio/ogg',
       buf.toString('base64'),
     );
-    const msg = await this.client!.sendMessage(chatId, media, {
+    return this.sendMedia(chatId, media, {
       sendAudioAsVoice: request.convert !== false,
     });
-    return this.wrapMessage(msg);
   }
 
   async sendVideo(request: MessageVideoRequest) {
@@ -503,10 +557,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       buf.toString('base64'),
       request.file?.filename || 'video',
     );
-    const msg = await this.client!.sendMessage(chatId, media, {
-      caption: request.caption,
-    });
-    return this.wrapMessage(msg);
+    return this.sendMedia(chatId, media, { caption: request.caption });
   }
 
   async sendLocation(request: MessageLocationRequest) {
@@ -526,31 +577,47 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
     const chats = await this.client!.getChats();
     for (const chat of chats.slice(0, 10)) {
+      let msgs: any[];
       try {
-        const msgs = await chat.fetchMessages({ limit: 100 });
-        const found = msgs.find((m) => m.id._serialized === request.messageId);
-        if (found) {
-          await found.forward(chatId);
-          const destChat = await this.client!.getChatById(chatId);
-          const sent = await destChat.fetchMessages({ limit: 5, fromMe: true });
-          if (sent.length > 0) {
-            return this.wrapMessage(sent[sent.length - 1]);
-          }
-          return { id: '', timestamp: Date.now(), from: '', fromMe: true, source: 'api', to: '' };
+        msgs = await chat.fetchMessages({ limit: 100 });
+      } catch {
+        continue;
+      }
+      const found = msgs.find((m: any) => this.messageIdSerialized(m.id) === request.messageId);
+      if (!found) continue;
+
+      try {
+        await found.forward(chatId);
+      } catch (err: any) {
+        // whatsapp-web.js forwards through WAWebChatForwardMessage, a module
+        // the current WhatsApp Web build no longer exposes, so the library's
+        // forward path cannot work here. Report that instead of a 500.
+        const reason = err?.message || String(err);
+        if (reason.includes('forwardMessages')) {
+          this.notImplemented(
+            'Forwarding is not supported by the installed whatsapp-web.js version against the current WhatsApp Web build.',
+          );
         }
-      } catch {}
+        throw err;
+      }
+
+      const destChat = await this.getChatOrFail(chatId);
+      const sent = await destChat.fetchMessages({ limit: 5, fromMe: true });
+      if (sent.length > 0) {
+        return this.wrapMessage(sent[sent.length - 1]);
+      }
+      return { id: '', timestamp: Date.now(), from: '', fromMe: true, source: 'api', to: '' };
     }
-    throw new Error(`Message ${request.messageId} not found for forwarding`);
+    throw new NotFoundException(`Message ${request.messageId} not found for forwarding`);
   }
 
   async reply(request: MessageReplyRequest) {
     this.ensureClientReady();
-    const chatId = this.ensureSuffix(request.chatId);
-    const chat = await this.client!.getChatById(chatId);
+    const chat = await this.getChatOrFail(request.chatId);
     const msgs = await chat.fetchMessages({ limit: 100 });
-    const target = msgs.find((m) => m.id._serialized === request.reply_to);
+    const target = msgs.find((m: any) => this.messageIdSerialized(m.id) === request.reply_to);
     if (!target) {
-      throw new Error(`Message ${request.reply_to} not found for reply`);
+      throw new NotFoundException(`Message ${request.reply_to} not found for reply`);
     }
     const msg = await target.reply(request.text);
     return this.wrapMessage(msg);
@@ -558,38 +625,33 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
   async sendSeen(request: SendSeenRequest) {
     this.ensureClientReady();
-    const chatId = this.ensureSuffix(request.chatId);
-    const chat = await this.client!.getChatById(chatId);
+    const chat = await this.getChatOrFail(request.chatId);
     await chat.sendSeen();
   }
 
   async startTyping(request: ChatRequest): Promise<void> {
     this.ensureClientReady();
-    const chatId = this.ensureSuffix(request.chatId);
+    const chat = await this.getChatOrFail(request.chatId);
     try {
-      const chat = await this.client!.getChatById(chatId);
       await chat.sendStateTyping();
     } catch {}
   }
 
   async stopTyping(request: ChatRequest) {
     this.ensureClientReady();
-    const chatId = this.ensureSuffix(request.chatId);
+    const chat = await this.getChatOrFail(request.chatId);
     try {
-      const chat = await this.client!.getChatById(chatId);
       await chat.clearState();
     } catch {}
   }
 
   async setReaction(request: MessageReactionRequest) {
     this.ensureClientReady();
-    const chatId = this.ensureSuffix(request.chatId);
-    const chat = await this.client!.getChatById(chatId);
+    const chat = await this.getChatOrFail(request.chatId);
     const msgs = await chat.fetchMessages({ limit: 100 });
-    const target = msgs.find((m) => m.id._serialized === request.messageId);
+    const target = msgs.find((m: any) => this.messageIdSerialized(m.id) === request.messageId);
     if (!target) {
-      this.logger.warn(`Message ${request.messageId} not found for reaction`);
-      return;
+      throw new NotFoundException(`Message ${request.messageId} not found for reaction`);
     }
     await (target as any).react(request.reaction);
   }
@@ -602,12 +664,27 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       );
     }
     const phone = request.phone;
-    const numberId = await this.client!.getNumberId(phone);
-    const exists = numberId !== null;
+    let numberId: any = null;
+    try {
+      numberId = await this.client!.getNumberId(phone);
+    } catch (err: any) {
+      // whatsapp-web.js throws "wid error: invalid wid" for a value that is
+      // not a plausible number instead of answering null. That is the
+      // protocol's negative answer, not a server fault.
+      return {
+        exists: false,
+        isBusiness: false,
+        canReceiveMessage: false,
+        number: phone,
+        status: 'not_resolvable',
+        reason: `WhatsApp rejected this number as invalid: ${err?.message || err}`,
+      };
+    }
+    const exists = numberId !== null && numberId !== undefined;
     return {
       exists,
       isBusiness: false,
-      canReceiveMessage: true,
+      canReceiveMessage: exists,
       number: phone,
       status: exists ? 'resolved' : 'not_resolvable',
       ...(exists ? {} : { reason: 'WhatsApp answered that this number is not registered.' }),
@@ -630,7 +707,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
         unreadCount: c.unreadCount || 0,
         lastMessage: c.lastMessage
           ? {
-              id: c.lastMessage.id?._serialized || '',
+              id: this.messageIdSerialized(c.lastMessage.id),
               from: c.lastMessage.from || '',
               to: c.lastMessage.to || '',
               body: c.lastMessage.body || '',
@@ -648,11 +725,16 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     filter: GetChatMessagesFilter,
   ): Promise<WAMessage[]> {
     this.ensureClientReady();
-    const jid = this.ensureSuffix(chatId);
-    const chat = await this.client!.getChatById(jid);
+    const chat = await this.getChatOrFail(chatId);
     const limit = query?.limit || 50;
     const msgs = await chat.fetchMessages({ limit });
-    return msgs.map((m) => this.mapMessageToWAMessage(m));
+    const messages = msgs.map((m: any) => this.mapMessageToWAMessage(m));
+    if (query?.downloadMedia && messages.some((m: any) => m.hasMedia)) {
+      this.notImplemented(
+        'Downloading media through the media manager is not implemented by the WEBJS engine.',
+      );
+    }
+    return messages;
   }
 
   async readChatMessages(
@@ -668,22 +750,28 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     query: GetChatMessageQuery,
   ): Promise<WAMessage | null> {
     this.ensureClientReady();
-    const jid = this.ensureSuffix(chatId);
-    const chat = await this.client!.getChatById(jid);
+    const chat = await this.getChatOrFail(chatId);
     const msgs = await chat.fetchMessages({ limit: 100 });
-    const found = msgs.find((m) => m.id._serialized === messageId);
-    return found ? this.mapMessageToWAMessage(found) : null;
+    const found = msgs.find((m: any) => this.messageIdSerialized(m.id) === messageId);
+    if (!found) return null;
+    const message = this.mapMessageToWAMessage(found);
+    if (query?.downloadMedia && message.hasMedia) {
+      this.notImplemented(
+        'Downloading media through the media manager is not implemented by the WEBJS engine.',
+      );
+    }
+    return message;
   }
 
   async deleteMessage(chatId: string, messageId: string) {
     this.ensureClientReady();
-    const jid = this.ensureSuffix(chatId);
-    const chat = await this.client!.getChatById(jid);
+    const chat = await this.getChatOrFail(chatId);
     const msgs = await chat.fetchMessages({ limit: 100 });
-    const target = msgs.find((m) => m.id._serialized === messageId || m.id.id === messageId);
+    const target = msgs.find((m: any) =>
+      this.messageIdSerialized(m.id) === messageId || m.id?.id === messageId,
+    );
     if (!target) {
-      this.logger.warn(`Message ${messageId} not found for deletion`);
-      return;
+      throw new NotFoundException(`Message ${messageId} not found`);
     }
     await target.delete(true);
   }
@@ -739,29 +827,23 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
   async getGroup(id: string) {
     this.ensureClientReady();
-    try {
-      const chat = await this.client!.getChatById(this.ensureSuffix(id));
-      if (!chat.isGroup) return null;
-      return {
-        id: chat.id._serialized,
-        name: chat.name || '',
-        description: (chat as any).description || undefined,
-        participants: ((chat as any).participants || []).map((p: any) => ({
-          id: p.id._serialized,
-          isAdmin: Boolean(p.isAdmin),
-          isSuperAdmin: Boolean(p.isSuperAdmin),
-        })),
-        owner: (chat as any).owner?._serialized || undefined,
-      };
-    } catch {
-      return null;
-    }
+    const chat = await this.getGroupChatOrFail(id);
+    return {
+      id: chat.id._serialized,
+      name: chat.name || '',
+      description: (chat as any).description || undefined,
+      participants: ((chat as any).participants || []).map((p: any) => ({
+        id: p.id._serialized,
+        isAdmin: Boolean(p.isAdmin),
+        isSuperAdmin: Boolean(p.isSuperAdmin),
+      })),
+      owner: (chat as any).owner?._serialized || undefined,
+    };
   }
 
   async getGroupParticipants(id: string): Promise<GroupParticipant[]> {
     this.ensureClientReady();
-    const chat = await this.client!.getChatById(this.ensureSuffix(id));
-    if (!chat.isGroup) return [];
+    const chat = await this.getGroupChatOrFail(id);
     return ((chat as any).participants || []).map((p: any) => ({
       id: p.id._serialized,
       isAdmin: Boolean(p.isAdmin),
@@ -795,8 +877,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
   async addParticipants(id: string, request: ParticipantsRequest) {
     this.ensureClientReady();
-    const chat = await this.client!.getChatById(this.ensureSuffix(id));
-    if (!chat.isGroup) throw new Error('Chat is not a group');
+    const chat = await this.getGroupChatOrFail(id);
     const ids = (request.participants || []).map((p) =>
       p.includes('@') ? p : `${p}@c.us`,
     );
@@ -805,8 +886,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
   async removeParticipants(id: string, request: ParticipantsRequest) {
     this.ensureClientReady();
-    const chat = await this.client!.getChatById(this.ensureSuffix(id));
-    if (!chat.isGroup) throw new Error('Chat is not a group');
+    const chat = await this.getGroupChatOrFail(id);
     const ids = (request.participants || []).map((p) =>
       p.includes('@') ? p : `${p}@c.us`,
     );
@@ -815,43 +895,61 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
   async leaveGroup(id: string) {
     this.ensureClientReady();
-    const chat = await this.client!.getChatById(this.ensureSuffix(id));
-    if (!chat.isGroup) throw new Error('Chat is not a group');
+    const chat = await this.getGroupChatOrFail(id);
     await (chat as any).leave();
   }
 
   async setDescription(id: string, description: string) {
     this.ensureClientReady();
-    const chat = await this.client!.getChatById(this.ensureSuffix(id));
-    if (!chat.isGroup) throw new Error('Chat is not a group');
+    const chat = await this.getGroupChatOrFail(id);
     await (chat as any).setDescription(description);
   }
 
   async setSubject(id: string, subject: string) {
     this.ensureClientReady();
-    const chat = await this.client!.getChatById(this.ensureSuffix(id));
-    if (!chat.isGroup) throw new Error('Chat is not a group');
+    const chat = await this.getGroupChatOrFail(id);
     await (chat as any).setSubject(subject);
   }
 
   async getInviteCode(id: string): Promise<string> {
     this.ensureClientReady();
-    const chat = await this.client!.getChatById(this.ensureSuffix(id));
-    if (!chat.isGroup) throw new Error('Chat is not a group');
-    return (chat as any).getInviteCode();
+    const chat = await this.getGroupChatOrFail(id);
+    try {
+      return await (chat as any).getInviteCode();
+    } catch (err: any) {
+      // whatsapp-web.js calls WAWebMexFetchGroupInviteCodeJob, a module the
+      // current WhatsApp Web build no longer exposes.
+      const reason = err?.message || String(err);
+      if (reason.includes('fetchMexGroupInviteCode')) {
+        this.notImplemented(
+          'Group invite codes are not supported by the installed whatsapp-web.js version against the current WhatsApp Web build.',
+        );
+      }
+      throw err;
+    }
   }
 
   async revokeInviteCode(id: string): Promise<string> {
     this.ensureClientReady();
-    const chat = await this.client!.getChatById(this.ensureSuffix(id));
-    if (!chat.isGroup) throw new Error('Chat is not a group');
-    return (chat as any).revokeInviteCode();
+    const chat = await this.getGroupChatOrFail(id);
+    try {
+      return await (chat as any).revokeInvite();
+    } catch (err: any) {
+      // Same removed module family as getInviteCode; resetGroupInviteCode is
+      // no longer exported by WAWebGroupQueryJob either.
+      const reason = err?.message || String(err);
+      if (reason.includes('resetGroupInviteCode') || reason.includes('fetchMexGroupInviteCode')) {
+        this.notImplemented(
+          'Revoking group invite codes is not supported by the installed whatsapp-web.js version against the current WhatsApp Web build.',
+        );
+      }
+      throw err;
+    }
   }
 
   async promoteParticipantsToAdmin(id: string, request: ParticipantsRequest) {
     this.ensureClientReady();
-    const chat = await this.client!.getChatById(this.ensureSuffix(id));
-    if (!chat.isGroup) throw new Error('Chat is not a group');
+    const chat = await this.getGroupChatOrFail(id);
     const ids = (request.participants || []).map((p) =>
       p.includes('@') ? p : `${p}@c.us`,
     );
@@ -860,8 +958,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
   async demoteParticipantsToUser(id: string, request: ParticipantsRequest) {
     this.ensureClientReady();
-    const chat = await this.client!.getChatById(this.ensureSuffix(id));
-    if (!chat.isGroup) throw new Error('Chat is not a group');
+    const chat = await this.getGroupChatOrFail(id);
     const ids = (request.participants || []).map((p) =>
       p.includes('@') ? p : `${p}@c.us`,
     );
@@ -890,17 +987,127 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     }
   }
 
-  async getPresences() {
-    return [];
-  }
-
-  async getPresence(id: string) {
-    return { chatId: id, presences: {} };
-  }
-
   // ------------------------------------------------------------------
   // Internal helpers
   // ------------------------------------------------------------------
+
+  /**
+   * Two whatsapp-web.js internals are incompatible with the current WhatsApp
+   * Web build:
+   *
+   * 1. getChatModel resolves a chat's last message through
+   *    Msg.getMessagesById, which throws an IndexedDB DataError when the last
+   *    received message is not in the in-memory store. That makes getChats()
+   *    and getChatById() reject for every real chat, so the API answered 500
+   *    for the chats list, message history and groups.
+   * 2. sendMessage looks the just-sent message up with
+   *    Msg.get(key._serialized), but the message key of this build exposes the
+   *    serialized form as `$1` and not `_serialized`, so the lookup misses and
+   *    sendMessage resolves undefined even though the message was sent.
+   *
+   * Patch both: take the last message from the loaded collection when the
+   * lookup misses, and return the newly added collection entry when a send
+   * reports no message. The rest of the library implementation still runs.
+   */
+  private async installChatModelShim(): Promise<void> {
+    const client = this.client as any;
+    const page = client?.pupPage ?? client?.puppeteer?.page;
+    if (!page) return;
+    try {
+      await page.evaluate(() => {
+        const wwebjs = (globalThis as any).WWebJS;
+        if (!wwebjs) return;
+
+        if (!wwebjs.__bunwaChatModelShim) {
+          const original = wwebjs.getChatModel;
+          wwebjs.getChatModel = async (chat: any, options: any = {}) => {
+            const lastReceivedKey = chat.lastReceivedKey;
+            let model: any;
+            try {
+              chat.lastReceivedKey = null;
+              model = await original.call(wwebjs, chat, options);
+            } finally {
+              chat.lastReceivedKey = lastReceivedKey;
+            }
+            if (!model.lastMessage && chat.msgs?.getModelsArray) {
+              try {
+                const messages = chat.msgs.getModelsArray();
+                const last = messages[messages.length - 1];
+                if (last) model.lastMessage = wwebjs.getMessageModel(last);
+              } catch {
+                // Keep lastMessage null when the collection is not readable.
+              }
+            }
+            return model;
+          };
+          wwebjs.__bunwaChatModelShim = true;
+        }
+
+        if (!wwebjs.__bunwaSendMessageShim) {
+          const originalSend = wwebjs.sendMessage;
+          wwebjs.sendMessage = async (chat: any, content: any, options: any = {}) => {
+            const countBefore = chat?.msgs?.getModelsArray?.().length ?? 0;
+            const message = await originalSend.call(wwebjs, chat, content, options);
+            if (message) return message;
+            const messages = chat?.msgs?.getModelsArray?.() ?? [];
+            return messages.length > countBefore ? messages[messages.length - 1] : undefined;
+          };
+          wwebjs.__bunwaSendMessageShim = true;
+        }
+      });
+      this.logger.debug('Installed the WhatsApp Web compatibility shims');
+    } catch (err) {
+      this.logger.warn({ err }, 'Could not install the WhatsApp Web compatibility shims');
+    }
+  }
+
+  /**
+   * Serialize a message id the way the WAHA API addresses messages:
+   * `{fromMe}_{remote}_{id}`. The current WhatsApp Web build exposes the
+   * serialized key as `$1` instead of `_serialized`, and whatsapp-web.js
+   * passes the raw model id through untouched, so both spellings and the
+   * component form are accepted.
+   */
+  private messageIdSerialized(id: any): string {
+    if (!id) return '';
+    if (typeof id === 'string') return id;
+    if (id._serialized) return id._serialized;
+    if (id.$1) return id.$1;
+    if (id.id) return `${id.fromMe}_${id.remote}_${id.id}`;
+    return '';
+  }
+
+  /**
+   * Resolve a chat the way every chat-scoped method needs it: a well-formed
+   * address, a chat the engine knows, or a 404 naming the address. A missing
+   * chat throws from whatsapp-web.js with a transport-shaped error
+   * ("No LID for user"), which used to reach the caller as a generic 500.
+   */
+  private async getChatOrFail(chatId: string): Promise<any> {
+    const jid = this.ensureSuffix(chatId);
+    let chat: any;
+    try {
+      chat = await this.client!.getChatById(jid);
+    } catch (err: any) {
+      // whatsapp-web.js rejects an unknown chat with a transport-shaped error
+      // (its message can arrive minified from the page realm), which used to
+      // reach the caller as a generic 500. Log it and answer 404.
+      this.logger.debug({ err }, `Chat ${jid} could not be resolved`);
+      throw new NotFoundException(`Chat ${jid} not found`);
+    }
+    if (!chat) {
+      throw new NotFoundException(`Chat ${jid} not found`);
+    }
+    return chat;
+  }
+
+  private async getGroupChatOrFail(id: string): Promise<any> {
+    const chat = await this.getChatOrFail(id);
+    if (!chat.isGroup) {
+      throw new NotFoundException(`Group ${this.ensureSuffix(id)} not found`);
+    }
+    return chat;
+  }
 
   private ensureClientReady(): void {
     if (!this.client) {
@@ -937,7 +1144,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
   private mapIncomingMessage(msg: any): any {
     return {
-      id: msg.id?._serialized || '',
+      id: this.messageIdSerialized(msg.id),
       from: msg.from || '',
       to: msg.to || '',
       body: msg.body || '',
@@ -952,7 +1159,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
   private mapMessageToWAMessage(msg: any): WAMessage {
     return {
-      id: msg.id?._serialized || '',
+      id: this.messageIdSerialized(msg.id),
       from: msg.from || '',
       to: msg.to || '',
       timestamp: msg.timestamp || Math.floor(Date.now() / 1000),
@@ -964,8 +1171,13 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   }
 
   private wrapMessage(msg: any): WAMessage {
+    if (!msg) {
+      throw new UnprocessableEntityException(
+        'The WEBJS engine sent the message but could not read it back from WhatsApp Web.',
+      );
+    }
     return {
-      id: msg.id?._serialized || '',
+      id: this.messageIdSerialized(msg.id),
       from: msg.from || '',
       to: msg.to || '',
       timestamp: Math.floor(Date.now() / 1000),

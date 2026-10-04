@@ -7,8 +7,8 @@ import { NotFoundException } from '../core/exceptions';
 import { workingSessionQueryResolver } from '../middleware/session-resolver';
 import { getSessionFromBody } from '../middleware/get-session-from-body';
 
-export function createContactsRouter(): Hono<{ Variables: { session: any } }> {
-  const router = new Hono<{ Variables: { session: any } }>();
+export function createContactsRouter(): Hono<{ Variables: { session: any; body: any } }> {
+  const router = new Hono<{ Variables: { session: any; body: any } }>();
 
   router.use('*', apiKeyAuthMiddleware());
 
@@ -94,7 +94,13 @@ export function createContactsRouter(): Hono<{ Variables: { session: any } }> {
     policiesMiddleware(CanSession(Action.Send, FromQuery('session'))),
     getSessionFromBody(),
     async (c) => {
-      return c.json({ statusCode: 500, message: 'Block not available in NOWEB engine' }, 500);
+      const session = c.get('session');
+      const body = c.get('body');
+      const result = await (session as any).blockContact({
+        session: body.session,
+        contactId: body.contactId,
+      });
+      return c.json(result);
     }
   );
 
@@ -102,7 +108,13 @@ export function createContactsRouter(): Hono<{ Variables: { session: any } }> {
     policiesMiddleware(CanSession(Action.Send, FromQuery('session'))),
     getSessionFromBody(),
     async (c) => {
-      return c.json({ statusCode: 500, message: 'Unblock not available in NOWEB engine' }, 500);
+      const session = c.get('session');
+      const body = c.get('body');
+      const result = await (session as any).unblockContact({
+        session: body.session,
+        contactId: body.contactId,
+      });
+      return c.json(result);
     }
   );
 
