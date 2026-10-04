@@ -629,6 +629,20 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     await this.store.init();
   }
 
+  /**
+   * Close the store and drop the reference. A closed store keeps its storage
+   * handle, and for Postgres that handle is a knex instance whose pool is
+   * destroyed by close(); reusing it later fails every query with
+   * "Unable to acquire a connection" (surfaced as a 500). Clearing the
+   * reference here makes the next buildClient() rebuild the store through
+   * ensureStore() instead of reusing the closed one.
+   */
+  private async closeStore(): Promise<void> {
+    const store = this.store;
+    this.store = null as any;
+    await store?.close();
+  }
+
   connectStore() {
     this.logger.debug(`Connecting store...`);
     this.logger.debug(`Binding store to socket...`);
@@ -661,7 +675,14 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     if (this.isDebugEnabled()) {
       this.listenEngineEventsInDebugMode();
     }
-    this.connectStore();
+    // A concurrent stop() closes and drops the store while the socket is
+    // still being built. Rebuild it when it was dropped, and skip the bind
+    // entirely when the session is no longer wanted, so connectStore() never
+    // sees a null store.
+    if (this.shouldRestart) {
+      await this.ensureStore();
+      this.connectStore();
+    }
     this.listenConnectionEvents();
     this.subscribeEngineEvents2();
     this.listenContactsUpdatePictureProfile();
@@ -812,7 +833,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
     this.mediaManager?.close();
     await this.end();
-    await this.store?.close();
+    await this.closeStore();
     this.authNOWEBStore?.close().catch((err: any) => {
       this.logger.error('Failed to close NOWEB auth store');
       this.logger.error(err, err.stack);
@@ -833,7 +854,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     }
 
     await this.end();
-    await this.store?.close();
+    await this.closeStore();
   }
 
   private async clearAuthAndRestart() {
@@ -850,8 +871,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     this.autoRestartJob.stop();
 
     await this.end();
-    await this.store?.close();
-    this.store = null as any;
+    await this.closeStore();
 
     // Delete auth files (creds.json, pre-keys, etc.) from the session directory
     try {
@@ -1706,6 +1726,20 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
         caption: request.caption,
         mentions: request.mentions?.map(toJID),
       };
+      // fileToBuffer returns raw bytes for { data } inputs, which drops the
+      // declared mimetype and filename; without them Baileys labels every
+      // document application/pdf with the name "file". Carry them through
+      // from the object input when the caller supplied them.
+      if (request.file && typeof request.file === 'object') {
+        const mimetype = request.file.mimetype ?? request.file.mimeType;
+        if (typeof mimetype === 'string' && mimetype) {
+          message.mimetype = mimetype;
+        }
+        const filename = request.file.filename ?? request.file.fileName;
+        if (typeof filename === 'string' && filename) {
+          message.fileName = filename;
+        }
+      }
       const options: any = await this.getMessageOptions(request);
       const result = await this.sock.sendMessage(chatId, message, options);
       this.policyRecord(chatId, false);

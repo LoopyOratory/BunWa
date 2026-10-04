@@ -93,7 +93,14 @@ export function createGroupsRouter(): Hono<{ Variables: { session: any; body: an
     policiesMiddleware(CanSession(Action.Send, FromParam('session'))),
     workingSessionResolver(),
     async (c) => {
-      return c.json({ statusCode: 500, message: 'Delete group not available in NOWEB engine' }, 500);
+      const session = c.get('session');
+      const id = c.req.param('id');
+      // The engine primitive leaves the group and clears it from the local
+      // store; engines without it raise NotImplementedByEngineError, which the
+      // shared error handler maps to 422 with the engine's reason. The route
+      // used to answer a hardcoded 500 that named nothing.
+      const result = await (session as any).deleteGroup(id);
+      return c.json(result);
     }
   );
 

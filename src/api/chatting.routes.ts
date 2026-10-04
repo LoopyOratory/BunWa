@@ -524,14 +524,30 @@ export function createBulkRouter(): Hono<{ Variables: { session: any; body: any 
   const batches = new Map<string, BulkMessageService>();
 
   function getBulk(session: any): BulkMessageService {
-    const key = (session as any).sessionId ?? 'default';
+    // Sessions expose their name as `name`; the old `sessionId` lookup always
+    // fell back to 'default', so every session shared one batch map and every
+    // batch reported sessionId 'default'.
+    const key = (session as any).name ?? 'default';
     if (!batches.has(key)) {
       batches.set(key, new BulkMessageService(
-        (chatId: string, text: string) => (session as any).sendTextMessage(chatId, text),
-        (chatId: string, buffer: Buffer, caption?: string) => (session as any).sendImageMessage(chatId, buffer, caption),
-        (chatId: string, buffer: Buffer, caption?: string) => (session as any).sendVideoMessage(chatId, buffer, caption),
-        (chatId: string, buffer: Buffer) => (session as any).sendVoiceMessage(chatId, buffer),
-        (chatId: string, buffer: Buffer, filename?: string) => (session as any).sendDocumentMessage(chatId, buffer, filename),
+        // The engine sends through its request-shaped methods (sendText,
+        // sendImage, ...). The old delegates called sendTextMessage /
+        // sendImageMessage / ... which no session class defines, so every
+        // recipient failed with "is not a function" while the batch reported
+        // 201 created.
+        (chatId: string, text: string) => (session as any).sendText({ session: key, chatId, text }),
+        (chatId: string, buffer: Buffer, caption?: string) =>
+          (session as any).sendImage({ session: key, chatId, file: buffer, caption }),
+        (chatId: string, buffer: Buffer, caption?: string) =>
+          (session as any).sendVideo({ session: key, chatId, file: buffer, caption }),
+        (chatId: string, buffer: Buffer) =>
+          (session as any).sendVoice({ session: key, chatId, file: buffer }),
+        (chatId: string, buffer: Buffer, filename?: string, mimetype?: string) =>
+          (session as any).sendFile({
+            session: key,
+            chatId,
+            file: { mimetype: mimetype || 'application/octet-stream', filename, data: buffer },
+          }),
       ));
     }
     return batches.get(key)!;
@@ -546,7 +562,7 @@ export function createBulkRouter(): Hono<{ Variables: { session: any; body: any 
       if (!Array.isArray(body.recipients)) return c.json({ error: 'recipients[] required' }, 400);
       const bulk = getBulk(session);
       const batch = bulk.createBatch(
-        (session as any).sessionId ?? 'default',
+        (session as any).name ?? 'default',
         body.recipients,
         body.content ?? {},
         { delayMs: body.delayMs, randomizeDelay: body.randomizeDelay, stopOnError: body.stopOnError, template: body.template },

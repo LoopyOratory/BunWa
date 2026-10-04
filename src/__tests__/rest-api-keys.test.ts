@@ -117,15 +117,15 @@ describe('per-session REST API keys', () => {
     });
 
     it('allows a permitted action on its own session through a body-derived route', async () => {
-      // Policy passes for send on alpha; the handler then fails with 404
-      // because the session is not running. A 403 would mean the body-derived
-      // session ownership check rejected it.
+      // Policy passes for send on alpha; the shared body-session guard then
+      // answers 422 because the session exists but is not connected. A 403
+      // would mean the body-derived session ownership check rejected it.
       const send = await api('/api/sendText', {
         method: 'POST',
         key: scopedKey,
         body: { session: 'alpha', chatId: '15551234567@c.us', text: 'hi' },
       });
-      expect(send.status).toBe(404);
+      expect(send.status).toBe(422);
     });
 
     it('cannot mint or rewrite key material through the session config endpoint', async () => {

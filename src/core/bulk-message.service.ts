@@ -5,6 +5,7 @@
 
 import { randomUUID } from 'crypto';
 import pino from 'pino';
+import { safeFetch } from '../common/security/ssrf-guard';
 
 export enum BatchStatus {
   PENDING = 'pending',
@@ -56,6 +57,27 @@ function renderTemplate(template: string, variables: Record<string, string>): st
   return result;
 }
 
+/**
+ * Turn a bulk content media field into raw bytes. Accepts a bare base64 string
+ * (or data URL), or an http(s) URL fetched through the SSRF guard. Returns
+ * undefined when the field carries no bytes.
+ */
+async function materializeMedia(media?: { base64?: string; url?: string }): Promise<Buffer | undefined> {
+  if (!media) return undefined;
+  if (media.base64) {
+    const base64 = media.base64.includes(',') ? media.base64.split(',')[1] : media.base64;
+    return Buffer.from(base64, 'base64');
+  }
+  if (media.url) {
+    const res: any = await safeFetch(media.url);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch bulk media from ${media.url} (${res.status})`);
+    }
+    return Buffer.from(await res.arrayBuffer());
+  }
+  return undefined;
+}
+
 export class BulkMessageService {
   private batches = new Map<string, BulkMessageBatch>();
   private processing = new Map<string, boolean>();
@@ -66,7 +88,7 @@ export class BulkMessageService {
     private sendImage?: (chatId: string, buffer: Buffer, caption?: string) => Promise<string>,
     private sendVideo?: (chatId: string, buffer: Buffer, caption?: string) => Promise<string>,
     private sendAudio?: (chatId: string, buffer: Buffer) => Promise<string>,
-    private sendDocument?: (chatId: string, buffer: Buffer, filename?: string) => Promise<string>,
+    private sendDocument?: (chatId: string, buffer: Buffer, filename?: string, mimetype?: string) => Promise<string>,
   ) {}
 
   /** Create a new batch */
@@ -115,15 +137,35 @@ export class BulkMessageService {
 
       const recipient = batch.recipients[i];
       try {
-        let text = batch.content.text || '';
+        const content = batch.content;
+        const image = await materializeMedia(content.image);
+        const video = image ? undefined : await materializeMedia(content.video);
+        const audio = image || video ? undefined : await materializeMedia(content.audio);
+        const document = image || video || audio ? undefined : await materializeMedia(content.document);
 
-        // Template variable substitution
-        if (batch.template && recipient.variables) {
-          text = renderTemplate(batch.template, recipient.variables);
-        }
+        if (image) {
+          if (!this.sendImage) throw new Error('Image content is not supported by this bulk sender');
+          await this.sendImage(recipient.chatId, image, content.caption);
+        } else if (video) {
+          if (!this.sendVideo) throw new Error('Video content is not supported by this bulk sender');
+          await this.sendVideo(recipient.chatId, video, content.caption);
+        } else if (audio) {
+          if (!this.sendAudio) throw new Error('Audio content is not supported by this bulk sender');
+          await this.sendAudio(recipient.chatId, audio);
+        } else if (document) {
+          if (!this.sendDocument) throw new Error('Document content is not supported by this bulk sender');
+          await this.sendDocument(recipient.chatId, document, content.document?.filename, content.document?.mimetype);
+        } else {
+          let text = content.text || '';
 
-        if (text) {
-          await this.sendText(recipient.chatId, text);
+          // Template variable substitution
+          if (batch.template && recipient.variables) {
+            text = renderTemplate(batch.template, recipient.variables);
+          }
+
+          if (text) {
+            await this.sendText(recipient.chatId, text);
+          }
         }
 
         batch.sent++;

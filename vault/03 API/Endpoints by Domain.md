@@ -2,7 +2,7 @@
 type: note
 section: api
 tags: [bunwa, api, reference]
-updated: 2026-09-14
+updated: 2026-10-04
 source: src/api/*.routes.ts
 status: shipped
 ---
@@ -53,7 +53,7 @@ document (which lags: [[API Docs]]). `⚠️` = stub or permanently-failing rout
 | PATCH | `/api/sessions/:session/config` | merge-update config (re-syncs webhooks) |
 | GET | `/api/:session/auth/qr` | QR as base64 PNG; `?phoneNumber=` also returns a pairing code |
 | POST | `/api/:session/auth/request-code` | request a pairing code explicitly |
-| GET | `/api/:session/screenshot` | base64 PNG of the session view (WEBJS) |
+| GET | `/api/:session/screenshot` | WEBJS only: 422 naming the engine on other engines while WORKING; in QR state NOWEB returns the QR image |
 | GET | `/api/mcp/tools` | full MCP tool registry + `byCategory` ([[MCP Server]]) |
 | GET | `/api/sessions/:session/mcp` | MCP policy for a session |
 | PUT | `/api/sessions/:session/mcp` | set `enabled`/`allowedTools`/`deniedTools`/`destructiveOps` |
@@ -61,15 +61,15 @@ document (which lags: [[API Docs]]). `⚠️` = stub or permanently-failing rout
 
 ## Messaging
 
-Session arrives **in the body** (`{ session, chatId, text, … }`) for the classic WAHA paths.
+Session arrives **in the body** (`{ session, chatId, text, … }`) for the classic WAHA paths. The body-addressed routes resolve a WORKING session: 404 for an unknown name, 422 when the session is not connected.
 
 | Method | Path | Notes |
 |---|---|---|
 | POST | `/api/sendText` | |
-| POST | `/api/sendImage` · `/api/sendFile` · `/api/sendVoice` · `/api/sendVideo` | `convert` honoured for voice (ffmpeg) |
+| POST | `/api/sendImage` · `/api/sendFile` · `/api/sendVoice` · `/api/sendVideo` | `convert` honoured for voice (ffmpeg); `sendFile` keeps the declared `mimetype`/`filename` |
 | POST | `/api/sendLocation` | sending works; response `location` field is always null (`waproto` stub) |
 | POST | `/api/sendPoll` · `/api/sendPollVote` | |
-| POST | `/api/sendContactVcard` | sending works; response `vCards` field is always null (same stub) |
+| POST | `/api/sendContactVcard` | outgoing vCard uses `fullName`/`phoneNumber`/`organization`; response `vCards` field is always null (waproto stub) |
 | POST | `/api/sendLinkPreview` · `/api/send/link-custom-preview` | |
 | POST | `/api/sendButtons` · `/api/send/buttons/reply` · `/api/sendList` | interactive messages |
 | POST | `/api/sendSticker` | webp/png through the media pipeline with `sendMediaAsSticker` |
@@ -79,7 +79,7 @@ Session arrives **in the body** (`{ session, chatId, text, … }`) for the class
 | GET | `/api/checkNumberStatus` | LID-aware |
 | GET | `/api/messages` | fetch messages for a chat |
 | GET | `/api/:session/new-message-id` | generate an id before sending |
-| POST | `/api/:session/messages/send-bulk` | 201 + `batchId` ([[Templates and Bulk Send]]) |
+| POST | `/api/:session/messages/send-bulk` | 201 + `batchId`; text and base64/url media dispatch to the engine; batches are in-memory ([[Templates and Bulk Send]]) |
 | GET | `/api/:session/messages/batch/:batchId` | batch status |
 | POST | `/api/:session/messages/batch/:batchId/cancel` | cancel a running batch |
 
@@ -97,7 +97,7 @@ Session arrives **in the body** (`{ session, chatId, text, … }`) for the class
 |---|---|---|
 | GET | `/api/:session/chats` | list chats |
 | GET | `/api/:session/chats/overview` · POST same path | overview (session must be running) |
-| GET·DELETE | `/api/:session/chats/:chatId` | |
+| GET·DELETE | `/api/:session/chats/:chatId` | ⚠️ GET returns `{id}` only; DELETE is a no-op stub returning `{result:true}` |
 | GET | `/api/:session/chats/:chatId/messages` | `limit`/`offset`, optional media download |
 | GET·DELETE | `/api/:session/chats/:chatId/messages/:messageId` | delete clears for everyone |
 | PUT | `/api/:session/chats/:chatId/messages/:messageId` | edit message |
@@ -113,21 +113,21 @@ Session arrives **in the body** (`{ session, chatId, text, … }`) for the class
 | POST | `/api/contacts/block` · `/contacts/unblock` | ⚠️ always 500 "not available in NOWEB" |
 | GET | `/api/:session/groups` · `/groups/count` · `/groups/:id` · `/groups/join-info` | |
 | POST | `/api/:session/groups` | create |
-| DELETE | `/api/:session/groups/:id` | ⚠️ always 500 "not available in NOWEB" (though the engine has `deleteGroup`) |
+| DELETE | `/api/:session/groups/:id` | delegates to `engine.deleteGroup` (leaves the group); 422 when an engine lacks it |
 | POST | `/api/:session/groups/join` · `/groups/:id/leave` · `/groups/refresh` | |
-| GET·PUT·DELETE | `/api/:session/groups/:id/picture` | |
+| GET·PUT·DELETE | `/api/:session/groups/:id/picture` | ⚠️ GET is a stub returning `{url: null}`; PUT/DELETE reach the engine |
 | PUT | `/api/:session/groups/:id/subject` · `/description` | |
 | GET·PUT | `/api/:session/groups/:id/settings/security/info-admin-only` · `…/messages-admin-only` | group security settings |
 | GET | `/api/:session/groups/:id/invite-code` · POST `…/invite-code/revoke` | |
 | GET | `/api/:session/groups/:id/participants` · `/participants/v2` | |
 | POST | `/api/:session/groups/:id/participants/add` · `/remove` | |
 | POST | `/api/:session/groups/:id/admin/promote` · `/demote` | |
-| GET | `/api/:session/channels` · `/:id` · `/:id/messages/preview` | |
+| GET | `/api/:session/channels` · `/:id` · `/:id/messages/preview` | listing is 422 on NOWEB (engine does not implement it); preview is Plus-gated |
 | POST | `/api/:session/channels` | create |
 | DELETE | `/api/:session/channels/:id` | |
 | POST | `/api/:session/channels/:id/follow` · `/unfollow` · `/mute` · `/unmute` | |
 | POST | `/api/:session/channels/search/by-view` · `/by-text` | `w:mex` directory search |
-| GET | `/api/:session/channels/search/views` · `/countries` · `/categories` | directory facets |
+| GET | `/api/:session/channels/search/views` · `/countries` · `/categories` | ⚠️ hardcoded `[]` stubs |
 | GET | `/api/:session/labels` · `/:labelId/chats` | |
 | POST | `/api/:session/labels` | create (colour mapping is faked) |
 | PUT | `/api/:session/labels/:labelId` | |

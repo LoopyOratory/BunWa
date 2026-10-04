@@ -37,6 +37,20 @@ Both fixes are pinned by `src/__tests__/conformance/conformance.shared.ts` (the
 "label associations: deleteOne removes its own row and is idempotent" case), which runs against
 both drivers.
 
+## 0.2 Resolved 2026-10-04: endpoint drill on NOWEB (`vivita`)
+
+Live drill against the running NOWEB engine, plus fixes for what it found.
+
+| Item | Detail |
+|---|---|
+| NOWEB store was reused after close | `stop()` and `failed()` closed the store but kept the reference, so the next `buildClient()` reused a storage handle whose Postgres knex pool was destroyed: every query failed with "Unable to acquire a connection" and surfaced as a 500 (reproduced live on `POST /api/sendText` after the session dropped). A `closeStore()` helper now closes and drops the reference, used by `stop()`, `failed()` and `clearAuthAndRestart()`; `buildClient()` also re-ensures the store before binding when a concurrent stop dropped it. Pinned by `src/__tests__/noweb-store-lifecycle.test.ts`. |
+| Sends on a disconnected session answered 500 | The body-session middleware (`getSessionFromBody`) resolved any session without the working guard. It now uses `getWorkingSession`, so sends and block/unblock answer 404 for an unknown name and 422 naming the status when the session exists but is not WORKING. Pinned in `src/__tests__/session-guard.test.ts`. |
+| Screenshot flattened the engine's 422 into a 400 | The route caught every error and answered 400. Client-facing errors now rethrow, so a non-chrome engine answers 422 "Can not get screenshot for non chrome based engine." while WORKING; in QR state the engine returns the QR image. |
+| `DELETE /api/:session/groups/:id` was a hardcoded 500 | Now delegates to `engine.deleteGroup` (leave plus local cleanup); engines without the primitive answer 422 through the shared handler. |
+| Bulk send delivered nothing | The route wired `BulkMessageService` to `session.sendTextMessage` / `sendImageMessage` / ... methods that no session class defines, so every recipient failed while the batch reported 201. Delegates now call the request-shaped engine methods, the batch is keyed and labelled by `session.name` instead of the always-missing `sessionId`, and image/video/audio/document content (base64 or URL) dispatches to the matching sender. Pinned by `src/__tests__/bulk-and-vcard.test.ts`. |
+| `sendFile` dropped declared metadata | `{ mimetype, filename, data }` inputs were reduced to raw bytes, so every document went out as `application/pdf` named "file". The declared `mimetype`/`filename` are carried onto the Baileys message. |
+| vCard fields were empty | `toVcardV3` read `name`/`phone`, but the API documents `fullName`/`phoneNumber`; the sent vCard had empty FN and TEL. Both spellings are accepted and `organization` is emitted as ORG. |
+
 ## 1. Routes that can never succeed
 
 These are mounted and documented, but always fail:
@@ -44,9 +58,12 @@ These are mounted and documented, but always fail:
 | Endpoint | Response | Cause |
 |---|---|---|
 | `POST /api/contacts/block` · `/unblock` | 500 "not available in NOWEB engine" | handler is a stub, even though the engine has the primitive |
-| `DELETE /api/:session/groups/:id` | 500 "not available in NOWEB engine" | stub, though `deleteGroup` exists on the engine |
 | `POST /api/:session/chats/:chatId/mute` · `/unmute` | 400 | guards on `typeof session.muteChat === 'function'`; **no engine defines `muteChat`** — so channel mute works, chat mute never does |
 | `GET /api/contacts/about` | `{about: ''}` | stub |
+| `GET /api/:session/chats/:chatId` | `{id}` only | stub, no chat data is read |
+| `DELETE /api/:session/chats/:chatId` | `{result: true}` | no-op stub, nothing is deleted |
+| `GET /api/:session/groups/:id/picture` | `{url: null}` | stub, no group picture is read |
+| `GET /api/:session/channels/search/views` · `/countries` · `/categories` | `[]` | hardcoded empty-array stubs |
 | `POST /api/:session/events` | fake `{id, timestamp}` | stub |
 | `POST /api/:session/media/convert/video` | placeholder string `'base64-video-data'` | stub |
 | `GET /api/:session/channels/:id/messages/preview` | `AvailableInPlusVersion` | Argo decoder missing |
@@ -145,6 +162,20 @@ assumptions:
 | **Message payload shape** | Matches the vault: `id` (`true_`/`false_` prefix encodes `fromMe`), `timestamp`, `from`, `fromMe`, `source` (`app` inbound, `api` for sends through BunWa), `body`, `hasMedia`, `ack`/`ackName` (`DEVICE`, `SERVER`), `replyTo`, `reactions`, `_data` (raw Baileys) |
 | **`location` / `vCards` always null live** | Confirms the `waproto` stub ([[Messaging]]); the message itself sends fine |
 | **`_status` in the session index can be stale** | `SessionGet` reported `status: "WORKING"` while `config._status: "STOPPED"`. The index copy is written on some transitions only, so it must not be used as a status source; read the live status |
+
+## Live endpoint drill (2026-10-04, NOWEB `vivita`)
+
+Verifier passes matched the recorded baseline before the incident: read pass `50 works, 3 needs a
+parameter, 13 not applicable, 4 error` (the 4 are client-side 15 s timeouts on dummy ids), write
+pass exercised templates, webhook create/delete, policy and `sendText` with the safe chat.
+
+| Observation | Detail |
+|---|---|
+| Session unlinked mid-drill | At 17:16 UTC, while a `POST /api/groups` (throwaway group, safe number as the only participant) was waiting, WhatsApp closed the stream with `conflict/device_removed` (401). The app cleared auth as designed; `vivita` now needs a QR re-scan by the account owner. No logout/stop/delete call was made. The group create answered 500 after a 30 s Baileys "Invalid group metadata response: missing `<group>` node", and the local group store contains no throwaway group. If a "BunWa Drill Throwaway" group appears after re-pairing, leave it: it may have been created server-side before the metadata response was lost. |
+| Not exercised live | Group mutations (get, subject, description, participants, invite code, security settings, picture) and channel follow/unfollow were blocked by the unlink. `DELETE /groups/:id` is wired but was not re-tested live for the same reason. |
+| Webhook delivery | Verified with a local sink and `SSRF_ALLOWED_HOSTS=127.0.0.1` for the drill only: payload, `X-WAHA-*` headers, custom header and the HMAC-SHA256 signature all arrived. Triggered with `POST /webhooks/:id/test` because a send was impossible; after delete, deliveries stopped. Without the variable the same target is refused 422 "Blocked internal address: 127.0.0.1". |
+| `GET /api/infra/config` reports the defaults, not the running overrides | The live instance runs Postgres and `.dev-data/media`, but the endpoint returned `type: sqlite` and `localPath: ./data/media`. Not fixed in this round. |
+| Status audience | Status text/image/voice/video were sent with `contacts: [safe number]` only and deleted afterwards; the safe number plus the account itself were the only viewers. |
 
 ## Related
 
