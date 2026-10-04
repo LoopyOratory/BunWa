@@ -443,7 +443,18 @@ export const api = {
       body: JSON.stringify({ session, chatId, text, reply_to: replyTo }),
     }),
   checkNumberStatus: (session: string, phone: string) =>
-    request<{ exists: boolean; isBusiness: boolean; canReceiveMessage: boolean; number: string }>(
+    request<{
+      exists: boolean | null
+      status?: "resolved" | "not_resolvable" | "could_not_check"
+      reason?: string
+      isBusiness: boolean
+      canReceiveMessage: boolean
+      number: string
+      username?: string
+      usernameState?: string | null
+      lid?: string | null
+      pushName?: string | null
+    }>(
       `/api/checkNumberStatus?session=${encodeURIComponent(session)}&phone=${encodeURIComponent(phone)}`,
     ),
 

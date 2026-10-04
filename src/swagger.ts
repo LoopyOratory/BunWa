@@ -1320,14 +1320,16 @@ export function buildOpenApiSpec(): any {
       '/api/checkNumberStatus': {
         get: {
           tags: ['📤 Chatting'],
-          summary: 'Check if number is on WhatsApp',
+          summary: 'Check whether a phone number or username resolves on WhatsApp',
+          description:
+            'Returns status resolved, not_resolvable or could_not_check. not_resolvable means WhatsApp answered that the target is not registered. could_not_check means no usable answer (engine unsupported, query failed or empty answer) and is not proof of absence. A resolved username returns the LID (number and lid), the username state and any locally known display name; the phone number is not revealed.',
           operationId: 'checkNumberStatus',
           security: [{ apiKey: [] }],
           parameters: [
             { name: 'session', in: 'query', required: true, schema: { type: 'string' } },
             { name: 'phone', in: 'query', required: true, schema: { type: 'string' } },
           ],
-          responses: { '200': { description: 'Number status' } },
+          responses: { '200': { description: 'Check result with status, exists and the resolved address' } },
         },
       },
       '/api/{session}/new-message-id': {
@@ -1584,14 +1586,16 @@ export function buildOpenApiSpec(): any {
       '/api/contacts/check-exists': {
         get: {
           tags: ['👤 Contacts'],
-          summary: 'Check if number exists on WhatsApp',
+          summary: 'Check whether a phone number or username resolves on WhatsApp',
+          description:
+            'Returns status resolved, not_resolvable or could_not_check. not_resolvable means WhatsApp answered that the target is not registered. could_not_check means no usable answer (engine unsupported, query failed or empty answer) and is not proof of absence. A resolved username returns the LID, never the phone number.',
           operationId: 'checkContactExists',
           security: [{ apiKey: [] }],
           parameters: [
             { name: 'session', in: 'query', required: true, schema: { type: 'string' } },
             { name: 'phone', in: 'query', required: true, schema: { type: 'string' } },
           ],
-          responses: { '200': { description: 'Contact existence status' } },
+          responses: { '200': { description: 'Check result with status, exists and the resolved address' } },
         },
       },
       '/api/contacts/about': {

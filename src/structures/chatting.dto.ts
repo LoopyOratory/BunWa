@@ -156,11 +156,41 @@ export class SendListRequest {
   sections!: any[];
 }
 
+/**
+ * How to read a checkNumberStatus / check-exists answer:
+ *   - resolved: WhatsApp returned an identity for the target and its reachability
+ *   - not_resolvable: WhatsApp answered that the target is not registered; this
+ *     is a negative answer from the protocol, not an absence of one
+ *   - could_not_check: no usable answer (the engine cannot look it up, the query
+ *     failed, or WhatsApp returned an empty answer). This is NOT proof that the
+ *     target is absent, so callers must not present it as one.
+ */
+export type WaCheckStatus = 'resolved' | 'not_resolvable' | 'could_not_check';
+
 export class WANumberExistResult {
-  exists!: boolean;
+  /** true when resolved, false when not_resolvable, null when could_not_check. */
+  exists!: boolean | null;
   isBusiness!: boolean;
   canReceiveMessage!: boolean;
+  /**
+   * The resolved address when one exists. For a phone check that is the
+   * `<phone>@c.us` form; for a username it is the user's `<lid>@lid` privacy id,
+   * because a username resolves to a LID and the phone number is not revealed.
+   * When nothing resolved this carries the queried target.
+   */
   number!: string;
+  /** Explicit outcome; see WaCheckStatus. Absent only on older-shaped answers. */
+  status?: WaCheckStatus;
+  /** Why the target could not be resolved, when status is not 'resolved'. */
+  reason?: string;
+  /** Username checks only: the handle that was looked up. */
+  username?: string;
+  /** Username checks only: the username state WhatsApp reports, for example 'active'. */
+  usernameState?: string | null;
+  /** Username checks only: the resolved privacy id (LID) address. */
+  lid?: string | null;
+  /** Username checks only: the display name known locally for the LID, when any. */
+  pushName?: string | null;
 }
 
 export class MessageDestination {

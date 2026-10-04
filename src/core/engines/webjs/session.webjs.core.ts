@@ -603,11 +603,14 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     }
     const phone = request.phone;
     const numberId = await this.client!.getNumberId(phone);
+    const exists = numberId !== null;
     return {
-      exists: numberId !== null,
+      exists,
       isBusiness: false,
       canReceiveMessage: true,
       number: phone,
+      status: exists ? 'resolved' : 'not_resolvable',
+      ...(exists ? {} : { reason: 'WhatsApp answered that this number is not registered.' }),
     };
   }
 

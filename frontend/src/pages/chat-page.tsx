@@ -190,7 +190,11 @@ function NewChatDialog({ open, onOpenChange, session, onOpenChat }: {
         onOpenChat(res.number.includes("@") ? res.number : `${res.number}@c.us`)
         onOpenChange(false)
         setPhone("")
-      } else setError("That number or username is not registered on WhatsApp.")
+      } else if (res.exists === false) {
+        setError("That number or username is not registered on WhatsApp.")
+      } else {
+        setError(res.reason ? `Could not check the number or username: ${res.reason}` : "Could not check the number or username. Try again.")
+      }
     } catch {
       setError("Could not check the number or username. Try again.")
       toast.error("Failed to check number")

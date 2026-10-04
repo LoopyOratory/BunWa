@@ -12,7 +12,11 @@ export function contactTools(manager: SessionManager): ToolDescriptor[] {
     {
       name: 'ContactCheckNumber',
       description:
-        'Check whether a phone number or WhatsApp username is registered on WhatsApp. Returns exists flag and the WhatsApp JID if found.',
+        'Check whether a phone number or WhatsApp username resolves on WhatsApp. ' +
+        'Returns status resolved, not_resolvable or could_not_check, plus exists (true, false or null). ' +
+        'not_resolvable means WhatsApp answered that the target is not registered. ' +
+        'could_not_check means no usable answer (engine unsupported, query failed or empty answer) and is not proof of absence. ' +
+        'A resolved username returns the LID and any locally known display name, never a phone number.',
       tier: 'read',
       category: 'contact',
       sessionScoped: true,
@@ -25,8 +29,13 @@ export function contactTools(manager: SessionManager): ToolDescriptor[] {
         const result = await (session as any).checkNumberStatus({ phone: input.phone });
         return {
           phone: input.phone,
-          exists: result?.exists ?? false,
+          status: result?.status ?? 'could_not_check',
+          exists: result?.exists ?? null,
           whatsappId: result?.number ?? null,
+          username: result?.username ?? null,
+          lid: result?.lid ?? null,
+          pushName: result?.pushName ?? null,
+          reason: result?.reason ?? null,
         };
       },
     },

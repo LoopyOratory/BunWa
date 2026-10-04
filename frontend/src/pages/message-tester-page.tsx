@@ -154,7 +154,13 @@ export function MessageTesterPage() {
     if (!session) { toast.error("No session selected"); return }
     try {
       const res = await api.checkNumberStatus(session, chatId)
-      toast[res.exists ? "success" : "info"](res.exists ? `${chatId} is on WhatsApp` : `${chatId} is not on WhatsApp`)
+      if (res.exists === true) {
+        toast.success(`${chatId} resolved to ${res.number}`)
+      } else if (res.exists === false) {
+        toast.info(`${chatId} is not registered on WhatsApp`)
+      } else {
+        toast.info(`Could not check ${chatId}${res.reason ? `: ${res.reason}` : ""}`)
+      }
     } catch { toast.error("Check failed") }
   }
 

@@ -32,6 +32,7 @@ import makeWASocket, {
   USyncQuery,
   USyncUser,
 } from '@whiskeysockets/baileys';
+import type { BinaryNode } from '@whiskeysockets/baileys';
 import { WACallEvent } from '@whiskeysockets/baileys/lib/Types/Call';
 import { BaileysEventMap } from '@whiskeysockets/baileys/lib/Types/Events';
 import { GroupMetadata } from '@whiskeysockets/baileys/lib/Types/GroupMetadata';
@@ -82,7 +83,7 @@ import { QR } from '../../QR';
 import { AckToStatus, StatusToAck } from '../../utils/acks';
 import { pairs } from '../../../utils/pairs';
 import { parseMessageIdSerialized } from '../../utils/ids';
-import { isJidNewsletter, toCusFormat, toJID, JidFilter, jidsFromKey } from '../../utils/jids';
+import { isJidNewsletter, normalizeJid, toCusFormat, toJID, JidFilter, jidsFromKey } from '../../utils/jids';
 import { DistinctAck, DistinctMessages } from '../../utils/reactive';
 import { flipObject, splitAt } from '../../../helpers';
 import { PairingCodeResponse } from '../../../structures/auth.dto';
@@ -272,6 +273,143 @@ const PresenceStatuses = {
   paused: WAHAPresenceStatus.PAUSED,
 };
 const ToEnginePresenceStatus = flipObject(PresenceStatuses);
+
+/** A username handle WhatsApp resolved to a privacy id (LID). */
+interface ResolvedUsername {
+  status: 'resolved';
+  username: string;
+  lid: string;
+  usernameState: string | null;
+}
+
+/**
+ * The three outcomes of a username lookup. There is deliberately no boolean
+ * here: a failed or empty lookup is not a negative answer, so it cannot be
+ * collapsed into "not registered".
+ */
+type UsernameLookupResult =
+  | ResolvedUsername
+  | { status: 'not_resolvable'; username: string }
+  | { status: 'could_not_check'; username: string; reason: string };
+
+/** Reads a child node by tag from a BinaryNode whose content is a node list. */
+function childBinaryNode(node: BinaryNode | undefined, tag: string): BinaryNode | undefined {
+  if (!Array.isArray(node?.content)) {
+    return undefined;
+  }
+  return (node.content as BinaryNode[]).find((child) => child?.tag === tag);
+}
+
+/** Decodes node text, which the binary decoder may hand over as bytes or a string. */
+function binaryNodeText(node: BinaryNode | undefined): string | null {
+  const content = node?.content;
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (content instanceof Uint8Array) {
+    return Buffer.from(content).toString('utf8');
+  }
+  return null;
+}
+
+/**
+ * Builds the USync IQ for one username handle. This is the shape Baileys sends
+ * from executeUSyncQuery, assembled from the public USyncQuery parts so the
+ * wire format stays owned by the library. It is sent directly because the
+ * parsed helper Baileys exposes drops the user node of a handle WhatsApp does
+ * not resolve, and only that node separates "not registered" from "no answer".
+ */
+function buildUsernameUsyncIq(query: USyncQuery): BinaryNode {
+  const userNodes: BinaryNode[] = query.users.map((user) => {
+    const attrs: { [key: string]: string } = {};
+    if (!user.phone && user.id) {
+      attrs.jid = user.id;
+    }
+    return {
+      tag: 'user',
+      attrs,
+      content: query.protocols
+        .map((protocol) => protocol.getUserElement(user))
+        .filter((element): element is BinaryNode => element !== null),
+    };
+  });
+  return {
+    tag: 'iq',
+    attrs: { to: 's.whatsapp.net', type: 'get', xmlns: 'usync' },
+    content: [
+      {
+        tag: 'usync',
+        attrs: {
+          context: query.context,
+          mode: query.mode,
+          sid: generateMessageIDV2(),
+          last: 'true',
+          index: '0',
+        },
+        content: [
+          {
+            tag: 'query',
+            attrs: {},
+            content: query.protocols.map((protocol) => protocol.getQueryElement()),
+          },
+          { tag: 'list', attrs: {}, content: userNodes },
+        ],
+      },
+    ],
+  };
+}
+
+/**
+ * Parses the raw USync answer for a username handle. WhatsApp answers with one
+ * user node: a resolved handle carries jid="<lid>@lid", contact type="in" and a
+ * username node with its state; an unregistered handle carries no jid and
+ * contact type="out". Anything else is no usable answer, not an absence.
+ */
+function parseUsernameUsyncAnswer(
+  answer: BinaryNode | undefined,
+  handle: string,
+): UsernameLookupResult {
+  if (answer?.attrs?.type !== 'result') {
+    return {
+      status: 'could_not_check',
+      username: handle,
+      reason: 'WhatsApp did not return a result for the username lookup.',
+    };
+  }
+  const usync = childBinaryNode(answer, 'usync');
+  const list = childBinaryNode(usync, 'list');
+  const users = Array.isArray(list?.content)
+    ? (list.content as BinaryNode[]).filter((node) => node?.tag === 'user')
+    : [];
+  if (users.length === 0) {
+    return {
+      status: 'could_not_check',
+      username: handle,
+      reason: 'WhatsApp returned an empty answer for the username lookup.',
+    };
+  }
+  const user = users[0];
+  const contact = childBinaryNode(user, 'contact');
+  const contactType = contact?.attrs?.type ?? null;
+  const jid = typeof user.attrs?.jid === 'string' && user.attrs.jid ? user.attrs.jid : null;
+  if (contactType === 'in' && jid) {
+    const usernameNode = childBinaryNode(user, 'username');
+    return {
+      status: 'resolved',
+      username: contact?.attrs?.username || binaryNodeText(usernameNode) || handle,
+      lid: normalizeJid(jid),
+      usernameState: usernameNode?.attrs?.state ?? null,
+    };
+  }
+  if (contactType === 'out') {
+    return { status: 'not_resolvable', username: handle };
+  }
+  return {
+    status: 'could_not_check',
+    username: handle,
+    reason: 'WhatsApp answered without an address for the username lookup.',
+  };
+}
 
 export class WhatsappSessionNoWebCore extends WhatsappSession {
   private START_ATTEMPT_DELAY_SECONDS = 2;
@@ -1020,45 +1158,41 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   async checkNumberStatus(
     request: CheckNumberStatusQuery,
   ): Promise<WANumberExistResult> {
-    let target = request.phone;
     if (isUsernameAddress(request.phone)) {
-      const handle = usernameHandle(request.phone).toLowerCase();
-      if (!isValidWhatsAppUsername(handle)) {
-        throw new UnprocessableEntityException(
-          `'${request.phone}' is not a valid WhatsApp username. Usernames are 3 to 35 letters, digits, periods or underscores.`,
-        );
-      }
-      let resolved: string | null = null;
-      try {
-        resolved = await this.resolveUsernameJid(handle);
-      } catch (error) {
-        if (error instanceof UnprocessableEntityException) {
-          throw error;
-        }
-        this.logger.warn({ error, username: handle }, 'Username lookup failed');
-      }
-      if (!resolved) {
-        // A definitive negative answer, the same shape the phone path returns
-        // when onWhatsApp does not know the number.
-        return {
-          exists: false,
-          isBusiness: false,
-          canReceiveMessage: false,
-          number: `@${handle}`,
-        };
-      }
-      target = resolved;
+      return this.checkUsernameStatus(request.phone);
     }
-    let phone = target.split('@')[0];
+    return this.checkPhoneStatus(request.phone);
+  }
+
+  /**
+   * Check a phone number. onWhatsApp answers with one entry per number it knows
+   * and omits the numbers it does not, so an empty array is the protocol's
+   * negative answer; no answer at all is reported as could_not_check instead of
+   * being flattened into "not registered".
+   */
+  private async checkPhoneStatus(value: string): Promise<WANumberExistResult> {
+    let phone = value.split('@')[0];
     phone = phone.replace(/\+/g, '');
     const results = await this.sock.onWhatsApp(phone);
-    const result = results?.[0];
+    if (!results) {
+      return {
+        exists: null,
+        isBusiness: false,
+        canReceiveMessage: false,
+        number: phone,
+        status: 'could_not_check',
+        reason: 'WhatsApp did not answer the number lookup.',
+      };
+    }
+    const result = results[0];
     if (!result || !result.exists) {
       return {
         exists: false,
         isBusiness: false,
         canReceiveMessage: false,
         number: phone,
+        status: 'not_resolvable',
+        reason: 'WhatsApp answered that this number is not registered.',
       };
     }
     return {
@@ -1066,7 +1200,71 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       isBusiness: false,
       canReceiveMessage: true,
       number: toCusFormat(result.jid),
+      status: 'resolved',
     };
+  }
+
+  /**
+   * Check a WhatsApp username handle. A username resolves to the user's LID,
+   * never to a phone number: WhatsApp's answer names the privacy id and whether
+   * the handle is in use, and does not disclose the number behind it. The raw
+   * USync answer is used here because it distinguishes a definite "not
+   * registered" answer (contact type "out") from no answer at all, which must
+   * not be reported as absence.
+   */
+  private async checkUsernameStatus(value: string): Promise<WANumberExistResult> {
+    const handle = usernameHandle(value).toLowerCase();
+    if (!isValidWhatsAppUsername(handle)) {
+      throw new UnprocessableEntityException(
+        `'${value}' is not a valid WhatsApp username. Usernames are 3 to 35 letters, digits, periods or underscores.`,
+      );
+    }
+    const lookup = await this.lookupUsername(handle);
+    if (lookup.status === 'resolved') {
+      const address = toCusFormat(lookup.lid);
+      return {
+        exists: true,
+        isBusiness: false,
+        canReceiveMessage: true,
+        number: address,
+        status: 'resolved',
+        username: lookup.username,
+        usernameState: lookup.usernameState,
+        lid: address,
+        pushName: await this.storedPushName(lookup.lid),
+      };
+    }
+    if (lookup.status === 'not_resolvable') {
+      return {
+        exists: false,
+        isBusiness: false,
+        canReceiveMessage: false,
+        number: `@${handle}`,
+        status: 'not_resolvable',
+        username: handle,
+        reason: 'WhatsApp answered that this username is not registered.',
+      };
+    }
+    return {
+      exists: null,
+      isBusiness: false,
+      canReceiveMessage: false,
+      number: `@${handle}`,
+      status: 'could_not_check',
+      username: handle,
+      reason: lookup.reason,
+    };
+  }
+
+  /** The display name stored locally for a LID, when the session knows one. */
+  private async storedPushName(lid: string): Promise<string | null> {
+    try {
+      const store = this.store as any;
+      const contact = await store?.getContactById?.(lid);
+      return contact?.notify || contact?.name || null;
+    } catch {
+      return null;
+    }
   }
 
   async generateNewMessageId(): Promise<string> {
@@ -1116,46 +1314,61 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   }
 
   /** Username lookups already resolved in this session, keyed by lowercase handle. */
-  private usernameTargets = new Map<string, string>();
+  private usernameLookups = new Map<string, ResolvedUsername>();
 
   /**
-   * Resolve a bare username handle to a WhatsApp JID through the USync
-   * username/contact query (Baileys exposes `executeUSyncQuery` for exactly
-   * this). Returns null when the server answers without an address; throws
-   * when there is no connected socket to ask at all, so the caller can say
-   * that lookup is unavailable instead of reporting "not found".
+   * Ask WhatsApp what a username handle resolves to through the USync username
+   * and contact protocols. The answer is one of three states: resolved
+   * (WhatsApp named a LID), not_resolvable (WhatsApp answered that the handle is
+   * not registered), or could_not_check (no connected socket, the query failed,
+   * or the answer carried no usable identity). A failed or empty lookup is
+   * never reported as absence. Resolved lookups are cached for this session.
    */
-  private async resolveUsernameJid(handle: string): Promise<string | null> {
-    const cached = this.usernameTargets.get(handle);
+  private async lookupUsername(handle: string): Promise<UsernameLookupResult> {
+    const cached = this.usernameLookups.get(handle);
     if (cached) {
       return cached;
     }
     const sock = this.sock as any;
-    if (!sock?.executeUSyncQuery) {
-      throw new UnprocessableEntityException(
-        `WhatsApp username '@${handle}' cannot be looked up because the session is not connected. Send to a numeric JID instead, for example 15551234567@c.us.`,
-      );
+    if (!sock?.query) {
+      return {
+        status: 'could_not_check',
+        username: handle,
+        reason: 'The session is not connected, so the username lookup could not be sent.',
+      };
     }
     const query = new USyncQuery()
       .withContext('interactive')
       .withContactProtocol()
       .withUsernameProtocol();
     query.withUser(new USyncUser().withUsername(handle));
-    const result = await sock.executeUSyncQuery(query);
-    const resolved = result?.list?.find((entry: any) => entry?.id)?.id;
-    if (typeof resolved !== 'string' || !resolved) {
-      return null;
+    let answer: BinaryNode | undefined;
+    try {
+      answer = await sock.query(buildUsernameUsyncIq(query));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn({ error, username: handle }, 'Username lookup failed');
+      return {
+        status: 'could_not_check',
+        username: handle,
+        reason: `The username lookup failed: ${message}.`,
+      };
     }
-    this.usernameTargets.set(handle, resolved);
-    return resolved;
+    const lookup = parseUsernameUsyncAnswer(answer, handle);
+    if (lookup.status === 'resolved') {
+      this.usernameLookups.set(handle, lookup);
+    }
+    return lookup;
   }
 
   /**
    * Turn a send target into the address the protocol can use. A username is
    * resolved through the protocol lookup when possible; any other value is
-   * returned unchanged. When the handle is malformed or cannot be resolved,
-   * this throws a 422 that names the problem and tells the caller a numeric
-   * JID is required, rather than letting a broken JID fail deeper down.
+   * returned unchanged. When the handle is malformed or WhatsApp cannot resolve
+   * it, this throws a 422 that names the problem and tells the caller a numeric
+   * JID is required, rather than letting a broken JID fail deeper down. A
+   * lookup that could not be completed says so; it is not reported as "not
+   * registered".
    */
   public async resolveSendTarget(chatId: string): Promise<string> {
     if (!isUsernameAddress(chatId)) {
@@ -1167,18 +1380,16 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
         `'${chatId}' is not a valid WhatsApp username. Usernames are 3 to 35 letters, digits, periods or underscores.`,
       );
     }
-    let resolved: string | null = null;
-    try {
-      resolved = await this.resolveUsernameJid(handle);
-    } catch (error) {
-      this.logger.warn({ error, username: handle }, 'Username lookup failed');
+    const lookup = await this.lookupUsername(handle);
+    if (lookup.status === 'resolved') {
+      return lookup.lid;
     }
-    if (!resolved) {
-      throw new UnprocessableEntityException(
-        `WhatsApp username '@${handle}' could not be resolved to an address on this account. Send to a numeric JID instead, for example 15551234567@c.us.`,
-      );
-    }
-    return resolved;
+    const detail = lookup.status === 'not_resolvable'
+      ? `WhatsApp answered that username '@${handle}' is not registered.`
+      : `WhatsApp username '@${handle}' could not be checked: ${lookup.reason}`;
+    throw new UnprocessableEntityException(
+      `${detail} Send to a numeric JID instead, for example 15551234567@c.us.`,
+    );
   }
 
   /** Resolve a send target, then run the sending-policy gate on the address. */

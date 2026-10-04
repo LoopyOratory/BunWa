@@ -219,7 +219,7 @@ Routes that accept a username wherever they accept `chatId` (NOWEB engine):
 | `POST /api/reply`, `/forwardMessage`, `/sendSeen`, `/startTyping`, `/stopTyping` | body `chatId` may be a handle |
 | `PUT /api/star` | body `chatId` may be a handle |
 | `POST /api/sessions/:session/templates/:id/send` | body `chatId` may be a handle |
-| `GET /api/checkNumberStatus?session=...&phone=...` and `GET /api/contacts/check-exists?session=...&phone=...` | `phone` may be a handle; `number` in the reply is the resolved address when one is found |
+| `GET /api/checkNumberStatus?session=...&phone=...` and `GET /api/contacts/check-exists?session=...&phone=...` | `phone` may be a handle; the reply carries an explicit `status` (see below) |
 
 The MCP tools listed in the tables above take the same values through the same engine methods,
 including `ContactCheckNumber` and `SessionCheckNumber`.
@@ -235,11 +235,23 @@ curl "http://localhost:3000/api/checkNumberStatus?session=my-session&phone=@ada.
   -H "X-Api-Key: $WAHA_API_KEY"
 ```
 
-When a send target is a malformed handle, or a valid handle that cannot be resolved on this
-account, the send answers `422` with a message that names the problem and points at the numeric JID
-alternative. A handle is never turned into a broken JID such as `handle@c.us`. The two check routes
-instead answer `exists: false` for a valid handle that resolves to nothing, the same shape they
-return for an unknown number.
+When a send target is a malformed handle, or a valid handle WhatsApp does not resolve, the send
+answers `422` with a message that names the problem and points at the numeric JID alternative. A
+handle is never turned into a broken JID such as `handle@c.us`.
+
+The two check routes answer with an explicit `status`, because a lookup has three possible outcomes
+and two of them are not "the user is absent". This distinction was verified against a live paired
+session on the NOWEB engine:
+
+| `status` | `exists` | Meaning |
+| --- | --- | --- |
+| `resolved` | `true` | WhatsApp returned an identity for the handle. A username resolves to the user's LID (`number` and `lid` are the `<lid>@lid` address) and to nothing else: the phone number is not revealed, and `usernameState` (`active`) and any locally known `pushName` are included. The raw USync answer names the LID, a `username` node with `state="active"`, and `contact type="in"`. |
+| `not_resolvable` | `false` | WhatsApp answered that the handle is not registered. The raw USync answer carries no jid and a `contact type="out"` node. This is a negative answer from the protocol. |
+| `could_not_check` | `null` | No usable answer: the engine cannot look it up, the query failed, or WhatsApp returned an empty answer. This is not proof of absence and must not be presented as one. For a username the reply also carries a `reason`. |
+
+The same three-way rule applies to phone checks: an unknown number is `not_resolvable`, while a
+failed or empty `onWhatsApp` answer is `could_not_check`. An MCP tool or UI that shows absence must
+read `status` (or treat `exists: null` as unknown), not just the `exists` flag.
 
 Inbound messages carry the sender's handle in `WAMessage.username` when WhatsApp supplies one
 (`remoteJidUsername` on a 1:1 message, `participantUsername` on a group participant). The chat
@@ -247,12 +259,15 @@ console shows it in the chat header and on the message sender line.
 
 Not supported yet:
 
-- the WEBJS engine has no username lookup, so a username target answers `422` there
+- the WEBJS engine has no username lookup, so a username target answers `422` there (a
+  `could_not_check` outcome at the route level, not a claim of absence)
 - handles are not accepted by chat lookup routes (history, labels, presence, archive) or by any
   search route
-- resolution depends on the account's rollout and on WhatsApp returning an address for the handle;
-  this implementation is verified against the protocol surface and unit tests, not against a live
-  paired account
+- resolution depends on the account's rollout and on WhatsApp returning an answer for the handle;
+  the NOWEB lookup and its negative answer shape are verified against a live paired account, but a
+  resolved handle has not been exercised end to end with an actual send in that verification
+- a resolved username yields a LID and no phone number, so callers that need a phone (for example
+  contact cards) cannot get one from this lookup
 
 ## Access
 
