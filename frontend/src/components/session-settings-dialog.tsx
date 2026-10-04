@@ -22,7 +22,7 @@ import {
 import { toast } from "sonner"
 import { api, type Session, type SendingPolicyOverrides, type SendingPolicyState } from "@/lib/api"
 import { EmptyState, ErrorState, Skeleton } from "@/components/primitives"
-import { Plus, Trash2, X, ChevronDown, ChevronRight, Check, MessageCircle, Search, Webhook, RefreshCw } from "lucide-react"
+import { Plus, Trash2, X, ChevronDown, ChevronRight, Check, MessageCircle, Search, Webhook, RefreshCw, KeyRound } from "lucide-react"
 
 const WEBHOOK_EVENTS = [
   { value: "*", label: "All events" },
@@ -76,6 +76,19 @@ const BROWSER_NAMES = [
   { value: "Firefox", label: "Firefox" },
   { value: "Safari", label: "Safari" },
   { value: "Edge", label: "Edge" },
+]
+
+const REST_KEY_ACTION_OPTIONS = [
+  { value: "read", label: "Read" },
+  { value: "list", label: "List" },
+  { value: "retrieve", label: "Retrieve" },
+  { value: "send", label: "Send" },
+  { value: "create", label: "Create" },
+  { value: "setting", label: "Settings" },
+  { value: "delete", label: "Delete" },
+  { value: "control", label: "Control" },
+  { value: "app", label: "Apps" },
+  { value: "manage", label: "Manage" },
 ]
 
 const POLICY_NUMBER_FIELDS = [
@@ -215,7 +228,7 @@ function MultiSelect({
 
 export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: SessionSettingsDialogProps) {
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<"webhooks" | "proxy" | "engine" | "ignore" | "sending" | "advanced" | "integrations" | "mcp">("webhooks")
+  const [activeTab, setActiveTab] = useState<"webhooks" | "proxy" | "engine" | "ignore" | "sending" | "advanced" | "integrations" | "access">("webhooks")
 
   const [webhooks, setWebhooks] = useState<WebhookConfig[]>([])
   const [proxyServer, setProxyServer] = useState("")
@@ -252,6 +265,15 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
   const [mcpConnection, setMcpConnection] = useState<any>(null)
   const [mcpKeyRevealed, setMcpKeyRevealed] = useState(false)
   const [mcpKeyExists, setMcpKeyExists] = useState(false)
+
+  // REST API keys
+  const [restKeysData, setRestKeysData] = useState<{ session: string; keys: { id: string; name: string; prefix: string; actions: string[]; createdAt: string; lastUsedAt: string | null; revokedAt: string | null }[] } | null>(null)
+  const [restKeysErrorSession, setRestKeysErrorSession] = useState<string | null>(null)
+  const [restKeyReload, setRestKeyReload] = useState(0)
+  const [restKeyName, setRestKeyName] = useState("")
+  const [restKeyActions, setRestKeyActions] = useState<string[]>(["read", "send"])
+  const [restKeyVisible, setRestKeyVisible] = useState<string | null>(null)
+  const [restKeyCreating, setRestKeyCreating] = useState(false)
 
   // Chatwoot integration state
   const [chatwootEnabled, setChatwootEnabled] = useState(false)
@@ -366,6 +388,21 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
     }).finally(() => setMcpLoading(false))
   }, [open, session, mcpReload])
 
+  // Load REST API keys for this session
+  useEffect(() => {
+    if (!open || !session) return
+    let cancelled = false
+    api.getRestApiKeys(session.name).then(({ keys }) => {
+      if (cancelled) return
+      setRestKeysData({ session: session.name, keys })
+      setRestKeysErrorSession(null)
+    }).catch(() => {
+      if (cancelled) return
+      setRestKeysErrorSession(session.name)
+    })
+    return () => { cancelled = true }
+  }, [open, session, restKeyReload])
+
   // Load the sending policy (overrides + live usage) for this session
   useEffect(() => {
     if (!open || !session) return
@@ -389,12 +426,13 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
     }).catch(() => setPolicyLoadError(true)).finally(() => setPolicyLoading(false))
   }, [open, session, policyReload])
 
-  // Clear revealed key when dialog closes
+  // Clear revealed keys when dialog closes
   useEffect(() => {
     if (!open) {
       setMcpKeyRevealed(false)
       setMcpKey(null)
       setMcpConnection(null)
+      setRestKeyVisible(null)
     }
   }, [open])
 
@@ -459,6 +497,49 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
       toast.error(e.message || "Failed to reset sending limits")
     } finally {
       setPolicySaving(false)
+    }
+  }
+
+  const handleCreateRestKey = async () => {
+    if (!session || restKeyActions.length === 0) return
+    setRestKeyCreating(true)
+    try {
+      const result = await api.createRestApiKey(session.name, {
+        name: restKeyName.trim() || undefined,
+        actions: restKeyActions,
+      })
+      setRestKeyVisible(result.key)
+      setRestKeyName("")
+      setRestKeyReload((n) => n + 1)
+      toast.success("REST API key created")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create REST API key")
+    } finally {
+      setRestKeyCreating(false)
+    }
+  }
+
+  const handleRotateRestKey = async (id: string) => {
+    if (!session) return
+    try {
+      const result = await api.rotateRestApiKey(session.name, id)
+      setRestKeyVisible(result.key)
+      setRestKeyReload((n) => n + 1)
+      toast.success("REST API key rotated")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to rotate REST API key")
+    }
+  }
+
+  const handleRevokeRestKey = async (id: string) => {
+    if (!session) return
+    if (!window.confirm("Revoke this key? Requests using it will start failing immediately.")) return
+    try {
+      await api.revokeRestApiKey(session.name, id)
+      setRestKeyReload((n) => n + 1)
+      toast.success("REST API key revoked")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to revoke REST API key")
     }
   }
 
@@ -601,12 +682,15 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
     { id: "engine" as const, label: "Engine" },
     { id: "sending" as const, label: "Sending limits" },
     { id: "ignore" as const, label: "Ignore" },
-    { id: "mcp" as const, label: "MCP tools" },
+    { id: "access" as const, label: "Access" },
     { id: "advanced" as const, label: "Advanced" },
     { id: "integrations" as const, label: "Integrations" },
   ]
 
   if (!session) return null
+
+  const restKeys = restKeysData?.session === session.name ? restKeysData.keys : null
+  const restKeysError = restKeysErrorSession === session.name
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1010,8 +1094,152 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
               </div>
             )}
 
-            {activeTab === "mcp" && (
+            {activeTab === "access" && (
               <div className="space-y-6">
+                {/* ── Per-Session REST API Keys ────────────────────── */}
+                <div className="space-y-3">
+                  <div className="space-y-0.5">
+                    <h4 className="text-sm font-medium">REST API keys</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Scoped keys for scripts and integrations. Each key can only use the actions
+                      you select, on this session. The key is shown <strong>once</strong>; only a
+                      SHA-256 hash is stored.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+                    <div className="space-y-2 flex-1">
+                      <Label>Key name</Label>
+                      <Input
+                        placeholder="Reporting script"
+                        value={restKeyName}
+                        onChange={(e) => setRestKeyName(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2 flex-1">
+                      <Label>Actions</Label>
+                      <MultiSelect
+                        value={restKeyActions}
+                        onChange={setRestKeyActions}
+                        options={REST_KEY_ACTION_OPTIONS}
+                        placeholder="Select actions..."
+                      />
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCreateRestKey}
+                      disabled={restKeyCreating || restKeyActions.length === 0}
+                    >
+                      <Plus strokeWidth={1.75} />
+                      {restKeyCreating ? "Generating..." : "Generate key"}
+                    </Button>
+                  </div>
+
+                  {(restKeyActions.includes("manage") || restKeyActions.includes("control")) && (
+                    <p className="text-xs text-warning-foreground">
+                      Manage and control let the key change or restart this session. Grant them
+                      only if the integration really needs it.
+                    </p>
+                  )}
+
+                  {restKeyVisible && (
+                    <div className="space-y-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+                      <p className="text-xs font-medium text-destructive">
+                        Copy this key now. It will not be shown again.
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <pre className="flex-1 rounded-lg bg-muted p-2.5 text-xs font-mono overflow-x-auto select-all">{restKeyVisible}</pre>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            navigator.clipboard.writeText(restKeyVisible)
+                            toast.success("Key copied")
+                          }}
+                        >
+                          Copy
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Send it as the <code className="text-xs bg-muted px-1 rounded">x-api-key</code> header.
+                      </p>
+                    </div>
+                  )}
+
+                  {restKeysError ? (
+                    <ErrorState
+                      compact
+                      title="Could not load REST API keys"
+                      description="The API did not respond."
+                      onRetry={() => setRestKeyReload((n) => n + 1)}
+                    />
+                  ) : restKeys === null ? (
+                    <div className="space-y-2" aria-hidden>
+                      {Array.from({ length: 2 }).map((_, i) => (
+                        <Skeleton key={i} className="h-20 w-full" />
+                      ))}
+                    </div>
+                  ) : restKeys.length > 0 ? (
+                    <div className="space-y-2">
+                      {restKeys.map((key) => (
+                        <div
+                          key={key.id}
+                          className={`border rounded-lg p-3 space-y-2 ${key.revokedAt ? "opacity-60" : ""}`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-sm font-medium truncate">{key.name}</span>
+                              <span className="metric text-xs font-mono text-muted-foreground">{key.prefix}...</span>
+                              {key.revokedAt && <Badge variant="outline">Revoked</Badge>}
+                            </div>
+                            {!key.revokedAt && (
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button variant="ghost" size="sm" onClick={() => handleRotateRestKey(key.id)} className="h-7 px-2">
+                                  Rotate
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => handleRevokeRestKey(key.id)} className="h-7 px-2 text-destructive">
+                                  Revoke
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {key.actions.map((action) => (
+                              <Badge key={action} variant="secondary">
+                                {REST_KEY_ACTION_OPTIONS.find((option) => option.value === action)?.label || action}
+                              </Badge>
+                            ))}
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Created {new Date(key.createdAt).toLocaleString()}
+                            {key.lastUsedAt ? ` · Last used ${new Date(key.lastUsedAt).toLocaleString()}` : " · Never used"}
+                            {key.revokedAt ? ` · Revoked ${new Date(key.revokedAt).toLocaleString()}` : ""}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyState
+                      compact
+                      icon={<KeyRound className="size-5" strokeWidth={1.75} />}
+                      title="No REST API keys yet"
+                      description="Generate a scoped key to let a script read and send through this session."
+                    />
+                  )}
+                </div>
+
+                <Separator className="my-4" />
+
+                {/* ── Per-Session MCP Key ──────────────────────────── */}
+                <div className="space-y-6">
+                  <div className="space-y-0.5">
+                    <h4 className="text-sm font-medium">MCP keys</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Model Context Protocol keys for AI assistants that call WhatsApp tools.
+                    </p>
+                  </div>
+
                 <div className="flex items-center justify-between gap-4">
                   <div className="space-y-0.5">
                     <h4 className="text-sm font-medium">MCP server</h4>
@@ -1350,6 +1578,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: 
                       })()}
                     </div>
                   )}
+                </div>
                 </div>
               </div>
             )}

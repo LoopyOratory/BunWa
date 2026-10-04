@@ -10,9 +10,11 @@ import { AuditService, AuditAction } from '../core/audit/audit.service';
 import { TooManyRequestsException } from '../core/exceptions';
 import { getChatMessagesViaEngine } from './chats.routes';
 
-// Get session name from body for policy enforcement
+// Get session name from body for policy enforcement. `validatedBody` is set
+// by policiesMiddleware for scoped principals (before route body middleware
+// runs); `body` covers the admin path where the policy passes without it.
 const FromBodySession = (c: any) => {
-  const body = c.get('body');
+  const body = c.get('validatedBody') ?? c.get('body');
   return body?.session;
 };
 

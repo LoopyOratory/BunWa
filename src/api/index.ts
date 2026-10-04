@@ -29,6 +29,7 @@ import { createSendingPolicyRouter } from './sending-policy.routes';
 import { createAuditRouter } from './audit.routes';
 import { createInfraRouter } from './infra.routes';
 import { createMcpConfigRouter } from './mcp-config.routes';
+import { createApiKeysRouter } from './api-keys.routes';
 import { createFilesRouter } from './files.routes';
 
 export function createApiRouter(): Hono {
@@ -63,6 +64,7 @@ export function createApiRouter(): Hono {
   router.route('/api', createAuditRouter());
   router.route('/api', createInfraRouter());
   router.route('/api', createMcpConfigRouter());
+  router.route('/api', createApiKeysRouter());
   router.route('/api/files', createFilesRouter());
 
   return router;

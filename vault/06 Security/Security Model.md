@@ -2,8 +2,8 @@
 type: note
 section: security
 tags: [bunwa, security, auth]
-updated: 2026-09-14
-source: src/middleware/, src/common/security/, src/core/exceptions.ts
+updated: 2026-10-04
+source: src/middleware/, src/core/api-keys/, src/common/security/, src/core/exceptions.ts
 status: shipped
 ---
 
@@ -16,7 +16,7 @@ Five independent trust boundaries: **API callers**, **the dashboard**, **the API
 
 | Boundary | Credential | Notes |
 |---|---|---|
-| REST API | `X-Api-Key: $WAHA_API_KEY` **or** dashboard Basic credentials | dashboard creds are admin-equivalent; timing-safe compares |
+| REST API | `X-Api-Key: $WAHA_API_KEY`, dashboard Basic credentials, or a per-session `sk_ses_...` key | master and Basic are admin-equivalent; session keys are scoped to one session and an action allowlist |
 | Dashboard UI | Basic `WAHA_DASHBOARD_USERNAME` / `WAHA_DASHBOARD_PASSWORD` | `GET /api/dashboard/login`, rate-limited 10/min; creds kept in `localStorage` |
 | `/api-docs` | optional Basic (`WHATSAPP_SWAGGER_USERNAME`/`PASSWORD`) | only installed when credentials are configured |
 | Chatwoot inbound webhook | **HMAC** over the raw body (`X-Chatwoot-Signature`) using the app's `webhookSecret` | no api-key middleware on `/webhook/chatwoot/:session`; falls back to an `account.id` comparison when no secret is set |
@@ -29,15 +29,18 @@ exists but is not used for this:
 
 ```text
 CanServer(Action.X)                    → admin only
-CanSession(Action.X, FromParam('session'))  → admin, or the session's owner
+CanSession(Action.X, FromParam('session'))  → admin, or a scoped key whose allowlist contains X and whose session matches
 ```
 
 `Action` enum: `manage`, `list`, `retrieve`, `create`, `delete`, `setting`, `control`, `app`,
 `read`, `send`. Value extractors: `FromParam`, `FromBody`, `FromQuery`.
 
-Today everything resolves to `{ isAdmin: true }` for any accepted credential, so policies mostly act
-as an "auth actually happened" gate rather than a fine-grained role system. Session-scoped keys are
-where real scoping exists — and that lives in the MCP layer.
+Master keys and dashboard Basic still resolve to `{ isAdmin: true }`. Per-session credentials now
+exist in two independent namespaces: `sk_mcp_...` for the MCP endpoint and `sk_ses_...` for REST.
+A REST session key resolves to `{ isAdmin: false, session, actions }`, so it fails `CanServer`
+entirely (no session list/create, audit, infra, server stop, or key management) and `CanSession`
+checks both the session match and the action allowlist. Cross-session requests return the same 403
+whether or not the target session exists. Neither key type is accepted by the other surface.
 
 ## Outbound request safety (SSRF)
 
@@ -66,7 +69,7 @@ Applies to webhook delivery ([[Webhooks]]) and remote media/`file://`-style inpu
 | Practice | Where |
 |---|---|
 | Timing-safe comparison of API keys and passwords | `api-key-auth.ts`, `main.ts` (login, static) |
-| MCP keys stored as SHA-256 hashes, plaintext shown once | `mcp-config.routes.ts` |
+| MCP and REST keys stored as SHA-256 hashes, plaintext shown once | `mcp-config.routes.ts`, `api-keys.routes.ts` |
 | `.env`-backed config; `PUT /api/infra/config` rewrites `.env` preserving comments/order | `infra.routes.ts` |
 | Credentials never logged; failed auth attempts **are** logged to the audit trail | [[Audit Log]] |
 

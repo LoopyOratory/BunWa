@@ -201,6 +201,30 @@ sequenceDiagram
 The interactive API reference is at `http://localhost:3000/api-docs/`. It is generated from the
 OpenAPI document in `src/swagger.ts`.
 
+## Access
+
+Three credential types can reach the REST API. They differ in blast radius:
+
+| Credential | Header | Scope |
+| --- | --- | --- |
+| Master API key (`WAHA_API_KEY`) | `x-api-key` | Full admin: every session and action, key management, infra, server stop. |
+| Dashboard Basic credentials (`WAHA_DASHBOARD_USERNAME` / `WAHA_DASHBOARD_PASSWORD`) | `Authorization: Basic ...` | Full admin, identical to the master key. Intended for the dashboard UI. |
+| Per-session REST API key (`sk_ses_...`) | `x-api-key` | One session only, and only the actions in its allowlist. Cannot list sessions, read the audit log, touch infra, stop the server, or manage keys for any session including its own. |
+
+Per-session REST keys are created from **Dashboard, Session settings, Access, REST API keys** or with
+`POST /api/sessions/:session/api-keys`. The request body may carry a `name` and an `actions` array
+drawn from the `Action` enum (`read`, `send`, `list`, `retrieve`, `create`, `setting`, `delete`,
+`control`, `app`, `manage`); actions default to `read` and `send`. Grant `manage` and `control` only
+when an integration truly needs them. The plaintext is returned once at creation (and again after a
+rotate), only its SHA-256 hash is stored, and revocation takes effect immediately: a revoked key is
+rejected exactly like an unknown key.
+
+Authentication resolves in this order: master API key, dashboard Basic credentials, then a
+per-session REST key. The first two remain full admin. A per-session key can only act on its own
+session, and a cross-session request gets the same response whether or not the other session exists.
+MCP keys (`sk_mcp_...`) are a separate credential for `POST /mcp`: the REST API does not accept them,
+and the MCP endpoint does not accept REST keys.
+
 ## MCP
 
 BunWa exposes a Model Context Protocol server with 53 tools for sessions, messaging, chats,

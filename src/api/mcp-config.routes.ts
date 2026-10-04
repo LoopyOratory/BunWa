@@ -83,12 +83,14 @@ export function createMcpConfigRouter(): Hono {
       const manager = container.resolve(SessionManager);
       const sessionName = c.req.param('session');
       const config = manager.getSessionConfig(sessionName);
+      const user = (c as any).get('user') as { isAdmin?: boolean } | null;
       return c.json({
         enabled: config?.mcp?.enabled ?? true,
         allowedTools: config?.mcp?.allowedTools ?? [],
         deniedTools: config?.mcp?.deniedTools ?? [],
         destructiveOps: config?.mcp?.destructiveOps ?? false,
-        apiKeyHash: config?.mcp?.apiKeyHash ?? undefined,
+        // The stored MCP key hash is admin-only metadata.
+        apiKeyHash: user?.isAdmin ? (config?.mcp?.apiKeyHash ?? undefined) : undefined,
       });
     },
   );
@@ -173,7 +175,7 @@ export function createMcpConfigRouter(): Hono {
       await manager.upsert(sessionName, {
         ...currentConfig,
         mcp: { ...currentMcp, apiKeyHash: hash } as typeof currentMcp,
-      });
+      }, { allowManagedKeys: true });
 
       // Build connection configs with the real key filled in
       const origin = `${c.req.header('x-forwarded-proto') || 'http'}://${c.req.header('host') || 'localhost:3000'}`;

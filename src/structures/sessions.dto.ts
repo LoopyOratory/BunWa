@@ -69,6 +69,23 @@ export class McpConfig {
   apiKeyHash?: string;  // SHA-256 of per-session MCP key (sk_mcp_...)
 }
 
+/**
+ * A per-session REST API key. The plaintext (`sk_ses_...`) is returned once at
+ * creation and never stored; only its SHA-256 `keyHash` lives here. `actions`
+ * is the allowlist of `Action` values the key may use on its own session.
+ */
+export class RestApiKeyRecord {
+  id!: string;
+  session!: string;
+  name!: string;
+  keyHash!: string;
+  prefix!: string;
+  actions!: string[];
+  createdAt!: string;
+  lastUsedAt?: string;
+  revokedAt?: string;
+}
+
 export class SessionConfig {
   webhooks?: WebhookConfig[];
   metadata?: Record<string, any>;
@@ -85,6 +102,8 @@ export class SessionConfig {
   gows?: GowsConfig;
   webjs?: WebjsConfig;
   mcp?: McpConfig;
+  /** Per-session REST API keys (hashes only, plaintext never stored). */
+  restApiKeys?: RestApiKeyRecord[];
 }
 
 export class MeInfo {

@@ -476,17 +476,54 @@ export class SessionManager {
     }
   }
 
-  async upsert(name: string, config?: SessionConfig): Promise<void> {
+  /**
+   * Persist a session config.
+   *
+   * `restApiKeys` and `mcp.apiKeyHash` are server-managed: generic callers
+   * (dashboard settings form, API clients, a scoped key with the `setting`
+   * action) can neither set nor clear them. Only server-side key management
+   * (the MCP/REST key routes) may write them, by passing
+   * `{ allowManagedKeys: true }`.
+   */
+  async upsert(
+    name: string,
+    config?: SessionConfig,
+    options: { allowManagedKeys?: boolean } = {},
+  ): Promise<void> {
     this.validateSessionName(name);
     if (config) {
-      // Preserve the server-managed per-session MCP key hash across full
-      // config replacements. The dashboard settings form rebuilds `config`
-      // from scratch and never echoes back `mcp.apiKeyHash`, so without this
-      // guard any settings save (or a config-carrying restart) would silently
-      // wipe the generated MCP key and force the user to regenerate it.
-      const existingHash = this.sessionConfigs.get(name)?.mcp?.apiKeyHash;
-      if (existingHash && !config.mcp?.apiKeyHash) {
-        config = { ...config, mcp: { ...(config.mcp || {}), apiKeyHash: existingHash } };
+      const existing = this.sessionConfigs.get(name);
+      const existingHash = existing?.mcp?.apiKeyHash;
+      const existingRestKeys = existing?.restApiKeys;
+
+      if (options.allowManagedKeys) {
+        // Key-management writes: keep server-managed fields the caller
+        // omitted (the dashboard settings form rebuilds config from scratch
+        // and never echoes them back) and accept the ones it supplied.
+        if (existingHash && !config.mcp?.apiKeyHash) {
+          config = { ...config, mcp: { ...(config.mcp || {}), apiKeyHash: existingHash } };
+        }
+        if (existingRestKeys?.length && !config.restApiKeys) {
+          config = { ...config, restApiKeys: existingRestKeys };
+        }
+      } else {
+        const mcp = config.mcp ? { ...config.mcp } : undefined;
+        if (mcp) delete mcp.apiKeyHash;
+        if (existingHash) {
+          config = { ...config, mcp: { ...(mcp || {}), apiKeyHash: existingHash } };
+        } else if (mcp && Object.keys(mcp).length > 0) {
+          config = { ...config, mcp };
+        } else if (config.mcp) {
+          config = { ...config };
+          delete config.mcp;
+        }
+
+        if (existingRestKeys?.length) {
+          config = { ...config, restApiKeys: existingRestKeys };
+        } else if (config.restApiKeys) {
+          config = { ...config };
+          delete config.restApiKeys;
+        }
       }
       this.sessionConfigs.set(name, config);
     }
@@ -494,6 +531,18 @@ export class SessionManager {
       this.sessions.set(name, null as any);
       this.audit.logInfo(AuditAction.SESSION_CREATED, { sessionName: name });
     }
+    await this.saveSessionIndex();
+  }
+
+  /**
+   * Record that a REST API key was used. Metadata only (lastUsedAt); the
+   * request path calls this fire-and-forget so auth never waits on disk I/O.
+   */
+  async touchRestApiKey(name: string, keyId: string): Promise<void> {
+    const config = this.sessionConfigs.get(name);
+    const record = config?.restApiKeys?.find((key) => key.id === keyId);
+    if (!record) return;
+    record.lastUsedAt = new Date().toISOString();
     await this.saveSessionIndex();
   }
 

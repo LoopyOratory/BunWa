@@ -24,6 +24,21 @@ export function policiesMiddleware(...checks: PolicyCheck[]): MiddlewareHandler 
       return c.json({ statusCode: 403, message: 'Forbidden' }, 403);
     }
 
+    // Session-scoped principals are matched against the request's target
+    // session by CanSession. Body-derived session names must be available
+    // before route-level body middleware runs, so parse a JSON body once here
+    // (Hono caches it) and expose it as `validatedBody`. Only scoped
+    // principals pay this cost; admin requests keep streaming untouched.
+    if (user && !user.isAdmin) {
+      const contentType = c.req.header('content-type') || '';
+      if (contentType.includes('application/json') || contentType.includes('+json')) {
+        const body = await c.req.json().catch(() => undefined);
+        if (body && typeof body === 'object') {
+          c.set('validatedBody', body);
+        }
+      }
+    }
+
     const ok = checks.every((check) => check(user, c));
     if (!ok) {
       return c.json({ statusCode: 403, message: 'Forbidden' }, 403);
@@ -38,10 +53,15 @@ export function CanSession(action: Action, getSessionName?: (c: any) => string):
     if (!user) return false;
     if (user.isAdmin) return true;
     if (!user.session) return false;
-    // Enforce session ownership: non-admin users can only access their own session
+    // A scoped key carries an allowlist of actions; anything not listed is
+    // denied even on its own session.
+    if (user.actions?.[action] !== true) return false;
+    // Enforce session ownership: non-admin users can only access their own
+    // session. Fail closed when an extractor is present but produced no
+    // session, so a missing body/query field can never widen access.
     if (getSessionName) {
       const requestedSession = getSessionName(c);
-      if (requestedSession && requestedSession !== user.session) {
+      if (!requestedSession || requestedSession !== user.session) {
         return false;
       }
     }

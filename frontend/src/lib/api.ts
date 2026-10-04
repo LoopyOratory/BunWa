@@ -141,6 +141,17 @@ export interface Webhook {
   filters?: { conditions?: WebhookFilterCondition[] }
 }
 
+export interface RestApiKey {
+  id: string
+  session: string
+  name: string
+  prefix: string
+  actions: string[]
+  createdAt: string
+  lastUsedAt: string | null
+  revokedAt: string | null
+}
+
 const API_BASE = window.location.origin
 
 function getDashboardAuth(): string | null {
@@ -613,6 +624,23 @@ export const api = {
       `/api/sessions/${name}/policy`,
       { method: "PUT", body: JSON.stringify(overrides) },
     ),
+
+  // ==================== REST API KEYS ====================
+  /** List per-session REST API key metadata (the hash is never returned) */
+  getRestApiKeys: (name: string) =>
+    request<{ keys: RestApiKey[] }>(`/api/sessions/${name}/api-keys`),
+  /** Create a per-session REST API key (plaintext is returned once) */
+  createRestApiKey: (name: string, body: { name?: string; actions?: string[] }) =>
+    request<RestApiKey & { key: string; keyHash: string }>(`/api/sessions/${name}/api-keys`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  /** Revoke a per-session REST API key */
+  revokeRestApiKey: (session: string, id: string) =>
+    request<RestApiKey>(`/api/sessions/${session}/api-keys/${id}`, { method: "DELETE" }),
+  /** Rotate a per-session REST API key (plaintext is returned once) */
+  rotateRestApiKey: (session: string, id: string) =>
+    request<RestApiKey & { key: string; keyHash: string }>(`/api/sessions/${session}/api-keys/${id}/rotate`, { method: "POST" }),
 
   // ==================== MCP ====================
   /** Get all registered MCP tools with categories */

@@ -3,6 +3,8 @@ import { container } from 'tsyringe';
 import { WhatsappConfigService } from '../config.service';
 import { DashboardConfigServiceCore } from '../core/config/DashboardConfigServiceCore';
 import { AuditService, AuditAction } from '../core/audit/audit.service';
+import { SessionManager } from '../core/manager.core';
+import { isRestApiKey, resolveRestApiKey } from '../core/api-keys/rest-api-keys';
 import { timingSafeEqual } from 'crypto';
 
 /** Best-effort client IP for audit logging (not spoof-proof; informational only). */
@@ -16,6 +18,8 @@ export class User {
   isAdmin: boolean = false;
   session?: string;
   actions?: Record<string, boolean> | null;
+  keyId?: string;
+  keyName?: string;
 }
 
 /**
@@ -35,11 +39,15 @@ function allowNoAuth(): boolean {
 }
 
 /**
- * Auth middleware that accepts:
- * 1. API key via x-api-key header
- * 2. Basic auth via Authorization header (dashboard credentials)
+ * Auth middleware. Credentials are resolved in this order:
  *
- * Both grant admin access when valid.
+ * 1. the master `WAHA_API_KEY` (via x-api-key) — full admin
+ * 2. dashboard Basic credentials — full admin
+ * 3. a per-session REST key (`sk_ses_...`) — scoped to one session and to the
+ *    actions in its allowlist; never satisfies `CanServer`
+ *
+ * MCP keys (`sk_mcp_...`) are not accepted here: they only resolve against the
+ * MCP endpoint's own hash storage.
  */
 export function apiKeyAuthMiddleware(): MiddlewareHandler {
   return async (c, next) => {
@@ -52,45 +60,87 @@ export function apiKeyAuthMiddleware(): MiddlewareHandler {
       return next();
     }
 
-    // Check for API key auth
+    const audit = container.resolve(AuditService);
+    const logAuthFailure = () => audit.logWarn(AuditAction.API_KEY_AUTH_FAILED, {
+      ipAddress: getClientIp(c),
+      method: c.req.method,
+      path,
+    });
+
     const apiKey = config.getApiKey();
     const providedKey = c.req.header('x-api-key');
-    if (apiKey && providedKey) {
-      if (safeCompare(providedKey, apiKey)) {
-        c.set('user', { isAdmin: true } as User);
-        return next();
-      }
-      container.resolve(AuditService).logWarn(AuditAction.API_KEY_AUTH_FAILED, {
-        ipAddress: getClientIp(c),
-        method: c.req.method,
-        path,
-      });
-      return c.json({ statusCode: 401, message: 'Invalid API key' }, 401);
+
+    // 1. Master API key — full admin
+    if (apiKey && providedKey && safeCompare(providedKey, apiKey)) {
+      c.set('user', { isAdmin: true } as User);
+      return next();
     }
 
-    // Check for Basic auth (dashboard credentials)
+    // 2. Dashboard Basic credentials — full admin
     const authHeader = c.req.header('authorization');
-    if (authHeader?.startsWith('Basic ')) {
+    const hasBasic = !!authHeader?.startsWith('Basic ');
+    let basicValid = false;
+    if (hasBasic) {
       try {
         const dashboardConfig = container.resolve(DashboardConfigServiceCore);
         const credentials = dashboardConfig.credentials;
         if (credentials) {
-          const base64 = authHeader.split(' ')[1];
+          const base64 = authHeader!.split(' ')[1];
           const decoded = atob(base64);
           const [user, pass] = decoded.split(':');
           if (safeCompare(user, credentials[0]) && safeCompare(pass, credentials[1])) {
-            c.set('user', { isAdmin: true } as User);
-            return next();
+            basicValid = true;
           }
         }
       } catch {
         // Invalid basic auth format
       }
-      container.resolve(AuditService).logWarn(AuditAction.API_KEY_AUTH_FAILED, {
-        ipAddress: getClientIp(c),
-        method: c.req.method,
-        path,
-      });
+      if (basicValid) {
+        c.set('user', { isAdmin: true } as User);
+        return next();
+      }
+    }
+
+    // 3. Per-session REST API key — scoped to one session and its actions
+    if (providedKey) {
+      const manager = container.resolve(SessionManager);
+      const resolved = await resolveRestApiKey(manager, providedKey);
+      if (resolved) {
+        c.set('user', {
+          isAdmin: false,
+          session: resolved.session,
+          actions: Object.fromEntries(resolved.record.actions.map((action) => [action, true])),
+          keyId: resolved.record.id,
+          keyName: resolved.record.name,
+        } as User);
+        audit.logInfo(AuditAction.API_KEY_USED, {
+          apiKeyId: resolved.record.id,
+          apiKeyName: resolved.record.name,
+          sessionName: resolved.session,
+          ipAddress: getClientIp(c),
+          method: c.req.method,
+          path,
+        });
+        // Fire-and-forget: auth must not wait on the sessions index write.
+        manager.touchRestApiKey(resolved.session, resolved.record.id).catch(() => {});
+        return next();
+      }
+
+      // A key that looks like a session key but does not resolve is always
+      // rejected, even in keyless dev mode, so a revoked key can never fall
+      // through to the no-auth allowance.
+      const rejectKey = isRestApiKey(providedKey) || !!apiKey || hasBasic;
+      if (rejectKey) {
+        logAuthFailure();
+        return c.json(
+          { statusCode: 401, message: hasBasic && !basicValid ? 'Invalid credentials' : 'Invalid API key' },
+          401,
+        );
+      }
+    }
+
+    if (hasBasic) {
+      logAuthFailure();
       return c.json({ statusCode: 401, message: 'Invalid credentials' }, 401);
     }
 

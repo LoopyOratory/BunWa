@@ -3,6 +3,7 @@ import { container } from 'tsyringe';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanSession, CanServer, Action, FromParam } from '../middleware/policies';
 import { SessionManager } from '../core/manager.core';
+import { redactSessionSecrets } from '../core/api-keys/rest-api-keys';
 import { BadRequestException, NotFoundException } from '../core/exceptions';
 import pino from 'pino';
 
@@ -27,7 +28,8 @@ export function createSessionsRouter(): Hono {
           s.name === nameFilter || (s.name ?? '').toLowerCase().startsWith(prefix)
         );
       }
-      return c.json(sessions);
+      // Never ship stored key hashes with the session list.
+      return c.json(sessions.map((s) => ({ ...s, config: redactSessionSecrets(s.config) })));
     }
   );
 
@@ -43,7 +45,7 @@ export function createSessionsRouter(): Hono {
         return c.json({
           name: sessionName,
           status: (session as any).status || 'STOPPED',
-          config: (session as any).sessionConfig || {},
+          config: redactSessionSecrets((session as any).sessionConfig || {}),
           me: (session as any).getSessionMeInfo?.() || null,
         });
       } catch (error: any) {
@@ -236,7 +238,7 @@ export function createSessionsRouter(): Hono {
       const sessionName = c.req.param('session');
       try {
         const session = manager.getSession(sessionName);
-        return c.json({ name: sessionName, config: (session as any).sessionConfig || {} });
+        return c.json({ name: sessionName, config: redactSessionSecrets((session as any).sessionConfig || {}) });
       } catch (e: any) {
         return c.json({ error: String(e?.message || e) }, 404);
       }
