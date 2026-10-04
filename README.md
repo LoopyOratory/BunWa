@@ -58,7 +58,8 @@ cd bunwa
 bun install
 
 # Configure
-cp .env.example .env
+cp .env.example.minimal .env   # minimal production set, three required values
+#   or cp .env.example .env     # full reference with every option
 # Edit .env and set WAHA_API_KEY. In production also set WAHA_ALLOW_NO_AUTH=false.
 
 # Build the dashboard and start
