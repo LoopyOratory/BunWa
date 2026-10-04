@@ -27,8 +27,8 @@ whatsapp-web.js with Chrome when you need it. Beyond the compatible surface, Bun
 server for AI agents, a structured audit log, editable and sendable message templates, HMAC-signed
 webhooks with an SSRF guard, a per-session anti-ban sending policy, a React dashboard, and an n8n
 community node. It is a fork of [OpenWA](https://github.com/rmyndharis/OpenWA) and is developed
-independently for Bun. The project is at version 2026.5.1; its recorded gate at commit 3391e17 is
-222 tests passing with 1 skipped, across 26 test files.
+independently for Bun. The project is at version 2026.10.0; its recorded gate at commit 8661ed5 is
+449 tests passing with 1 skipped, across 44 test files.
 
 ## Features
 
@@ -38,7 +38,7 @@ independently for Bun. The project is at version 2026.5.1; its recorded gate at 
 | Messaging | Text, image, file, voice, video, location, poll, contact vCard, link preview, reply, forward, reaction, star, seen, typing and sticker. Buttons and lists through native flows (WhatsApp caps 3 buttons, and 10 list rows across 3 sections). Bulk batches with progress and cancel. Status and stories. Voice-note transcoding to OGG/Opus with ffmpeg. |
 | Chats and groups | Chat list, messages, archive, delete, mark read or unread, pin and unpin, reactions. Groups: create, leave, participants add, remove, promote and demote, invite codes, description, subject, join info, security settings. Channels, labels, LIDs, contacts and presence. |
 | Webhooks and events | Global and per-session subscriptions, HMAC-SHA256 signatures, idempotency keys, delivery ids, bounded retries with backoff, message filters, SSRF protection and a real test delivery endpoint. Webhook subscriptions and the `/ws` event monitor use the `WAHAEvents` list, which defines 30 event types. |
-| MCP | 53 tools over HTTP (`POST /mcp`) and stdio. Per-session keys scoped to one session, per-session allow and deny policies, a destructive-operations gate, rate limiting and a read-only mode. |
+| MCP | 77 tools over HTTP (`POST /mcp`) and stdio. Per-session keys scoped to one session, per-session allow and deny policies, a destructive-operations gate, rate limiting and a read-only mode. |
 | Templates and bulk send | Per-session templates with `{{variables}}` (including dotted paths), create, edit, delete, preview and send, addressed by id or name. Bulk sends return a batch id with sent, failed and remaining counts, and can be cancelled. |
 | Anti-ban sending policy | Per-session caps per minute, hour and day, a cold-outreach timelock between new chats, a new-chat daily quota, quiet hours, a warm-up ramp for new sessions, per-session overrides and a bypass list. Blocked sends answer 429 with a `Retry-After` header. |
 | Security | API key and dashboard Basic auth, per-session MCP keys stored as SHA-256 hashes, auth-exempt path list, audit log with retention, 10 MB request body cap, 200 requests per minute per IP on `/api/*`, and SSRF-hardened webhook delivery. |
@@ -295,8 +295,8 @@ and the MCP endpoint does not accept REST keys.
 
 ## MCP
 
-BunWa exposes a Model Context Protocol server with 53 tools for sessions, messaging, chats,
-contacts, presence, statuses, templates and the sending policy. Two transports are supported:
+BunWa exposes a Model Context Protocol server with 77 tools for sessions, messaging, chats,
+groups, channels, contacts, presence, statuses, templates and the sending policy. Two transports are supported:
 
 - HTTP: `POST /mcp`, authenticated with `x-api-key: <key>` or `Authorization: Bearer <key>`.
 - stdio: `bun run src/mcp/stdio.ts`, authenticated with the `BUNWA_SESSION` and `BUNWA_MCP_KEY`
@@ -651,7 +651,7 @@ flowchart TD
 
 - One Bun process serves the REST API, the WebSocket stream, the MCP endpoint and the compiled
   dashboard. Each session holds its WhatsApp engine connection in-process.
-- The API mounts 181 route registrations across 29 router modules, plus `/mcp` and `/ws`.
+- The API mounts 185 route registrations across 29 router modules, plus `/mcp` and `/ws`.
 - Auth state and the session index live in `.sessions`. Chats and messages go to SQLite (default,
   `bun:sqlite`) or PostgreSQL. `audit.db` and `sending-limits.db` always stay in local SQLite.
   Media goes to local disk or S3.
