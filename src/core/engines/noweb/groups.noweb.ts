@@ -35,7 +35,8 @@ export function ToGroupInfo(group: Partial<GroupMetadata>): GroupInfo {
     invite: group.inviteCode ? getGroupInviteLink(group.inviteCode) : undefined,
     participants: participants,
     membersCanAddNewMember: group.memberAddMode,
-    membersCanSendMessages: group.announce,
+    // announce means only admins can send, so the answer is its inverse
+    membersCanSendMessages: !group.announce,
     newMembersApprovalRequired: group.joinApprovalMode,
   };
 }
@@ -61,6 +62,7 @@ export function ToGroupParticipant(
     id: toCusFormat(participant.id),
     pn: toCusFormat(participant.phoneNumber),
     role: role,
+    username: participant.username || undefined,
   };
 }
 

@@ -19,6 +19,7 @@ export class GroupParticipant {
   id!: string;
   pn?: string;
   role?: string;
+  username?: string;
 }
 
 export class GroupsListFields {

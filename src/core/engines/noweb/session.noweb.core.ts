@@ -53,6 +53,7 @@ import {
   WhatsappSession,
 } from '../../session/session.abc';
 import {
+  ToGroupInfo,
   ToGroupParticipant,
   ToGroupV2JoinEvent,
   ToGroupV2LeaveEvent,
@@ -156,6 +157,7 @@ import {
 import { BinaryFile, RemoteFile } from '../../../structures/files.dto';
 import {
   CreateGroupRequest,
+  GroupInfo,
   GroupParticipant,
   ParticipantsRequest,
   SettingsSecurityChangeInfo,
@@ -2600,7 +2602,12 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     return true;
   }
 
-  public async getGroup(id: any) {
+  /**
+   * Raw Baileys group metadata. Internal callers that need the engine's own
+   * field names (restrict, announce, participants[].admin) use this; the REST
+   * contract is served by getGroup below, which maps it to GroupInfo.
+   */
+  private async getGroupMetadata(id: any) {
     // Try direct lookup first (O(1) instead of loading all groups)
     const group = await this.store.getGroupById?.(id);
     if (group) {
@@ -2618,12 +2625,51 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     return groupFromList;
   }
 
+  /**
+   * The group as the REST contract describes it: description, invite link and
+   * participants with pn and role, not the engine's raw metadata.
+   */
+  public async getGroup(id: any): Promise<GroupInfo> {
+    const info = ToGroupInfo(await this.getGroupMetadata(id));
+    await this.resolveParticipantPhoneNumbers(info);
+    return info;
+  }
+
+  /**
+   * Fill in participant phone numbers from the LID mapping when WhatsApp left
+   * them out of the group metadata. Modern groups address participants by LID,
+   * so without this the API answers opaque LIDs and no phone number.
+   */
+  private async resolveParticipantPhoneNumbers(group: {
+    participants?: GroupParticipant[];
+  }): Promise<void> {
+    const participants = group?.participants;
+    if (!participants?.length) {
+      return;
+    }
+    for (const participant of participants) {
+      if (participant.pn || !participant.id || !isLidUser(participant.id)) {
+        continue;
+      }
+      try {
+        const pn = await this.store.findPNByLid(participant.id);
+        if (pn) {
+          participant.pn = toCusFormat(pn);
+        }
+      } catch {
+        // A store without LID mappings leaves pn empty.
+      }
+    }
+  }
+
   public async getGroupParticipants(id: string): Promise<GroupParticipant[]> {
-    const group = (await this.getGroup(id)) as GroupMetadata;
+    const group = (await this.getGroupMetadata(id)) as GroupMetadata;
     if (!group?.participants?.length) {
       return [];
     }
-    return group.participants.map(ToGroupParticipant);
+    const participants = group.participants.map(ToGroupParticipant);
+    await this.resolveParticipantPhoneNumbers({ participants });
+    return participants;
   }
 
   @Activity()
@@ -2650,7 +2696,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   }
 
   public async getInfoAdminsOnly(id: any): Promise<SettingsSecurityChangeInfo> {
-    const group = await this.getGroup(id);
+    const group = await this.getGroupMetadata(id);
     return { adminsOnly: group.restrict ?? false };
   }
 
@@ -2661,7 +2707,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   }
 
   public async getMessagesAdminsOnly(id: any): Promise<SettingsSecurityChangeInfo> {
-    const group = await this.getGroup(id);
+    const group = await this.getGroupMetadata(id);
     return { adminsOnly: group.announce ?? false };
   }
 

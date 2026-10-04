@@ -47,7 +47,9 @@ import {
 import { BinaryFile, RemoteFile } from '../../../structures/files.dto';
 import {
   CreateGroupRequest,
+  GroupInfo,
   GroupParticipant,
+  GroupParticipantRole,
   ParticipantsRequest,
 } from '../../../structures/groups.dto';
 import {
@@ -91,6 +93,23 @@ function toWebjsParticipantId(participant: unknown): string {
     );
   }
   return id.includes('@') ? id : `${id}@c.us`;
+}
+
+/**
+ * Map a whatsapp-web.js participant onto the API shape. The library reports
+ * booleans (isAdmin, isSuperAdmin); the contract uses roles, matching the NOWEB
+ * engine and the documented GroupParticipant.
+ */
+function toGroupParticipant(participant: any): GroupParticipant {
+  return {
+    id: participant?.id?._serialized ?? participant?.id,
+    role: participant?.isSuperAdmin
+      ? GroupParticipantRole.SUPERADMIN
+      : participant?.isAdmin
+        ? GroupParticipantRole.ADMIN
+        : GroupParticipantRole.PARTICIPANT,
+    username: participant?.username || undefined,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -843,30 +862,25 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   // Groups
   // ------------------------------------------------------------------
 
-  async getGroup(id: string) {
+  async getGroup(id: string): Promise<GroupInfo> {
     this.ensureClientReady();
     const chat = await this.getGroupChatOrFail(id);
     return {
       id: chat.id._serialized,
-      name: chat.name || '',
+      subject: chat.name || undefined,
       description: (chat as any).description || undefined,
-      participants: ((chat as any).participants || []).map((p: any) => ({
-        id: p.id._serialized,
-        isAdmin: Boolean(p.isAdmin),
-        isSuperAdmin: Boolean(p.isSuperAdmin),
-      })),
-      owner: (chat as any).owner?._serialized || undefined,
+      participants: ((chat as any).participants || []).map((p: any) =>
+        toGroupParticipant(p),
+      ),
     };
   }
 
   async getGroupParticipants(id: string): Promise<GroupParticipant[]> {
     this.ensureClientReady();
     const chat = await this.getGroupChatOrFail(id);
-    return ((chat as any).participants || []).map((p: any) => ({
-      id: p.id._serialized,
-      isAdmin: Boolean(p.isAdmin),
-      isSuperAdmin: Boolean(p.isSuperAdmin),
-    }));
+    return ((chat as any).participants || []).map((p: any) =>
+      toGroupParticipant(p),
+    );
   }
 
   async getGroups(pagination?: PaginationParams) {

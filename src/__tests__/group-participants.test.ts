@@ -226,3 +226,137 @@ describe('toJID', () => {
     expect(toJID('15551234567')).toBe('15551234567@s.whatsapp.net');
   });
 });
+
+describe('group detail shape', () => {
+  it('NOWEB getGroup answers the documented GroupInfo', async () => {
+    const session = makeNowebSession();
+    session.store = {
+      getGroupById: async () => ({
+        id: '120363416106788489@g.us',
+        subject: 'BunWa Drill',
+        desc: 'A description',
+        announce: false,
+        restrict: true,
+        participants: [
+          { id: '218734094458920@lid', admin: 'superadmin', username: 'king_kow' },
+        ],
+      }),
+      findPNByLid: async () => '233553919737@s.whatsapp.net',
+    };
+
+    const info = await session.getGroup('120363416106788489@g.us');
+
+    // description comes from the engine's desc field, not the raw key
+    expect(info.subject).toBe('BunWa Drill');
+    expect(info.description).toBe('A description');
+    // the LID is resolved to a phone number through the store mapping
+    expect(info.participants).toEqual([
+      {
+        id: '218734094458920@lid',
+        pn: '233553919737@c.us',
+        role: 'superadmin',
+        username: 'king_kow',
+      },
+    ]);
+    // the raw engine fields stay out of the contract
+    expect((info as any).announce).toBeUndefined();
+    expect((info as any).restrict).toBeUndefined();
+  });
+
+  it('NOWEB getGroup leaves pn empty when the store has no mapping', async () => {
+    const session = makeNowebSession();
+    session.store = {
+      getGroupById: async () => ({
+        id: '123@g.us',
+        subject: 'Drill',
+        participants: [{ id: '218734094458920@lid', admin: null }],
+      }),
+      findPNByLid: async () => null,
+    };
+
+    const info = await session.getGroup('123@g.us');
+
+    expect(info.participants?.[0].pn).toBeUndefined();
+    expect(info.participants?.[0].role).toBe('participant');
+  });
+
+  it('NOWEB keeps a phone number the engine already provided', async () => {
+    const session = makeNowebSession();
+    let lookedUp = false;
+    session.store = {
+      getGroupById: async () => ({
+        id: '123@g.us',
+        participants: [
+          { id: '111@lid', phoneNumber: '233553919737@s.whatsapp.net', admin: 'admin' },
+        ],
+      }),
+      findPNByLid: async () => {
+        lookedUp = true;
+        return null;
+      },
+    };
+
+    const info = await session.getGroup('123@g.us');
+
+    expect(info.participants?.[0]).toEqual({
+      id: '111@lid',
+      pn: '233553919737@c.us',
+      role: 'admin',
+      username: undefined,
+    });
+    expect(lookedUp).toBe(false);
+  });
+
+  it('NOWEB reports membersCanSendMessages as the inverse of announce', async () => {
+    const session = makeNowebSession();
+    session.store = {
+      getGroupById: async () => ({ id: '123@g.us', announce: false, participants: [] }),
+    };
+    expect((await session.getGroup('123@g.us')).membersCanSendMessages).toBe(true);
+
+    session.store = {
+      getGroupById: async () => ({ id: '123@g.us', announce: true, participants: [] }),
+    };
+    expect((await session.getGroup('123@g.us')).membersCanSendMessages).toBe(false);
+  });
+
+  it('NOWEB settings reads still see the raw metadata', async () => {    const session = makeNowebSession();
+    session.store = {
+      getGroupById: async () => ({
+        id: '123@g.us',
+        announce: true,
+        restrict: true,
+        participants: [],
+      }),
+    };
+
+    expect(await session.getInfoAdminsOnly('123@g.us')).toEqual({ adminsOnly: true });
+    expect(await session.getMessagesAdminsOnly('123@g.us')).toEqual({ adminsOnly: true });
+  });
+
+  it('WEBJS getGroup answers the same shape with roles', async () => {
+    const session = makeWebjsSession();
+    session.getGroupChatOrFail = async () => ({
+      id: { _serialized: '123@g.us' },
+      name: 'BunWa Drill',
+      description: 'A description',
+      participants: [
+        { id: { _serialized: '111@c.us' }, isAdmin: true },
+        { id: { _serialized: '222@c.us' }, isSuperAdmin: true },
+        { id: { _serialized: '333@c.us' }, username: 'king_kow' },
+      ],
+    });
+
+    const info = await session.getGroup('123@g.us');
+
+    expect(info.id).toBe('123@g.us');
+    expect(info.subject).toBe('BunWa Drill');
+    expect(info.description).toBe('A description');
+    expect(info.participants?.map((p: any) => p.role)).toEqual([
+      'admin',
+      'superadmin',
+      'participant',
+    ]);
+    expect(info.participants?.[2].username).toBe('king_kow');
+  });
+});
