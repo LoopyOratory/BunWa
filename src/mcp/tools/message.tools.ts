@@ -6,7 +6,16 @@ import { z } from 'zod';
 import type { SessionManager } from '../../core/manager.core';
 import type { ToolDescriptor } from '../tool-descriptor';
 
-const sessionId = z.string().min(1).describe('Session name (e.g. "default")');
+const sessionId = z
+  .string()
+  .min(1)
+  // Optional so a session-scoped MCP key can call the tool without naming its
+  // session: the key supplies it before the handler runs, and the server
+  // answers a clear error when neither is present. Defaulted to an empty
+  // string rather than left undefined so every handler keeps a string type.
+  .optional()
+  .default('')
+  .describe('Session name (e.g. "default"). Not needed when the key is a session-scoped MCP key, which supplies it.');
 
 async function getSession(manager: SessionManager, name: string) {
   return manager.getWorkingSession(name);

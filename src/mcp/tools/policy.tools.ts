@@ -14,7 +14,16 @@ import {
 } from '../../core/sending-policy/sending-policy.service';
 import { NotFoundException } from '../../core/exceptions';
 
-const sessionId = z.string().min(1).describe('Session name (e.g. "default")');
+const sessionId = z
+  .string()
+  .min(1)
+  // Optional so a session-scoped MCP key can call the tool without naming its
+  // session: the key supplies it before the handler runs, and the server
+  // answers a clear error when neither is present. Defaulted to an empty
+  // string rather than left undefined so every handler keeps a string type.
+  .optional()
+  .default('')
+  .describe('Session name (e.g. "default"). Not needed when the key is a session-scoped MCP key, which supplies it.');
 
 async function requireSession(manager: SessionManager, name: string): Promise<void> {
   if (!(await manager.exists(name))) {
