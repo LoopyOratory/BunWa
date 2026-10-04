@@ -47,8 +47,17 @@ Two kinds of key:
 **Scoping rules** for per-session keys:
 
 - `sessionId` is forced to the key's session on `sessionScoped` tools (99 % of the registry).
+- `sessionId` is **optional** in every tool schema, so a keyed client can call a tool with no
+  arguments at all; the key supplies the session. It used to be required, and because the MCP SDK
+  validates input before the server can inject the scoped session, a keyed call with no arguments
+  came back as `Input validation error: expected string` instead of data. Fixed 2026-10-04.
 - Calling a **non**-session-scoped tool (e.g. `SessionList`) with a per-session key is denied.
+- A `sessionId` naming a different session is accepted by validation and then overridden, so a key
+  can never read another session even if the caller asks for one.
+- Destructive tools stay refused while the session's `destructiveOps` is false, for both key kinds.
 - stdio auth (`BUNWA_SESSION` + `BUNWA_MCP_KEY`) verifies the same hash and exits non-zero if invalid.
+- One key hash per session: generating a new key **invalidates the previous one**, so a client
+  holding the old key must be updated from the session's MCP tab.
 
 ## Rate limiting
 
