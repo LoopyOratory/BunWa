@@ -111,8 +111,8 @@ Session arrives **in the body** (`{ session, chatId, text, … }`) for the class
 | GET | `/api/contacts` · `/contacts/all` · `/contacts/check-exists` · `/contacts/profile-picture` | |
 | GET | `/api/contacts/about` | ⚠️ stub — returns `{about: ''}` |
 | POST | `/api/contacts/block` · `/contacts/unblock` | ⚠️ always 500 "not available in NOWEB" |
-| GET | `/api/:session/groups` · `/groups/count` · `/groups/:id` · `/groups/join-info` | |
-| POST | `/api/:session/groups` | create |
+| GET | `/api/:session/groups` · `/groups/count` · `/groups/:id` · `/groups/join-info` | `:id` answers the mapped `GroupInfo` (description, participants with `role`, `pn` and `username`) |
+| POST | `/api/:session/groups` | create; `participants` is a list of chat id strings (`15551234567` or `…@c.us`), a malformed entry is 400 |
 | DELETE | `/api/:session/groups/:id` | delegates to `engine.deleteGroup` (leaves the group); 422 when an engine lacks it |
 | POST | `/api/:session/groups/join` · `/groups/:id/leave` · `/groups/refresh` | |
 | GET·PUT·DELETE | `/api/:session/groups/:id/picture` | ⚠️ GET is a stub returning `{url: null}`; PUT/DELETE reach the engine |
@@ -120,8 +120,8 @@ Session arrives **in the body** (`{ session, chatId, text, … }`) for the class
 | GET·PUT | `/api/:session/groups/:id/settings/security/info-admin-only` · `…/messages-admin-only` | group security settings |
 | GET | `/api/:session/groups/:id/invite-code` · POST `…/invite-code/revoke` | |
 | GET | `/api/:session/groups/:id/participants` · `/participants/v2` | |
-| POST | `/api/:session/groups/:id/participants/add` · `/remove` | |
-| POST | `/api/:session/groups/:id/admin/promote` · `/demote` | |
+| POST | `/api/:session/groups/:id/participants/add` · `/remove` | chat id strings, same contract as create |
+| POST | `/api/:session/groups/:id/admin/promote` · `/demote` | chat id strings, same contract as create |
 | GET | `/api/:session/channels` · `/:id` · `/:id/messages/preview` | listing is 422 on NOWEB (engine does not implement it); preview is Plus-gated |
 | POST | `/api/:session/channels` | create |
 | DELETE | `/api/:session/channels/:id` | |
