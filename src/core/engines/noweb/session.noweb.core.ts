@@ -69,6 +69,7 @@ import { NowebAuthFactoryCore } from './NowebAuthFactoryCore';
 import { NowebInMemoryStore } from './store/NowebInMemoryStore';
 import {
   AvailableInPlusVersion,
+  NotFoundException,
   NotImplementedByEngineError,
 } from '../../exceptions';
 import { toVcardV3 } from '../../vcard';
@@ -2285,7 +2286,9 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     const groups = await this.getGroups({});
     const groupFromList = groups[id];
     if (!groupFromList) {
-      throw new Error(`Group with id '${id}' not found`);
+      // NotFoundException is mapped to a 404 by the global error handler, so a
+      // missing group id names itself instead of surfacing as a 500.
+      throw new NotFoundException(`Group with id '${id}' not found`);
     }
     return groupFromList;
   }
@@ -2371,7 +2374,11 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   public async getParticipants(id: any) {
     const groups = await this.sock.groupFetchAllParticipating();
-    return groups[id].participants;
+    const group = groups[id];
+    if (!group) {
+      throw new NotFoundException(`Group with id '${id}' not found`);
+    }
+    return group.participants;
   }
 
   @Activity()
@@ -2759,8 +2766,32 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   }
 
   public async channelsGetChannel(id: string) {
-    const newsletter = await this.sock.newsletterMetadata('jid', id);
-    return this.toChannel(toNewsletterMetadata(newsletter));
+    let newsletter: any;
+    try {
+      newsletter = await this.sock.newsletterMetadata('jid', id);
+    } catch (error) {
+      // WhatsApp answers a metadata query for an id it cannot resolve with a
+      // GraphQL Bad Request. Normalize that lookup failure to a 404 naming the
+      // id; anything else (network, auth, rate limit) keeps its own status.
+      const lookupRejected =
+        typeof error === 'object' &&
+        error !== null &&
+        (error as any).isBoom === true &&
+        (error as any).output?.statusCode === 400;
+      if (lookupRejected) {
+        throw new NotFoundException(`Channel with id '${id}' not found`);
+      }
+      throw error;
+    }
+    // Baileys returns null when the newsletter exists in the query result but
+    // has no id, and toNewsletterMetadata cannot read a null payload. Report
+    // the missing channel as a 404 instead of a null dereference 500.
+    const metadata = newsletter ? toNewsletterMetadata(newsletter) : null;
+    const channel = metadata ? this.toChannel(metadata) : null;
+    if (!channel) {
+      throw new NotFoundException(`Channel with id '${id}' not found`);
+    }
+    return channel;
   }
 
   @Activity()

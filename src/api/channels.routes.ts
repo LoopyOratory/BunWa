@@ -25,12 +25,8 @@ export function createChannelsRouter(): Hono<{ Variables: { session: any; body: 
     async (c) => {
       const session = c.get('session');
       const body = await c.req.json();
-      try {
-        const result = await (session as any).channelsCreateChannel(body);
-        return c.json(result);
-      } catch (e: any) {
-        return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
-      }
+      const result = await (session as any).channelsCreateChannel(body);
+      return c.json(result);
     }
   );
 
@@ -51,12 +47,10 @@ export function createChannelsRouter(): Hono<{ Variables: { session: any; body: 
     async (c) => {
       const session = c.get('session');
       const id = c.req.param('id');
-      try {
-        const channel = await (session as any).channelsGetChannel(id);
-        return c.json(channel);
-      } catch (e: any) {
-        return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
-      }
+      // A missing channel raises NotFoundException and the shared error
+      // handler answers 404 naming the id.
+      const channel = await (session as any).channelsGetChannel(id);
+      return c.json(channel);
     }
   );
 
@@ -66,12 +60,10 @@ export function createChannelsRouter(): Hono<{ Variables: { session: any; body: 
     async (c) => {
       const session = c.get('session');
       const id = c.req.param('id');
-      try {
-        const messages = await (session as any).previewChannelMessages(id, {});
-        return c.json(messages);
-      } catch (e: any) {
-        return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
-      }
+      // The engine explains that the Argo decoder is unavailable; that reason
+      // must reach the caller as a 422 instead of being flattened to a 500.
+      const messages = await (session as any).previewChannelMessages(id, {});
+      return c.json(messages);
     }
   );
 
@@ -125,12 +117,8 @@ export function createChannelsRouter(): Hono<{ Variables: { session: any; body: 
     async (c) => {
       const session = c.get('session');
       const body = await c.req.json();
-      try {
-        const result = await (session as any).searchChannelsByView(body);
-        return c.json(result);
-      } catch (e: any) {
-        return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
-      }
+      const result = await (session as any).searchChannelsByView(body);
+      return c.json(result);
     }
   );
 
@@ -140,12 +128,8 @@ export function createChannelsRouter(): Hono<{ Variables: { session: any; body: 
     async (c) => {
       const session = c.get('session');
       const body = await c.req.json();
-      try {
-        const result = await (session as any).searchChannelsByText(body);
-        return c.json(result);
-      } catch (e: any) {
-        return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
-      }
+      const result = await (session as any).searchChannelsByText(body);
+      return c.json(result);
     }
   );
 

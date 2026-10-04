@@ -22,9 +22,12 @@
  *   BUNWA_URL=... BUNWA_API_KEY=... bun run scripts/verify-endpoints.ts \
  *     --include-writes --session default --confirm-live [--chat-id 111@s.whatsapp.net]
  *
- * Exit code is non-zero when any route returns 5xx or the request fails at the
- * transport level, so it can gate a deploy. Auth and parameter problems do not
- * fail the run; they are reported.
+ * Exit code is non-zero when any route returns 5xx, fails at the transport
+ * level, or answers without the server's own explanation, so it can gate a
+ * deploy. A 404 or 422 that carries a message from the server is "not
+ * applicable here": the route needs a session, a specific resource, or a
+ * capability the engine does not have. Auth and parameter problems are
+ * reported the same way and do not fail the run.
  */
 import 'reflect-metadata';
 
@@ -34,6 +37,7 @@ const VERDICT_ORDER = [
   'needs a parameter',
   'auth',
   'missing',
+  'not applicable',
   'error',
 ] as const;
 
@@ -96,8 +100,9 @@ Options:
   --timeout <ms>     per-request timeout in milliseconds (default 15000)
   --help             print this text
 
-Verdicts: works, needs a session, needs a parameter, auth, missing, error.
-Exit code is non-zero when any route returns 5xx or the request cannot be sent.`);
+Verdicts: works, needs a session, needs a parameter, auth, missing, not applicable, error.
+Exit code is non-zero when any route returns 5xx, cannot be reached, or answers
+without the server's own explanation.`);
 }
 
 function parseArgs(argv: string[]): Options {
@@ -272,22 +277,34 @@ function truncate(value: string, max = 120): string {
   return oneLine.length > max ? `${oneLine.slice(0, max - 3)}...` : oneLine;
 }
 
-function verdictFor(route: RouteEntry, status: number | null, options: Options): Verdict {
+/**
+ * A 404 or 422 only reads as "not applicable here" when the server explains
+ * itself: the report shows that reason, so a client can tell a missing
+ * resource or an unimplemented capability from a server fault. An empty body
+ * on those statuses has no explanation to report and stays an error.
+ */
+function verdictFor(route: RouteEntry, status: number | null, options: Options, message: string): Verdict {
   if (status === null) return 'error';
   if (status >= 500) return 'error';
   if (status >= 200 && status < 400) return 'works';
   if (status === 401 || status === 403) return 'auth';
+  const explained = message.trim().length > 0;
   if (status === 404) {
+    if (!explained) return 'error';
     // A session scoped route with no other parameter needs a session (either
     // none was given, or the named one is missing or not working).
     if (route.requiresSession && (!route.resourceParams || !options.session)) return 'needs a session';
-    // A 404 on a route with a placeholder id means a real resource is needed.
-    if (route.resourceParams) return 'needs a parameter';
-    return 'missing';
+    // No session involvement: the server says the target resource is absent.
+    return 'not applicable';
+  }
+  if (status === 405) return 'missing';
+  if (status === 422) {
+    // The engine does not implement the operation; the message says so.
+    return explained ? 'not applicable' : 'error';
   }
   if (route.requiresSession && !options.session && status >= 400) return 'needs a session';
-  if (status === 405) return 'missing';
-  if (status === 400 || status === 409 || status === 422 || status === 428) return 'needs a parameter';
+  // A required parameter or other client input problem; the server names it.
+  if (status === 400 || status === 409 || status === 428) return 'needs a parameter';
   return 'error';
 }
 
@@ -302,7 +319,7 @@ function makeResult(
     method: route.method,
     path: route.path,
     status,
-    verdict: optionsExtra.forcedVerdict ?? verdictFor(route, status, options),
+    verdict: optionsExtra.forcedVerdict ?? verdictFor(route, status, options, message),
     message,
     sent: optionsExtra.sent ?? true,
   };
@@ -470,9 +487,11 @@ function printSummary(results: Result[]): void {
   );
   console.log(`\nSummary: ${results.length} routes checked, ${parts.join(', ')}.`);
 
-  const failures = results.filter((result) => result.sent && (result.status === null || result.status >= 500));
+  const failures = results.filter((result) => result.sent && result.verdict === 'error');
   if (failures.length > 0) {
-    console.log(`Attention: ${failures.length} route(s) returned 5xx or could not be reached.`);
+    console.log(
+      `Attention: ${failures.length} route(s) returned 5xx, could not be reached, or answered without an explanation.`,
+    );
   }
 }
 
@@ -514,7 +533,7 @@ async function main(): Promise<void> {
 
   printSummary(allResults);
 
-  const failed = allResults.some((result) => result.sent && (result.status === null || result.status >= 500));
+  const failed = allResults.some((result) => result.sent && result.verdict === 'error');
   process.exit(failed ? 1 : 0);
 }
 
