@@ -2,20 +2,50 @@
 type: note
 section: mcp
 tags: [bunwa, mcp, reference, ai]
-updated: 2026-09-29
+updated: 2026-10-04
 source: src/mcp/tools/*.ts
 status: shipped
-tools: 53
+tools: 77
 ---
 
 # 🧰 MCP Tools Reference
 
-All **53** tools, grouped by category, with the file each defines and its policy tier.
+All **77** tools, grouped by category, with the file each defines and its policy tier.
 Everything is `sessionScoped` **except `SessionList`**; `sessionId` is a parameter on every
 session-scoped tool.
 
+The list is built in one place, `buildAllTools()` in `src/mcp/tools/index.ts`, which the MCP
+server and the dashboard's tool endpoint both call. They used to keep separate lists, so a
+family added to one was missing from the other: that is how the `group` category was advertised
+with no tools in it, and why the new channel tools would not have appeared in the dashboard.
+
 Legend — Tier: `read` = `readOnlyHint`, filtered out by `MCP_READONLY`; `write` = mutating.
 ⚠️ = destructive (needs `destructiveOps: true` in the session MCP policy).
+
+## Group — `src/mcp/tools/group.tools.ts` (14)
+
+Added 2026-10-04, wrapping the engine methods the REST group routes use. Participants are chat
+id strings (`15551234567` or `15551234567@c.us`). `GroupGet` answers the mapped `GroupInfo`;
+`GroupList` answers the store's own keyed-by-id shape, matching the REST list route.
+
+| Tool | Tier | Notes |
+|---|---|---|
+| `GroupList` · `GroupGet` · `GroupGetParticipants` · `GroupGetInviteCode` | read | |
+| `GroupCreate` | write | the session account becomes owner |
+| `GroupAddParticipants` · `GroupPromoteParticipants` · `GroupDemoteParticipants` | write | |
+| `GroupRemoveParticipants` | write ⚠️ | removes access immediately |
+| `GroupSetSubject` · `GroupSetDescription` · `GroupRefresh` | write | |
+| `GroupRevokeInviteCode` · `GroupLeave` | write ⚠️ | |
+
+## Channel — `src/mcp/tools/channel.tools.ts` (10)
+
+Added 2026-10-04, same day the channel routes were verified live.
+
+| Tool | Tier | Notes |
+|---|---|---|
+| `ChannelList` · `ChannelGet` · `ChannelSearchByText` · `ChannelSearchByView` | read | `ChannelSearchByText` is the working search; WhatsApp refuses `by-view` for every view value |
+| `ChannelFollow` · `ChannelUnfollow` · `ChannelMute` · `ChannelUnmute` · `ChannelCreate` | write | |
+| `ChannelDelete` | write ⚠️ | |
 
 ## Session — `src/mcp/tools/session.tools.ts` (6)
 

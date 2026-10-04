@@ -41,7 +41,7 @@ Full analysis in [[Interactive Messages and Commerce]].
 | # | Task | Why |
 |---|---|---|
 | 7 | **Declarative engine capability matrix** — `getEngineInfo()` returning per-engine supported operations | kills the whole class of "500 instead of a clear 422" bugs, and lets the dashboard hide unsupported buttons ([[Engines Overview]]) |
-| 8 | **Group MCP tools** — create/participants/settings | the `'group'` tool category already exists with no tools in it ([[MCP Tools Reference]]) |
+| 8 | ~~**Group MCP tools** — create/participants/settings~~ **done 2026-10-04** | 14 group tools and 10 channel tools added, and the duplicated tool lists in the MCP server and the dashboard endpoint replaced by one `buildAllTools()` ([[MCP Tools Reference]]) |
 | 9 | **Label colour mapping** — implement the hex ↔ 0–19 index conversion | three `TODO`s in the engine; labels currently lose their colour ([[Channels and Labels]]) |
 | 10 | **`waproto` location/vCard extraction** | outgoing location and vCard payloads are silently empty |
 | 11 | **Postgres `runInTransaction`** — real `BEGIN`/`COMMIT` | batch writes are non-atomic today ([[Session Stores]]) |

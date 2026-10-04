@@ -19,16 +19,9 @@ import type { SessionManager } from '../core/manager.core';
 import type { SessionConfig } from '../structures/sessions.dto';
 import type { ToolDescriptor } from './tool-descriptor';
 import { ToolRegistryService } from './tool-registry.service';
+import { buildAllTools } from './tools';
 import { handleToolError, jsonToolResult, smartToolResult } from './tool-result';
 import { KeyRateLimiter, RateLimitError, readRateLimitConfig } from './mcp-rate-limit';
-import { sessionTools } from './tools/session.tools';
-import { messageTools } from './tools/message.tools';
-import { contactTools } from './tools/contact.tools';
-import { chatTools } from './tools/chat.tools';
-import { statusTools } from './tools/status.tools';
-import { presenceTools } from './tools/presence.tools';
-import { policyTools } from './tools/policy.tools';
-import { templateTools } from './tools/template.tools';
 
 const logger = pino({ name: 'McpServer' });
 
@@ -259,16 +252,7 @@ export function createMcpRouter(
   const configuredKey = process.env.WAHA_API_KEY || undefined;
 
   // Build tool registry from all tool definition factories
-  const allTools: ToolDescriptor[] = [
-    ...sessionTools(sessionManager),
-    ...messageTools(sessionManager),
-    ...contactTools(sessionManager),
-    ...chatTools(sessionManager),
-    ...statusTools(sessionManager),
-    ...presenceTools(sessionManager),
-    ...policyTools(sessionManager),
-    ...templateTools(sessionManager),
-  ];
+  const allTools: ToolDescriptor[] = buildAllTools(sessionManager);
   const registry = new ToolRegistryService(allTools);
 
   // Eagerly compute tool list at mount time to validate registry

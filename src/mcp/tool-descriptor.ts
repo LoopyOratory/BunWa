@@ -6,7 +6,7 @@ import type { z } from 'zod';
 
 export type ToolTier = 'read' | 'write';
 
-export type ToolCategory = 'session' | 'message' | 'chat' | 'contact' | 'group' | 'presence' | 'media' | 'status' | 'policy' | 'template';
+export type ToolCategory = 'session' | 'message' | 'chat' | 'contact' | 'group' | 'channel' | 'presence' | 'media' | 'status' | 'policy' | 'template';
 
 export interface ToolDescriptor<I = any> {
   /** Explicit, stable public name, e.g. 'MessageSendText'. */

@@ -9,14 +9,7 @@ import { policiesMiddleware, CanSession, Action, FromParam } from '../middleware
 import { SessionManager } from '../core/manager.core';
 import { CryptoHasher } from 'bun';
 import { randomBytes } from 'crypto';
-import { sessionTools } from '../mcp/tools/session.tools';
-import { messageTools } from '../mcp/tools/message.tools';
-import { contactTools } from '../mcp/tools/contact.tools';
-import { chatTools } from '../mcp/tools/chat.tools';
-import { statusTools } from '../mcp/tools/status.tools';
-import { presenceTools } from '../mcp/tools/presence.tools';
-import { policyTools } from '../mcp/tools/policy.tools';
-import { templateTools } from '../mcp/tools/template.tools';
+import { buildAllTools } from '../mcp/tools';
 import { ToolRegistryService } from '../mcp/tool-registry.service';
 import type { ToolCategory } from '../mcp/tool-descriptor';
 
@@ -41,17 +34,7 @@ export function createMcpConfigRouter(): Hono {
    */
   router.get('/mcp/tools', async (c) => {
     const manager = container.resolve(SessionManager);
-    const allTools = [
-      ...sessionTools(manager),
-      ...messageTools(manager),
-      ...contactTools(manager),
-      ...chatTools(manager),
-      ...statusTools(manager),
-      ...presenceTools(manager),
-      ...policyTools(manager),
-      ...templateTools(manager),
-    ];
-    const registry = new ToolRegistryService(allTools);
+    const registry = new ToolRegistryService(buildAllTools(manager));
 
     const tools: McpToolInfo[] = registry.list().map((t) => ({
       name: t.name,
