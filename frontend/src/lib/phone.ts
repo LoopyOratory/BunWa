@@ -30,11 +30,16 @@ export function toIntlDigits(iso: string, raw: string): string {
 }
 
 /** Full WhatsApp chat id ("<intl>@c.us"). Inputs that already carry an id
- *  ("...@c.us", "...@g.us") pass through untouched. */
+ *  ("...@c.us", "...@g.us") pass through untouched. A non-numeric handle is a
+ *  WhatsApp username and becomes "@/handle" so the server can resolve it. */
 export function toChatId(iso: string, raw: string): string {
   const t = raw.trim()
   if (!t) return ""
   if (t.includes("@")) return t
+  if (!/^[\d+\s()-]+$/.test(t)) {
+    // Meta's username rules: 3-35 letters, digits, periods or underscores.
+    return /^[a-zA-Z0-9._]{3,35}$/.test(t) ? `@${t}` : ""
+  }
   const digits = toIntlDigits(iso, t)
   return digits ? `${digits}@c.us` : ""
 }

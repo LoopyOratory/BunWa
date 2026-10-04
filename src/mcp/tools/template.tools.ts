@@ -158,7 +158,7 @@ export function templateTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        chatId: z.string().min(1).describe('Chat JID (e.g. 628123456789@c.us or groupId@g.us)'),
+        chatId: z.string().min(1).describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
         template: templateIdOrName,
         variables: variablesSchema,
         linkPreview: z.boolean().optional().describe('Enable link preview in the sent message'),

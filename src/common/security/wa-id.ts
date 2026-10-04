@@ -8,6 +8,7 @@
  *   - `<id>@g.us`               a group
  *   - `status@broadcast`        the status/stories pseudo-JID
  *   - `<id>@newsletter`         a channel; `<id>@broadcast` a broadcast list
+ *   - `handle`, `@handle` or `handle@username`  a user addressed by WhatsApp username
  *   - any of the above may carry a `:<device>` multi-device suffix
  *
  * The engine boundary is an anti-corruption layer: adapters reduce all of that to the NEUTRAL dialect
@@ -19,14 +20,29 @@
  *   - `status@broadcast` / `<id>@newsletter` / `<id>@broadcast`  special channels
  *   - never `@s.whatsapp.net`, never a `:device` suffix
  *
+ * A username is recognized here and classified, but it has NO neutral JID: the protocol maps it to
+ * the user's LID, not to a separate address form, so `toNeutralJid` passes it through untouched and
+ * callers that need an address must resolve it (see the send-target resolution in the engine).
+ *
  * Resolution rule: prefer `@c.us` (resolve a lid to its phone when the mapping is known); fall back to
  * `@lid` only when it can't be resolved. An unresolved lid is NOT pretended to be a phone.
  */
 
-export type WaIdKind = 'user' | 'group' | 'lid' | 'status' | 'newsletter' | 'broadcast' | 'unknown';
+export type WaIdKind =
+  | 'user'
+  | 'group'
+  | 'lid'
+  | 'status'
+  | 'newsletter'
+  | 'broadcast'
+  | 'username'
+  | 'unknown';
 
 /** Domains that denote a phone-addressed user (the two are the same entity, different dialects). */
 const USER_DOMAINS = new Set(['c.us', 's.whatsapp.net']);
+
+/** The dialect domain WhatsApp clients use for a username-addressed JID (`handle@username`). */
+export const USERNAME_DOMAIN = 'username';
 
 export interface ParsedWaId {
   kind: WaIdKind;
@@ -43,6 +59,11 @@ export function userPart(jid: string): string {
   return jid.split('@')[0].split(':')[0];
 }
 
+/** A bare handle that does not look like a phone number (digits only, optional leading +). */
+function looksLikeBareHandle(value: string): boolean {
+  return value.length > 0 && !/^\+?\d+$/.test(value);
+}
+
 /** Classify any WhatsApp JID into its neutral kind + parts, without resolving anything. */
 export function parseWaId(jid: string): ParsedWaId {
   const raw = jid;
@@ -50,9 +71,15 @@ export function parseWaId(jid: string): ParsedWaId {
   if (lower === 'status@broadcast') {
     return { kind: 'status', userPart: 'status', raw };
   }
+  // `@handle` (the Telegram-style spelling) and a bare non-numeric handle.
+  if (lower.startsWith('@') && !lower.slice(1).includes('@')) {
+    return { kind: 'username', userPart: lower.slice(1), raw };
+  }
   const at = lower.lastIndexOf('@');
   if (at === -1) {
-    return { kind: 'unknown', userPart: lower, raw };
+    return looksLikeBareHandle(lower)
+      ? { kind: 'username', userPart: lower, raw }
+      : { kind: 'unknown', userPart: lower, raw };
   }
   const domain = lower.slice(at + 1);
   const [local, device] = lower.slice(0, at).split(':');
@@ -66,8 +93,57 @@ export function parseWaId(jid: string): ParsedWaId {
           ? 'newsletter'
           : domain === 'broadcast'
             ? 'broadcast'
-            : 'unknown';
+            : domain === USERNAME_DOMAIN
+              ? 'username'
+              : 'unknown';
   return { kind, userPart: local, device, raw };
+}
+
+/**
+ * The bare handle from any accepted username address form (`handle`, `@handle`,
+ * `handle@username`), lowercased. Non-username input is returned verbatim, so
+ * callers can use this blindly before validation.
+ */
+export function usernameHandle(value: string): string {
+  const parsed = parseWaId(value);
+  return parsed.kind === 'username' ? parsed.userPart : value.trim();
+}
+
+/** Check whether the value is an address form that denotes a username. */
+export function isUsernameAddress(value: string): boolean {
+  return parseWaId(value).kind === 'username';
+}
+
+/**
+ * Meta's published rules for user and business usernames: 3 to 35 characters
+ * from a-z, 0-9, period and underscore, at least one letter, no leading or
+ * trailing period, no consecutive periods, no `www` prefix, and no domain-like
+ * ending. Comparison is case-insensitive.
+ *
+ * The domain-ending rule in Meta's documentation is open-ended ("and so on");
+ * only the examples it lists are rejected here.
+ */
+const DOMAIN_LIKE_ENDINGS = new Set(['com', 'org', 'net', 'int', 'edu', 'gov', 'mil', 'us', 'in', 'html']);
+
+export function isValidWhatsAppUsername(value: string): boolean {
+  const handle = usernameHandle(value).toLowerCase();
+  if (handle.length < 3 || handle.length > 35) {
+    return false;
+  }
+  if (!/^[a-z0-9._]+$/.test(handle)) {
+    return false;
+  }
+  if (!/[a-z]/.test(handle)) {
+    return false;
+  }
+  if (handle.startsWith('.') || handle.endsWith('.') || handle.includes('..')) {
+    return false;
+  }
+  if (handle.startsWith('www')) {
+    return false;
+  }
+  const lastDot = handle.lastIndexOf('.');
+  return lastDot === -1 || !DOMAIN_LIKE_ENDINGS.has(handle.slice(lastDot + 1));
 }
 
 /**
@@ -95,6 +171,10 @@ export function toNeutralJid(jid: string, resolvePhone?: (jid: string) => string
       return `${parsed.userPart}@newsletter`;
     case 'broadcast':
       return `${parsed.userPart}@broadcast`;
+    case 'username':
+      // A username has no neutral JID (it maps to the user's LID on the wire);
+      // pass it through so a resolver, not this reducer, decides the address.
+      return parsed.raw;
     default:
       return jid;
   }

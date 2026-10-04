@@ -68,8 +68,10 @@ import { WhatsappSession } from '../../session/session.abc';
 import { getBrowserExecutablePath } from '../../session/session.browser';
 import {
   NotImplementedByEngineError,
+  UnprocessableEntityException,
 } from '../../exceptions';
 import { fetchBuffer } from '../../../utils/fetch';
+import { isUsernameAddress } from '../../../common/security/wa-id';
 
 // ---------------------------------------------------------------------------
 // Chrome path — resolved at launch time by the shared browser-path helper
@@ -594,6 +596,11 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
   async checkNumberStatus(request: CheckNumberStatusQuery): Promise<WANumberExistResult> {
     this.ensureClientReady();
+    if (isUsernameAddress(request.phone)) {
+      throw new UnprocessableEntityException(
+        `The WEBJS engine cannot look up a WhatsApp username. Check a numeric number instead.`,
+      );
+    }
     const phone = request.phone;
     const numberId = await this.client!.getNumberId(phone);
     return {
@@ -913,6 +920,14 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   }
 
   protected ensureSuffix(phone: string): string {
+    // whatsapp-web.js has no username lookup; build the address only for a
+    // numeric id, and refuse a handle with a clear reason instead of turning
+    // it into a broken JID like `alice@c.us`.
+    if (isUsernameAddress(phone)) {
+      throw new UnprocessableEntityException(
+        `The WEBJS engine cannot address a WhatsApp username. Send to a numeric JID instead, for example 15551234567@c.us.`,
+      );
+    }
     if (phone.includes('@')) return phone;
     return `${phone}@c.us`;
   }

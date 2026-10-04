@@ -29,6 +29,8 @@ import makeWASocket, {
   jidDecode,
   updateMessageWithReceipt,
   updateMessageWithReaction,
+  USyncQuery,
+  USyncUser,
 } from '@whiskeysockets/baileys';
 import { WACallEvent } from '@whiskeysockets/baileys/lib/Types/Call';
 import { BaileysEventMap } from '@whiskeysockets/baileys/lib/Types/Events';
@@ -245,6 +247,11 @@ import { StatusStringToStatus } from '../../utils/acks';
 import promiseRetry from 'promise-retry';
 import { container } from 'tsyringe';
 import { SendingPolicyService } from '../../sending-policy/sending-policy.service';
+import {
+  isUsernameAddress,
+  isValidWhatsAppUsername,
+  usernameHandle,
+} from '../../../common/security/wa-id';
 
 export const BaileysEvents = {
   CONNECTION_UPDATE: 'connection.update',
@@ -1012,7 +1019,36 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   async checkNumberStatus(
     request: CheckNumberStatusQuery,
   ): Promise<WANumberExistResult> {
-    let phone = request.phone.split('@')[0];
+    let target = request.phone;
+    if (isUsernameAddress(request.phone)) {
+      const handle = usernameHandle(request.phone).toLowerCase();
+      if (!isValidWhatsAppUsername(handle)) {
+        throw new UnprocessableEntityException(
+          `'${request.phone}' is not a valid WhatsApp username. Usernames are 3 to 35 letters, digits, periods or underscores.`,
+        );
+      }
+      let resolved: string | null = null;
+      try {
+        resolved = await this.resolveUsernameJid(handle);
+      } catch (error) {
+        if (error instanceof UnprocessableEntityException) {
+          throw error;
+        }
+        this.logger.warn({ error, username: handle }, 'Username lookup failed');
+      }
+      if (!resolved) {
+        // A definitive negative answer, the same shape the phone path returns
+        // when onWhatsApp does not know the number.
+        return {
+          exists: false,
+          isBusiness: false,
+          canReceiveMessage: false,
+          number: `@${handle}`,
+        };
+      }
+      target = resolved;
+    }
+    let phone = target.split('@')[0];
     phone = phone.replace(/\+/g, '');
     const results = await this.sock.onWhatsApp(phone);
     const result = results?.[0];
@@ -1078,6 +1114,77 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     return chatId;
   }
 
+  /** Username lookups already resolved in this session, keyed by lowercase handle. */
+  private usernameTargets = new Map<string, string>();
+
+  /**
+   * Resolve a bare username handle to a WhatsApp JID through the USync
+   * username/contact query (Baileys exposes `executeUSyncQuery` for exactly
+   * this). Returns null when the server answers without an address; throws
+   * when there is no connected socket to ask at all, so the caller can say
+   * that lookup is unavailable instead of reporting "not found".
+   */
+  private async resolveUsernameJid(handle: string): Promise<string | null> {
+    const cached = this.usernameTargets.get(handle);
+    if (cached) {
+      return cached;
+    }
+    const sock = this.sock as any;
+    if (!sock?.executeUSyncQuery) {
+      throw new UnprocessableEntityException(
+        `WhatsApp username '@${handle}' cannot be looked up because the session is not connected. Send to a numeric JID instead, for example 15551234567@c.us.`,
+      );
+    }
+    const query = new USyncQuery()
+      .withContext('interactive')
+      .withContactProtocol()
+      .withUsernameProtocol();
+    query.withUser(new USyncUser().withUsername(handle));
+    const result = await sock.executeUSyncQuery(query);
+    const resolved = result?.list?.find((entry: any) => entry?.id)?.id;
+    if (typeof resolved !== 'string' || !resolved) {
+      return null;
+    }
+    this.usernameTargets.set(handle, resolved);
+    return resolved;
+  }
+
+  /**
+   * Turn a send target into the address the protocol can use. A username is
+   * resolved through the protocol lookup when possible; any other value is
+   * returned unchanged. When the handle is malformed or cannot be resolved,
+   * this throws a 422 that names the problem and tells the caller a numeric
+   * JID is required, rather than letting a broken JID fail deeper down.
+   */
+  public async resolveSendTarget(chatId: string): Promise<string> {
+    if (!isUsernameAddress(chatId)) {
+      return chatId;
+    }
+    const handle = usernameHandle(chatId).toLowerCase();
+    if (!isValidWhatsAppUsername(handle)) {
+      throw new UnprocessableEntityException(
+        `'${chatId}' is not a valid WhatsApp username. Usernames are 3 to 35 letters, digits, periods or underscores.`,
+      );
+    }
+    let resolved: string | null = null;
+    try {
+      resolved = await this.resolveUsernameJid(handle);
+    } catch (error) {
+      this.logger.warn({ error, username: handle }, 'Username lookup failed');
+    }
+    if (!resolved) {
+      throw new UnprocessableEntityException(
+        `WhatsApp username '@${handle}' could not be resolved to an address on this account. Send to a numeric JID instead, for example 15551234567@c.us.`,
+      );
+    }
+    return resolved;
+  }
+
+  /** Resolve a send target, then run the sending-policy gate on the address. */
+  private async resolveAndGate(requestChatId: string): Promise<string> {
+    return this.policyGate(await this.resolveSendTarget(requestChatId));
+  }
+
   /** Record a send against the policy counters (success, or a failed cold attempt). */
   private policyRecord(chatId: string, failed: boolean): void {
     this.getSendingPolicy()?.recordSend(this.name, chatId, failed);
@@ -1111,7 +1218,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async sendText(request: MessageTextRequest) {
-    const chatId = this.policyGate(request.chatId);
+    const chatId = await this.resolveAndGate(request.chatId);
     try {
       const message = {
         text: request.text,
@@ -1207,7 +1314,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     if (contacts.length === 0) {
       throw new UnprocessableEntityException('No contacts provided');
     }
-    const chatId = this.policyGate(request.chatId);
+    const chatId = await this.resolveAndGate(request.chatId);
     try {
       const options: any = await this.getMessageOptions(request);
       const msg = { contacts: { contacts: contacts } };
@@ -1243,7 +1350,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       messageSecret: requestPoll.messageSecret,
     };
     const message = { poll: poll };
-    const remoteJid = this.policyGate(request.chatId);
+    const remoteJid = await this.resolveAndGate(request.chatId);
     try {
       const options: any = await this.getMessageOptions(request);
       const result = await this.sock.sendMessage(remoteJid, message, options);
@@ -1257,7 +1364,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async reply(request: MessageReplyRequest) {
-    const chatId = this.policyGate(request.chatId);
+    const chatId = await this.resolveAndGate(request.chatId);
     try {
       const options: any = await this.getMessageOptions(request);
       const message = {
@@ -1292,7 +1399,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async sendImage(request: MessageImageRequest) {
-    const chatId = this.policyGate(request.chatId);
+    const chatId = await this.resolveAndGate(request.chatId);
     try {
       const fileData = this.fileToBuffer(request.file);
       const message: any = {
@@ -1312,7 +1419,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async sendFile(request: MessageFileRequest) {
-    const chatId = this.policyGate(request.chatId);
+    const chatId = await this.resolveAndGate(request.chatId);
     try {
       const fileData = this.fileToBuffer(request.file);
       const message: any = {
@@ -1332,7 +1439,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async sendVoice(request: MessageVoiceRequest) {
-    const chatId = this.policyGate(request.chatId);
+    const chatId = await this.resolveAndGate(request.chatId);
     try {
       const fileData = this.fileToBuffer(request.file);
       const convert = request.convert !== false; // default: transcode to OGG/Opus
@@ -1362,7 +1469,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async sendVideo(request: MessageVideoRequest) {
-    const chatId = this.policyGate(request.chatId);
+    const chatId = await this.resolveAndGate(request.chatId);
     try {
       const fileData = this.fileToBuffer(request.file);
       const message: any = {
@@ -1385,7 +1492,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async sendButtonsReply(request: MessageButtonReply) {
-    const chatId = toJID(this.ensureSuffix(request.chatId));
+    const chatId = toJID(this.ensureSuffix(await this.resolveSendTarget(request.chatId)));
     const message = {
       buttonsResponseMessage: {
         selectedButtonId: request.selectedButtonID,
@@ -1403,7 +1510,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async sendPollVote(request: MessagePollVoteRequest) {
-    const chatId = toJID(this.ensureSuffix(request.chatId));
+    const chatId = toJID(this.ensureSuffix(await this.resolveSendTarget(request.chatId)));
     const key = parseMessageIdSerialized(request.pollMessageId);
     const pollMessage = await this.store.loadMessage(key.remoteJid, key.id);
     if (!pollMessage) {
@@ -1423,7 +1530,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async sendEvent(request: EventMessageRequest): Promise<WAMessage> {
-    const chatId = toJID(this.ensureSuffix(request.chatId));
+    const chatId = toJID(this.ensureSuffix(await this.resolveSendTarget(request.chatId)));
     const message = {
       eventMessage: {
         name: request.text,
@@ -1441,7 +1548,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   async sendLinkCustomPreview(
     request: MessageLinkCustomPreviewRequest,
   ): Promise<any> {
-    const chatId = toJID(this.ensureSuffix(request.chatId));
+    const chatId = toJID(this.ensureSuffix(await this.resolveSendTarget(request.chatId)));
     const text = request.text || (request as any).body || '';
     const msg: any = {
       text: text,
@@ -1464,7 +1571,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async sendButtons(request: SendButtonsRequest) {
-    const chatId = this.policyGate(request.chatId);
+    const chatId = await this.resolveAndGate(request.chatId);
     try {
       const headerImage = await this.uploadMedia(request.headerImage, 'image');
       const result = await sendButtonMessage(
@@ -1486,7 +1593,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async sendList(request: SendListRequest) {
-    const chatId = this.policyGate(request.chatId);
+    const chatId = await this.resolveAndGate(request.chatId);
     try {
       const sections = request.sections.map((s) => ({
         title: s.title || '',
@@ -1543,7 +1650,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async sendLocation(request: MessageLocationRequest) {
-    const chatId = this.policyGate(request.chatId);
+    const chatId = await this.resolveAndGate(request.chatId);
     try {
       const msg = {
         location: {
@@ -1571,7 +1678,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
         `Message with id '${request.messageId}' not found`,
       );
     }
-    const chatId = toJID(this.ensureSuffix(request.chatId));
+    const chatId = toJID(this.ensureSuffix(await this.resolveSendTarget(request.chatId)));
     const message = {
       forward: forwardMessage,
       force: true,
@@ -1583,7 +1690,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async sendLinkPreview(request: MessageLinkPreviewRequest) {
-    const chatId = this.policyGate(request.chatId);
+    const chatId = await this.resolveAndGate(request.chatId);
     try {
       const text = request.title ? `${request.title}\n${request.url}` : request.url;
       const msg: any = {
@@ -1602,7 +1709,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async sendSeen(request: SendSeenRequest) {
-    const chatId = toJID(this.ensureSuffix(request.chatId));
+    const chatId = toJID(this.ensureSuffix(await this.resolveSendTarget(request.chatId)));
 
     // Build message keys to mark as read
     let messageKeys: any[];
@@ -1640,13 +1747,13 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async startTyping(request: ChatRequest): Promise<void> {
-    const chatId = toJID(this.ensureSuffix(request.chatId));
+    const chatId = toJID(this.ensureSuffix(await this.resolveSendTarget(request.chatId)));
     await this.sock.sendPresenceUpdate('composing', chatId);
   }
 
   @Activity()
   async stopTyping(request: ChatRequest) {
-    const chatId = toJID(this.ensureSuffix(request.chatId));
+    const chatId = toJID(this.ensureSuffix(await this.resolveSendTarget(request.chatId)));
     return this.sock.sendPresenceUpdate('paused', chatId);
   }
 
@@ -1770,7 +1877,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
           star: request.star,
         },
       },
-      toJID(request.chatId),
+      toJID(await this.resolveSendTarget(request.chatId)),
     );
   }
 
@@ -3305,6 +3412,10 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       replyTo: replyTo,
       reactions: message.reactions || [],
       interactive: extractInteractiveReply(message.message),
+      // WhatsApp username addressing: the protocol attaches the handle to a
+      // message key as `remoteJidUsername` (1:1) or `participantUsername`
+      // (group participant). Surface it instead of dropping it.
+      username: message.key.remoteJidUsername ?? message.key.participantUsername ?? null,
       _data: message,
     };
   }

@@ -49,6 +49,8 @@ export interface ChatOverview {
   name: string
   picture?: string
   unreadCount?: number
+  /** WhatsApp username of the chat, when the overview carries one */
+  username?: string
   lastMessage?: {
     id: string
     timestamp: number
@@ -77,6 +79,8 @@ export interface Message {
     selectedText: string | null
     repliedToMessageId: string | null
   } | null
+  /** WhatsApp username of the sender, when the message carried one */
+  username?: string | null
 }
 
 export interface Contact {
@@ -86,6 +90,8 @@ export interface Contact {
   verifiedName?: string
   imgUrl?: string | null
   status?: string
+  /** WhatsApp username, when the contact record carries one */
+  username?: string
 }
 
 export interface Group {
@@ -437,7 +443,9 @@ export const api = {
       body: JSON.stringify({ session, chatId, text, reply_to: replyTo }),
     }),
   checkNumberStatus: (session: string, phone: string) =>
-    request<{ exists: boolean; isBusiness: boolean; canReceiveMessage: boolean; number: string }>(`/api/checkNumberStatus?session=${session}&phone=${phone}`),
+    request<{ exists: boolean; isBusiness: boolean; canReceiveMessage: boolean; number: string }>(
+      `/api/checkNumberStatus?session=${encodeURIComponent(session)}&phone=${encodeURIComponent(phone)}`,
+    ),
 
   // ==================== CONTACTS ====================
   getContacts: (session: string, limit = 50, offset = 0) =>

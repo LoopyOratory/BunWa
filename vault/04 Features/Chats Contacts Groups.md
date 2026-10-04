@@ -5,8 +5,8 @@ engine: [noweb, webjs]
 tier: both
 endpoints: 55
 tags: [feature, api, whatsapp]
-updated: 2026-09-14
-source: src/api/chats.routes.ts, src/api/contacts.routes.ts, src/api/groups.routes.ts, src/api/presence.routes.ts
+updated: 2026-10-04
+source: src/api/chats.routes.ts, src/api/contacts.routes.ts, src/api/groups.routes.ts, src/api/presence.routes.ts, src/common/security/wa-id.ts
 ---
 
 # 👥 Chats, Contacts, Groups, Presence
@@ -78,6 +78,28 @@ timeout). Implemented with the `@Activity()` decorator in `src/core/session/acti
 `GET /lids`, `/lids/count`, `/lids/:lid`, `/lids/pn/:phoneNumber`. Engine-neutral JID handling lives in
 `src/common/security/wa-id.ts` (`@c.us`, `@g.us`, `@lid`, newsletter, broadcast), which is what makes
 LID-aware `checkNumberStatus` and `fromMe` detection work ([[NOWEB Engine]]).
+
+## Usernames (WhatsApp's handle layer)
+
+WhatsApp usernames are an alias for a user's LID, not a separate address (Baileys PR #2480). Support
+today, NOWEB only:
+
+- **Classification**: `src/common/security/wa-id.ts` recognizes a bare `handle`, `@handle` and
+  `handle@username` as `kind: 'username'` and validates against Meta's published rules
+  (3-35 chars, `a-z 0-9 . _`, at least one letter, no leading/trailing/consecutive periods, no `www`
+  prefix, no listed domain-like ending, case-insensitive).
+- **Send targets**: the send methods and `checkNumberStatus` call `resolveSendTarget`, which resolves
+  a valid handle through Baileys' `USyncQuery` username+contact query (`executeUSyncQuery`). A handle
+  that cannot be resolved answers `422` naming the problem and pointing at a numeric JID; it is never
+  turned into a broken `<handle>@c.us`.
+- **Inbound**: `WAMessage.username` carries `key.remoteJidUsername` (1:1) or
+  `key.participantUsername` (group participant); the console shows it in the chat header and message
+  sender line.
+- **WEBJS**: no lookup exists, so a username target is refused with a clear `422`.
+
+Not possible yet: sending to a username if the server returns no address for it (the account may not
+have the rollout), and resolving a username for chat lookups, labels or history. Verification against
+a live paired account is still outstanding.
 
 ## Profile & calls
 

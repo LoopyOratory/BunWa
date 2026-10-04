@@ -7,7 +7,7 @@ import { workingSessionResolver } from '../middleware/session-resolver';
 import { SessionManager } from '../core/manager.core';
 import { getSessionFromBody } from '../middleware/get-session-from-body';
 import { AuditService, AuditAction } from '../core/audit/audit.service';
-import { TooManyRequestsException } from '../core/exceptions';
+import { isClientFacingError } from '../core/exceptions';
 import { getChatMessagesViaEngine } from './chats.routes';
 
 // Get session name from body for policy enforcement. `validatedBody` is set
@@ -85,7 +85,7 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
       } catch (e: any) {
         // Let mapped domain exceptions (e.g. the 429 sending policy) reach
         // the global error handler instead of flattening into a 500.
-        if (e instanceof TooManyRequestsException) throw e;
+        if (isClientFacingError(e)) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -108,7 +108,7 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
       } catch (e: any) {
         // Let mapped domain exceptions (e.g. the 429 sending policy) reach
         // the global error handler instead of flattening into a 500.
-        if (e instanceof TooManyRequestsException) throw e;
+        if (isClientFacingError(e)) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -130,7 +130,7 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
       } catch (e: any) {
         // Let mapped domain exceptions (e.g. the 429 sending policy) reach
         // the global error handler instead of flattening into a 500.
-        if (e instanceof TooManyRequestsException) throw e;
+        if (isClientFacingError(e)) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -153,7 +153,7 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
       } catch (e: any) {
         // Let mapped domain exceptions (e.g. the 429 sending policy) reach
         // the global error handler instead of flattening into a 500.
-        if (e instanceof TooManyRequestsException) throw e;
+        if (isClientFacingError(e)) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -248,7 +248,7 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
       } catch (e: any) {
         // Let mapped domain exceptions (e.g. the 429 sending policy) reach
         // the global error handler instead of flattening into a 500.
-        if (e instanceof TooManyRequestsException) throw e;
+        if (isClientFacingError(e)) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -273,7 +273,7 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
       } catch (e: any) {
         // Let mapped domain exceptions (e.g. the 429 sending policy) reach
         // the global error handler instead of flattening into a 500.
-        if (e instanceof TooManyRequestsException) throw e;
+        if (isClientFacingError(e)) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -291,7 +291,7 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
       } catch (e: any) {
         // Let mapped domain exceptions (e.g. the 429 sending policy) reach
         // the global error handler instead of flattening into a 500.
-        if (e instanceof TooManyRequestsException) throw e;
+        if (isClientFacingError(e)) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -379,7 +379,7 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
       } catch (e: any) {
         // Let mapped domain exceptions (e.g. the 429 sending policy) reach
         // the global error handler instead of flattening into a 500.
-        if (e instanceof TooManyRequestsException) throw e;
+        if (isClientFacingError(e)) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -402,7 +402,7 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
       } catch (e: any) {
         // Let mapped domain exceptions (e.g. the 429 sending policy) reach
         // the global error handler instead of flattening into a 500.
-        if (e instanceof TooManyRequestsException) throw e;
+        if (isClientFacingError(e)) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -440,7 +440,7 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
       } catch (e: any) {
         // Let mapped domain exceptions (e.g. the 429 sending policy) reach
         // the global error handler instead of flattening into a 500.
-        if (e instanceof TooManyRequestsException) throw e;
+        if (isClientFacingError(e)) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -495,7 +495,7 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
       } catch (e: any) {
         // Let mapped domain exceptions (e.g. the 429 sending policy) reach
         // the global error handler instead of flattening into a 500.
-        if (e instanceof TooManyRequestsException) throw e;
+        if (isClientFacingError(e)) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }
@@ -523,7 +523,7 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
         });
         return c.json({ success: true, id: result?.key?.id ?? result?._id ?? null });
       } catch (e: any) {
-        if (e instanceof TooManyRequestsException) throw e;
+        if (isClientFacingError(e)) throw e;
         return c.json({ error: String(e?.message || e) }, 500);
       }
     }

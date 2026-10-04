@@ -55,9 +55,12 @@ validation) plus a long fix list. Nothing API-breaking for BunWa's clients.
 | 25 | **Webhook header hygiene** | v0.24.0: dashboard webhooks set a signing secret and write-only custom headers; a header the gateway sets itself (`User-Agent`, `X-OpenWA-*`) is refused; non-Latin-1 values and names that differ only in case are rejected `400`, and a custom `User-Agent` is dropped at delivery | — | `customHeaders` exist; delivery filters only `X-WAHA-*` and `Content-Type`, with no charset or duplicate-name validation | **Port (small fix, security)** |
 | 26 | **Durable webhook outbox** | v0.24.0: deliveries are recorded before the first attempt and stranded ones replay under the stored idempotency key (at-least-once); retries back off exponentially; a receiver that keeps failing is capped per session | — | inline delivery with bounded retries and audit; no durable outbox | **Port (feature, security: no)** |
 | 27 | **Subsystems BunWa does not carry** | v0.24.0: Redis TLS/cache/queue, built-in PostgreSQL/Redis/MinIO containers, plugin registry fixes, data export/import hardening, Helm chart and locales; the image can also start as a non-root uid and the Helm chart sets a pod security context, while BunWa already runs UID/GID 1001 with a read-only root filesystem | not compared here | no Redis, no container management, plugin loader and export/import unwired, no Helm chart or locales | **Intentionally not portable (no action)** |
+| 28 | **WhatsApp usernames (handle addressing)** | none: issue #642 (BSUID and username support) closed 2026-08-03 and PR #643 closed unmerged, so main still has no username model; v0.13.0 only fixes a stale lid→phone mapping when a user adopts a username | none: issue #2225 (include the username in the GOWS payload) still open on 2026-10-04, and no engine source handles `remoteJidUsername` | ✅ **shipped** - `src/common/security/wa-id.ts` classifies `handle` / `@handle` / `handle@username`; NOWEB sends and `checkNumberStatus` resolve through the Baileys USync username+contact query and return a clear 422 when a handle cannot be resolved; `WAMessage.username` surfaces the inbound handle; WEBJS refuses with a clear 422 | **Done (NOWEB); live-account verification outstanding** |
 
 Sources per row: OpenWA release notes (v0.23.4 to v0.24.0) and the 50 fetched commits
-(2026-10-02 to 2026-10-03); WAHA release notes (2026.3.4 to 2026.9.1).
+(2026-10-02 to 2026-10-03); WAHA release notes (2026.3.4 to 2026.9.1). Row 28 additionally:
+Baileys PR #2480 (merged 2026-04-24, the source of the username fields), Baileys issue #2516,
+WAHA issue #2225, OpenWA issue #642 and PR #643.
 
 ## What BunWa has that upstream does not
 
@@ -66,7 +69,9 @@ tools** plus session-scoped MCP keys and per-session tool policy (WAHA shipped a
 2026.4.3; OpenWA has none); templates that are editable, previewable and sendable with server
 rendering; HMAC-signed webhooks with idempotency keys and filters; an audit log with
 retention; an n8n community node whose trigger **flattens button and list taps into a
-`selectedId`** (the upstream plugin cannot read button replies at all); and a chat console
+`selectedId`** (the upstream plugin cannot read button replies at all); **WhatsApp username
+addressing** end to end (classification, send-target resolution and an inbound `username`
+field), which neither upstream has; and a chat console
 that explains its own store-disabled state.
 
 ## Port list, prioritised

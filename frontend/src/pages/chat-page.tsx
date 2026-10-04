@@ -24,7 +24,7 @@ import { ChatComposerWrapper } from "@/components/chat/chat-composer-wrapper"
 import { TemplatePicker } from "@/components/chat/template-picker"
 import { mapMessage, resolveUserJid, showSendError, chatName } from "@/components/chat/helpers"
 import { PhoneInput } from "@/components/phone-input"
-import { toIntlDigits } from "@/lib/phone"
+import { toChatId } from "@/lib/phone"
 
 /* ================================================================== */
 /*  STORE FAILURE HELPERS                                             */
@@ -161,12 +161,17 @@ function NewChatDialog({ open, onOpenChange, session, onOpenChat }: {
     if (!phone.trim()) return
     setChecking(true)
     setError(null)
+    const target = toChatId(country, phone)
+    if (!target) { setError("Enter a phone number or a WhatsApp username."); return }
     try {
-      const res = await api.checkNumberStatus(session, toIntlDigits(country, phone))
-      if (res.exists && res.number) { onOpenChat(`${res.number}@c.us`); onOpenChange(false); setPhone("") }
-      else setError("That number is not registered on WhatsApp.")
+      const res = await api.checkNumberStatus(session, target)
+      if (res.exists && res.number) {
+        onOpenChat(res.number.includes("@") ? res.number : `${res.number}@c.us`)
+        onOpenChange(false)
+        setPhone("")
+      } else setError("That number or username is not registered on WhatsApp.")
     } catch {
-      setError("Could not check the number. Try again.")
+      setError("Could not check the number or username. Try again.")
       toast.error("Failed to check number")
     }
     finally { setChecking(false) }
@@ -187,13 +192,13 @@ function NewChatDialog({ open, onOpenChange, session, onOpenChat }: {
       }
     >
       <div className="space-y-2">
-        <Label className="text-xs text-muted-foreground">Phone number</Label>
+        <Label className="text-xs text-muted-foreground">Phone number or username</Label>
         <PhoneInput
           country={country}
           onCountryChange={setCountry}
           value={phone}
           onChange={setPhone}
-          placeholder="501234567"
+          placeholder="501234567 or @handle"
           onEnter={handleCheck}
         />
       </div>

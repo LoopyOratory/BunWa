@@ -201,6 +201,59 @@ sequenceDiagram
 The interactive API reference is at `http://localhost:3000/api-docs/`. It is generated from the
 OpenAPI document in `src/swagger.ts`.
 
+## WhatsApp usernames
+
+WhatsApp's username rollout lets a person be contacted by a handle instead of a phone number. BunWa
+recognizes the three spellings in use (`handle`, `@handle`, `handle@username`), validates them against
+Meta's published rules (3 to 35 characters from `a-z`, `0-9`, `.` and `_`, at least one letter, no
+leading, trailing or doubled periods, no `www` prefix, no domain-like ending, case-insensitive) and,
+on the default NOWEB engine, resolves a valid handle through the protocol's USync username query
+before sending. A username is an alias for the user's LID, not a new address type, so a handle works
+only when WhatsApp itself can resolve it for your account.
+
+Routes that accept a username wherever they accept `chatId` (NOWEB engine):
+
+| Route | Notes |
+| --- | --- |
+| `POST /api/sendText`, `/sendImage`, `/sendFile`, `/sendVoice`, `/sendVideo`, `/sendLocation`, `/sendPoll`, `/sendContactVcard`, `/sendLinkPreview`, `/send/link-custom-preview`, `/sendButtons`, `/sendList`, `/sendSticker` | body `chatId` may be a handle |
+| `POST /api/reply`, `/forwardMessage`, `/sendSeen`, `/startTyping`, `/stopTyping` | body `chatId` may be a handle |
+| `PUT /api/star` | body `chatId` may be a handle |
+| `POST /api/sessions/:session/templates/:id/send` | body `chatId` may be a handle |
+| `GET /api/checkNumberStatus?session=...&phone=...` and `GET /api/contacts/check-exists?session=...&phone=...` | `phone` may be a handle; `number` in the reply is the resolved address when one is found |
+
+The MCP tools listed in the tables above take the same values through the same engine methods,
+including `ContactCheckNumber` and `SessionCheckNumber`.
+
+```bash
+# Send to a username instead of a phone number
+curl -X POST http://localhost:3000/api/sendText \
+  -H "X-Api-Key: $WAHA_API_KEY" -H "Content-Type: application/json" \
+  -d '{"session":"my-session","chatId":"@ada.lovelace","text":"Hello from BunWa"}'
+
+# Check a username
+curl "http://localhost:3000/api/checkNumberStatus?session=my-session&phone=@ada.lovelace" \
+  -H "X-Api-Key: $WAHA_API_KEY"
+```
+
+When a send target is a malformed handle, or a valid handle that cannot be resolved on this
+account, the send answers `422` with a message that names the problem and points at the numeric JID
+alternative. A handle is never turned into a broken JID such as `handle@c.us`. The two check routes
+instead answer `exists: false` for a valid handle that resolves to nothing, the same shape they
+return for an unknown number.
+
+Inbound messages carry the sender's handle in `WAMessage.username` when WhatsApp supplies one
+(`remoteJidUsername` on a 1:1 message, `participantUsername` on a group participant). The chat
+console shows it in the chat header and on the message sender line.
+
+Not supported yet:
+
+- the WEBJS engine has no username lookup, so a username target answers `422` there
+- handles are not accepted by chat lookup routes (history, labels, presence, archive) or by any
+  search route
+- resolution depends on the account's rollout and on WhatsApp returning an address for the handle;
+  this implementation is verified against the protocol surface and unit tests, not against a live
+  paired account
+
 ## Access
 
 Three credential types can reach the REST API. They differ in blast radius:

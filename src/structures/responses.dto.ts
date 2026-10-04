@@ -26,6 +26,11 @@ export class WAMessage extends WAMessageBase {
   replyTo?: any;
   reactions?: any[];
   interactive?: WAMessageInteractiveReply | null;
+  /**
+   * WhatsApp username of the sender, when the message arrived with one
+   * (username addressing). Null when the protocol carried no handle.
+   */
+  username?: string | null;
   _data?: any;
 }
 

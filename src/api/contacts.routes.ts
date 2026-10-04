@@ -3,7 +3,7 @@ import { container } from 'tsyringe';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanSession, Action, FromQuery } from '../middleware/policies';
 import { SessionManager } from '../core/manager.core';
-import { NotFoundException } from '../core/exceptions';
+import { NotFoundException, isClientFacingError } from '../core/exceptions';
 import { getSessionFromBody } from '../middleware/get-session-from-body';
 
 export function createContactsRouter(): Hono {
@@ -68,6 +68,9 @@ export function createContactsRouter(): Hono {
         const result = await (session as any).checkNumberStatus({ phone });
         return c.json(result);
       } catch (e: any) {
+        // Let mapped domain exceptions (a bad username, the sending policy)
+        // reach the global error handler instead of flattening into a 500.
+        if (isClientFacingError(e)) throw e;
         return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
       }
     }

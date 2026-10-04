@@ -27,14 +27,15 @@ interface PhoneInputProps {
 
 /** Country selector + national-number field. The user types only the main
  *  number; the selector supplies the country code and the WhatsApp suffix
- *  ("@c.us") is added automatically. Pasting a full id or "+..." still works. */
+ *  ("@c.us") is added automatically. Pasting a full id or "+..." still works,
+ *  and a non-numeric value is treated as a WhatsApp username ("@handle"). */
 export function PhoneInput({
   id,
   country,
   onCountryChange,
   value,
   onChange,
-  placeholder = "201234567",
+  placeholder = "201234567 or @handle",
   disabled,
   preview = "chatId",
   onEnter,
@@ -63,7 +64,6 @@ export function PhoneInput({
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onEnter ? (e) => e.key === "Enter" && onEnter() : undefined}
           placeholder={placeholder}
-          inputMode="tel"
           autoComplete="off"
           spellCheck={false}
           disabled={disabled}

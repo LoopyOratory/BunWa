@@ -23,9 +23,17 @@ export function chatName(chat: ChatOverview, contactsMap?: Map<string, Contact>)
   if (chat.name) return chat.name
   if (contactsMap) {
     for (const [, contact] of contactsMap) {
-      if (contact.id === chat.id) return contact.name || contact.notify || chat.id.split("@")[0]
+      if (contact.id === chat.id) return contact.name || contact.notify || chatAddress(chat, contactsMap)
     }
   }
+  return chatAddress(chat, contactsMap)
+}
+
+/** The address line for a chat: its WhatsApp username when one is known,
+ *  otherwise the local part of the JID (the phone number or LID). */
+export function chatAddress(chat: ChatOverview, contactsMap?: Map<string, Contact>): string {
+  const username = chat.username || contactsMap?.get(chat.id)?.username
+  if (username) return `@${username.replace(/^@/, "")}`
   return chat.id.split("@")[0] || chat.id
 }
 
@@ -60,9 +68,10 @@ export function resolveUserJid(session: { me?: { id?: string } }): string {
 
 export function mapMessage(msg: Message, contactsMap: Map<string, Contact>, currentUserJid: string): ChatMessageData {
   const senderId = msg.fromMe ? currentUserJid : msg.from
+  const sender = contactsMap.get(msg.from)
   const senderName = msg.fromMe
     ? "You"
-    : contactsMap.get(msg.from)?.name || contactsMap.get(msg.from)?.notify || msg.from.split("@")[0]
+    : sender?.name || sender?.notify || (msg.username ? `@${msg.username.replace(/^@/, "")}` : msg.from.split("@")[0])
 
   const reactionMap = new Map<string, { emoji: string; userIds: string[]; count: number }>()
   for (const r of msg.reactions || []) {

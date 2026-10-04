@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { ChatOverview, Contact } from "@/lib/api"
-import { avColor, chatName, chatInitials } from "./helpers"
+import { avColor, chatAddress, chatName, chatInitials } from "./helpers"
 
 interface ChatHeaderProps {
   chat: ChatOverview
@@ -83,7 +83,7 @@ export function ChatHeader({
           </span>
         ) : (
           <span className="metric truncate text-[13px] leading-[18px] text-[var(--chat-accent)]">
-            {chat.id.split("@")[0]}
+            {chatAddress(chat, contacts)}
           </span>
         )}
       </div>

@@ -22,7 +22,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        chatId: z.string().describe('Chat JID (e.g. 628123456789@c.us or groupId@g.us)'),
+        chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle). Usernames resolve when the account supports username lookup.'),
         text: z.string().min(1).max(4096).describe('Text message content'),
       }),
       handler: async (input) => {
@@ -42,7 +42,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        chatId: z.string().describe('Chat JID'),
+        chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
         file: z.string().describe('Image URL or base64 data'),
         caption: z.string().max(1024).optional(),
       }),
@@ -64,7 +64,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        chatId: z.string().describe('Chat JID'),
+        chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
         file: z.string().describe('File URL or base64 data'),
         caption: z.string().max(1024).optional(),
       }),
@@ -89,7 +89,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        chatId: z.string().describe('Chat JID'),
+        chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
         file: z.string().describe('Audio URL or base64 data (any common format)'),
         convert: z
           .boolean()
@@ -114,7 +114,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        chatId: z.string().describe('Chat JID'),
+        chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
         file: z.string().describe('Video URL or base64 data'),
         caption: z.string().max(1024).optional(),
       }),
@@ -136,7 +136,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        chatId: z.string().describe('Chat JID'),
+        chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
         latitude: z.number().min(-90).max(90).describe('Latitude coordinate'),
         longitude: z.number().min(-180).max(180).describe('Longitude coordinate'),
         title: z.string().optional().describe('Location label/title'),
@@ -160,7 +160,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        chatId: z.string().describe('Chat JID'),
+        chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
         poll: z.object({
           name: z.string().describe('Poll question'),
           values: z.array(z.string()).min(2).describe('Poll options (2-12)'),
@@ -184,7 +184,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        chatId: z.string().describe('Chat JID'),
+        chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
         contacts: z.array(z.object({
           displayName: z.string().describe('Contact display name'),
           vcard: z.string().describe('vCard string'),
@@ -207,7 +207,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        chatId: z.string().describe('Chat JID'),
+        chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
         url: z.string().url().describe('URL to preview'),
         title: z.string().optional().describe('Preview title'),
       }),
@@ -229,7 +229,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        chatId: z.string().describe('Chat JID'),
+        chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
         messageId: z.string().describe('ID of the message to reply to'),
         text: z.string().min(1).describe('Reply text content'),
       }),
@@ -251,7 +251,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        chatId: z.string().describe('Destination chat JID'),
+        chatId: z.string().describe('Destination chat JID, or a WhatsApp username (handle or @handle)'),
         messageId: z.string().describe('ID of the message to forward'),
       }),
       handler: async (input) => {
@@ -295,7 +295,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        chatId: z.string().describe('Chat JID'),
+        chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
         messageId: z.string().describe('ID of the message'),
         star: z.boolean().describe('true to star, false to unstar'),
       }),
@@ -318,7 +318,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        chatId: z.string().describe('Chat JID (e.g. 1234567890@c.us)'),
+        chatId: z.string().describe('Chat JID (e.g. 1234567890@c.us) or a WhatsApp username (handle or @handle)'),
       }),
       handler: async (input) => {
         const session = await getSession(manager, input.sessionId);
@@ -337,7 +337,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        chatId: z.string().describe('Chat JID'),
+        chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
       }),
       handler: async (input) => {
         const session = await getSession(manager, input.sessionId);
@@ -356,7 +356,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        chatId: z.string().describe('Chat JID'),
+        chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
       }),
       handler: async (input) => {
         const session = await getSession(manager, input.sessionId);
@@ -375,7 +375,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        chatId: z.string().describe('Chat JID containing the poll'),
+        chatId: z.string().describe('Chat JID containing the poll, or a WhatsApp username (handle or @handle)'),
         pollMessageId: z.string().describe('ID of the poll message'),
         pollServerId: z.string().optional().describe('Poll server ID, if known'),
         votes: z.array(z.string()).describe('Poll option values to vote for'),
@@ -402,7 +402,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        chatId: z.string().describe('Chat JID'),
+        chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
         buttons: z.array(z.object({
           type: z.enum(['reply', 'url', 'call', 'copy', 'catalog', 'location', 'flow']),
           text: z.string().describe('Button label'),
@@ -440,7 +440,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        chatId: z.string().describe('Chat JID'),
+        chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
         title: z.string().describe('List message title'),
         description: z.string().describe('List message description'),
         button: z.string().describe('Label of the button that opens the list'),

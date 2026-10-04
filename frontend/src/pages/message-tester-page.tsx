@@ -150,7 +150,7 @@ export function MessageTesterPage() {
   }
 
   async function checkNumber() {
-    if (!chatId) { toast.error("Enter a phone number"); return }
+    if (!chatId) { toast.error("Enter a phone number or username"); return }
     if (!session) { toast.error("No session selected"); return }
     try {
       const res = await api.checkNumberStatus(session, chatId)
@@ -208,7 +208,7 @@ export function MessageTesterPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="tester-chat-id">Phone number</Label>
+                  <Label htmlFor="tester-chat-id">Phone number or username</Label>
                   <div className="flex gap-2">
                     <PhoneInput
                       id="tester-chat-id"
@@ -221,8 +221,8 @@ export function MessageTesterPage() {
                     <Button
                       variant="outline"
                       onClick={checkNumber}
-                      title="Check if the number is on WhatsApp"
-                      aria-label="Check if the number is on WhatsApp"
+                      title="Check if the number or username is on WhatsApp"
+                      aria-label="Check if the number or username is on WhatsApp"
                     >
                       <Phone strokeWidth={1.75} />
                     </Button>

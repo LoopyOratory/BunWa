@@ -84,3 +84,17 @@ export class TooManyRequestsException extends Error {
     this.reason = reason;
   }
 }
+
+/**
+ * Errors the global error handler already maps to a client-facing 4xx
+ * response. Route handlers rethrow these instead of flattening them into a
+ * generic 500, so the reason (a blocked send, a bad target, a username that
+ * cannot be resolved) reaches the caller.
+ */
+export function isClientFacingError(error: unknown): boolean {
+  return (
+    error instanceof BadRequestException ||
+    error instanceof UnprocessableEntityException ||
+    error instanceof TooManyRequestsException
+  );
+}
