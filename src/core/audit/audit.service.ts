@@ -23,6 +23,9 @@ export enum AuditAction {
   MESSAGE_SENT = 'message_sent',
   MESSAGE_FAILED = 'message_failed',
 
+  MCP_TOOL_CALLED = 'mcp_tool_called',
+  MCP_TOOL_FAILED = 'mcp_tool_failed',
+
   WEBHOOK_CREATED = 'webhook_created',
   WEBHOOK_DELETED = 'webhook_deleted',
   WEBHOOK_TRIGGERED = 'webhook_triggered',

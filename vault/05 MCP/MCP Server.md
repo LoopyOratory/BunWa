@@ -59,6 +59,22 @@ Two kinds of key:
 - One key hash per session: generating a new key **invalidates the previous one**, so a client
   holding the old key must be updated from the session's MCP tab.
 
+## Security posture (verified live 2026-10-04)
+
+| Property | How it holds |
+|---|---|
+| **Audit trail** | Every write-tier tool call is recorded as `mcp_tool_called` (or `mcp_tool_failed` with the error) with the session, the tool, the category, whether it was destructive and which credential kind was used. Before this, the MCP called engine methods directly and an agent could send messages, change a group or delete a status with no trace: the REST routes audit through `sendAndAudit`, the MCP path did not. Reads are not audited, matching REST. |
+| **No secret material in responses** | `SessionGet` returned the session config verbatim, including `mcp.apiKeyHash` and every `restApiKeys[].keyHash`. It now applies the same `redactSessionSecrets` the REST routes use, so a scoped key reading its own session gets `enabled` and `destructiveOps` but no hashes. |
+| **Scoping** | A session key is refused non-session-scoped tools (`SessionList`) and a `sessionId` naming another session is overridden, verified against both the local and production servers. |
+| **Destructive gate** | All seven destructive tools are refused while the session's `destructiveOps` is false, for both key kinds. |
+| **Read-only mode** | `MCP_READONLY=true` registers only `tier: read` tools, so the media and group write tools are absent rather than merely refused. |
+| **Sending policy** | Send tools go through the engine's `policyGate`, so a 429 with `Retry-After` applies to an agent exactly as it does to REST. Observed live. |
+| **SSRF** | Media sent by URL and audio converted from a URL both fetch through `resolveAndPinFetch`, the same guard webhooks use. |
+| **Rate limit** | Per key, `MCP_RATE_LIMIT_MAX` (default 60) per window. |
+| **Fail closed** | With no `WAHA_API_KEY`, the endpoint is open unless `WAHA_ALLOW_NO_AUTH=false`, which closes it; boot warns loudly while keyless. |
+
+Not exposed on purpose, because they widen an agent's blast radius: session REST API key management, webhook management, session config writes, audit reads and the Chatwoot app. If an agent needs one of those, the REST API with the global key is the intended path.
+
 ## Rate limiting
 
 In-memory sliding window **per key**: `MCP_RATE_LIMIT_MAX` (default 60) per

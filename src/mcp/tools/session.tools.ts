@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 import type { SessionManager } from '../../core/manager.core';
+import { redactSessionSecrets } from '../../core/api-keys/rest-api-keys';
 import type { ToolDescriptor } from '../tool-descriptor';
 
 const sessionId = z
@@ -47,7 +48,11 @@ export function sessionTools(manager: SessionManager): ToolDescriptor[] {
           return {
             name: input.sessionId,
             status: (session as any).status || 'UNKNOWN',
-            config: (session as any).sessionConfig || {},
+            // The same redaction the REST routes apply. The session config
+            // carries server-managed key hashes (mcp.apiKeyHash, restApiKeys),
+            // and a scoped key reading its own session should not receive them
+            // either.
+            config: redactSessionSecrets((session as any).sessionConfig || {}),
             me: (session as any).getSessionMeInfo?.() || null,
           };
         } catch {

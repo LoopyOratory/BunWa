@@ -19,6 +19,8 @@ import type { SessionManager } from '../core/manager.core';
 import type { SessionConfig } from '../structures/sessions.dto';
 import type { ToolDescriptor } from './tool-descriptor';
 import { ToolRegistryService } from './tool-registry.service';
+import { container } from 'tsyringe';
+import { AuditService, AuditAction } from '../core/audit/audit.service';
 import { buildAllTools } from './tools';
 import { handleToolError, jsonToolResult, smartToolResult } from './tool-result';
 import { KeyRateLimiter, RateLimitError, readRateLimitConfig } from './mcp-rate-limit';
@@ -58,6 +60,47 @@ export function validateApiKey(rawKey: string | undefined, configuredKey: string
   if (!configuredKey) return process.env.WAHA_ALLOW_NO_AUTH !== 'false';
   if (!rawKey) return false;
   return safeCompare(rawKey, configuredKey);
+}
+
+/**
+ * Record a write-tier MCP tool call in the audit log.
+ *
+ * The REST routes audit every send through `sendAndAudit`, but the MCP path
+ * calls the engine methods directly, so an agent could send messages, change a
+ * group or delete a status with no trace in the audit log at all. Reads are not
+ * audited, matching the REST behaviour and keeping the log readable.
+ */
+export function auditToolCall(
+  tool: ToolDescriptor,
+  input: Record<string, unknown>,
+  credential: 'global-key' | 'session-key',
+  outcome: 'ok' | 'failed',
+  error?: unknown,
+): void {
+  if (tool.tier !== 'write') return;
+  try {
+    const audit = container.resolve(AuditService);
+    const context = {
+      sessionName: typeof input.sessionId === 'string' ? input.sessionId : undefined,
+      errorMessage: error instanceof Error ? error.message : undefined,
+      metadata: {
+        tool: tool.name,
+        category: tool.category,
+        destructive: tool.destructive ?? false,
+        credential,
+        source: 'mcp',
+      },
+    };
+    const entry =
+      outcome === 'ok'
+        ? audit.logInfo(AuditAction.MCP_TOOL_CALLED, context)
+        : audit.logWarn(AuditAction.MCP_TOOL_FAILED, context);
+    // logInfo/logWarn are async on the AuditService; never let an audit
+    // failure break the tool call.
+    Promise.resolve(entry).catch(() => {});
+  } catch {
+    // Auditing is best effort: an unregistered service (unit tests) is fine.
+  }
 }
 
 /**
@@ -209,11 +252,19 @@ function buildServer(
             }
           }
 
-          const result = await tool.handler(input as never);
-          return tool.resultDisposition === 'json'
-            ? jsonToolResult(result as object)
-            : smartToolResult(result as object);
+          const credential = scopedSession ? 'session-key' : 'global-key';
+          try {
+            const result = await tool.handler(input as never);
+            auditToolCall(tool, input, credential, 'ok');
+            return tool.resultDisposition === 'json'
+              ? jsonToolResult(result as object)
+              : smartToolResult(result as object);
+          } catch (error) {
+            auditToolCall(tool, input, credential, 'failed', error);
+            return handleToolError(error);
+          }
         } catch (error) {
+          // Auth and policy failures land here rather than in the handler.
           return handleToolError(error);
         }
       },
