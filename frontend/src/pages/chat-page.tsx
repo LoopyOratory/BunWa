@@ -17,6 +17,7 @@ import { ChatProvider, ChatMessages } from "@/components/ui/chat"
 import type { ChatUser, ChatMessageData, TypingUser } from "@/components/ui/chat"
 import { EmptyState, ErrorState, Metric, Skeleton } from "@/components/primitives"
 import { api, ApiError, type Session, type ChatOverview, type Message, type Contact } from "@/lib/api"
+import { useSessionGuard } from "@/lib/use-session-guard"
 import { useWebSocket } from "@/lib/use-websocket"
 import { ChatConversations } from "@/components/chat/chat-conversations"
 import { ChatHeader } from "@/components/chat/chat-header"
@@ -624,6 +625,9 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   const [typingMap, setTypingMap] = useState<Map<string, string>>(new Map())
   const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
+  // Drops answers that belong to a session the user has already left.
+  const isCurrentSession = useSessionGuard(selectedSession)
+
   const currentSession = sessions.find((s) => s.name === selectedSession)
   const isWorking = currentSession?.status === "WORKING"
   const currentUserJid = resolveUserJid(currentSession || {})
@@ -646,56 +650,70 @@ export function ChatPage({ initialSession }: ChatPageProps) {
     if (!s?.me?.id) return
     setPictureError(false)
     const jid = resolveUserJid(s)
-    api.getContactPicture(selectedSession, jid).then(res => {
+    const session = selectedSession
+    api.getContactPicture(session, jid).then(res => {
+      if (!isCurrentSession(session)) return
       if (res.profilePictureURL) setUserPicture(res.profilePictureURL)
-    }).catch(() => setPictureError(true))
-  }, [selectedSession, sessions])
+    }).catch(() => { if (isCurrentSession(session)) setPictureError(true) })
+  }, [selectedSession, sessions, isCurrentSession])
 
   useEffect(() => {
     if (!selectedChat || !selectedSession) return
     if (selectedChat.picture) return
     if (contactPictures.has(selectedChat.id)) return
-    api.getContactPicture(selectedSession, selectedChat.id).then(res => {
+    const session = selectedSession
+    api.getContactPicture(session, selectedChat.id).then(res => {
+      if (!isCurrentSession(session)) return
       if (res.profilePictureURL) {
         setContactPictures(prev => { const m = new Map(prev); m.set(selectedChat.id, res.profilePictureURL!); return m })
       }
-    }).catch(() => setPictureError(true))
-  }, [selectedChat, selectedSession])
+    }).catch(() => { if (isCurrentSession(session)) setPictureError(true) })
+  }, [selectedChat, selectedSession, isCurrentSession])
 
   const loadContacts = useCallback(async () => {
-    if (!selectedSession || !isWorking) { setContacts(new Map()); return }
+    const session = selectedSession
+    if (!session || !isWorking) { setContacts(new Map()); return }
     try {
-      const list = await api.getContacts(selectedSession, 500, 0)
+      const list = await api.getContacts(session, 500, 0)
+      if (!isCurrentSession(session)) return
       setContacts(new Map(list.map((c) => [c.id, c])))
       setContactsError(false)
     } catch (error) {
+      if (!isCurrentSession(session)) return
       if (isDatabaseUnreachableError(error)) setDatabaseUnreachable(true)
       else setContactsError(true)
     }
-  }, [selectedSession, isWorking])
+  }, [selectedSession, isWorking, isCurrentSession])
   useEffect(() => { loadContacts() }, [loadContacts])
 
   const chatsLoadedForSessionRef = useRef<string | null>(null)
   const loadChats = useCallback(async () => {
-    if (!selectedSession || !isWorking) { setChats([]); return }
+    const session = selectedSession
+    if (!session || !isWorking) { setChats([]); return }
     // Only show the blocking "Loading conversations..." placeholder on the
     // first load for this session — background refreshes (5s poll, WS
     // events) should update the list in place without blanking it out.
-    const isFirstLoad = chatsLoadedForSessionRef.current !== selectedSession
+    const isFirstLoad = chatsLoadedForSessionRef.current !== session
     if (isFirstLoad) setLoadingChats(true)
     try {
-      setChats(await api.getChatsOverview(selectedSession))
-      chatsLoadedForSessionRef.current = selectedSession
+      const list = await api.getChatsOverview(session)
+      // The user may have switched sessions while this was in flight; the
+      // answer describes the previous session, so it must not replace the
+      // current list.
+      if (!isCurrentSession(session)) return
+      setChats(list)
+      chatsLoadedForSessionRef.current = session
       setStoreDisabled(false)
       setDatabaseUnreachable(false)
     }
     catch (error) {
+      if (!isCurrentSession(session)) return
       if (isDatabaseUnreachableError(error)) { setDatabaseUnreachable(true); setStoreDisabled(false) }
       else if (isStoreDisabledError(error)) setStoreDisabled(true)
       else toast.error("Failed to load chats")
     }
-    finally { if (isFirstLoad) setLoadingChats(false) }
-  }, [selectedSession, isWorking])
+    finally { if (isFirstLoad && isCurrentSession(session)) setLoadingChats(false) }
+  }, [selectedSession, isWorking, isCurrentSession])
   useEffect(() => { loadChats() }, [loadChats])
 
   // Latest message list for callers that run outside a render (fetch races).
@@ -703,11 +721,15 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   useEffect(() => { messagesRef.current = messages }, [messages])
 
   const loadMessages = useCallback(async (chatId: string) => {
-    if (!selectedSession) return
+    const session = selectedSession
+    if (!session) return
     setLoadingMessages(true)
     const listedBeforeFetch = messagesRef.current
     try {
-      const msgs = await api.getMessages(selectedSession, chatId, 50, 0)
+      const msgs = await api.getMessages(session, chatId, 50, 0)
+      // Same guard as the chat list: a page fetched for a chat in the session
+      // the user has just left must not land in the new session's thread.
+      if (!isCurrentSession(session)) return
       // The socket can append while the request is in flight. Keep those
       // arrivals (de-duplicated by id) instead of letting the fetched page
       // drop them, so both update paths converge on one list.
@@ -721,12 +743,13 @@ export function ChatPage({ initialSession }: ChatPageProps) {
       setDatabaseUnreachable(false)
       api.sendSeen(selectedSession, chatId).catch(() => {})
     } catch (error) {
+      if (!isCurrentSession(session)) return
       if (isDatabaseUnreachableError(error)) { setDatabaseUnreachable(true); setStoreDisabled(false) }
       else if (isStoreDisabledError(error)) setStoreDisabled(true)
       else toast.error("Failed to load messages")
     }
-    finally { setLoadingMessages(false) }
-  }, [selectedSession])
+    finally { if (isCurrentSession(session)) setLoadingMessages(false) }
+  }, [selectedSession, isCurrentSession])
   useEffect(() => { if (selectedChat) loadMessages(selectedChat.id) }, [selectedChat, loadMessages])
 
   /* ── WebSocket ── */
@@ -1059,6 +1082,7 @@ export function ChatPage({ initialSession }: ChatPageProps) {
     if (!selectedSession || !selectedChat) return
     try {
       const older = await api.getMessages(selectedSession, selectedChat.id, 50, messages.length)
+      if (!isCurrentSession(selectedSession)) return
       if (older.length > 0) {
         setMessages((prev) => [...prev, ...older])
         setHasMoreMessages(older.length === 50)

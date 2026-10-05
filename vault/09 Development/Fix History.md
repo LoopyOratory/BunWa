@@ -235,6 +235,15 @@ unusable anywhere Chrome isn't at a hardcoded system path.
 | Verified | The real components were exercised with fixture data in a scratch harness (vite on :5199, kept outside the repo): hover toolbar, star toggle, reaction picker + chip, poll card, typing bubble, online/typing header, 68px rail collapse with badges/dots, rail chat switch, mobile — zero console errors. On the live app (:3096): collapse -> 68px + `localStorage=collapsed`, survives reload, expand restores; ws URL carries `presence.update`; collapse control hidden at 390px; `bun run test` 198/0, typecheck + oxlint clean. |
 | Note | The local test store has no paired session, so live message traffic could not be exercised against a real phone; message-level behaviour is verified through the harness against the same components + API contract (`PUT /api/star`, presence routes). |
 
+## Chat page mixed chats across sessions (2026-10-05)
+
+| | |
+|---|---|
+| Report | "on the chat route the chats get mixed when multiple sessions are running and it does not separate the chats as the selector function was meant for" |
+| Cause | Not the selector and not the socket. Every session-scoped read (chats overview, messages, contacts, contact pictures, older-message pagination) wrote its result unconditionally, so a response issued for the previous session could land after the user switched and replace the new session's rows. With one session it never showed; with two running, the slower answer won. |
+| Fix | `useSessionGuard` in `frontend/src/lib/use-session-guard.ts`: capture the session a request was issued for, drop the answer once the selection moved on. Applied to all six loaders. |
+| Proof | `frontend/tests/session-guard.test.tsx` fails against the unguarded pattern (3 of 4 cases) and passes with it. The socket path was already correct: the handler drops events whose `session` differs from the selected one. |
+
 ## Related
 
 [[OpenWA Parity]] · [[Roadmap]] · [[Testing]] · [[Dashboard]] · [[Known Gaps and Stubs]]
