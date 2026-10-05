@@ -13,6 +13,7 @@ import { policyTools } from './policy.tools';
 import { templateTools } from './template.tools';
 import { groupTools } from './group.tools';
 import { channelTools } from './channel.tools';
+import { mediaTools } from './media.tools';
 
 export { sessionTools } from './session.tools';
 export { messageTools } from './message.tools';
@@ -24,6 +25,7 @@ export { policyTools } from './policy.tools';
 export { templateTools } from './template.tools';
 export { groupTools } from './group.tools';
 export { channelTools } from './channel.tools';
+export { mediaTools } from './media.tools';
 
 /**
  * The one place that knows every tool family.
@@ -45,5 +47,6 @@ export function buildAllTools(manager: SessionManager): ToolDescriptor[] {
     ...templateTools(manager),
     ...groupTools(manager),
     ...channelTools(manager),
+    ...mediaTools(manager),
   ];
 }

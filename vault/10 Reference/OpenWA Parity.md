@@ -17,7 +17,7 @@ BunWa is a fork of [`rmyndharis/OpenWA`](https://github.com/rmyndharis/OpenWA). 
 | | Upstream OpenWA | BunWa |
 |---|---|---|
 | Endpoints | **195 across 31 modules** | **175 route definitions** in `src/api` (173 mounted) → 181 repo-wide routes |
-| MCP surface | none | **77 tools** |
+| MCP surface | none | **80 tools** |
 | Queue | Redis/BullMQ processors | inline delivery with retries |
 | Verdict | — | ~90 % of the user-facing surface already covered |
 
@@ -51,7 +51,7 @@ BunWa is a fork of [`rmyndharis/OpenWA`](https://github.com/rmyndharis/OpenWA). 
 
 ## Where BunWa goes further
 
-- **MCP server** with 77 tools, per-session keys and policy — nothing equivalent upstream
+- **MCP server** with 80 tools, per-session keys and policy — nothing equivalent upstream
 - **Audit log** with retention and an API ([[Audit Log]])
 - **SSRF-hardened** webhook delivery with HMAC, idempotency keys and filters ([[Webhooks]])
 - **Channel directory search** via the private `w:mex` node ([[Channels and Labels]])

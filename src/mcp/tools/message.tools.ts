@@ -45,7 +45,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
     },
     {
       name: 'MessageSendImage',
-      description: 'Send an image message via URL or base64.',
+      description: 'Send an image message. file accepts an http(s) URL, a data URL, a base64 string or a local path on the server. MediaDownloadMessage returns base64 you can pass straight back here.',
       tier: 'write',
       category: 'message',
       sessionScoped: true,
@@ -67,7 +67,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
     },
     {
       name: 'MessageSendFile',
-      description: 'Send a file/document message via URL or base64.',
+      description: 'Send a file or document message. file accepts an http(s) URL, a data URL, a base64 string or a local path on the server. MediaDownloadMessage returns base64 you can pass straight back here. Set filename to control the name the recipient sees.',
       tier: 'write',
       category: 'message',
       sessionScoped: true,
@@ -92,7 +92,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       description:
         'Send a voice note (PTT) via URL or base64. WhatsApp voice notes must be OGG/Opus — ' +
         'by default this server transcodes other formats (e.g. MP3, WAV) automatically via ffmpeg. ' +
-        'Set convert:false only if the file is already OGG/Opus, to skip the transcode step.',
+        'Set convert:false only if the file is already OGG/Opus, to skip the transcode step. file accepts an http(s) URL, a data URL, a base64 string or a local path on the server. MediaDownloadMessage returns base64 you can pass straight back here, and convert false sends the bytes as they are.',
       tier: 'write',
       category: 'message',
       sessionScoped: true,
@@ -117,7 +117,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
     },
     {
       name: 'MessageSendVideo',
-      description: 'Send a video message via URL or base64.',
+      description: 'Send a video message. file accepts an http(s) URL, a data URL, a base64 string or a local path on the server. MediaDownloadMessage returns base64 you can pass straight back here.',
       tier: 'write',
       category: 'message',
       sessionScoped: true,

@@ -13,7 +13,7 @@ source: src/mcp/, src/api/mcp-config.routes.ts
 
 BunWa exposes WhatsApp as a **Model Context Protocol** server, so an AI agent (Claude Desktop,
 Zed, any MCP host) can send messages, manage sessions and inspect chats through a standard tool
-interface. **77 tools.** Upstream OpenWA has no MCP surface at all — this is a fork-only feature.
+interface. **80 tools.** Upstream OpenWA has no MCP surface at all — this is a fork-only feature.
 
 SDK: `@modelcontextprotocol/sdk` ^1.29.0. Tools are registered with `McpServer.registerTool`, with
 each descriptor's Zod schema passed straight through.

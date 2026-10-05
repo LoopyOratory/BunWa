@@ -5,12 +5,12 @@ tags: [bunwa, mcp, reference, ai]
 updated: 2026-10-04
 source: src/mcp/tools/*.ts
 status: shipped
-tools: 77
+tools: 80
 ---
 
 # 🧰 MCP Tools Reference
 
-All **77** tools, grouped by category, with the file each defines and its policy tier.
+All **80** tools, grouped by category, with the file each defines and its policy tier.
 Everything is `sessionScoped` **except `SessionList`**; `sessionId` is a parameter on every
 session-scoped tool.
 
@@ -46,6 +46,22 @@ Added 2026-10-04, same day the channel routes were verified live.
 | `ChannelList` · `ChannelGet` · `ChannelSearchByText` · `ChannelSearchByView` | read | `ChannelSearchByText` is the working search; WhatsApp refuses `by-view` for every view value |
 | `ChannelFollow` · `ChannelUnfollow` · `ChannelMute` · `ChannelUnmute` · `ChannelCreate` | write | |
 | `ChannelDelete` | write ⚠️ | |
+
+## Media — `src/mcp/tools/media.tools.ts` (3)
+
+Added 2026-10-04. The REST surface could download a message's media and serve a stored file, and
+the MCP could neither, so an agent could send a picture but not read one back. The download URL is
+served under `/api` and needs the API key, so these return the bytes as base64 as well: an agent
+can pass the result straight to `MessageSendImage`, `MessageSendFile`, `MessageSendVoice` or
+`MessageSendVideo`, whose descriptions now say they accept a URL, a data URL, a base64 string or a
+local path. Large results arrive as an MCP resource (`mcp://toolResult/<id>.json`) rather than
+inline text, which is how the rest of the registry behaves.
+
+| Tool | Tier | Notes |
+|---|---|---|
+| `MediaDownloadMessage` | read | mirrors `GET /chats/{chatId}/messages/{messageId}/media`; `includeData: false` for metadata only, `maxBytes` caps the payload (default 8 MiB) |
+| `MediaGetFile` | read | mirrors `GET /api/files/{session}/{filename}`; the same path-traversal guards as the route |
+| `MediaConvertVoice` | write | mirrors `POST /media/convert/voice`; needs ffmpeg, an Ogg/Opus input is returned unchanged |
 
 ## Session — `src/mcp/tools/session.tools.ts` (6)
 

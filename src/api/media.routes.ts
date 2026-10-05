@@ -19,13 +19,9 @@ export function createMediaRouter(): Hono<{ Variables: { session: any; body: any
       if (!body?.file) {
         return c.json({ statusCode: 400, message: 'file is required (URL, base64, or data URL)' }, 400);
       }
-      try {
-        const input = await materializeAudioBytes(body.file);
-        const opus = isOggOpus(input) ? input : await (session as any).mediaConverter.voice(input);
-        return c.json({ data: opus.toString('base64'), mimetype: 'audio/ogg; codecs=opus' });
-      } catch (e: any) {
-        return c.json({ statusCode: 500, message: e?.message || 'Voice conversion failed' }, 500);
-      }
+      const input = await materializeAudioBytes(body.file);
+      const opus = isOggOpus(input) ? input : await (session as any).mediaConverter.voice(input);
+      return c.json({ data: opus.toString('base64'), mimetype: 'audio/ogg; codecs=opus' });
     }
   );
 
