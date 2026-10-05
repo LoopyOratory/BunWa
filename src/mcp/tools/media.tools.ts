@@ -52,7 +52,8 @@ function mimetypeFor(filename: string): string {
   return MIME_BY_EXTENSION[extension] ?? 'application/octet-stream';
 }
 
-async function readMediaFile(session: string, filename: string, maxBytes: number) {
+/** Resolve a stored file and report its size, without reading the bytes. */
+function statMediaFile(session: string, filename: string, maxBytes: number) {
   if (
     !session ||
     !filename ||
@@ -77,8 +78,13 @@ async function readMediaFile(session: string, filename: string, maxBytes: number
       `The stored file is ${sizeBytes} bytes, above the ${maxBytes} byte limit for this tool. Raise maxBytes to read it.`,
     );
   }
+  return { filePath, sizeBytes, mimetype: mimetypeFor(filename) };
+}
+
+async function readMediaFile(session: string, filename: string, maxBytes: number) {
+  const { filePath, sizeBytes, mimetype } = statMediaFile(session, filename, maxBytes);
   const bytes = Buffer.from(await Bun.file(filePath).arrayBuffer());
-  return { bytes, sizeBytes, mimetype: mimetypeFor(filename) };
+  return { bytes, sizeBytes, mimetype };
 }
 
 export function mediaTools(manager: SessionManager): ToolDescriptor[] {
@@ -129,17 +135,24 @@ export function mediaTools(manager: SessionManager): ToolDescriptor[] {
           type: message?.type ?? null,
           caption: message?.body ?? null,
         };
-        if (input.includeData && media.url) {
+        if (media.url) {
           // The stored file is named after the last path segment of the URL.
           const storedName = String(media.url).split('/').pop() ?? '';
-          const { bytes, sizeBytes, mimetype } = await readMediaFile(
-            input.sessionId,
-            decodeURIComponent(storedName),
-            input.maxBytes,
-          );
-          result.sizeBytes = sizeBytes;
-          result.mimetype = media.mimetype ?? mimetype;
-          result.base64 = bytes.toString('base64');
+          const filename = decodeURIComponent(storedName);
+          if (input.includeData) {
+            const { bytes, sizeBytes, mimetype } = await readMediaFile(
+              input.sessionId,
+              filename,
+              input.maxBytes,
+            );
+            result.sizeBytes = sizeBytes;
+            result.mimetype = media.mimetype ?? mimetype;
+            result.base64 = bytes.toString('base64');
+          } else {
+            // Metadata only: still report the size, without reading the bytes.
+            const { sizeBytes } = statMediaFile(input.sessionId, filename, input.maxBytes);
+            result.sizeBytes = sizeBytes;
+          }
         }
         return result;
       },

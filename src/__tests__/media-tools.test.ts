@@ -105,6 +105,8 @@ describe('media MCP tools', () => {
     });
     expect(result.base64).toBeUndefined();
     expect(result.mimetype).toBe('image/jpeg');
+    // the size is still reported, it just does not read the bytes
+    expect(result.sizeBytes).toBe(11);
   });
 
   it('reads a stored file by name', async () => {
