@@ -21,6 +21,20 @@ async function getSession(manager: SessionManager, name: string) {
   return manager.getWorkingSession(name);
 }
 
+const fileInput = z
+  .union([
+    z.string(),
+    z.object({
+      url: z.string().optional(),
+      data: z.string().optional(),
+      mimetype: z.string().optional(),
+      filename: z.string().optional(),
+    }),
+  ])
+  .describe(
+    'The file: an http(s) URL, a data URL, a base64 string or a local path. Use the object form when a document needs a filename or an explicit mimetype, otherwise the recipient sees it named "file".',
+  );
+
 export function messageTools(manager: SessionManager): ToolDescriptor[] {
   return [
     {
@@ -52,7 +66,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       inputSchema: z.object({
         sessionId,
         chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
-        file: z.string().describe('Image URL or base64 data'),
+        file: fileInput,
         caption: z.string().max(1024).optional(),
       }),
       handler: async (input) => {
@@ -74,7 +88,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       inputSchema: z.object({
         sessionId,
         chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
-        file: z.string().describe('File URL or base64 data'),
+        file: fileInput,
         caption: z.string().max(1024).optional(),
       }),
       handler: async (input) => {
@@ -99,7 +113,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       inputSchema: z.object({
         sessionId,
         chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
-        file: z.string().describe('Audio URL or base64 data (any common format)'),
+        file: fileInput,
         convert: z
           .boolean()
           .optional()
@@ -124,7 +138,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       inputSchema: z.object({
         sessionId,
         chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
-        file: z.string().describe('Video URL or base64 data'),
+        file: fileInput,
         caption: z.string().max(1024).optional(),
       }),
       handler: async (input) => {
