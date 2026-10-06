@@ -1113,7 +1113,7 @@ export function buildOpenApiSpec(routes?: RouteLike[]): any {
                         type: 'object',
                         required: ['type', 'text'],
                         properties: {
-                          type: { type: 'string', enum: ['reply', 'url', 'call', 'copy'] },
+                          type: { type: 'string', enum: ['reply', 'url', 'call', 'copy', 'catalog', 'location', 'flow'] },
                           text: { type: 'string', description: 'Button label' },
                           id: { type: 'string', description: 'Reply button id (type=reply); auto-generated if omitted' },
                           url: { type: 'string', description: 'Target URL (type=url)' },
@@ -1123,7 +1123,22 @@ export function buildOpenApiSpec(routes?: RouteLike[]): any {
                       },
                     },
                     header: { type: 'string' },
-                    headerImage: { type: 'object', description: 'Image file object shown in the header (mimetype/filename/data or url)' },
+                    headerImage: {
+                      description:
+                        'Image shown above the buttons, in the same bubble: an http(s) URL, a data URL, a base64 string, or an object with url or data',
+                      oneOf: [
+                        { type: 'string' },
+                        {
+                          type: 'object',
+                          properties: {
+                            url: { type: 'string' },
+                            data: { type: 'string', description: 'base64 payload' },
+                            mimetype: { type: 'string' },
+                            filename: { type: 'string' },
+                          },
+                        },
+                      ],
+                    },
                     body: { type: 'string' },
                     footer: { type: 'string' },
                   },
