@@ -8,6 +8,31 @@ import { BinaryFile, RemoteFile } from '../structures/files.dto';
 // Core implementations already send all of these correctly by passing the
 // file straight to sock.sendMessage(), which uploads media internally, so
 // those overrides were pure dead weight and have been removed.
+/**
+ * Normalise the media input an interactive message accepts.
+ *
+ * A header image arrives as a plain string as often as an object — a URL, or a
+ * data URL holding the bytes. `'url' in someString` throws a TypeError, which
+ * surfaced as a 500 on sendButtons, so the shape is settled here first.
+ */
+export function normalizeInteractiveMedia(
+  file: unknown,
+): { url: string } | { data: string } | undefined {
+  if (typeof file === 'string') {
+    if (!file) return undefined;
+    if (file.startsWith('data:')) {
+      const base64 = file.split(',').pop() ?? '';
+      return base64 ? { data: base64 } : undefined;
+    }
+    return { url: file };
+  }
+  if (!file || typeof file !== 'object') return undefined;
+  const candidate = file as { url?: unknown; data?: unknown };
+  if (typeof candidate.url === 'string' && candidate.url) return { url: candidate.url };
+  if (typeof candidate.data === 'string' && candidate.data) return { data: candidate.data };
+  return undefined;
+}
+
 export class WhatsappSessionNoWebPlus extends WhatsappSessionNoWebCore {
 
   async setProfilePicture(file: BinaryFile | RemoteFile): Promise<boolean> {
@@ -46,15 +71,16 @@ export class WhatsappSessionNoWebPlus extends WhatsappSessionNoWebCore {
    * than a standalone "uploadMedia" call, which Baileys does not expose.
    * Overrides Core.uploadMedia(), which throws AvailableInPlusVersion.
    */
-  async uploadMedia(file: BinaryFile | RemoteFile, type: string): Promise<any> {
+  async uploadMedia(file: BinaryFile | RemoteFile | string, type: string): Promise<any> {
+    const input = normalizeInteractiveMedia(file);
     // sendButtons() calls this unconditionally, with no header image in the
     // common case, so a missing file has to behave like Core.uploadMedia() does
     // (a no-op) instead of reaching getFileBuffer() and throwing a TypeError on
     // `'data' in undefined`.
-    if (!file || !('url' in file || 'data' in file)) {
+    if (!input) {
       return undefined;
     }
-    const buffer = await this.getFileBuffer(file);
+    const buffer = await this.getFileBuffer(input as BinaryFile | RemoteFile);
     const { prepareWAMessageMedia } = await import('@whiskeysockets/baileys');
     const prepared = await prepareWAMessageMedia(
       { [type]: buffer } as any,

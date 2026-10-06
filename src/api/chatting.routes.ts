@@ -266,6 +266,10 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
           chatId: body.chatId,
           buttons: body.buttons,
           header: body.header,
+          // The engine renders this as the interactive message's media header,
+          // which is how a product photo travels in the same bubble as the
+          // buttons. It was accepted by the DTO but dropped here.
+          headerImage: body.headerImage,
           body: body.body,
           footer: body.footer,
         }));

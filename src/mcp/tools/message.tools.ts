@@ -426,6 +426,10 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
           flowCta: z.string().optional().describe('Label on a flow button; defaults to the button text'),
         })).min(1).describe('Buttons to display (1-3 typically)'),
         header: z.string().optional().describe('Header text'),
+        headerImage: z
+          .string()
+          .optional()
+          .describe('Image shown above the buttons: an http(s) URL, a data URL, a base64 string or a local path'),
         body: z.string().optional().describe('Body text'),
         footer: z.string().optional().describe('Footer text'),
       }),
@@ -436,6 +440,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
           chatId: input.chatId,
           buttons: input.buttons,
           header: input.header,
+          headerImage: input.headerImage,
           body: input.body,
           footer: input.footer,
         });
