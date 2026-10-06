@@ -32,8 +32,12 @@ services:
       # audit.db, sending-limits.db and export/import artifacts.
       - bunwa-data:/app/data
     tmpfs:
-      # Size-capped scratch space for downloaded/outgoing media files.
-      - /tmp/whatsapp-files:size=512m,mode=1777
+      # Scratch space, and the reason it is /tmp and not a subdirectory: with a
+      # read-only root filesystem, libraries that prepare media (Baileys' image
+      # processing, ffmpeg for voice notes) write their working file to the OS
+      # temp dir and fail with EROFS when /tmp is not writable. Downloaded media
+      # lives inside this mount at WHATSAPP_FILES_FOLDER.
+      - /tmp:size=512m,mode=1777
     user: "1001:1001"
     read_only: true
     cap_drop:

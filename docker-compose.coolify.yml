@@ -41,6 +41,13 @@ services:
       # Downloaded media; point Coolify at a host path if it must survive.
       - bunwa-media:/app/.media
     user: "1001:1001"
+    tmpfs:
+      # Scratch space, and the reason it is /tmp and not a subdirectory: with a
+      # read-only root filesystem, libraries that prepare media (Baileys' image
+      # processing, ffmpeg for voice notes) write their working file to the OS
+      # temp dir and fail with EROFS when /tmp is not writable. Downloaded media
+      # lives inside this mount at WHATSAPP_FILES_FOLDER.
+      - /tmp:size=512m,mode=1777
     read_only: true
     cap_drop:
       - ALL
