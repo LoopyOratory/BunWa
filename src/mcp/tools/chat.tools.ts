@@ -25,15 +25,17 @@ export function chatTools(manager: SessionManager): ToolDescriptor[] {
   return [
     {
       name: 'ChatGetMessages',
-      description: 'Get messages from a chat, most recent first.',
+      description:
+        'Get messages from a chat, newest first, with pagination. One page is 50 messages by default: ' +
+        'pass limit (up to 1000) and offset to page through history, one page at a time.',
       tier: 'read',
       category: 'chat',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
         chatId: z.string().describe('Chat JID (e.g. 1234567890@c.us or groupId@g.us)'),
-        limit: z.number().int().min(1).max(500).optional().describe('Max number of messages to return (default 50)'),
-        offset: z.number().int().min(0).optional().describe('Number of messages to skip (default 0)'),
+        limit: z.number().int().min(1).max(1000).optional().describe('Messages per page, up to 1000 (default 50)'),
+        offset: z.number().int().min(0).optional().describe('Messages to skip before this page (default 0), for example 50 for the second page'),
         downloadMedia: z.boolean().optional().describe('Whether to download media attachments (default false)'),
       }),
       handler: async (input) => {

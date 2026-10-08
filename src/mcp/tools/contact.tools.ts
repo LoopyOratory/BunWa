@@ -19,6 +19,36 @@ const sessionId = z
 export function contactTools(manager: SessionManager): ToolDescriptor[] {
   return [
     {
+      name: 'ContactList',
+      description:
+        'List the contacts this session knows, with pagination. Omit limit to return every contact; ' +
+        'pass limit and offset to page through a large book (a big result arrives as an MCP resource, ' +
+        'not inline text). Mirrors GET /api/contacts/all.',
+      tier: 'read',
+      category: 'contact',
+      sessionScoped: true,
+      inputSchema: z.object({
+        sessionId,
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(1000)
+          .optional()
+          .describe('Maximum contacts to return. Omit to return all of them'),
+        offset: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe('Number of contacts to skip. Needs a limit to take effect'),
+      }),
+      handler: async (input: { sessionId: string; limit?: number; offset?: number }) => {
+        const session = await manager.getWorkingSession(input.sessionId);
+        return (session as any).getContacts({ limit: input.limit, offset: input.offset });
+      },
+    },
+    {
       name: 'ContactCheckNumber',
       description:
         'Check whether a phone number or WhatsApp username resolves on WhatsApp. ' +
