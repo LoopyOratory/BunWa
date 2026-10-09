@@ -8,8 +8,15 @@ export class PostgresGroupRepository implements IGroupRepository {
 
   async getAll(pagination: PaginationParams): Promise<GroupMetadata[]> {
     let query = this.knex('groups').select('data');
-    if (pagination) {
-      query = query.limit(pagination.limit || 50).offset(pagination.offset || 0);
+    // A caller that passes a pagination object without a limit means "all of
+    // them", the way the SQLite path behaves. Defaulting to 50 here silently
+    // truncated every unpaginated read on Postgres — contacts, chats, groups,
+    // labels, LID mappings and messages — while SQLite returned the full set.
+    if (pagination?.limit) {
+      query = query.limit(pagination.limit);
+      if (pagination.offset) {
+        query = query.offset(pagination.offset);
+      }
     }
     const rows = await query;
     return rows.map((row) => JSON.parse(row.data));

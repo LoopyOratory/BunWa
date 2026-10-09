@@ -92,6 +92,33 @@ export function runDriverConformance(driver: ConformanceDriver, skipReason?: str
       expect(await contacts.getById(first)).not.toBeNull();
     });
 
+    // A pagination object without a limit means "all of them". Postgres used to
+    // default to 50 here while SQLite returned everything, so an unpaginated
+    // read silently truncated at 50 on the driver production runs. This is the
+    // case that caught it.
+    it('contacts: an unpaginated read returns every row, not the first 50', async () => {
+      const contacts = harness.storage.getContactsRepository();
+      const ids = Array.from({ length: 60 }, (_, i) => `bulk-${i}@s.whatsapp.net`);
+      await contacts.upsertMany(ids.map((id, i) => ({ id, name: `Bulk ${i}` })) as any);
+
+      const all = await contacts.getAll({} as any);
+      for (const id of ids) {
+        expect(all.some((contact: any) => contact.id === id), id).toBe(true);
+      }
+
+      // and a page still pages
+      const page = await contacts.getAll({ limit: 10, offset: 0 } as any);
+      expect(page.length).toBe(10);
+      const second = await contacts.getAll({ limit: 10, offset: 10 } as any);
+      expect(second.length).toBe(10);
+      const firstIds = new Set(page.map((c: any) => c.id));
+      expect(second.every((c: any) => !firstIds.has(c.id))).toBe(true);
+
+      for (const id of ids) {
+        await contacts.deleteById(id);
+      }
+    });
+
     // --------------------------------------------------------------- chats
     it('chats: save, read, batch read, upsert, delete', async () => {
       const chats = harness.storage.getChatRepository();
