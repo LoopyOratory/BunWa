@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from "react"
+import { getApiAuthHeaders } from "./api"
 
 interface UseWebSocketOptions {
   session?: string
@@ -7,6 +8,26 @@ interface UseWebSocketOptions {
 }
 
 const RECONNECT_DELAY_MS = 3000
+
+/**
+ * Trade the dashboard credentials for a single-use WebSocket ticket. A browser
+ * WebSocket cannot send headers, and putting the password in the /ws URL leaks
+ * it into proxy and access logs. Returns null when no ticket can be had (e.g.
+ * a keyless dev server), in which case the socket connects without one.
+ */
+async function fetchWsTicket(): Promise<string | null> {
+  try {
+    const res = await fetch(`${window.location.origin}/api/ws/ticket`, {
+      method: "POST",
+      headers: getApiAuthHeaders(),
+    })
+    if (!res.ok) return null
+    const body = await res.json()
+    return typeof body?.ticket === "string" ? body.ticket : null
+  } catch {
+    return null
+  }
+}
 
 export function useWebSocket({ session = "*", events = "*", onMessage }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null)
@@ -20,8 +41,12 @@ export function useWebSocket({ session = "*", events = "*", onMessage }: UseWebS
   useEffect(() => {
     let disposed = false
 
-    const open = () => {
-      if (disposed) return
+    // A connection attempt in flight (waiting on its ticket) counts as open,
+    // so a reconnect timer cannot start a second one beside it.
+    let opening = false
+
+    const open = async () => {
+      if (disposed || opening) return
       const current = wsRef.current
       if (
         current &&
@@ -30,19 +55,16 @@ export function useWebSocket({ session = "*", events = "*", onMessage }: UseWebS
         return
       }
 
-      // Browser WebSocket cannot send headers, so dashboard credentials ride
-      // in the query string (the server consumes them during the upgrade).
-      const stored = localStorage.getItem("waha_dashboard_auth")
+      opening = true
+      const ticket = await fetchWsTicket()
+      opening = false
+      // The consumer unmounted or switched session while the ticket was in flight.
+      if (disposed) return
+
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
       let url = `${protocol}//${window.location.host}/ws?session=${encodeURIComponent(session)}&events=${encodeURIComponent(events)}`
-      if (stored) {
-        try {
-          const decoded = atob(stored)
-          const [user, pass] = decoded.split(":")
-          url += `&user=${encodeURIComponent(user)}&pass=${encodeURIComponent(pass)}`
-        } catch {
-          // ignore decode errors
-        }
+      if (ticket) {
+        url += `&ticket=${encodeURIComponent(ticket)}`
       }
 
       const ws = new WebSocket(url)
@@ -70,7 +92,7 @@ export function useWebSocket({ session = "*", events = "*", onMessage }: UseWebS
         wsRef.current = null
         setConnected(false)
         if (!disposed) {
-          reconnectTimeoutRef.current = setTimeout(open, RECONNECT_DELAY_MS)
+          reconnectTimeoutRef.current = setTimeout(() => void open(), RECONNECT_DELAY_MS)
         }
       }
 
@@ -83,7 +105,7 @@ export function useWebSocket({ session = "*", events = "*", onMessage }: UseWebS
       }
     }
 
-    open()
+    void open()
 
     return () => {
       disposed = true

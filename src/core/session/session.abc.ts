@@ -137,6 +137,9 @@ import {
 } from '../env';
 import { Activity } from './activity';
 import qrcode from 'qrcode-terminal';
+import { container } from 'tsyringe';
+import { SendingPolicyService } from '../sending-policy/sending-policy.service';
+import { toJID } from '../utils/jids';
 
 export function ensureSuffix(phone: any) {
   const suffix = '@c.us';
@@ -1139,6 +1142,56 @@ export abstract class WhatsappSession {
 
   public deleteStatus(request: DeleteStatusRequest) {
     throw this.notImplemented();
+  }
+
+  // ===== Anti-ban sending policy =====
+  //
+  // Shared by every engine so the caps, reachout timelock and quiet hours
+  // apply whichever engine a session runs on.
+
+  private sendingPolicyService?: SendingPolicyService | null;
+
+  /**
+   * Lazy, optional access to the sending policy service. Engines are not
+   * DI-managed, so the service is pulled from the tsyringe container on first
+   * use and simply skipped when it was never registered (e.g. unit tests).
+   */
+  protected getSendingPolicy(): SendingPolicyService | null {
+    if (this.sendingPolicyService === undefined) {
+      this.sendingPolicyService = null;
+      try {
+        if (container.isRegistered(SendingPolicyService)) {
+          this.sendingPolicyService = container.resolve(SendingPolicyService);
+        }
+      } catch (error) {
+        this.logger.warn({ error }, 'Sending policy unavailable, sends are not gated');
+        this.sendingPolicyService = null;
+      }
+    }
+    return this.sendingPolicyService;
+  }
+
+  /**
+   * Run one outgoing send under the sending policy: refuse it with
+   * TooManyRequestsException when a limit applies, otherwise send and record
+   * the outcome. Counters are keyed by the normalized JID, the same key the
+   * NOWEB engine uses, so a session keeps its history across engines.
+   */
+  protected async withSendingPolicy<T>(chatId: string, send: () => Promise<T>): Promise<T> {
+    const policy = this.getSendingPolicy();
+    if (!policy) {
+      return send();
+    }
+    const key = toJID(this.ensureSuffix(chatId));
+    policy.assertSendAllowed(this.name, key);
+    try {
+      const result = await send();
+      policy.recordSend(this.name, key, false);
+      return result;
+    } catch (error) {
+      policy.recordSend(this.name, key, true);
+      throw error;
+    }
   }
 
   /**

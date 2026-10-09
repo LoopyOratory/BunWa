@@ -62,7 +62,7 @@ export class PostgresMessagesRepository implements IMessagesRepository {
         .where('messages.jid', pnJid)
         .orWhereIn(
           'messages.jid',
-          this.knex.select('id').from('lid_map').where('pn', pnJid),
+          this.knex('lid_map').select('id').where('pn', pnJid),
         );
     });
   }

@@ -525,8 +525,10 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   async sendText(request: MessageTextRequest) {
     this.ensureClientReady();
     const chatId = this.ensureSuffix(request.chatId);
-    const msg = await this.client!.sendMessage(chatId, request.text);
-    return this.wrapMessage(msg);
+    return this.withSendingPolicy(chatId, async () => {
+      const msg = await this.client!.sendMessage(chatId, request.text);
+      return this.wrapMessage(msg);
+    });
   }
 
   async sendImage(request: MessageImageRequest) {
@@ -542,7 +544,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       request.file?.mimetype || 'image/png',
       buf.toString('base64'),
     );
-    return this.sendMedia(chatId, media, { caption: request.caption });
+    return this.withSendingPolicy(chatId, () => this.sendMedia(chatId, media, { caption: request.caption }));
   }
 
   async sendFile(request: MessageFileRequest) {
@@ -559,7 +561,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       buf.toString('base64'),
       request.file?.filename || 'file',
     );
-    return this.sendMedia(chatId, media, { caption: request.caption });
+    return this.withSendingPolicy(chatId, () => this.sendMedia(chatId, media, { caption: request.caption }));
   }
 
   async sendVoice(request: MessageVoiceRequest) {
@@ -575,9 +577,9 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       request.file?.mimetype || 'audio/ogg',
       buf.toString('base64'),
     );
-    return this.sendMedia(chatId, media, {
+    return this.withSendingPolicy(chatId, () => this.sendMedia(chatId, media, {
       sendAudioAsVoice: request.convert !== false,
-    });
+    }));
   }
 
   async sendVideo(request: MessageVideoRequest) {
@@ -594,7 +596,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       buf.toString('base64'),
       request.file?.filename || 'video',
     );
-    return this.sendMedia(chatId, media, { caption: request.caption });
+    return this.withSendingPolicy(chatId, () => this.sendMedia(chatId, media, { caption: request.caption }));
   }
 
   async sendLocation(request: MessageLocationRequest) {
@@ -604,8 +606,10 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     const loc = new Location(request.latitude, request.longitude, {
       name: request.title || '',
     });
-    const msg = await this.client!.sendMessage(chatId, loc);
-    return this.wrapMessage(msg);
+    return this.withSendingPolicy(chatId, async () => {
+      const msg = await this.client!.sendMessage(chatId, loc);
+      return this.wrapMessage(msg);
+    });
   }
 
   async forwardMessage(request: MessageForwardRequest): Promise<WAMessage> {
@@ -656,8 +660,10 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     if (!target) {
       throw new NotFoundException(`Message ${request.reply_to} not found for reply`);
     }
-    const msg = await target.reply(request.text);
-    return this.wrapMessage(msg);
+    return this.withSendingPolicy(request.chatId, async () => {
+      const msg = await target.reply(request.text);
+      return this.wrapMessage(msg);
+    });
   }
 
   async sendSeen(request: SendSeenRequest) {

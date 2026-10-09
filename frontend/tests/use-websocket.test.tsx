@@ -50,12 +50,32 @@ class FakeWebSocket {
 /* ── Reconnect-timer capture ───────────────────────────────────────────────
    The hook schedules reconnects with setTimeout(..., 3000). Intercepting that
    one delay lets the test run any retry that was armed without waiting. */
+/* ── Ticket endpoint ───────────────────────────────────────────────────────
+   The hook asks POST /api/ws/ticket for a single-use ticket before every
+   connection. `ticketResponse` lets a test hold that request open. */
+const realFetch = globalThis.fetch
+let ticketCounter = 0
+let ticketRequests: Array<{ url: string; init?: RequestInit }> = []
+let ticketGate: Promise<void> | null = null
+
 let armedTimers: Array<{ id: number; run: () => void }> = []
 let nextTimerId = 1
 const realSetTimeout = globalThis.setTimeout
 const realClearTimeout = globalThis.clearTimeout
 
 beforeEach(() => {
+  ticketCounter = 0
+  ticketRequests = []
+  ticketGate = null
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    ticketRequests.push({ url: String(input), init })
+    if (ticketGate) await ticketGate
+    ticketCounter++
+    return new Response(JSON.stringify({ ticket: `t${ticketCounter}`, expiresInSeconds: 30 }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })
+  }) as typeof fetch
   FakeWebSocket.reset()
   armedTimers = []
   nextTimerId = 1
@@ -83,6 +103,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  globalThis.fetch = realFetch
   globalThis.setTimeout = realSetTimeout
   globalThis.clearTimeout = realClearTimeout
   document.body.innerHTML = ""
@@ -154,5 +175,45 @@ describe("useWebSocket", () => {
       root.unmount()
     })
     expect(FakeWebSocket.instances[1].closeCalls).toBe(1)
+  })
+
+  test("connects with a ticket and never puts the password in the URL", async () => {
+    localStorage.setItem("waha_dashboard_auth", btoa("admin:s3cret"))
+    const { root } = await mount(<Harness session="alpha" tick={0} />)
+
+    expect(ticketRequests).toHaveLength(1)
+    expect(ticketRequests[0].url).toEndWith("/api/ws/ticket")
+    expect(ticketRequests[0].init?.method).toBe("POST")
+    expect((ticketRequests[0].init?.headers as Record<string, string>).Authorization).toBe(
+      `Basic ${btoa("admin:s3cret")}`,
+    )
+
+    const url = FakeWebSocket.instances[0].url
+    expect(url).toContain("ticket=t1")
+    expect(url).not.toContain("pass=")
+    expect(url).not.toContain("s3cret")
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  test("does not open a socket when unmounted while the ticket is in flight", async () => {
+    let release!: () => void
+    ticketGate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const { root } = await mount(<Harness session="alpha" tick={0} />)
+    expect(FakeWebSocket.instances.length).toBe(0)
+
+    await act(async () => {
+      root.unmount()
+    })
+    await act(async () => {
+      release()
+      await ticketGate
+    })
+
+    expect(FakeWebSocket.instances.length).toBe(0)
   })
 })

@@ -146,11 +146,15 @@ interface WebhookConfig {
   filters?: { conditions?: WebhookFilterCondition[] }
 }
 
+export type SessionSettingsTab = "webhooks" | "proxy" | "engine" | "ignore" | "sending" | "advanced" | "integrations" | "access"
+
 interface SessionSettingsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   session: Session | null
   onSaved: () => void
+  /** Tab to show when the dialog opens (default: webhooks). */
+  initialTab?: SessionSettingsTab
 }
 
 function MultiSelect({
@@ -226,9 +230,14 @@ function MultiSelect({
   )
 }
 
-export function SessionSettingsDialog({ open, onOpenChange, session, onSaved }: SessionSettingsDialogProps) {
+export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, initialTab }: SessionSettingsDialogProps) {
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<"webhooks" | "proxy" | "engine" | "ignore" | "sending" | "advanced" | "integrations" | "access">("webhooks")
+  const [activeTab, setActiveTab] = useState<SessionSettingsTab>(initialTab ?? "webhooks")
+  // Each opening starts on the tab the caller asked for (the dashboard's
+  // "Limits" and "Webhooks" actions jump straight to theirs).
+  useEffect(() => {
+    if (open) setActiveTab(initialTab ?? "webhooks")
+  }, [open, initialTab])
 
   const [webhooks, setWebhooks] = useState<WebhookConfig[]>([])
   const [proxyServer, setProxyServer] = useState("")

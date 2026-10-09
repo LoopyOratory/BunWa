@@ -30,3 +30,12 @@ jobs:
 
       - name: TypeScript type check
         run: bun run typecheck
+
+      # The dashboard has its own dependency tree and test suite (hooks such as
+      # the WebSocket client); run it so a server-side contract change that
+      # breaks the dashboard fails CI.
+      - name: Dashboard tests
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun test

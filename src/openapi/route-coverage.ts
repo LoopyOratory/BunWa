@@ -99,9 +99,25 @@ export const CURATED: Record<string, RouteDoc> = {
     tag: TAGS.chats,
   },
   'POST /api/{session}/events': {
-    summary: 'Emit a custom event on the session WebSocket stream',
+    summary: 'Send an event message (calendar invite) to a chat (NOWEB; 422 on other engines)',
     tag: TAGS.chats,
-    body: { event: { type: 'string' }, payload: { type: 'object' } },
+    body: {
+      chatId: { type: 'string' },
+      reply_to: { type: 'string' },
+      event: {
+        type: 'object',
+        required: ['name', 'startTime'],
+        properties: {
+          name: { type: 'string' },
+          description: { type: 'string' },
+          startTime: { type: 'number', description: 'Unix time in seconds' },
+          endTime: { type: 'number', description: 'Unix time in seconds' },
+          location: { type: 'object', properties: { name: { type: 'string' } } },
+          extraGuestsAllowed: { type: 'boolean' },
+        },
+      },
+    },
+    responses: { '400': { description: 'Missing chatId, event.name or a valid event.startTime' } },
   },
   'GET /api/{session}/screenshot': {
     summary: 'Screenshot the engine browser (WEBJS only, answers 422 naming the engine on NOWEB)',
@@ -119,8 +135,16 @@ export const CURATED: Record<string, RouteDoc> = {
     },
   },
   'POST /api/send/buttons/reply': {
-    summary: 'Send a reply to a button tap (accepted, sends nothing)',
+    summary: 'Reply to a buttons message as if a button was tapped (NOWEB; 422 on other engines)',
     tag: TAGS.chatting,
+    body: {
+      session: { type: 'string' },
+      chatId: { type: 'string' },
+      selectedButtonID: { type: 'string' },
+      selectedDisplayText: { type: 'string' },
+      replyTo: { type: 'string', description: 'Id of the buttons message being answered' },
+    },
+    responses: { '400': { description: 'Missing chatId or selectedButtonID' } },
   },
   'POST /api/send/link-custom-preview': {
     summary: 'Send a link with a custom preview',
@@ -161,7 +185,7 @@ export const CURATED: Record<string, RouteDoc> = {
     },
   },
   'POST /api/{session}/media/convert/video': {
-    summary: 'Convert a video (not implemented, answers 422)',
+    summary: 'Convert a video to H.264/AAC MP4 for WhatsApp (needs ffmpeg; 422 when it is missing)',
     tag: TAGS.media,
   },
 
@@ -232,7 +256,7 @@ export const CURATED: Record<string, RouteDoc> = {
     tag: TAGS.groups,
   },
   'GET /api/{session}/groups/{id}/picture': {
-    summary: 'Get the group picture (stub, returns {url: null})',
+    summary: 'Get the group picture URL (null when the group has none; ?refresh=true skips the cache)',
     tag: TAGS.groups,
   },
   'PUT /api/{session}/groups/{id}/picture': {
@@ -294,9 +318,18 @@ export const CURATED: Record<string, RouteDoc> = {
       actions: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Allowlisted actions; empty means every action the session allows',
+        description: 'Allowlisted actions; omit for the default set (an empty list is rejected)',
       },
     },
+  },
+  'GET /api/dashboard/summary': {
+    summary: 'Ops dashboard summary: session health and limits, send and webhook outcomes, and what needs attention (admin only; ?range=1h|24h|7d|30d, ?session=<name>)',
+    tag: TAGS.audit,
+  },
+  'POST /api/ws/ticket': {
+    summary: 'Get a single-use WebSocket ticket (valid 30 s): connect with /ws?ticket=<ticket> instead of putting credentials in the URL',
+    tag: TAGS.apiKeys,
+    responses: { '403': { description: 'A session key without the read action' } },
   },
   'DELETE /api/sessions/{session}/api-keys/{id}': {
     summary: 'Revoke a session REST API key',

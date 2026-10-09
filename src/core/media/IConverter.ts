@@ -35,8 +35,9 @@ async function runFfmpeg(input: Buffer, argsAfterInput: string[]): Promise<Buffe
         // A caller-supplied file the environment cannot convert is a client
         // facing result, not a server fault: answer 422 with the fix.
         throw new UnprocessableEntityException(
-          'ffmpeg is not installed in this environment, so voice transcoding is unavailable. ' +
-          'Add ffmpeg to the image, send an OGG/Opus file, or use sendFile for a plain audio attachment.',
+          'ffmpeg is not installed in this environment, so media conversion is unavailable. ' +
+          'Add ffmpeg to the image, or send a file that is already in the target format ' +
+          '(OGG/Opus for voice, H.264/AAC MP4 for video).',
         );
       }
       throw e;
@@ -80,7 +81,22 @@ export class CoreMediaConverter implements IMediaConverter {
   }
 
   async video(content: Buffer): Promise<Buffer> {
-    // Not implemented yet — voice is the immediate need.
-    throw new Error('Video conversion not available in Core version');
+    // The format WhatsApp plays everywhere: H.264 (baseline) + AAC in MP4.
+    // Output goes to a pipe, which cannot be seeked, so the MP4 is written
+    // fragmented with the index up front instead of `+faststart`.
+    return runFfmpeg(content, [
+      '-c:v', 'libx264',
+      '-profile:v', 'baseline',
+      '-level', '3.1',
+      '-pix_fmt', 'yuv420p',
+      '-preset', 'veryfast',
+      '-crf', '28',
+      // Even dimensions are required by yuv420p.
+      '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+      '-c:a', 'aac',
+      '-b:a', '128k',
+      '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+      '-f', 'mp4',
+    ]);
   }
 }

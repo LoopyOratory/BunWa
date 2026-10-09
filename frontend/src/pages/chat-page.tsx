@@ -1,1120 +1,495 @@
-import { useEffect, useState, useRef, useCallback, useMemo, type ReactNode, type RefObject } from "react"
-import { RefreshCw, CircleDot, Trash2, Mic, Square, Plus, Upload, MessageSquare, TriangleAlert } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { CircleDot, MessageSquare, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { ChatProvider, ChatMessages } from "@/components/ui/chat"
 import type { ChatUser, ChatMessageData, TypingUser } from "@/components/ui/chat"
-import { EmptyState, ErrorState, Metric, Skeleton } from "@/components/primitives"
-import { api, ApiError, type Session, type ChatOverview, type Message, type Contact } from "@/lib/api"
-import { useSessionGuard } from "@/lib/use-session-guard"
+import { EmptyState, ErrorState, Skeleton } from "@/components/primitives"
+import { api, type ChatOverview, type Contact, type Message, type Session } from "@/lib/api"
 import { useWebSocket } from "@/lib/use-websocket"
+import {
+  DATABASE_UNREACHABLE_DESCRIPTION,
+  DATABASE_UNREACHABLE_TITLE,
+  STORE_DISABLED_DESCRIPTION,
+  STORE_DISABLED_TITLE,
+  isDatabaseUnreachableError,
+} from "@/lib/chat-errors"
 import { ChatConversations } from "@/components/chat/chat-conversations"
 import { ChatHeader } from "@/components/chat/chat-header"
 import { ChatComposerWrapper } from "@/components/chat/chat-composer-wrapper"
 import { TemplatePicker } from "@/components/chat/template-picker"
-import { mapMessage, resolveUserJid, showSendError, chatName } from "@/components/chat/helpers"
-import { PhoneInput } from "@/components/phone-input"
-import { toChatId } from "@/lib/phone"
+import { NewChatDialog, SendMediaDialog, StatusDialog } from "@/components/chat/send-dialogs"
+import { SessionConnectPanel } from "@/components/chat/session-connect-panel"
+import { chatName, resolveUserJid, showSendError } from "@/components/chat/helpers"
+import { useChatList } from "@/hooks/chat/use-chat-list"
+import { useChatThread, type ThreadEventPayload } from "@/hooks/chat/use-chat-thread"
+import { useAvatars } from "@/hooks/chat/use-avatars"
+import { usePresence } from "@/hooks/chat/use-presence"
+import { useMappedMessages } from "@/hooks/chat/use-mapped-messages"
+import { useSendingLimit } from "@/hooks/chat/use-sending-limit"
 
-/* ================================================================== */
-/*  STORE FAILURE HELPERS                                             */
-/* ================================================================== */
-
-/* Collect the human-readable text of an error from any of the shapes the API
-   client or the server can hand back. */
-function errorText(error: unknown): string {
-  if (typeof error === "string") return error
-  if (error instanceof Error) return error.message
-  if (error && typeof error === "object") {
-    const body = error as { message?: unknown; error?: unknown; detail?: unknown }
-    return [body.message, body.error, body.detail].filter((v): v is string => typeof v === "string").join(" ")
+/** The fields of a chat-related WebSocket payload this page reads. */
+type ChatEventPayload = ThreadEventPayload &
+  Partial<Message> & {
+    status?: Session["status"]
+    presences?: Record<string, { lastKnownPresence?: string }>
   }
-  return ""
+
+type MediaType = "image" | "file" | "voice" | "video" | "location" | "poll" | "buttons"
+
+const SIDEBAR_KEY = "bunwa.chat.sidebar"
+const EVENTS = "message,message.any,message.ack,message.reaction,presence.update,session.status"
+
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === "collapsed"
+  } catch {
+    return false
+  }
 }
 
-/*
- * A session with the message store disabled rejects every store read with a
- * 400 that names the two settings to change. Recognise it in an error message
- * or a raw response body so the UI can point at the fix instead of a
- * generic failure.
+function readStars(key: string | null): Set<string> {
+  if (!key) return new Set()
+  try {
+    return new Set(JSON.parse(localStorage.getItem(key) || "[]"))
+  } catch {
+    return new Set()
+  }
+}
+
+interface ChatPageProps {
+  initialSession?: string | null
+}
+
+/**
+ * The chat page: a thin layout over the chat hooks. The list, the open
+ * thread, pictures and presence each live in their own hook; this component
+ * routes WebSocket events to them and wires the actions.
  */
-function isStoreDisabledError(error: unknown): boolean {
-  const text = errorText(error)
-  return /enable noweb store/i.test(text) || /noweb\.store\.enabled/i.test(text)
-}
-
-/*
- * The message store lives in the configured database, so a refused or timed
- * out database connection arrives here as the reason every store read failed.
- * Match the socket and Postgres connection errors the drivers surface.
- */
-const DATABASE_UNREACHABLE_PATTERN =
-  /ECONNREFUSED|ECONNRESET|ETIMEDOUT|getaddrinfo|ENOTFOUND|connection refused|connection terminated|could not connect to server|the database system is starting up|remaining connection slots/i
-
-function isDatabaseUnreachableError(error: unknown): boolean {
-  return DATABASE_UNREACHABLE_PATTERN.test(errorText(error))
-}
-
-const STORE_DISABLED_TITLE = "Chat history is unavailable"
-const STORE_DISABLED_DESCRIPTION = "This session is running without a message store, so BunWa cannot read chats, messages or contacts. Enable the store in the session settings and restart the session. History backfill also needs full sync enabled."
-
-const DATABASE_UNREACHABLE_TITLE = "The database is unreachable"
-const DATABASE_UNREACHABLE_DESCRIPTION = "BunWa cannot reach the database that stores chats and messages. Check that WAHA_DATABASE_URL points at the right server and that the database service is running, then retry."
-
-/** Ordering for picking the strongest presence among several participants. */
-const PRESENCE_RANK: Record<string, number> = { recording: 4, composing: 3, available: 2, paused: 1, unavailable: 0 }
-
-/* ================================================================== */
-/*  DIALOGS (ported from old chat-page)                                */
-/* ================================================================== */
-
-/* ── Shared dialog shell: one header/footer/scroll shape for all three ── */
-function ComposerDialog({ open, onOpenChange, title, children, footer }: {
-  open: boolean
-  onOpenChange: (v: boolean) => void
-  title: string
-  children: ReactNode
-  footer: ReactNode
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
-        <div className="max-h-[70vh] space-y-3 overflow-y-auto py-2">{children}</div>
-        <DialogFooter>{footer}</DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-/* ── Shared file picker: click or drag and drop ── */
-function FileDropzone({ inputRef, accept, label, onSelect }: {
-  inputRef: RefObject<HTMLInputElement | null>
-  accept: string
-  label: string
-  onSelect: (file: File) => void
-}) {
-  const [dragOver, setDragOver] = useState(false)
-  const pick = (files: FileList | null) => { const f = files?.[0]; if (f) onSelect(f) }
-  return (
-    <>
-      <input
-        ref={inputRef}
-        type="file"
-        accept={accept}
-        className="hidden"
-        onChange={(e) => { pick(e.target.files); e.target.value = "" }}
-      />
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); pick(e.dataTransfer.files) }}
-        className={`flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed py-10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-          dragOver ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
-        }`}
-      >
-        <Upload className="size-6 text-muted-foreground" strokeWidth={1.75} />
-        <p className="text-sm font-medium">Click to select {label}</p>
-        <p className="text-xs text-muted-foreground">or drag and drop a file here</p>
-      </button>
-    </>
-  )
-}
-
-/* ── Shared picked-file row ── */
-function FileRow({ name, onRemove }: { name: string; onRemove: () => void }) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg bg-muted p-3">
-      <span className="min-w-0 flex-1 truncate text-sm">{name}</span>
-      <Button variant="ghost" size="icon" className="size-7 shrink-0 rounded-md" onClick={onRemove} aria-label="Remove file">
-        <Trash2 className="size-4" strokeWidth={1.75} />
-      </Button>
-    </div>
-  )
-}
-
-/* ── Shared segmented control ── */
-function Segmented({ value, onChange, options }: {
-  value: string
-  onChange: (v: string) => void
-  options: { value: string; label: string }[]
-}) {
-  return (
-    <div className="flex gap-2" role="group">
-      {options.map((opt) => (
-        <Button
-          key={opt.value}
-          type="button"
-          size="sm"
-          variant={value === opt.value ? "default" : "secondary"}
-          aria-pressed={value === opt.value}
-          onClick={() => onChange(opt.value)}
-          className="flex-1 rounded-md"
-        >
-          {opt.label}
-        </Button>
-      ))}
-    </div>
-  )
-}
-
-/* ── New Chat Dialog ── */
-function NewChatDialog({ open, onOpenChange, session, onOpenChat }: {
-  open: boolean; onOpenChange: (v: boolean) => void; session: string; onOpenChat: (chatId: string) => void
-}) {
-  const [country, setCountry] = useState("GH")
-  const [phone, setPhone] = useState("")
-  const [checking, setChecking] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const handleCheck = async () => {
-    if (!phone.trim()) return
-    setChecking(true)
-    setError(null)
-    const target = toChatId(country, phone)
-    if (!target) { setError("Enter a phone number or a WhatsApp username."); return }
-    try {
-      const res = await api.checkNumberStatus(session, target)
-      if (res.exists && res.number) {
-        onOpenChat(res.number.includes("@") ? res.number : `${res.number}@c.us`)
-        onOpenChange(false)
-        setPhone("")
-      } else if (res.exists === false) {
-        setError("That number or username is not registered on WhatsApp.")
-      } else {
-        setError(res.reason ? `Could not check the number or username: ${res.reason}` : "Could not check the number or username. Try again.")
-      }
-    } catch {
-      setError("Could not check the number or username. Try again.")
-      toast.error("Failed to check number")
-    }
-    finally { setChecking(false) }
-  }
-  return (
-    <ComposerDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title="Start new chat"
-      footer={
-        <>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleCheck} disabled={checking || !phone.trim()} className="rounded-md">
-            {/* Always mounted: toggling visibility keeps the label from
-                shifting when the request starts and stops. */}
-            <RefreshCw className={`mr-2 size-4 ${checking ? "animate-spin" : "opacity-0"}`} strokeWidth={1.75} aria-hidden={!checking} />
-            Start chat
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-2">
-        <Label className="text-xs text-muted-foreground">Phone number or username</Label>
-        <PhoneInput
-          country={country}
-          onCountryChange={setCountry}
-          value={phone}
-          onChange={setPhone}
-          placeholder="501234567 or @handle"
-          onEnter={handleCheck}
-        />
-      </div>
-      {error && (
-        <p role="alert" className="rounded-md border border-error-border bg-error-bg px-3 py-2 text-xs text-error-foreground">
-          {error}
-        </p>
-      )}
-    </ComposerDialog>
-  )
-}
-
-/* ── Send Media Dialog ── */
-function SendMediaDialog({ open, onOpenChange, type, session, chatId, onSent }: {
-  open: boolean; onOpenChange: (v: boolean) => void
-  type: "image" | "file" | "voice" | "video" | "location" | "poll" | "buttons"
-  session: string; chatId: string; onSent: () => void
-}) {
-  const [file, setFile] = useState<File | null>(null)
-  const [caption, setCaption] = useState("")
-  const [lat, setLat] = useState("")
-  const [lng, setLng] = useState("")
-  const [title, setTitle] = useState("")
-  const [pollName, setPollName] = useState("")
-  const [pollOptions, setPollOptions] = useState<string[]>(["", ""])
-  const [pollType, setPollType] = useState<"single" | "multiple">("single")
-  const [buttonsBody, setButtonsBody] = useState("")
-  const [buttonsList, setButtonsList] = useState<{ id: string; text: string }[]>([
-    { id: "", text: "" },
-    { id: "", text: "" },
-  ])
-  const [sending, setSending] = useState(false)
-  const [sendError, setSendError] = useState<string | null>(null)
-  const [recording, setRecording] = useState(false)
-  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
-  const [recordTime, setRecordTime] = useState(0)
-  const fileRef = useRef<HTMLInputElement>(null)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const recordTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const audioChunksRef = useRef<Blob[]>([])
-
-  const reset = () => {
-    setFile(null); setCaption(""); setLat(""); setLng(""); setTitle("")
-    setPollName(""); setPollOptions(["", ""]); setPollType("single")
-    setButtonsBody(""); setButtonsList([{ id: "", text: "" }, { id: "", text: "" }])
-    setRecording(false); setRecordedBlob(null); setRecordTime(0); setSendError(null)
-    if (recordTimerRef.current) clearInterval(recordTimerRef.current)
-  }
-
-  const fileToBase64 = (f: File): Promise<string> =>
-    new Promise((resolve) => { const r = new FileReader(); r.onload = () => resolve(r.result as string); r.readAsDataURL(f) })
-
-  const handleSend = async () => {
-    setSending(true)
-    setSendError(null)
-    try {
-      if (type === "location") {
-        await api.sendLocation(session, chatId, parseFloat(lat), parseFloat(lng), title)
-      } else if (type === "poll") {
-        const opts = pollOptions.map((o) => o.trim()).filter(Boolean)
-        await api.sendPoll(session, chatId, { name: pollName, options: opts, multipleAnswers: pollType === "multiple" })
-      } else if (type === "buttons") {
-        const btns = buttonsList
-          .map((b) => ({ id: b.id.trim(), text: b.text.trim() }))
-          .filter((b) => b.text)
-          .map((b, i) => ({ id: b.id || `btn_${i + 1}`, text: b.text }))
-        await api.sendButtons(session, chatId, buttonsBody, btns)
-      } else if (type === "voice" && recordedBlob) {
-        const base64 = await new Promise<string>((r) => { const reader = new FileReader(); reader.onload = () => r(reader.result as string); reader.readAsDataURL(recordedBlob) })
-        await api.sendVoice(session, chatId, { mimetype: "audio/ogg", filename: "voice.ogg", data: base64 })
-      } else if (file) {
-        const base64 = await fileToBase64(file)
-        const fd = { mimetype: file.type, filename: file.name, data: base64 }
-        if (type === "image") await api.sendImage(session, chatId, fd, caption)
-        else if (type === "video") await api.sendVideo(session, chatId, fd, caption)
-        else if (type === "file") await api.sendFile(session, chatId, fd, caption)
-      }
-      toast.success("Sent")
-      onSent()
-      onOpenChange(false)
-      reset()
-    } catch (e) {
-      const blocked = e instanceof ApiError && e.status === 429
-      setSendError(blocked ? e.message : "The message could not be sent. Check the file and try again.")
-      if (!blocked) toast.error("Failed to send")
-    }
-    finally { setSending(false) }
-  }
-
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/ogg" })
-      audioChunksRef.current = []
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
-      recorder.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: "audio/ogg" })
-        setRecordedBlob(blob)
-        stream.getTracks().forEach((t) => t.stop())
-      }
-      recorder.start()
-      mediaRecorderRef.current = recorder
-      setRecording(true)
-      setRecordTime(0)
-      recordTimerRef.current = setInterval(() => setRecordTime((t) => t + 1), 1000)
-    } catch {
-      setSendError("Microphone access was denied. Allow it in the browser and try again.")
-      toast.error("Microphone access denied")
-    }
-  }
-
-  const stopRecording = () => {
-    mediaRecorderRef.current?.stop()
-    setRecording(false)
-    if (recordTimerRef.current) clearInterval(recordTimerRef.current)
-  }
-
-  const acceptTypes: Record<string, string> = { image: "image/*", video: "video/*", file: "*" }
-  const labels: Record<string, string> = { image: "Send image", file: "Send file", voice: "Send voice", video: "Send video", location: "Send location", poll: "Create poll", buttons: "Send buttons" }
-
-  const formatClock = (seconds: number) =>
-    `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`
-
-  const canSend =
-    type === "poll" ? !!pollName.trim()
-      : type === "buttons" ? (!!buttonsBody.trim() && buttonsList.filter((b) => b.text.trim()).length > 0)
-        : type === "location" ? (!!lat && !!lng)
-          : type === "voice" ? !!recordedBlob
-            : !!file
-
-  return (
-    <ComposerDialog
-      open={open}
-      onOpenChange={(v) => { onOpenChange(v); if (!v) reset() }}
-      title={labels[type]}
-      footer={
-        <>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSend} disabled={sending || !canSend} className="rounded-md">
-            <RefreshCw className={`mr-2 size-4 ${sending ? "animate-spin" : "opacity-0"}`} strokeWidth={1.75} aria-hidden={!sending} />
-            Send
-          </Button>
-        </>
-      }
-    >
-      {(type === "image" || type === "file" || type === "video") && (
-        <>
-          {!file ? (
-            <FileDropzone inputRef={fileRef} accept={acceptTypes[type]} label={type} onSelect={setFile} />
-          ) : (
-            <FileRow name={file.name} onRemove={() => setFile(null)} />
-          )}
-          <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">Caption (optional)</Label>
-            <Input placeholder="Add a caption" value={caption} onChange={(e) => setCaption(e.target.value)} />
-          </div>
-        </>
-      )}
-
-      {type === "voice" && (
-        <div className="flex flex-col items-center space-y-4 py-4">
-          {!recording && !recordedBlob ? (
-            <Button
-              type="button"
-              onClick={startRecording}
-              aria-label="Start recording"
-              className="size-20 rounded-full"
-            >
-              <Mic className="size-8" strokeWidth={1.75} />
-            </Button>
-          ) : recording ? (
-            <div className="flex flex-col items-center gap-3">
-              <Button
-                type="button"
-                onClick={stopRecording}
-                aria-label="Stop recording"
-                className="size-20 animate-pulse rounded-full bg-error text-white hover:bg-error/90"
-              >
-                <Square className="size-6" fill="currentColor" strokeWidth={1.75} />
-              </Button>
-              <Metric className="text-sm">{formatClock(recordTime)}</Metric>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-3">
-              <span className="text-sm">Recorded <Metric>{formatClock(recordTime)}</Metric></span>
-              <Button variant="outline" size="sm" className="rounded-md" onClick={() => { setRecordedBlob(null); setRecordTime(0) }}>Re-record</Button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {type === "location" && (
-        <>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-2"><Label className="text-xs">Latitude</Label><Input placeholder="e.g. 5.6037" value={lat} onChange={(e) => setLat(e.target.value)} /></div>
-            <div className="space-y-2"><Label className="text-xs">Longitude</Label><Input placeholder="e.g. -0.1870" value={lng} onChange={(e) => setLng(e.target.value)} /></div>
-          </div>
-          <div className="space-y-2">
-            <Label className="text-xs">Title (optional)</Label>
-            <Input placeholder="Location name" value={title} onChange={(e) => setTitle(e.target.value)} />
-          </div>
-        </>
-      )}
-
-      {type === "poll" && (
-        <>
-          <div className="space-y-2">
-            <Label className="text-xs">Poll question</Label>
-            <Input placeholder="What is your question?" value={pollName} onChange={(e) => setPollName(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-xs">Poll type</Label>
-            <Segmented
-              value={pollType}
-              onChange={(v) => setPollType(v as "single" | "multiple")}
-              options={[
-                { value: "single", label: "Single choice" },
-                { value: "multiple", label: "Multiple choice" },
-              ]}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-xs">Options</Label>
-            {pollOptions.map((opt, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <Input placeholder={`Option ${i + 1}`} value={opt} onChange={(e) => { const n = [...pollOptions]; n[i] = e.target.value; setPollOptions(n) }} />
-                {pollOptions.length > 2 && (
-                  <Button variant="ghost" size="icon" className="size-7 shrink-0 rounded-md" onClick={() => setPollOptions(pollOptions.filter((_, j) => j !== i))} aria-label={`Remove option ${i + 1}`}>
-                    <Trash2 className="size-3" strokeWidth={1.75} />
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
-          {pollOptions.length < 10 && (
-            <Button variant="ghost" size="sm" className="gap-1 rounded-md" onClick={() => setPollOptions([...pollOptions, ""])}>
-              <Plus className="size-3.5" strokeWidth={1.75} />
-              Add option
-            </Button>
-          )}
-        </>
-      )}
-
-      {type === "buttons" && (
-        <>
-          <div className="space-y-2">
-            <Label className="text-xs">Message text</Label>
-            <Textarea placeholder="What would you like to say?" value={buttonsBody} onChange={(e) => setButtonsBody(e.target.value)} className="min-h-[80px]" />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-xs">Buttons</Label>
-            {buttonsList.map((btn, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <Input placeholder={`Button ${i + 1} text`} value={btn.text} onChange={(e) => { const n = [...buttonsList]; n[i] = { ...n[i], text: e.target.value }; setButtonsList(n) }} />
-                {buttonsList.length > 1 && (
-                  <Button variant="ghost" size="icon" className="size-7 shrink-0 rounded-md" onClick={() => setButtonsList(buttonsList.filter((_, j) => j !== i))} aria-label={`Remove button ${i + 1}`}>
-                    <Trash2 className="size-3" strokeWidth={1.75} />
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
-          {buttonsList.length < 3 && (
-            <Button variant="ghost" size="sm" className="gap-1 rounded-md" onClick={() => setButtonsList([...buttonsList, { id: "", text: "" }])}>
-              <Plus className="size-3.5" strokeWidth={1.75} />
-              Add button
-            </Button>
-          )}
-        </>
-      )}
-
-      {sendError && (
-        <p role="alert" className="rounded-md border border-error-border bg-error-bg px-3 py-2 text-xs text-error-foreground">
-          {sendError}
-        </p>
-      )}
-    </ComposerDialog>
-  )
-}
-
-/* ── Status Dialog ── */
-function StatusDialog({ open, onOpenChange, session, onSent }: { open: boolean; onOpenChange: (v: boolean) => void; session: string; onSent: () => void }) {
-  const [statusType, setStatusType] = useState<"text" | "image" | "video">("text")
-  const [text, setText] = useState("")
-  const [file, setFile] = useState<File | null>(null)
-  const [sending, setSending] = useState(false)
-  const [sendError, setSendError] = useState<string | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  const handleSend = async () => {
-    setSending(true)
-    setSendError(null)
-    try {
-      if (statusType === "text") {
-        await api.postTextStatus(session, text)
-      } else if (file) {
-        const base64 = await new Promise<string>((r) => { const reader = new FileReader(); reader.onload = () => r(reader.result as string); reader.readAsDataURL(file) })
-        const fd = { mimetype: file.type, filename: file.name, data: base64 }
-        if (statusType === "image") await api.postImageStatus(session, fd, text)
-        else await api.postVideoStatus(session, fd, text)
-      }
-      toast.success("Status posted")
-      onSent()
-      onOpenChange(false)
-      setText(""); setFile(null)
-    } catch (e) {
-      // Let the server's client-facing reasons through (a blocked send, an
-      // unsupported file shape); anything else keeps the generic fallback.
-      const clientFacing = e instanceof ApiError && (e.status === 400 || e.status === 422 || e.status === 429)
-      setSendError(clientFacing ? e.message : "The status could not be posted. Try again.")
-      if (!clientFacing) toast.error("Failed to post status")
-    }
-    finally { setSending(false) }
-  }
-
-  return (
-    <ComposerDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title="Post status"
-      footer={
-        <>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSend} disabled={sending || (statusType === "text" ? !text.trim() : !file)} className="rounded-md">
-            <RefreshCw className={`mr-2 size-4 ${sending ? "animate-spin" : "opacity-0"}`} strokeWidth={1.75} aria-hidden={!sending} />
-            Post status
-          </Button>
-        </>
-      }
-    >
-      <Segmented
-        value={statusType}
-        onChange={(v) => { setStatusType(v as "text" | "image" | "video"); setFile(null) }}
-        options={[
-          { value: "text", label: "Text" },
-          { value: "image", label: "Image" },
-          { value: "video", label: "Video" },
-        ]}
-      />
-      {statusType === "text" ? (
-        <Textarea placeholder="What is on your mind?" value={text} onChange={(e) => setText(e.target.value)} className="min-h-[100px]" />
-      ) : (
-        <>
-          {!file ? (
-            <FileDropzone inputRef={fileRef} accept={statusType === "image" ? "image/*" : "video/*"} label={statusType} onSelect={setFile} />
-          ) : (
-            <FileRow name={file.name} onRemove={() => setFile(null)} />
-          )}
-          <Input placeholder="Caption (optional)" value={text} onChange={(e) => setText(e.target.value)} />
-        </>
-      )}
-      {sendError && (
-        <p role="alert" className="rounded-md border border-error-border bg-error-bg px-3 py-2 text-xs text-error-foreground">
-          {sendError}
-        </p>
-      )}
-    </ComposerDialog>
-  )
-}
-
-/* ================================================================== */
-/*  MAIN CHAT PAGE ORCHESTRATOR                                       */
-/* ================================================================== */
-
-interface ChatPageProps { initialSession?: string | null }
-
 export function ChatPage({ initialSession }: ChatPageProps) {
-  /* ── State ── */
+  /* ── Sessions ── */
   const [sessions, setSessions] = useState<Session[]>([])
-  const [sessionsError, setSessionsError] = useState(false)
+  const [sessionsError, setSessionsError] = useState<"database" | "other" | null>(null)
   const [selectedSession, setSelectedSession] = useState("")
-  const [chats, setChats] = useState<ChatOverview[]>([])
-  const [contacts, setContacts] = useState<Map<string, Contact>>(new Map())
-  const [contactsError, setContactsError] = useState(false)
-  const [selectedChat, setSelectedChat] = useState<ChatOverview | null>(null)
-  const [messages, setMessages] = useState<Message[]>([])
-  const [loadingChats, setLoadingChats] = useState(false)
-  const [loadingMessages, setLoadingMessages] = useState(false)
-  const [storeDisabled, setStoreDisabled] = useState(false)
-  const [databaseUnreachable, setDatabaseUnreachable] = useState(false)
-  const [replyingTo, setReplyingTo] = useState<ChatMessageData | null>(null)
-  const [editingMessage, setEditingMessage] = useState<ChatMessageData | null>(null)
-  const [hasMoreMessages, setHasMoreMessages] = useState(false)
-  const [userPicture, setUserPicture] = useState<string | null>(null)
-  const [pictureError, setPictureError] = useState(false)
-  const [contactPictures, setContactPictures] = useState<Map<string, string>>(new Map())
-  const [newChatOpen, setNewChatOpen] = useState(false)
-  const [statusOpen, setStatusOpen] = useState(false)
-  const [templatesOpen, setTemplatesOpen] = useState(false)
-  const [mediaDialog, setMediaDialog] = useState<{ open: boolean; type: "image" | "file" | "voice" | "video" | "location" | "poll" | "buttons" }>({ open: false, type: "image" })
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    try { return localStorage.getItem("bunwa.chat.sidebar") === "collapsed" } catch { return false }
-  })
-  const [starred, setStarred] = useState<Set<string>>(new Set())
-  const [presences, setPresences] = useState<Map<string, string>>(new Map())
-  const [typingMap, setTypingMap] = useState<Map<string, string>>(new Map())
-  const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
-  // Drops answers that belong to a session the user has already left.
-  const isCurrentSession = useSessionGuard(selectedSession)
+  const loadSessions = useCallback(async () => {
+    try {
+      setSessions(await api.getSessions())
+      setSessionsError(null)
+    } catch (error) {
+      setSessionsError(isDatabaseUnreachableError(error) ? "database" : "other")
+    }
+  }, [])
+  useEffect(() => {
+    const first = setTimeout(() => void loadSessions(), 0)
+    const interval = setInterval(() => void loadSessions(), 30_000)
+    return () => {
+      clearTimeout(first)
+      clearInterval(interval)
+    }
+  }, [loadSessions])
+
+  // Pick a session as soon as the list arrives (during render, not in an effect).
+  if (!selectedSession && sessions.length > 0) {
+    setSelectedSession(initialSession && sessions.some((s) => s.name === initialSession) ? initialSession : sessions[0].name)
+  }
 
   const currentSession = sessions.find((s) => s.name === selectedSession)
   const isWorking = currentSession?.status === "WORKING"
   const currentUserJid = resolveUserJid(currentSession || {})
 
-  /* ── Data Loading ── */
-  const loadSessions = useCallback(async () => {
-    try { setSessions(await api.getSessions()); setSessionsError(false) }
-    catch (error) {
-      if (isDatabaseUnreachableError(error)) setDatabaseUnreachable(true)
-      setSessionsError(true)
-    }
-  }, [])
-  useEffect(() => { loadSessions(); const iv = setInterval(loadSessions, 30000); return () => clearInterval(iv) }, [loadSessions])
-  useEffect(() => { if (sessions.length > 0 && !selectedSession) setSelectedSession(initialSession || sessions[0].name) }, [sessions, selectedSession, initialSession])
-  useEffect(() => { setSelectedChat(null); setMessages([]); setStoreDisabled(false); setDatabaseUnreachable(false) }, [selectedSession])
-
+  /* ── Contacts (names for rows and senders) ── */
+  const [contactsState, setContactsState] = useState<{ session: string; map: Map<string, Contact>; error: boolean }>({
+    session: "",
+    map: new Map(),
+    error: false,
+  })
+  const contacts = useMemo(
+    () => (contactsState.session === selectedSession ? contactsState.map : new Map<string, Contact>()),
+    [contactsState, selectedSession],
+  )
+  const contactsError = contactsState.session === selectedSession && contactsState.error
   useEffect(() => {
-    if (!selectedSession) { setUserPicture(null); setPictureError(false); return }
-    const s = sessions.find(s => s.name === selectedSession)
-    if (!s?.me?.id) return
-    setPictureError(false)
-    const jid = resolveUserJid(s)
-    const session = selectedSession
-    api.getContactPicture(session, jid).then(res => {
-      if (!isCurrentSession(session)) return
-      if (res.profilePictureURL) setUserPicture(res.profilePictureURL)
-    }).catch(() => { if (isCurrentSession(session)) setPictureError(true) })
-  }, [selectedSession, sessions, isCurrentSession])
-
-  useEffect(() => {
-    if (!selectedChat || !selectedSession) return
-    if (selectedChat.picture) return
-    if (contactPictures.has(selectedChat.id)) return
-    const session = selectedSession
-    api.getContactPicture(session, selectedChat.id).then(res => {
-      if (!isCurrentSession(session)) return
-      if (res.profilePictureURL) {
-        setContactPictures(prev => { const m = new Map(prev); m.set(selectedChat.id, res.profilePictureURL!); return m })
-      }
-    }).catch(() => { if (isCurrentSession(session)) setPictureError(true) })
-  }, [selectedChat, selectedSession, isCurrentSession])
-
-  const loadContacts = useCallback(async () => {
-    const session = selectedSession
-    if (!session || !isWorking) { setContacts(new Map()); return }
-    try {
-      const list = await api.getContacts(session, 500, 0)
-      if (!isCurrentSession(session)) return
-      setContacts(new Map(list.map((c) => [c.id, c])))
-      setContactsError(false)
-    } catch (error) {
-      if (!isCurrentSession(session)) return
-      if (isDatabaseUnreachableError(error)) setDatabaseUnreachable(true)
-      else setContactsError(true)
-    }
-  }, [selectedSession, isWorking, isCurrentSession])
-  useEffect(() => { loadContacts() }, [loadContacts])
-
-  const chatsLoadedForSessionRef = useRef<string | null>(null)
-  const loadChats = useCallback(async () => {
-    const session = selectedSession
-    if (!session || !isWorking) { setChats([]); return }
-    // Only show the blocking "Loading conversations..." placeholder on the
-    // first load for this session — background refreshes (5s poll, WS
-    // events) should update the list in place without blanking it out.
-    const isFirstLoad = chatsLoadedForSessionRef.current !== session
-    if (isFirstLoad) setLoadingChats(true)
-    try {
-      const list = await api.getChatsOverview(session)
-      // The user may have switched sessions while this was in flight; the
-      // answer describes the previous session, so it must not replace the
-      // current list.
-      if (!isCurrentSession(session)) return
-      setChats(list)
-      chatsLoadedForSessionRef.current = session
-      setStoreDisabled(false)
-      setDatabaseUnreachable(false)
-    }
-    catch (error) {
-      if (!isCurrentSession(session)) return
-      if (isDatabaseUnreachableError(error)) { setDatabaseUnreachable(true); setStoreDisabled(false) }
-      else if (isStoreDisabledError(error)) setStoreDisabled(true)
-      else toast.error("Failed to load chats")
-    }
-    finally { if (isFirstLoad && isCurrentSession(session)) setLoadingChats(false) }
-  }, [selectedSession, isWorking, isCurrentSession])
-  useEffect(() => { loadChats() }, [loadChats])
-
-  // Latest message list for callers that run outside a render (fetch races).
-  const messagesRef = useRef<Message[]>([])
-  useEffect(() => { messagesRef.current = messages }, [messages])
-
-  const loadMessages = useCallback(async (chatId: string) => {
-    const session = selectedSession
-    if (!session) return
-    setLoadingMessages(true)
-    const listedBeforeFetch = messagesRef.current
-    try {
-      const msgs = await api.getMessages(session, chatId, 50, 0)
-      // Same guard as the chat list: a page fetched for a chat in the session
-      // the user has just left must not land in the new session's thread.
-      if (!isCurrentSession(session)) return
-      // The socket can append while the request is in flight. Keep those
-      // arrivals (de-duplicated by id) instead of letting the fetched page
-      // drop them, so both update paths converge on one list.
-      setMessages((prev) => {
-        const arrived = prev.filter((m) => !listedBeforeFetch.some((old) => old.id === m.id))
-        if (arrived.length === 0) return msgs
-        const known = new Set(msgs.map((m) => m.id))
-        return [...arrived.filter((m) => !known.has(m.id)), ...msgs]
+    if (!selectedSession || !isWorking) return
+    let cancelled = false
+    api
+      .getContacts(selectedSession, 500, 0)
+      .then((list) => {
+        if (!cancelled) setContactsState({ session: selectedSession, map: new Map(list.map((c) => [c.id, c])), error: false })
       })
-      setHasMoreMessages(msgs.length === 50)
-      setDatabaseUnreachable(false)
-      api.sendSeen(selectedSession, chatId).catch(() => {})
-    } catch (error) {
-      if (!isCurrentSession(session)) return
-      if (isDatabaseUnreachableError(error)) { setDatabaseUnreachable(true); setStoreDisabled(false) }
-      else if (isStoreDisabledError(error)) setStoreDisabled(true)
-      else toast.error("Failed to load messages")
+      .catch(() => {
+        if (!cancelled) setContactsState({ session: selectedSession, map: new Map(), error: true })
+      })
+    return () => {
+      cancelled = true
     }
-    finally { if (isCurrentSession(session)) setLoadingMessages(false) }
-  }, [selectedSession, isCurrentSession])
-  useEffect(() => { if (selectedChat) loadMessages(selectedChat.id) }, [selectedChat, loadMessages])
+  }, [selectedSession, isWorking])
 
-  /* ── WebSocket ── */
-  const selectedSessionRef = useRef(selectedSession)
-  selectedSessionRef.current = selectedSession
-  const selectedChatRef = useRef(selectedChat?.id)
-  selectedChatRef.current = selectedChat?.id
-  const loadChatsRef = useRef(loadChats)
-  loadChatsRef.current = loadChats
+  /* ── Open chat ── */
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(null)
+  // A chat opened from the new-chat dialog may not be in the list yet.
+  const [fallbackChat, setFallbackChat] = useState<ChatOverview | null>(null)
+  // Search, filters and the reply/edit draft belong to one chat.
+  const [search, setSearch] = useState<string | null>(null)
+  const [starredOnly, setStarredOnly] = useState(false)
+  const [replyingTo, setReplyingTo] = useState<ChatMessageData | null>(null)
+  const [editingMessage, setEditingMessage] = useState<ChatMessageData | null>(null)
 
-  /* One debounced refresh path for the conversation list: socket events and
-     the 5s fallback poll both go through it, so they cannot stack requests
-     or fight over the list state. */
-  const chatsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const scheduleChatsRefresh = useCallback(() => {
-    if (chatsRefreshTimerRef.current) return
-    chatsRefreshTimerRef.current = setTimeout(() => {
-      chatsRefreshTimerRef.current = null
-      loadChatsRef.current()
-    }, 2000)
-  }, [])
-  useEffect(() => () => {
-    if (chatsRefreshTimerRef.current) clearTimeout(chatsRefreshTimerRef.current)
-  }, [])
+  // Switching session closes the chat; switching chat clears its search and
+  // draft. Both adjust state during render instead of in an effect.
+  const [shownSession, setShownSession] = useState(selectedSession)
+  if (shownSession !== selectedSession) {
+    setShownSession(selectedSession)
+    setSelectedChatId(null)
+    setFallbackChat(null)
+  }
+  const [shownChat, setShownChat] = useState(selectedChatId)
+  if (shownChat !== selectedChatId) {
+    setShownChat(selectedChatId)
+    setSearch(null)
+    setStarredOnly(false)
+    setReplyingTo(null)
+    setEditingMessage(null)
+  }
 
-  /* ── Sidebar collapse (persisted across visits) ── */
-  const toggleSidebar = useCallback(() => {
-    setSidebarCollapsed((prev) => {
+  const list = useChatList(selectedSession, isWorking)
+  const avatars = useAvatars(selectedSession)
+  const thread = useChatThread(selectedSession, selectedChatId, currentUserJid)
+  const presence = usePresence(selectedSession, selectedChatId, isWorking)
+  const limit = useSendingLimit(selectedSession, isWorking)
+
+  const selectedChat =
+    (selectedChatId && list.chats.find((c) => c.id === selectedChatId)) ||
+    (fallbackChat && fallbackChat.id === selectedChatId ? fallbackChat : null)
+
+  useEffect(() => {
+    if (selectedChatId) avatars.request([selectedChatId])
+    if (currentUserJid) avatars.request([currentUserJid])
+  }, [selectedChatId, currentUserJid, avatars])
+
+  /* ── Stars: per chat, persisted locally, mirrored to /api/star ── */
+  const starsKey = selectedSession && selectedChatId ? `bunwa.stars.${selectedSession}.${selectedChatId}` : null
+  const [starsState, setStarsState] = useState<{ key: string | null; stars: Set<string> }>({ key: null, stars: new Set() })
+  const starred = starsState.key === starsKey ? starsState.stars : readStars(starsKey)
+  const setStarred = useCallback(
+    (next: Set<string>) => {
+      setStarsState({ key: starsKey, stars: next })
+      if (!starsKey) return
+      try {
+        localStorage.setItem(starsKey, JSON.stringify([...next]))
+      } catch {
+        /* private mode */
+      }
+    },
+    [starsKey],
+  )
+
+  /* ── In-chat search and starred filter ── */
+  const mapped = useMappedMessages(thread.messages, contacts, currentUserJid, starred)
+  const query = search?.trim().toLowerCase() ?? ""
+  const filtering = starredOnly || query.length > 0
+  const visibleMessages = useMemo(
+    () =>
+      filtering
+        ? mapped.filter((m) => (!starredOnly || m.isStarred) && (!query || (m.text ?? "").toLowerCase().includes(query)))
+        : mapped,
+    [mapped, filtering, starredOnly, query],
+  )
+
+  /* ── Dialogs ── */
+  const [newChatOpen, setNewChatOpen] = useState(false)
+  const [statusOpen, setStatusOpen] = useState(false)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
+  const [media, setMedia] = useState<{ open: boolean; type: MediaType }>({ open: false, type: "image" })
+  const [collapsed, setCollapsed] = useState(readCollapsed)
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((prev) => {
       const next = !prev
-      try { localStorage.setItem("bunwa.chat.sidebar", next ? "collapsed" : "expanded") } catch { /* private mode */ }
+      try {
+        localStorage.setItem(SIDEBAR_KEY, next ? "collapsed" : "expanded")
+      } catch {
+        /* private mode */
+      }
       return next
     })
   }, [])
 
-  /* ── Stars — per chat, persisted locally, mirrored to /api/star ── */
-  const starredRef = useRef(starred)
-  starredRef.current = starred
-  const starsKeyRef = useRef<string | null>(null)
-  starsKeyRef.current = selectedSession && selectedChat ? `bunwa.stars.${selectedSession}.${selectedChat.id}` : null
+  /* ── Live events ── */
+  const selectedChatIdRef = useRef(selectedChatId)
+  const selectedSessionRef = useRef(selectedSession)
   useEffect(() => {
-    const key = starsKeyRef.current
-    if (!key) { setStarred(new Set()); return }
-    try { setStarred(new Set(JSON.parse(localStorage.getItem(key) || "[]"))) } catch { setStarred(new Set()) }
-  }, [selectedSession, selectedChat])
-  const persistStars = useCallback((next: Set<string>) => {
-    const key = starsKeyRef.current
-    if (!key) return
-    try { localStorage.setItem(key, JSON.stringify([...next])) } catch { /* ignore */ }
-  }, [])
-  const handleStar = useCallback(async (messageId: string) => {
-    const session = selectedSessionRef.current
-    const chatId = selectedChatRef.current
-    if (!session || !chatId) return
-    const wasStarred = starredRef.current.has(messageId)
-    const next = new Set(starredRef.current)
-    if (wasStarred) next.delete(messageId); else next.add(messageId)
-    setStarred(next)
-    persistStars(next)
-    try {
-      await api.setStar(session, chatId, messageId, !wasStarred)
-      toast.success(wasStarred ? "Removed from starred" : "Starred")
-    } catch {
-      const revert = new Set(starredRef.current)
-      if (wasStarred) revert.add(messageId); else revert.delete(messageId)
-      setStarred(revert)
-      persistStars(revert)
-      toast.error("Could not update the star")
-    }
-  }, [persistStars])
+    selectedChatIdRef.current = selectedChatId
+    selectedSessionRef.current = selectedSession
+  }, [selectedChatId, selectedSession])
 
-  /* ── Presence + typing ──────────────────────────────────────────── */
-  const setTypingForChat = useCallback((chatId: string, state: string | null) => {
-    const timers = typingTimersRef.current
-    const existing = timers.get(chatId)
-    if (existing) { clearTimeout(existing); timers.delete(chatId) }
-    if (state) {
-      setTypingMap((prev) => (prev.get(chatId) === state ? prev : new Map(prev).set(chatId, state)))
-      // Safety net: engines do not always send a "paused" after composing.
-      timers.set(chatId, setTimeout(() => {
-        timers.delete(chatId)
-        setTypingMap((prev) => { if (!prev.has(chatId)) return prev; const n = new Map(prev); n.delete(chatId); return n })
-      }, 12000))
-    } else {
-      setTypingMap((prev) => { if (!prev.has(chatId)) return prev; const n = new Map(prev); n.delete(chatId); return n })
-    }
-  }, [])
-  useEffect(() => () => {
-    for (const t of typingTimersRef.current.values()) clearTimeout(t)
-    typingTimersRef.current.clear()
-  }, [])
+  const onEvent = useCallback(
+    (data: { event?: string; session?: string; payload?: ChatEventPayload }) => {
+      const { event, session, payload } = data ?? {}
+      if (!event || !payload) return
+      if (session && selectedSessionRef.current && session !== selectedSessionRef.current) return
+      const openChatId = selectedChatIdRef.current
 
-  const applyPresences = useCallback((chatId: string, entries: Record<string, { lastKnownPresence?: string }> | undefined) => {
-    let state: string | null = null
-    for (const p of Object.values(entries || {})) {
-      const s = p?.lastKnownPresence
-      if (!s) continue
-      if (!state || (PRESENCE_RANK[s] ?? 0) > (PRESENCE_RANK[state] ?? 0)) state = s
-    }
-    if (!state) return
-    // Presence events are chatty and often repeat; keep the previous map when
-    // nothing changed so they do not force a re-render each time.
-    setPresences((prev) => (prev.get(chatId) === state ? prev : new Map(prev).set(chatId, state as string)))
-    if (state === "composing" || state === "recording") setTypingForChat(chatId, state)
-    else setTypingForChat(chatId, null)
-  }, [setTypingForChat])
-  const applyPresencesRef = useRef(applyPresences)
-  applyPresencesRef.current = applyPresences
-
-  /* Stream presence for the open chat + read its current state. */
-  useEffect(() => {
-    if (!selectedSession || !selectedChat || !isWorking) return
-    const chatId = selectedChat.id
-    api.subscribePresence(selectedSession, chatId).catch(() => {})
-    api.getPresence(selectedSession, chatId)
-      .then((res) => applyPresencesRef.current(chatId, (res as unknown as { presences?: Record<string, { lastKnownPresence?: string }> })?.presences))
-      .catch(() => {})
-  }, [selectedSession, selectedChat, isWorking])
-
-  /* Seed the list dots when the session becomes working. */
-  useEffect(() => {
-    if (!selectedSession || !isWorking) { setPresences(new Map()); return }
-    let cancelled = false
-    api.getPresences(selectedSession).then((list) => {
-      if (cancelled || !Array.isArray(list)) return
-      const next = new Map<string, string>()
-      for (const item of list as Array<{ id?: string; presences?: Record<string, { lastKnownPresence?: string }> }>) {
-        if (!item?.id) continue
-        let state: string | null = null
-        for (const p of Object.values(item.presences || {})) {
-          const s = p?.lastKnownPresence
-          if (!s) continue
-          if (!state || (PRESENCE_RANK[s] ?? 0) > (PRESENCE_RANK[state] ?? 0)) state = s
+      if (event === "session.status") {
+        setSessions((prev) => prev.map((s) => (s.name === session ? { ...s, status: payload.status ?? s.status } : s)))
+        return
+      }
+      if (event === "presence.update") {
+        if (payload.id) presence.apply(payload.id, payload.presences)
+        return
+      }
+      const belongs = !!openChatId && (payload.from === openChatId || payload.to === openChatId)
+      if (event === "message" || event === "message.any") {
+        list.applyMessage(payload as unknown as Message, openChatId)
+        if (belongs) {
+          thread.applyEvent(event, payload)
+          if (!payload.fromMe) api.sendSeen(selectedSessionRef.current, openChatId!).catch(() => {})
         }
-        if (state) next.set(item.id, state)
+      } else if (belongs && (event === "message.ack" || event === "message.reaction")) {
+        thread.applyEvent(event, payload)
       }
-      if (next.size) setPresences((prev) => new Map([...prev, ...next]))
-    }).catch(() => {})
-    return () => { cancelled = true }
-  }, [selectedSession, isWorking])
+    },
+    [list, thread, presence],
+  )
+  const { connected } = useWebSocket({ session: selectedSession || "*", events: EVENTS, onMessage: onEvent })
 
-  const typingUsers: TypingUser[] = useMemo(() => {
-    if (!selectedChat) return []
-    const state = typingMap.get(selectedChat.id)
-    if (!state) return []
-    return [{ id: selectedChat.id, name: chatName(selectedChat, contacts) }]
-  }, [typingMap, selectedChat, contacts])
-
-  const handleWsMessage = useCallback((data: any) => {
-    if (!data || typeof data !== "object") return
-    const event = data.event as string | undefined
-    const session = data.session as string | undefined
-    const payload = data.payload
-    if (!event || !payload) return
-    if (session && selectedSessionRef.current && session !== selectedSessionRef.current) return
-
-    const openChatId = selectedChatRef.current
-    const belongsToOpenChat = !!openChatId && (payload.from === openChatId || payload.to === openChatId)
-
-    if (event === "message" || event === "message.any") {
-      if (belongsToOpenChat) {
-        // message and message.any can both deliver the same payload.
-        setMessages((prev) => (prev.some((m) => m.id === payload.id) ? prev : [payload, ...prev]))
-        api.sendSeen(selectedSessionRef.current, openChatId!).catch(() => {})
-      }
-    } else if (event === "message.ack") {
-      if (belongsToOpenChat) {
-        setMessages((prev) => {
-          const index = prev.findIndex((m) => m.id === payload.id)
-          if (index === -1 || prev[index].ack === payload.ack) return prev
-          const next = prev.slice()
-          next[index] = { ...next[index], ack: payload.ack, ackName: payload.ackName }
-          return next
-        })
-      }
-    } else if (event === "message.reaction") {
-      const messageId = payload.reaction?.messageId
-      const text = payload.reaction?.text
-      if (belongsToOpenChat && messageId) {
-        const reactor = payload.participant || payload.from
-        setMessages((prev) => prev.map((m) => {
-          if (m.id !== messageId) return m
-          const filtered = (m.reactions || []).filter((r) => r.key?.remoteJid !== reactor)
-          if (!text) return { ...m, reactions: filtered }
-          return { ...m, reactions: [...filtered, { text, key: { fromMe: payload.fromMe, remoteJid: reactor }, senderTimestampMs: (payload.timestamp || 0) * 1000 }] }
-        }))
-      }
-    } else if (event === "presence.update") {
-      const presenceChatId = payload.id as string | undefined
-      if (presenceChatId) applyPresencesRef.current(presenceChatId, payload.presences)
-    } else {
-      return
-    }
-
-    // Sidebar refresh (last-message preview / unread badges) — debounced,
-    // still needed for chats other than the one currently open.
-    scheduleChatsRefresh()
-  }, [scheduleChatsRefresh])
-  useWebSocket({ session: selectedSession || "*", events: "message,message.any,message.ack,message.reaction,presence.update", onMessage: handleWsMessage })
-
-  /* ── 5-second polling fallback for unread counts ── */
+  // After a reconnect (not the first connection), catch up on what the socket missed.
+  const connectedBefore = useRef(false)
   useEffect(() => {
-    if (!isWorking) return
-    const iv = setInterval(scheduleChatsRefresh, 5000)
-    return () => clearInterval(iv)
-  }, [scheduleChatsRefresh, isWorking])
+    if (!connected) return
+    if (connectedBefore.current) {
+      void list.refresh()
+      void thread.reload()
+    }
+    connectedBefore.current = true
+    // Only the connection flip matters here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected])
 
-  /* ── Current User for ChatProvider ── */
-  const chatUser: ChatUser = useMemo(() => ({
-    id: currentUserJid,
-    name: currentSession?.me?.pushName || selectedSession,
-    avatar: userPicture || undefined,
-    status: isWorking ? "online" : "offline",
-  }), [currentUserJid, currentSession, selectedSession, userPicture, isWorking])
-
-  /* ── Mapped Messages ── */
-  const mappedMessages: ChatMessageData[] = useMemo(
-    () => [...messages].reverse().map((m) => ({ ...mapMessage(m, contacts, currentUserJid), isStarred: starred.has(m.id) })),
-    [messages, contacts, currentUserJid, starred]
+  /* ── Actions (stable identities, so the chat context does not churn) ── */
+  const actions = {
+    selectChat(chatId: string) {
+      setSelectedChatId(chatId)
+      list.markRead(chatId)
+      if (selectedSession) api.readChatMessages(selectedSession, chatId).catch(() => {})
+    },
+    openNewChat(chatId: string) {
+      const chat: ChatOverview = { id: chatId, name: chatId.split("@")[0] }
+      setFallbackChat(chat)
+      list.ensureChat(chat)
+      setSelectedChatId(chatId)
+    },
+    async send(text: string) {
+      if (!selectedSession || !selectedChatId) return
+      if (editingMessage) {
+        const id = editingMessage.id
+        setEditingMessage(null)
+        const undo = thread.patchMessage(id, (m) => ({ ...m, body: text }))
+        try {
+          await api.editMessage(selectedSession, selectedChatId, id, text)
+        } catch {
+          undo()
+          toast.error("Could not edit the message")
+        }
+        return
+      }
+      const replyTo = replyingTo?.id
+      setReplyingTo(null)
+      await thread.sendText(text, replyTo)
+      limit.refresh()
+    },
+    async voice(base64: string, mimetype: string) {
+      if (!selectedSession || !selectedChatId) return
+      try {
+        await api.sendVoice(selectedSession, selectedChatId, { mimetype, filename: "voice.webm", data: base64 })
+        void thread.reload()
+        limit.refresh()
+      } catch (e) {
+        showSendError(e, "Could not send the voice note")
+      }
+    },
+    async react(messageId: string, emoji: string) {
+      if (!selectedSession || !selectedChatId) return
+      const undo = thread.patchMessage(messageId, (m) =>
+        m.reactions?.some((r) => r.text === emoji)
+          ? m
+          : { ...m, reactions: [...(m.reactions || []), { text: emoji, key: { fromMe: true }, senderTimestampMs: Date.now() }] },
+      )
+      try {
+        await api.setReaction(selectedSession, selectedChatId, messageId, emoji)
+      } catch {
+        undo()
+        toast.error("Could not add the reaction")
+      }
+    },
+    async unreact(messageId: string, emoji: string) {
+      if (!selectedSession || !selectedChatId) return
+      const undo = thread.patchMessage(messageId, (m) => ({ ...m, reactions: m.reactions?.filter((r) => r.text !== emoji) }))
+      try {
+        await api.setReaction(selectedSession, selectedChatId, messageId, "")
+      } catch {
+        undo()
+        toast.error("Could not remove the reaction")
+      }
+    },
+    async remove(messageId: string) {
+      if (!selectedSession || !selectedChatId) return
+      const failed = thread.messages.find((m) => m.id === messageId && m.sendError)
+      if (failed) {
+        thread.discard(messageId)
+        return
+      }
+      try {
+        await api.deleteMessage(selectedSession, selectedChatId, messageId)
+        void thread.reload()
+      } catch {
+        toast.error("Could not delete the message")
+      }
+    },
+    async pin(messageId: string) {
+      if (!selectedSession || !selectedChatId) return
+      try {
+        await api.pinMessage(selectedSession, selectedChatId, messageId)
+        toast.success("Pinned")
+      } catch {
+        toast.error("Could not pin the message")
+      }
+    },
+    async star(messageId: string) {
+      if (!selectedSession || !selectedChatId) return
+      const wasStarred = starred.has(messageId)
+      const next = new Set(starred)
+      if (wasStarred) next.delete(messageId)
+      else next.add(messageId)
+      setStarred(next)
+      try {
+        await api.setStar(selectedSession, selectedChatId, messageId, !wasStarred)
+      } catch {
+        setStarred(starred)
+        toast.error("Could not update the star")
+      }
+    },
+    reply(message: ChatMessageData) {
+      setEditingMessage(null)
+      setReplyingTo(message)
+    },
+    edit(message: ChatMessageData) {
+      setReplyingTo(null)
+      setEditingMessage(message)
+    },
+    retry(messageId: string) {
+      thread.retry(messageId)
+    },
+    typing(isTyping: boolean) {
+      if (!selectedSession || !selectedChatId || !isWorking) return
+      const call = isTyping ? api.startTyping : api.stopTyping
+      call(selectedSession, selectedChatId).catch(() => {})
+    },
+    async startSession(name: string) {
+      try {
+        await api.startSession(name)
+        toast.success(`Starting ${name}`)
+        await loadSessions()
+      } catch {
+        toast.error(`Could not start ${name}`)
+      }
+    },
+    async restartSession(name: string) {
+      try {
+        await api.restartSession(name)
+        toast.success(`Restarting ${name}`)
+        await loadSessions()
+      } catch {
+        toast.error(`Could not restart ${name}`)
+      }
+    },
+    async stopSession(name: string) {
+      try {
+        await api.stopSession(name)
+        toast.success(`Stopped ${name}`)
+        await loadSessions()
+      } catch {
+        toast.error(`Could not stop ${name}`)
+      }
+    },
+  }
+  const actionsRef = useRef(actions)
+  useEffect(() => {
+    actionsRef.current = actions
+  })
+  // One set of stable functions that always call the latest action.
+  const stable = useMemo(
+    () => ({
+      onReactionAdd: (id: string, emoji: string) => void actionsRef.current.react(id, emoji),
+      onReactionRemove: (id: string, emoji: string) => void actionsRef.current.unreact(id, emoji),
+      onReply: (m: ChatMessageData) => actionsRef.current.reply(m),
+      onEdit: (m: ChatMessageData) => actionsRef.current.edit(m),
+      onDelete: (id: string) => void actionsRef.current.remove(id),
+      onPin: (id: string) => void actionsRef.current.pin(id),
+      onStar: (id: string) => void actionsRef.current.star(id),
+      onRetry: (id: string) => actionsRef.current.retry(id),
+    }),
+    [],
   )
 
-  /* ── Actions ── */
-  const handleStartSession = async (name: string) => {
-    try { await api.startSession(name); toast.success("Starting"); await loadSessions() }
-    catch { toast.error("Failed to start") }
-  }
+  const chatUser: ChatUser = useMemo(
+    () => ({
+      id: currentUserJid,
+      name: currentSession?.me?.pushName || selectedSession,
+      avatar: avatars.get(currentUserJid),
+      status: isWorking ? "online" : "offline",
+    }),
+    [currentUserJid, currentSession?.me?.pushName, selectedSession, avatars, isWorking],
+  )
 
-  const handleStopSession = async (name: string) => {
-    try { await api.stopSession(name); toast.success("Stopped"); await loadSessions() }
-    catch { toast.error("Failed to stop") }
-  }
+  const typingUsers: TypingUser[] = useMemo(() => {
+    if (!selectedChat || !presence.typing.get(selectedChat.id)) return []
+    return [{ id: selectedChat.id, name: chatName(selectedChat, contacts) }]
+  }, [presence.typing, selectedChat, contacts])
 
-  const handleSend = async (text: string) => {
-    if (!selectedSession || !selectedChat) return
-    if (editingMessage) {
-      try { await api.editMessage(selectedSession, selectedChat.id, editingMessage.id, text); setEditingMessage(null) }
-      catch { toast.error("Failed to edit") }
-      return
-    }
-    const replyToId = replyingTo?.id
-    setReplyingTo(null)
-    // Optimistic append — show the message immediately instead of waiting on
-    // the send request + a reload. Reconciled below once the send resolves;
-    // the later WS echo (same real id) will no-op against it via dedup.
-    const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`
-    const optimistic: Message = {
-      id: tempId,
-      timestamp: Math.floor(Date.now() / 1000),
-      from: currentUserJid,
-      fromMe: true,
-      to: selectedChat.id,
-      body: text,
-      hasMedia: false,
-      ack: 0,
-      ackName: "PENDING",
-      replyTo: replyToId || null,
-    }
-    setMessages((prev) => [optimistic, ...prev])
-    try {
-      const sent = await api.sendText(selectedSession, selectedChat.id, text, replyToId)
-      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...optimistic, ...sent, id: sent?.id || tempId } : m)))
-      loadChats()
-    } catch (e) {
-      setMessages((prev) => prev.filter((m) => m.id !== tempId))
-      showSendError(e, "Failed to send")
-    }
-  }
-
-  const handleVoiceRecorded = useCallback(async (base64: string, mimetype: string) => {
-    if (!selectedSession || !selectedChat) return
-    try {
-      await api.sendVoice(selectedSession, selectedChat.id, { mimetype, filename: "voice.webm", data: base64 })
-      toast.success("Voice sent")
-      loadMessages(selectedChat.id)
-      loadChats()
-    } catch (e) { showSendError(e, "Failed to send voice") }
-  }, [selectedSession, selectedChat])
-
-  const handleReactionAdd = async (messageId: string, emoji: string) => {
-    if (!selectedSession || !selectedChat) return
-    setMessages((prev) =>
-      prev.map((m) => {
-        if (m.id !== messageId) return m
-        const existing = m.reactions?.find((r) => r.text === emoji)
-        if (existing) return m
-        return {
-          ...m,
-          reactions: [...(m.reactions || []), { text: emoji, key: { fromMe: true }, senderTimestampMs: Date.now() }],
-        }
-      })
-    )
-    try { await api.setReaction(selectedSession, selectedChat.id, messageId, emoji) }
-    catch { setMessages((prev) => prev.map((m) => m.id !== messageId ? m : { ...m, reactions: m.reactions?.filter((r) => r.text !== emoji) })); toast.error("Failed to react") }
-  }
-
-  const handleReactionRemove = async (messageId: string, emoji: string) => {
-    if (!selectedSession || !selectedChat) return
-    const prevMessages = messages
-    setMessages((prev) =>
-      prev.map((m) => {
-        if (m.id !== messageId) return m
-        return { ...m, reactions: m.reactions?.filter((r) => r.text !== emoji) }
-      })
-    )
-    try { await api.setReaction(selectedSession, selectedChat.id, messageId, "") }
-    catch { setMessages(prevMessages); toast.error("Failed to remove reaction") }
-  }
-
-  const handleReply = (msg: ChatMessageData) => {
-    const original = messages.find((m) => m.id === msg.id)
-    if (original) setReplyingTo(msg)
-  }
-
-  const handleEdit = (msg: ChatMessageData) => {
-    setEditingMessage(msg)
-  }
-
-  const handleDelete = async (messageId: string) => {
-    if (!selectedSession || !selectedChat) return
-    try { await api.deleteMessage(selectedSession, selectedChat.id, messageId); await loadMessages(selectedChat.id) }
-    catch { toast.error("Failed to delete") }
-  }
-
-  const handlePin = async (messageId: string) => {
-    if (!selectedSession || !selectedChat) return
-    try { await api.pinMessage(selectedSession, selectedChat.id, messageId); toast.success("Pinned") }
-    catch { toast.error("Failed to pin") }
-  }
-
-  const handleLoadMore = async () => {
-    if (!selectedSession || !selectedChat) return
-    try {
-      const older = await api.getMessages(selectedSession, selectedChat.id, 50, messages.length)
-      if (!isCurrentSession(selectedSession)) return
-      if (older.length > 0) {
-        setMessages((prev) => [...prev, ...older])
-        setHasMoreMessages(older.length === 50)
-      } else {
-        setHasMoreMessages(false)
+  /* ── Layout pieces ── */
+  const conversations = (
+    <ChatConversations
+      sessions={sessions}
+      selectedSession={selectedSession}
+      onSessionChange={setSelectedSession}
+      onStartSession={(name) => void actions.startSession(name)}
+      onStopSession={(name) => void actions.stopSession(name)}
+      isWorking={isWorking}
+      chats={list.chats}
+      contacts={contacts}
+      selectedChatId={selectedChatId}
+      onSelectChat={actions.selectChat}
+      loadingChats={list.loading}
+      hasMore={list.hasMore}
+      loadingMore={list.loadingMore}
+      onLoadMore={list.loadMore}
+      avatars={avatars}
+      onOpenNewChat={() => setNewChatOpen(true)}
+      onOpenStatus={() => setStatusOpen(true)}
+      failure={list.failure}
+      onRetryChats={() => void list.refresh()}
+      connectPanel={
+        <SessionConnectPanel
+          session={currentSession}
+          onStart={() => void actions.startSession(selectedSession)}
+          onRestart={() => void actions.restartSession(selectedSession)}
+        />
       }
-    } catch { toast.error("Failed to load older messages") }
-  }
+      limitLabel={limit.label}
+      collapsed={collapsed}
+      onToggleCollapse={toggleCollapsed}
+      presences={presence.presences}
+      typingMap={presence.typing}
+    />
+  )
+  const dialogs = (
+    <>
+      <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} session={selectedSession} onOpenChat={actions.openNewChat} />
+      <StatusDialog open={statusOpen} onOpenChange={setStatusOpen} session={selectedSession} onSent={() => void list.refresh()} />
+    </>
+  )
 
-  const handleSelectChat = (chatId: string) => {
-    const chat = chats.find((c) => c.id === chatId)
-    if (chat) {
-      setSelectedChat(chat)
-      setReplyingTo(null)
-      setEditingMessage(null)
-      api.readChatMessages(selectedSession, chatId).catch(() => {})
-    }
-  }
-
-  const handleNewChatOpen = (chatId: string) => {
-    const fakeChat: ChatOverview = { id: chatId, name: chatId.split("@")[0] }
-    setSelectedChat(fakeChat)
-    setChats((prev) => prev.some((c) => c.id === chatId) ? prev : [fakeChat, ...prev])
-  }
-
-  const handleTyping = (isTyping: boolean) => {
-    if (!selectedSession || !selectedChat || !isWorking) return
-    if (isTyping) api.startTyping(selectedSession, selectedChat.id).catch(() => {})
-    else api.stopTyping(selectedSession, selectedChat.id).catch(() => {})
-  }
-
-  /* ── Empty state: no session ── */
+  /* ── No session ── */
   if (!selectedSession) {
     return (
       <ChatProvider currentUser={chatUser} theme="whatsapp" className="h-dvh" messageGroupingInterval={120}>
@@ -1123,27 +498,19 @@ export function ChatPage({ initialSession }: ChatPageProps) {
             <SidebarTrigger />
           </div>
           <div className="flex flex-1 items-center justify-center px-4">
-            {databaseUnreachable ? (
+            {sessionsError ? (
               <div className="w-full max-w-md">
                 <ErrorState
-                  title={DATABASE_UNREACHABLE_TITLE}
-                  description={DATABASE_UNREACHABLE_DESCRIPTION}
-                  onRetry={loadSessions}
-                />
-              </div>
-            ) : sessionsError ? (
-              <div className="w-full max-w-md">
-                <ErrorState
-                  title="Could not load sessions"
-                  description="The sessions API did not respond."
-                  onRetry={loadSessions}
+                  title={sessionsError === "database" ? DATABASE_UNREACHABLE_TITLE : "Could not load sessions"}
+                  description={sessionsError === "database" ? DATABASE_UNREACHABLE_DESCRIPTION : "The sessions API did not respond."}
+                  onRetry={() => void loadSessions()}
                 />
               </div>
             ) : (
               <EmptyState
                 icon={<CircleDot className="size-6" strokeWidth={1.75} />}
-                title="No active sessions"
-                description="Create and start a session first."
+                title="Create a session first"
+                description="Chat opens a session's conversations. Create and start one from the dashboard."
               />
             )}
           </div>
@@ -1152,166 +519,109 @@ export function ChatPage({ initialSession }: ChatPageProps) {
     )
   }
 
-  /* ── No chat selected ── */
+  /* ── No chat open ── */
   if (!selectedChat) {
     return (
-      <ChatProvider currentUser={chatUser} theme="whatsapp" className="h-dvh" messageGroupingInterval={120}>
+      <ChatProvider currentUser={chatUser} theme="whatsapp" className="h-dvh" messageGroupingInterval={120} {...stable}>
         <div className="flex h-full overflow-hidden bg-[var(--chat-bg-main)]">
-          {/* The sidebar keeps one width formula in both chat states, so
-              opening a conversation no longer resizes it or leaves a gutter
-              between the divider and the pane. */}
           <div
             className={`min-h-0 min-w-0 w-full shrink-0 ${
-              sidebarCollapsed
-                ? "md:w-[var(--chat-sidebar-rail-width)]"
-                : "md:w-[var(--chat-sidebar-width)]"
+              collapsed ? "md:w-[var(--chat-sidebar-rail-width)]" : "md:w-[var(--chat-sidebar-width)]"
             }`}
           >
-            <ChatConversations
-              sessions={sessions}
-              selectedSession={selectedSession}
-              onSessionChange={setSelectedSession}
-              onStartSession={handleStartSession}
-              onStopSession={handleStopSession}
-              isWorking={isWorking}
-              chats={chats}
-              contacts={contacts}
-              selectedChatId={null}
-              onSelectChat={handleSelectChat}
-              loadingChats={loadingChats}
-              userPicture={userPicture}
-              onOpenNewChat={() => setNewChatOpen(true)}
-              onOpenStatus={() => setStatusOpen(true)}
-              storeDisabled={storeDisabled}
-              onRetryChats={loadChats}
-              collapsed={sidebarCollapsed}
-              onToggleCollapse={toggleSidebar}
-              presences={presences}
-              typingMap={typingMap}
-            />
+            {conversations}
           </div>
           <div className="chat-wallpaper hidden flex-1 items-center justify-center px-4 md:flex">
-            {databaseUnreachable ? (
-              <div className="w-full max-w-md">
-                <ErrorState
-                  title={DATABASE_UNREACHABLE_TITLE}
-                  description={DATABASE_UNREACHABLE_DESCRIPTION}
-                  onRetry={loadChats}
-                />
-              </div>
-            ) : storeDisabled ? (
-              <div className="w-full max-w-md">
-                <ErrorState
-                  title={STORE_DISABLED_TITLE}
-                  description={STORE_DISABLED_DESCRIPTION}
-                  onRetry={loadChats}
-                />
-              </div>
-            ) : (
-              <EmptyState
-                icon={<MessageSquare className="size-6" strokeWidth={1.75} />}
-                title="Select a conversation"
-                description="Choose a chat from the list to start messaging."
-              />
-            )}
+            <EmptyState
+              icon={<MessageSquare className="size-6" strokeWidth={1.75} />}
+              title={isWorking ? "Select a conversation" : "No conversations to show"}
+              description={
+                isWorking
+                  ? "Choose a chat from the list, or start a new one with the + button."
+                  : "Connect the session from the panel on the left to see its conversations."
+              }
+            />
           </div>
-          <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} session={selectedSession} onOpenChat={handleNewChatOpen} />
-          <StatusDialog open={statusOpen} onOpenChange={setStatusOpen} session={selectedSession} onSent={loadChats} />
+          {dialogs}
         </div>
       </ChatProvider>
     )
   }
 
-  /* ── Full chat view ── */
-  const picture = selectedChat.picture || contactPictures.get(selectedChat.id)
-
+  /* ── Open chat ── */
   return (
     <ChatProvider
       currentUser={chatUser}
       theme="whatsapp"
       className="h-dvh"
       messageGroupingInterval={120}
-      onReactionAdd={handleReactionAdd}
-      onReactionRemove={handleReactionRemove}
-      onReply={handleReply}
-      onEdit={handleEdit}
-      onDelete={handleDelete}
-      onPin={handlePin}
-      onStar={handleStar}
+      showSenders={selectedChat.id.endsWith("@g.us")}
+      {...stable}
     >
-      <div
-        className="chat-shell h-full overflow-hidden bg-[var(--chat-bg-main)]"
-        data-sidebar={sidebarCollapsed ? "rail" : "expanded"}
-      >
-        {/* Sidebar: rows 1-2, so the composer row below is free to run the
-            bottom band across this column as well. */}
-        <div className="hidden min-h-0 min-w-0 md:col-start-1 md:row-start-1 md:row-span-2 md:flex">
-          <ChatConversations
-            sessions={sessions}
-            selectedSession={selectedSession}
-            onSessionChange={setSelectedSession}
-            onStartSession={handleStartSession}
-            onStopSession={handleStopSession}
-            isWorking={isWorking}
-            chats={chats}
-            contacts={contacts}
-            selectedChatId={selectedChat.id}
-            onSelectChat={handleSelectChat}
-            loadingChats={loadingChats}
-            userPicture={userPicture}
-            onOpenNewChat={() => setNewChatOpen(true)}
-            onOpenStatus={() => setStatusOpen(true)}
-            storeDisabled={storeDisabled}
-            onRetryChats={loadChats}
-            collapsed={sidebarCollapsed}
-            onToggleCollapse={toggleSidebar}
-            presences={presences}
-            typingMap={typingMap}
-          />
-        </div>
+      <div className="chat-shell h-full overflow-hidden bg-[var(--chat-bg-main)]" data-sidebar={collapsed ? "rail" : "expanded"}>
+        <div className="hidden min-h-0 min-w-0 md:col-start-1 md:row-start-1 md:row-span-2 md:flex">{conversations}</div>
 
-        {/* Chat pane header: row 1 is the shared band track. */}
         <div className="col-start-2 row-start-1 min-w-0">
           <ChatHeader
             chat={selectedChat}
             contacts={contacts}
-            picture={picture}
-            presence={presences.get(selectedChat.id)}
-            typing={typingMap.has(selectedChat.id)}
-            onBack={() => { setSelectedChat(null); setMessages([]) }}
-            onArchive={() => {
-              if (selectedSession) api.archiveChat(selectedSession, selectedChat.id).then(() => { toast.success("Archived"); loadChats(); setSelectedChat(null) }).catch(() => toast.error("Could not archive the chat"))
-            }}
-            onMarkUnread={() => {
-              if (selectedSession) api.unreadChat(selectedSession, selectedChat.id).then(() => toast.success("Marked unread")).catch(() => toast.error("Could not mark the chat unread"))
-            }}
+            picture={avatars.get(selectedChat.id)}
+            presence={presence.presences.get(selectedChat.id)}
+            typing={presence.typing.has(selectedChat.id)}
+            onBack={() => setSelectedChatId(null)}
+            onArchive={() =>
+              api
+                .archiveChat(selectedSession, selectedChat.id)
+                .then(() => {
+                  toast.success("Archived")
+                  setSelectedChatId(null)
+                  void list.refresh()
+                })
+                .catch(() => toast.error("Could not archive the chat"))
+            }
+            onMarkUnread={() =>
+              api
+                .unreadChat(selectedSession, selectedChat.id)
+                .then(() => toast.success("Marked unread"))
+                .catch(() => toast.error("Could not mark the chat unread"))
+            }
+            search={search}
+            onSearchChange={setSearch}
+            starredOnly={starredOnly}
+            onToggleStarredOnly={() => setStarredOnly((v) => !v)}
           />
         </div>
 
         <div className="col-start-2 row-start-2 flex min-h-0 min-w-0 flex-col overflow-hidden">
-          {(contactsError || pictureError) && !storeDisabled && !databaseUnreachable && (
+          {contactsError && !thread.failure && (
             <div role="alert" className="mx-3 mt-3 flex items-center gap-2 rounded-md border border-error-border bg-error-bg px-3 py-2 text-xs text-error-foreground">
               <TriangleAlert className="size-3.5 shrink-0" strokeWidth={1.75} />
-              Some contact details could not be loaded. Names and photos may be missing.
+              Contact names could not be loaded, so some chats show numbers instead.
             </div>
           )}
-          {databaseUnreachable ? (
+          {filtering && (
+            <p className="border-b border-[var(--chat-border)] bg-[var(--chat-bg-header)] px-4 py-1.5 text-xs text-[var(--chat-text-secondary)]" aria-live="polite">
+              {visibleMessages.length} {visibleMessages.length === 1 ? "message" : "messages"}
+              {starredOnly ? " starred" : ""}
+              {query ? ` matching “${search?.trim()}”` : ""} in the loaded history
+            </p>
+          )}
+          {thread.failure === "database-unreachable" || thread.failure === "store-disabled" ? (
             <div className="min-h-0 overflow-y-auto p-4">
               <ErrorState
-                title={DATABASE_UNREACHABLE_TITLE}
-                description={DATABASE_UNREACHABLE_DESCRIPTION}
-                onRetry={() => { loadMessages(selectedChat.id); loadChats() }}
+                title={thread.failure === "store-disabled" ? STORE_DISABLED_TITLE : DATABASE_UNREACHABLE_TITLE}
+                description={thread.failure === "store-disabled" ? STORE_DISABLED_DESCRIPTION : DATABASE_UNREACHABLE_DESCRIPTION}
+                onRetry={() => {
+                  void thread.reload()
+                  void list.refresh()
+                }}
               />
             </div>
-          ) : storeDisabled ? (
+          ) : thread.failure === "other" && thread.messages.length === 0 ? (
             <div className="min-h-0 overflow-y-auto p-4">
-              <ErrorState
-                title={STORE_DISABLED_TITLE}
-                description={STORE_DISABLED_DESCRIPTION}
-                onRetry={() => { loadMessages(selectedChat.id); loadChats() }}
-              />
+              <ErrorState title="Could not load messages" onRetry={() => void thread.reload()} />
             </div>
-          ) : loadingMessages && mappedMessages.length === 0 ? (
+          ) : thread.loading && thread.messages.length === 0 ? (
             <div className="flex flex-col gap-4 p-4" aria-hidden>
               {[0, 1, 2, 3].map((i) => (
                 <div key={i} className={i % 2 === 0 ? "flex justify-start" : "flex justify-end"}>
@@ -1321,49 +631,57 @@ export function ChatPage({ initialSession }: ChatPageProps) {
             </div>
           ) : (
             <ChatMessages
-              messages={mappedMessages}
+              messages={visibleMessages}
               typingUsers={typingUsers}
-              hasMore={hasMoreMessages}
-              onLoadMore={handleLoadMore}
+              hasMore={thread.hasMore && !filtering}
+              loadingMore={thread.loadingOlder}
+              onLoadMore={thread.loadOlder}
             />
           )}
         </div>
 
-        {/* Composer row: the same surface and top hairline run across the
-            conversations column too, so the composer reads as one bar that
-            spans both panes. The band's height follows the composer because
-            both are items of this shared row. */}
-        <div
-          aria-hidden
-          className="hidden border-r border-t border-[var(--chat-border)] bg-[var(--chat-bg-composer)] md:col-start-1 md:row-start-3 md:block"
-        />
+        {/* The composer band runs across the conversations column too. */}
+        <div aria-hidden className="hidden border-r border-t border-[var(--chat-border)] bg-[var(--chat-bg-composer)] md:col-start-1 md:row-start-3 md:block" />
 
-        {/* Composer toolbar: templates open from the composer's attach menu. */}
-        <div className="col-start-2 row-start-3 min-w-0 border-t border-[var(--chat-border)] bg-[var(--chat-bg-composer)] backdrop-blur-[20px]">
+        <div className="relative col-start-2 row-start-3 min-w-0 border-t border-[var(--chat-border)] bg-[var(--chat-bg-composer)]">
+          <SendMediaDialog
+            open={media.open}
+            onOpenChange={(open) => setMedia((prev) => ({ ...prev, open }))}
+            type={media.type}
+            session={selectedSession}
+            chatId={selectedChat.id}
+            onSent={() => {
+              void thread.reload()
+              limit.refresh()
+            }}
+          />
           <ChatComposerWrapper
-            onSend={handleSend}
-            onTyping={handleTyping}
+            onSend={(text) => void actions.send(text)}
+            onTyping={actions.typing}
             placeholder={editingMessage ? "Edit message" : "Type a message"}
             disabled={!isWorking}
             replyingTo={editingMessage || replyingTo}
-            onCancelReply={() => { setReplyingTo(null); setEditingMessage(null) }}
-            onOpenMediaDialog={(type) => setMediaDialog({ open: true, type })}
-            onVoiceRecorded={handleVoiceRecorded}
+            onCancelReply={() => {
+              setReplyingTo(null)
+              setEditingMessage(null)
+            }}
+            onOpenMediaDialog={(type) => setMedia({ open: true, type })}
+            onVoiceRecorded={(base64, mimetype) => void actions.voice(base64, mimetype)}
             onOpenTemplates={() => setTemplatesOpen(true)}
           />
         </div>
 
-        {/* Dialogs */}
-        <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} session={selectedSession} onOpenChat={handleNewChatOpen} />
-        <StatusDialog open={statusOpen} onOpenChange={setStatusOpen} session={selectedSession} onSent={loadChats} />
+        {dialogs}
         <TemplatePicker
           session={selectedSession}
           chatId={selectedChat.id}
-          onSent={() => { loadMessages(selectedChat.id); loadChats() }}
+          onSent={() => {
+            void thread.reload()
+            limit.refresh()
+          }}
           open={templatesOpen}
           onOpenChange={setTemplatesOpen}
         />
-        <SendMediaDialog open={mediaDialog.open} onOpenChange={(v) => setMediaDialog((p) => ({ ...p, open: v }))} type={mediaDialog.type} session={selectedSession} chatId={selectedChat.id} onSent={() => { loadMessages(selectedChat.id); loadChats() }} />
       </div>
     </ChatProvider>
   )

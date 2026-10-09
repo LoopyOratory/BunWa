@@ -4,7 +4,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 
 interface PageLayoutProps {
   title: string
-  description?: string
+  description?: ReactNode
   actions?: ReactNode
   children: ReactNode
 }
@@ -39,7 +39,7 @@ export function PageLayout({ title, description, actions, children }: PageLayout
         <SidebarTrigger className="md:hidden" />
         <div className="min-w-0 flex-1">
           <h1 className="truncate font-heading text-3xl font-semibold tracking-tight">{title}</h1>
-          {description && <p className="mt-0.5 max-w-2xl text-sm text-muted-foreground">{description}</p>}
+          {description && <div className="mt-0.5 max-w-2xl text-sm text-muted-foreground">{description}</div>}
         </div>
         {actions && (
           <div className="flex w-full items-center justify-end gap-2 sm:w-auto">{actions}</div>

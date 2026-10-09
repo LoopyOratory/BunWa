@@ -67,11 +67,13 @@ import { WhatsappConfigService } from '../config.service';
 import { container as tsyringeContainer } from 'tsyringe';
 import { AuditService } from '../core/audit/audit.service';
 import { mkdtempSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 // Register a real AuditService bound to an isolated temp dir so container.resolve()
 // inside WebhookDelivery doesn't hit tsyringe auto-injection ("TypeInfo not known for Object")
 if (!tsyringeContainer.isRegistered(AuditService)) {
-  tsyringeContainer.registerInstance(AuditService, new AuditService(mkdtempSync('bunwa-audit-')));
+  tsyringeContainer.registerInstance(AuditService, new AuditService(mkdtempSync(join(tmpdir(), 'bunwa-audit-'))));
 }
 
 const mockConfigService = {

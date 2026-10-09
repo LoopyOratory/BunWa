@@ -28,24 +28,27 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }}
       style={
         {
-          "--normal-bg": "var(--popover)",
+          /* Opaque surfaces only. Sonner's rich-colour variables share their
+             names with the app's semantic tokens, so they point at the
+             --toast-* aliases defined on :root: writing "--success-bg:
+             var(--success-bg)" here is a self-reference, which CSS treats as
+             invalid, and the toast background came out transparent. */
+          "--normal-bg": "var(--surface-overlay)",
           "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
+          "--normal-border": "var(--surface-overlay-border)",
           "--border-radius": "var(--radius-md)",
-          /* Pastel toast palette instead of sonner's default saturated set.
-             Values come from the semantic tokens, so both themes stay in step. */
-          "--success-bg": "var(--success-bg)",
-          "--success-text": "var(--success-foreground)",
-          "--success-border": "var(--success-border)",
-          "--error-bg": "var(--error-bg)",
-          "--error-text": "var(--error-foreground)",
-          "--error-border": "var(--error-border)",
-          "--warning-bg": "var(--warning-bg)",
-          "--warning-text": "var(--warning-foreground)",
-          "--warning-border": "var(--warning-border)",
-          "--info-bg": "var(--secondary)",
-          "--info-text": "var(--secondary-foreground)",
-          "--info-border": "var(--border)",
+          "--success-bg": "var(--toast-success-bg)",
+          "--success-text": "var(--toast-success-text)",
+          "--success-border": "var(--toast-success-border)",
+          "--error-bg": "var(--toast-error-bg)",
+          "--error-text": "var(--toast-error-text)",
+          "--error-border": "var(--toast-error-border)",
+          "--warning-bg": "var(--toast-warning-bg)",
+          "--warning-text": "var(--toast-warning-text)",
+          "--warning-border": "var(--toast-warning-border)",
+          "--info-bg": "var(--surface-overlay)",
+          "--info-text": "var(--popover-foreground)",
+          "--info-border": "var(--surface-overlay-border)",
         } as React.CSSProperties
       }
       toastOptions={{

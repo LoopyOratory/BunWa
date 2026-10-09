@@ -35,6 +35,20 @@ interface WebhookConfig {
   filters?: WebhookFilters;
 }
 
+/**
+ * The webhook target as recorded in the audit log: origin and path only.
+ * Credentials, query strings and fragments are dropped, since they often
+ * carry tokens.
+ */
+export function webhookUrlLabel(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return 'invalid URL';
+  }
+}
+
 @injectable()
 export class WebhookDelivery {
   private logger: pino.Logger;
@@ -120,7 +134,7 @@ export class WebhookDelivery {
           container.resolve(AuditService).logInfo(AuditAction.WEBHOOK_TRIGGERED, {
             sessionName: payload.session,
             statusCode: res.status,
-            metadata: { event: payload.event, deliveryId },
+            metadata: { event: payload.event, url: webhookUrlLabel(url), deliveryId },
           });
           return { ok: true, statusCode: res.status };
         }
@@ -136,7 +150,7 @@ export class WebhookDelivery {
           sessionName: payload.session,
           statusCode: res.status,
           errorMessage: `HTTP ${res.status}`,
-          metadata: { event: payload.event, deliveryId },
+          metadata: { event: payload.event, url: webhookUrlLabel(url), deliveryId },
         });
         return { ok: false, statusCode: res.status, error: `HTTP ${res.status}` };
       } catch (error: any) {
@@ -145,7 +159,7 @@ export class WebhookDelivery {
           container.resolve(AuditService).logWarn(AuditAction.WEBHOOK_FAILED, {
             sessionName: payload.session,
             errorMessage: error.message,
-            metadata: { event: payload.event, deliveryId, reason: 'ssrf_blocked' },
+            metadata: { event: payload.event, url: webhookUrlLabel(url), deliveryId, reason: 'ssrf_blocked' },
           });
           return { ok: false, error: error.message };
         }
@@ -158,7 +172,7 @@ export class WebhookDelivery {
         container.resolve(AuditService).logWarn(AuditAction.WEBHOOK_FAILED, {
           sessionName: payload.session,
           errorMessage: error.message,
-          metadata: { event: payload.event, deliveryId },
+          metadata: { event: payload.event, url: webhookUrlLabel(url), deliveryId },
         });
         return { ok: false, error: error.message };
       }

@@ -24,6 +24,84 @@ export interface ServerVersion {
   tier: string
 }
 
+/* ── Ops dashboard summary (GET /api/dashboard/summary) ─────────────── */
+
+export type DashboardRange = "1h" | "24h" | "7d" | "30d"
+
+export interface DashboardCounts {
+  sent: number
+  failed: number
+  /** Sends the sending policy refused; already included in `failed`. */
+  refused: number
+  webhookDelivered: number
+  webhookFailed: number
+}
+
+export interface LimitGauge {
+  label: string
+  used: number
+  cap: number
+  ratio: number
+}
+
+export interface DashboardSession {
+  name: string
+  engine: string
+  status: Session["status"]
+  statusSince: string | null
+  lastActivityAt: string | null
+  account: { id: string; pushName?: string } | null
+  autoStart: boolean
+  counts: DashboardCounts
+  limits: {
+    enabled: boolean
+    nearest: LimitGauge | null
+    day: LimitGauge
+    newChats: LimitGauge
+    warmup: { ageDays: number; warmupDays: number; factor: number; done: boolean }
+    quietHoursUntil: string | null
+  } | null
+}
+
+export interface AttentionItem {
+  id: string
+  severity: "error" | "warning"
+  kind: "session" | "limit" | "webhook" | "sends"
+  session: string | null
+  title: string
+  detail: string
+  action: "qr" | "start" | "restart" | "limits" | "webhooks" | "logs"
+}
+
+export interface DashboardSummary {
+  generatedAt: string
+  range: { key: DashboardRange; from: string; to: string; bucketMs: number }
+  server: {
+    version: string
+    tier: string
+    engine: string
+    uptimeSeconds: number
+    workers: number
+    store: { driver: "sqlite" | "postgres"; ok: boolean; error?: string; checkedAt: string }
+  }
+  sessions: DashboardSession[]
+  attention: AttentionItem[]
+  totals: DashboardCounts
+  series: {
+    bucketStart: number[]
+    sent: number[]
+    failed: number[]
+    webhookDelivered: number[]
+    webhookFailed: number[]
+  }
+  failureReasons: Array<{ reason: string; count: number; lastAt: string; session: string | null; example: string | null }>
+  webhooks: {
+    delivered: number
+    failed: number
+    failing: Array<{ session: string | null; url: string | null; count: number; lastAt: string; lastError: string | null }>
+  }
+}
+
 export interface AuditEntry {
   id: string
   action: string
@@ -306,6 +384,11 @@ export const api = {
     }),
   getScreenshot: (name: string) => request<ScreenshotResponse>(`/api/${name}/screenshot`),
   getWorkers: () => request<Worker[]>("/api/workers"),
+  getDashboardSummary: (range: DashboardRange, session?: string) => {
+    const q = new URLSearchParams({ range })
+    if (session) q.set("session", session)
+    return request<DashboardSummary>(`/api/dashboard/summary?${q.toString()}`)
+  },
   getAudit: (params?: { limit?: number; offset?: number; severity?: string }) => {
     const q = new URLSearchParams()
     q.set("limit", String(params?.limit ?? 200))

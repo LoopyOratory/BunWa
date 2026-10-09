@@ -54,7 +54,7 @@ runDriverConformance(
     name: 'postgres',
     async setup() {
       const dir = mkdtempSync(join(tmpdir(), 'bunwa-conformance-postgres-'));
-      const storage = new PostgresStorage(resolvedUrl!);
+      const storage = new PostgresStorage(resolvedUrl!, 'bunwa_conformance');
       await storage.init();
 
       const templates = new PostgresTemplateRepository(resolvedUrl!);

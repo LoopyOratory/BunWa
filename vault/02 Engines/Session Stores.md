@@ -58,8 +58,9 @@ repository per entity: contacts, chats, groups, messages, labels, label associat
   template CRUD and session isolation — 10/10 ([[Postgres on PGlite]]). The first run also surfaced two
   runtime bugs, both fixed ([[Fix History]]): driver resolution under the bun isolated linker
   (`src/core/db/knex-postgres.ts`) and the `messages` upsert conflict target.
-- Tables are **global, not per-session** — the sqlite driver gets one file per session, Postgres keeps
-  one shared table set per database.
+- Tables are **per session** on both drivers: the sqlite driver gets one file per session, Postgres
+  one schema per session (`bunwa_<session>`), and every query names that schema
+  ([[Data and Storage#Database switches]]).
 - ⚠️ `runInTransaction()` is a **passthrough** — it calls the callback with no `BEGIN`/`COMMIT`
   ("best effort" per the source comment), so batch writes are not atomic on Postgres.
 

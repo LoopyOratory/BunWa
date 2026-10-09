@@ -119,7 +119,10 @@ export function createGroupsRouter(): Hono<{ Variables: { session: any; body: an
     policiesMiddleware(CanSession(Action.Read, FromParam('session'))),
     workingSessionResolver(),
     async (c) => {
-      return c.json({ url: null });
+      const session = c.get('session');
+      const refresh = c.req.query('refresh') === 'true';
+      const url = await (session as any).getContactProfilePicture(c.req.param('id'), refresh);
+      return c.json({ url });
     }
   );
 

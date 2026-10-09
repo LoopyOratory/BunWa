@@ -392,7 +392,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
     },
     {
       name: 'MessageVotePoll',
-      description: 'Vote on a poll message.',
+      description: 'Vote on a poll message. Not supported yet: every engine refuses it, because poll votes must be encrypted and the engines do not implement that.',
       tier: 'write',
       category: 'message',
       sessionScoped: true,

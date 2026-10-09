@@ -16,16 +16,11 @@ import { api, type Session } from "@/lib/api"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { EmptyState, ErrorState, Metric } from "@/components/primitives"
-import { mapSessionStatus, type StatusKind } from "@/lib/status"
+import { mapSessionStatus, STATUS_DOT_CLASS } from "@/lib/status"
 import { PhoneInput } from "@/components/phone-input"
 import { splitJid, toChatId, DEFAULT_COUNTRY } from "@/lib/phone"
 
-const SESSION_DOT: Record<StatusKind, string> = {
-  working: "bg-success",
-  starting: "bg-warning",
-  failed: "bg-error",
-  stopped: "bg-muted-foreground/60",
-}
+const SESSION_DOT = STATUS_DOT_CLASS
 
 function FileDropzone({
   accept,

@@ -6,6 +6,7 @@ import { policiesMiddleware, CanSession, Action, FromParam, FromQuery } from '..
 import { workingSessionResolver, workingSessionQueryResolver } from '../middleware/session-resolver';
 import { SessionManager } from '../core/manager.core';
 import { getSessionFromBody } from '../middleware/get-session-from-body';
+import { sendFailureMetadata } from '../core/audit/failure-reason';
 import { AuditService, AuditAction } from '../core/audit/audit.service';
 import { isClientFacingError } from '../core/exceptions';
 import { getChatMessagesViaEngine } from './chats.routes';
@@ -41,7 +42,7 @@ async function sendAndAudit<T>(sessionName: string | undefined, action: string, 
     container.resolve(AuditService).logWarn(AuditAction.MESSAGE_FAILED, {
       sessionName,
       errorMessage: error?.message || String(error),
-      metadata: { action },
+      metadata: { action, ...sendFailureMetadata(error) },
     });
     throw error;
   }
@@ -195,7 +196,15 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
     policiesMiddleware(CanSession(Action.Send, FromBodySession)),
     getSessionFromBody(),
     async (c) => {
-      return c.json({ result: true });
+      const session = c.get('session');
+      const body = c.get('body');
+      const result = await sendAndAudit(body.session, 'sendPollVote', () => (session as any).sendPollVote({
+        session: body.session,
+        chatId: body.chatId,
+        pollMessageId: body.pollMessageId,
+        votes: body.votes,
+      }));
+      return c.json(result);
     }
   );
 
@@ -305,7 +314,19 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
     policiesMiddleware(CanSession(Action.Send, FromBodySession)),
     getSessionFromBody(),
     async (c) => {
-      return c.json({ result: true });
+      const session = c.get('session');
+      const body = c.get('body');
+      if (!body.chatId || !body.selectedButtonID) {
+        return c.json({ statusCode: 400, message: 'chatId and selectedButtonID are required' }, 400);
+      }
+      const result = await sendAndAudit(body.session, 'sendButtonsReply', () => (session as any).sendButtonsReply({
+        session: body.session,
+        chatId: body.chatId,
+        replyTo: body.replyTo,
+        selectedButtonID: body.selectedButtonID,
+        selectedDisplayText: body.selectedDisplayText ?? '',
+      }));
+      return c.json(result);
     }
   );
 

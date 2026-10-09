@@ -1,5 +1,5 @@
 import { injectable, inject, container } from 'tsyringe';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync } from 'fs';
 import { join } from 'path';
 import { EMPTY, merge, Observable, map } from 'rxjs';
 import { WhatsappConfigService } from '../config.service';
@@ -24,6 +24,8 @@ import {
   UnprocessableEntityException,
 } from './exceptions';
 import { LocalStoreCore } from './storage/LocalStoreCore';
+import { SessionIndexFile } from './session/session-index-file';
+import { NowebStorageFactoryCore } from './engines/noweb/store/NowebStorageFactoryCore';
 import { WebhookDelivery } from './webhook-delivery';
 import { AuditService, AuditAction } from './audit/audit.service';
 import { buildMediaStorage } from './media/MediaStorageFactory';
@@ -47,6 +49,8 @@ function getSessionsIndexPath(): string {
   return join(getSessionsDir(), '.sessions-index.json');
 }
 
+const REST_KEY_TOUCH_PERSIST_MS = 60_000;
+
 @injectable()
 export class SessionManager {
   private sessions: Map<string, WhatsappSession> = new Map();
@@ -63,6 +67,8 @@ export class SessionManager {
   // audit logging as a side effect.
   private webhookSubscriptions: Map<string, Array<{ unsubscribe: () => void }>> = new Map();
   private auditService: AuditService | null = null;
+  /** When each session entered its current status (ms), for "Working · 2d". */
+  private statusSince: Map<string, { status: string; at: number }> = new Map();
 
   /** Lazily resolved: AuditService is registered in the DI container after
    *  SessionManager is constructed (see di/container.ts), so it can't be
@@ -260,6 +266,7 @@ export class SessionManager {
     });
 
     this.sessions.set(name, session);
+    this.markStatus(name, WAHASessionStatus.STARTING);
     this.refreshAllWildcardEvents();
     this.audit.logInfo(AuditAction.SESSION_STARTED, { sessionName: name });
 
@@ -273,6 +280,7 @@ export class SessionManager {
         next: (data: any) => {
           const status = data?.status as WAHASessionStatus | undefined;
           if (!status) return;
+          this.markStatus(name, status);
           if (status === WAHASessionStatus.SCAN_QR_CODE) {
             this.audit.logInfo(AuditAction.SESSION_QR_GENERATED, { sessionName: name });
           } else if (status === WAHASessionStatus.WORKING) {
@@ -329,6 +337,7 @@ export class SessionManager {
     if (session) {
       await (session as any).stop();
       this.sessions.set(name, null as any);
+      this.markStatus(name, WAHASessionStatus.STOPPED);
       this.refreshAllWildcardEvents();
       if (!silent) {
         this.logger.info(`Session ${name} stopped`);
@@ -342,6 +351,23 @@ export class SessionManager {
       await this._stop(name, true);
       return this._start(name);
     });
+  }
+
+  private markStatus(name: string, status: string): void {
+    if (this.statusSince.get(name)?.status === status) return;
+    this.statusSince.set(name, { status, at: Date.now() });
+  }
+
+  /**
+   * When the session entered its current status, or null when that is not
+   * known (a session restored as stopped at boot has no recorded change).
+   */
+  getStatusSince(name: string): number | null {
+    const entry = this.statusSince.get(name);
+    if (!entry) return null;
+    const session = this.sessions.get(name);
+    const current = (session as any)?.status || WAHASessionStatus.STOPPED;
+    return entry.status === current ? entry.at : null;
   }
 
   getSession(name: string): WhatsappSession {
@@ -428,7 +454,18 @@ export class SessionManager {
     }
   }
 
-  private async saveSessionIndex(): Promise<void> {
+  private sessionIndexFile?: SessionIndexFile;
+
+  /** Resolved per call so a test-time WAHA_LOCAL_STORE_BASE_DIR override is honoured. */
+  private getSessionIndexFile(): SessionIndexFile {
+    const path = getSessionsIndexPath();
+    if (this.sessionIndexFile?.path !== path) {
+      this.sessionIndexFile = new SessionIndexFile(path);
+    }
+    return this.sessionIndexFile;
+  }
+
+  private buildSessionIndex(): Record<string, any> {
     const index: Record<string, any> = {};
     for (const [name, config] of this.sessionConfigs) {
       index[name] = { ...config };
@@ -445,25 +482,15 @@ export class SessionManager {
         index[name]._status = 'STOPPED';
       }
     }
-    const sessionsDir = getSessionsDir();
-    if (!existsSync(sessionsDir)) {
-      mkdirSync(sessionsDir, { recursive: true });
-    }
-    await Bun.write(getSessionsIndexPath(), JSON.stringify(index, null, 2));
+    return index;
+  }
+
+  private async saveSessionIndex(): Promise<void> {
+    await this.getSessionIndexFile().write(() => this.buildSessionIndex());
   }
 
   private async loadSessionIndex(): Promise<Record<string, SessionConfig>> {
-    const indexPath = getSessionsIndexPath();
-    if (!existsSync(indexPath)) {
-      return {};
-    }
-    try {
-      const file = Bun.file(indexPath);
-      const content = await file.text();
-      return JSON.parse(content);
-    } catch {
-      return {};
-    }
+    return this.getSessionIndexFile().read();
   }
 
   /**
@@ -554,7 +581,13 @@ export class SessionManager {
     const config = this.sessionConfigs.get(name);
     const record = config?.restApiKeys?.find((key) => key.id === keyId);
     if (!record) return;
-    record.lastUsedAt = new Date().toISOString();
+    const now = Date.now();
+    const previous = record.lastUsedAt ? Date.parse(record.lastUsedAt) : 0;
+    record.lastUsedAt = new Date(now).toISOString();
+    // Persist at most once a minute per key: every scoped request lands here,
+    // and rewriting the whole index each time is wasted I/O. The in-memory
+    // value is current and rides along with the next save.
+    if (now - previous < REST_KEY_TOUCH_PERSIST_MS) return;
     await this.saveSessionIndex();
   }
 
@@ -564,11 +597,31 @@ export class SessionManager {
       if (session) {
         await this._stop(name, true);
       }
+      await this.deleteSessionStore(name);
       this.sessions.delete(name);
       this.sessionConfigs.delete(name);
+      this.statusSince.delete(name);
       await this.saveSessionIndex();
       this.audit.logInfo(AuditAction.SESSION_DELETED, { sessionName: name });
     });
+  }
+
+  /**
+   * Drop the deleted session's chat/message store. Without this its rows
+   * outlived the session: on Postgres they showed up in other sessions, and a
+   * new session reusing the name inherited them. A failure is logged, not
+   * thrown, so an unreachable database cannot block deleting the session.
+   */
+  private async deleteSessionStore(name: string): Promise<void> {
+    try {
+      const store = new LocalStoreCore();
+      await new NowebStorageFactoryCore().deleteStorage(store, name);
+    } catch (err: any) {
+      this.logger.error(
+        { err },
+        `Session ${name} was deleted but its message store could not be removed: ${err?.message || err}`,
+      );
+    }
   }
 
   async logout(name: string): Promise<void> {

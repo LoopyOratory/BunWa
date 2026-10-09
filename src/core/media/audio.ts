@@ -22,7 +22,7 @@ export async function materializeAudioBytes(file: Buffer | string): Promise<Buff
     return file;
   }
   if (typeof file !== 'string') {
-    throw new Error('Unsupported audio input: expected a URL, base64 string, or Buffer');
+    throw new Error('Unsupported media input: expected a URL, base64 string, or Buffer');
   }
   if (/^https?:\/\//i.test(file)) {
     const res: any = await resolveAndPinFetch(file);
@@ -30,7 +30,7 @@ export async function materializeAudioBytes(file: Buffer | string): Promise<Buff
       // A caller-supplied URL the remote host refuses is a client facing
       // result, not a server fault.
       throw new UnprocessableEntityException(
-        `The audio file URL could not be downloaded: the remote host answered HTTP ${res.status} ${res.statusText ?? ''}`.trim(),
+        `The file URL could not be downloaded: the remote host answered HTTP ${res.status} ${res.statusText ?? ''}`.trim(),
       );
     }
     return Buffer.from(await res.arrayBuffer());
