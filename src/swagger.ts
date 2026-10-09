@@ -1018,7 +1018,7 @@ export function buildOpenApiSpec(routes?: RouteLike[]): any {
       '/api/sendPollVote': {
         post: {
           tags: ['📤 Chatting'],
-          summary: 'Vote on a poll',
+          summary: 'Vote on a poll (not supported yet: answers 422 on every engine)',
           operationId: 'sendPollVote',
           security: [{ apiKey: [] }],
           requestBody: {
@@ -1037,7 +1037,10 @@ export function buildOpenApiSpec(routes?: RouteLike[]): any {
               },
             },
           },
-          responses: { '200': { description: 'Vote sent' } },
+          responses: {
+            '200': { description: 'Vote sent' },
+            '422': { description: 'Poll votes need encryption the engines do not implement yet' },
+          },
         },
       },
       '/api/sendContactVcard': {

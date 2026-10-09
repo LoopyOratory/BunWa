@@ -1,10 +1,23 @@
+export class EventLocation {
+  name!: string;
+}
+
 export class EventMessage {
-  // placeholder
+  name!: string;
+  description?: string;
+  /** Unix time in seconds. */
+  startTime!: number;
+  /** Unix time in seconds. */
+  endTime?: number;
+  location?: EventLocation;
+  extraGuestsAllowed?: boolean;
 }
 
 export class EventMessageRequest {
+  session?: string;
   chatId!: string;
-  text!: string;
+  reply_to?: string;
+  event!: EventMessage;
 }
 
 export class EventCancelRequest {

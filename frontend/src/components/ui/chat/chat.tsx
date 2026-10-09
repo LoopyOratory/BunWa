@@ -77,6 +77,9 @@ interface ChatProviderProps {
   onDelete?: (messageId: string) => void
   onPin?: (messageId: string) => void
   onStar?: (messageId: string) => void
+  onRetry?: (messageId: string) => void
+  /** Sender names and avatars on incoming bubbles; off for one-to-one chats. */
+  showSenders?: boolean
   children: React.ReactNode
   style?: React.CSSProperties
   className?: string
@@ -94,6 +97,8 @@ function ChatProvider({
   onDelete,
   onPin,
   onStar,
+  onRetry,
+  showSenders = true,
   children,
   style,
   className,
@@ -110,8 +115,10 @@ function ChatProvider({
       onDelete,
       onPin,
       onStar,
+      onRetry,
+      showSenders,
     }),
-    [currentUser, dateFormat, messageGroupingInterval, onReactionAdd, onReactionRemove, onReply, onEdit, onDelete, onPin, onStar]
+    [currentUser, dateFormat, messageGroupingInterval, onReactionAdd, onReactionRemove, onReply, onEdit, onDelete, onPin, onStar, onRetry, showSenders]
   )
 
   return (
@@ -426,7 +433,26 @@ function ChatVoiceMessage({ voice, isOutgoing }: { voice: NonNullable<ChatMessag
   )
 }
 
-function ChatMessage({
+function ChatMessageFailure({ messageId, error }: { messageId: string; error?: string }) {
+  const { onRetry } = useChatContext()
+  return (
+    <p className="mt-1 flex max-w-[70ch] flex-wrap items-center justify-end gap-x-2 text-[12px] text-[var(--chat-red)]" role="status">
+      <AlertCircle className="size-3.5 shrink-0" aria-hidden />
+      <span>{error || "Not sent"}</span>
+      {onRetry && (
+        <button
+          type="button"
+          onClick={() => onRetry(messageId)}
+          className="font-semibold underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
+        >
+          Retry
+        </button>
+      )}
+    </p>
+  )
+}
+
+function ChatMessageImpl({
   message,
   isOutgoing,
   position,
@@ -435,7 +461,7 @@ function ChatMessage({
   className,
 }: ChatMessageProps) {
   const timestamp = new Date(message.timestamp)
-  const { currentUser } = useChatContext()
+  const { currentUser, showSenders = true } = useChatContext()
   const radiusClass = getBubbleRadius(isOutgoing, position)
   const avatarInitial = senderInitial(message.senderName)
   const [lightboxImage, setLightboxImage] = React.useState<string | null>(null)
@@ -471,8 +497,9 @@ function ChatMessage({
         className
       )}
     >
-      {/* Avatar slot — 32px, only for incoming, only on last/solo */}
-      {!isOutgoing ? (
+      {/* Avatar slot — 32px, only for incoming, only on last/solo, and only
+          where there is more than one other sender (groups). */}
+      {!isOutgoing && showSenders ? (
         <div className="w-8 shrink-0">
           {showAvatar && message.senderAvatar ? (
             <img
@@ -491,7 +518,7 @@ function ChatMessage({
       {/* Bubble + reactions column */}
       <div className="flex max-w-[75%] flex-col">
         {/* Sender name — only first in group, incoming */}
-        {showSender && !isOutgoing && (
+        {showSender && showSenders && !isOutgoing && (
           <span className="mb-0.5 ml-2 text-[13px] font-semibold leading-tight text-[var(--chat-text-secondary)]">
             {message.senderName}
           </span>
@@ -702,6 +729,11 @@ function ChatMessage({
             isOutgoing={isOutgoing}
           />
         )}
+
+        {/* A failed send stays in the thread with its reason and a Retry. */}
+        {isOutgoing && message.status === "failed" && (
+          <ChatMessageFailure messageId={message.id} error={message.error} />
+        )}
       </div>
 
       {/* Image lightbox */}
@@ -909,7 +941,7 @@ interface ChatMessageGroupProps {
   className?: string
 }
 
-function ChatMessageGroup({ group, className }: ChatMessageGroupProps) {
+function ChatMessageGroupImpl({ group, className }: ChatMessageGroupProps) {
   const len = group.messages.length
 
   return (
@@ -944,6 +976,21 @@ function ChatMessageGroup({ group, className }: ChatMessageGroupProps) {
     </div>
   )
 }
+
+
+/* Bubbles re-render only when their own message object changes. The page
+   keeps message objects stable (it maps each one once), so a new message, a
+   tick or a reaction re-renders that bubble, not the thread. */
+const ChatMessage = React.memo(ChatMessageImpl)
+
+function sameGroup(a: ChatMessageGroupProps, b: ChatMessageGroupProps): boolean {
+  if (a.className !== b.className) return false
+  const x = a.group
+  const y = b.group
+  if (x.isOutgoing !== y.isOutgoing || x.messages.length !== y.messages.length) return false
+  return x.messages.every((m, i) => m === y.messages[i])
+}
+const ChatMessageGroup = React.memo(ChatMessageGroupImpl, sameGroup)
 
 // ─── ChatDateSeparator ────────────────────────────────────────────────────────
 
@@ -1100,16 +1147,36 @@ interface ChatMessagesProps {
   className?: string
   onLoadMore?: () => Promise<void>
   hasMore?: boolean
+  /** An older page is being fetched. */
+  loadingMore?: boolean
 }
 
 function ChatMessages({
   messages,
   typingUsers = [],
   className,
+  onLoadMore,
+  hasMore = false,
+  loadingMore = false,
 }: ChatMessagesProps) {
   const { currentUser, messageGroupingInterval } = useChatContext()
   const { containerRef, scrollToBottom, isAtBottom, unseenCount } =
-    useAutoScroll(messages)
+    useAutoScroll(messages, { ownSenderId: currentUser.id })
+
+  // Older history loads when the reader nears the top.
+  const loadMoreRef = React.useRef(onLoadMore)
+  React.useEffect(() => {
+    loadMoreRef.current = onLoadMore
+  }, [onLoadMore])
+  React.useEffect(() => {
+    const el = containerRef.current
+    if (!el || !hasMore) return
+    const onScroll = () => {
+      if (el.scrollTop < 200 && !loadingMore) void loadMoreRef.current?.()
+    }
+    el.addEventListener("scroll", onScroll, { passive: true })
+    return () => el.removeEventListener("scroll", onScroll)
+  }, [containerRef, hasMore, loadingMore])
 
   const items = React.useMemo(
     () => groupMessages(messages, currentUser.id, messageGroupingInterval),
@@ -1131,6 +1198,11 @@ function ChatMessages({
         aria-live="polite"
       >
         <div className="mx-auto w-full max-w-4xl">
+          {(hasMore || loadingMore) && (
+            <p className="py-2 text-center text-[12px] text-[var(--chat-text-tertiary)]" aria-live="polite">
+              {loadingMore ? "Loading older messages…" : "Scroll up for older messages"}
+            </p>
+          )}
           {items.map((item, i) => {
             switch (item.type) {
               case "date":

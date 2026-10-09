@@ -3,6 +3,7 @@ import { container } from 'tsyringe';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanSession, Action, FromParam } from '../middleware/policies';
 import { workingSessionResolver } from '../middleware/session-resolver';
+import { NotFoundException } from '../core/exceptions';
 
 /**
  * Single implementation for chat message history, shared by
@@ -65,7 +66,19 @@ export function createChatsRouter(): Hono<{ Variables: { session: any; body: any
     policiesMiddleware(CanSession(Action.Read, FromParam('session'))),
     workingSessionResolver(),
     async (c) => {
-      return c.json({ id: c.req.param('chatId') });
+      const session = c.get('session');
+      const chatId = c.req.param('chatId');
+      const chats = await (session as any).getChatsOverview(
+        { limit: 1, offset: 0 },
+        { ids: [chatId] },
+      );
+      const chat = chats?.[0];
+      // Compare on the user part so `@c.us` and `@s.whatsapp.net` match.
+      const user = (id: string) => String(id).split('@')[0];
+      if (!chat || user(chat.id) !== user(chatId)) {
+        throw new NotFoundException(`Chat ${chatId} not found`);
+      }
+      return c.json(chat);
     }
   );
 
@@ -73,6 +86,8 @@ export function createChatsRouter(): Hono<{ Variables: { session: any; body: any
     policiesMiddleware(CanSession(Action.Send, FromParam('session'))),
     workingSessionResolver(),
     async (c) => {
+      const session = c.get('session');
+      await (session as any).deleteChat(c.req.param('chatId'));
       return c.json({ result: true });
     }
   );

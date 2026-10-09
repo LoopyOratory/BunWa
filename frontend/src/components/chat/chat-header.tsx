@@ -1,4 +1,5 @@
-import { Archive, ChevronLeft, MoreVertical, MessageSquarePlus } from "lucide-react"
+import { useEffect, useRef } from "react"
+import { Archive, ChevronLeft, MoreVertical, MessageSquarePlus, Search, Star, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -22,6 +23,11 @@ interface ChatHeaderProps {
   onBack: () => void
   onArchive: () => void
   onMarkUnread: () => void
+  /** In-chat search; null while closed. */
+  search: string | null
+  onSearchChange: (value: string | null) => void
+  starredOnly: boolean
+  onToggleStarredOnly: () => void
 }
 
 export function ChatHeader({
@@ -33,7 +39,16 @@ export function ChatHeader({
   onBack,
   onArchive,
   onMarkUnread,
+  search,
+  onSearchChange,
+  starredOnly,
+  onToggleStarredOnly,
 }: ChatHeaderProps) {
+  const searchRef = useRef<HTMLInputElement>(null)
+  const searching = search !== null
+  useEffect(() => {
+    if (searching) searchRef.current?.focus()
+  }, [searching])
   const color = avColor(chat.id, false)
   const online = presence === "available"
   const showTyping = typing || presence === "composing"
@@ -64,7 +79,7 @@ export function ChatHeader({
         )}
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className={`min-w-0 flex-1 flex-col ${searching ? "hidden sm:flex" : "flex"}`}>
         <span className="truncate text-[16px] font-bold leading-[21px] text-[var(--chat-text-primary)]">
           {chatName(chat, contacts)}
         </span>
@@ -88,20 +103,63 @@ export function ChatHeader({
         )}
       </div>
 
+      {searching && (
+        <div className="flex min-w-0 flex-[2] items-center gap-2 rounded-full bg-[var(--chat-bg-input)] px-3 py-1.5">
+          <Search className="size-4 shrink-0 text-[var(--chat-text-tertiary)]" strokeWidth={1.75} />
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Escape") onSearchChange(null) }}
+            placeholder="Search this chat"
+            aria-label="Search this chat"
+            className="min-w-0 flex-1 bg-transparent text-[14px] text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-tertiary)] focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => onSearchChange(null)}
+            aria-label="Close search"
+            className="text-[var(--chat-text-tertiary)] hover:text-[var(--chat-text-primary)]"
+          >
+            <X className="size-4" strokeWidth={1.75} />
+          </button>
+        </div>
+      )}
+
       <div className="flex shrink-0 items-center gap-0.5">
+        {!searching && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                aria-label="Search this chat"
+                variant="ghost"
+                size="icon"
+                className="size-9 rounded-full text-[var(--chat-text-secondary)] hover:bg-[var(--chat-bg-hover)] hover:text-[var(--chat-text-primary)]"
+                onClick={() => onSearchChange("")}
+              >
+                <Search className="size-[18px]" strokeWidth={1.75} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Search this chat</TooltipContent>
+          </Tooltip>
+        )}
+
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              aria-label="Archive chat"
+              aria-label={starredOnly ? "Show all messages" : "Show starred messages"}
+              aria-pressed={starredOnly}
               variant="ghost"
               size="icon"
-              className="size-9 rounded-full text-[var(--chat-text-secondary)] hover:bg-[var(--chat-bg-hover)] hover:text-[var(--chat-text-primary)]"
-              onClick={onArchive}
+              className={`size-9 rounded-full hover:bg-[var(--chat-bg-hover)] ${
+                starredOnly ? "text-[var(--chat-orange)]" : "text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)]"
+              }`}
+              onClick={onToggleStarredOnly}
             >
-              <Archive className="size-[18px]" strokeWidth={1.75} />
+              <Star className={`size-[18px] ${starredOnly ? "fill-current" : ""}`} strokeWidth={1.75} />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Archive</TooltipContent>
+          <TooltipContent>{starredOnly ? "Show all messages" : "Starred messages"}</TooltipContent>
         </Tooltip>
 
         <DropdownMenu>
@@ -115,9 +173,12 @@ export function ChatHeader({
               <MoreVertical className="size-[18px]" strokeWidth={1.75} />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[160px]">
-            <DropdownMenuItem onClick={onMarkUnread} className="cursor-pointer text-xs">
-              <MessageSquarePlus className="size-3.5 mr-2" strokeWidth={1.75} /> Mark unread
+          <DropdownMenuContent align="end" className="min-w-[170px]">
+            <DropdownMenuItem onClick={onMarkUnread} className="cursor-pointer">
+              <MessageSquarePlus strokeWidth={1.75} /> Mark unread
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onArchive} className="cursor-pointer">
+              <Archive strokeWidth={1.75} /> Archive chat
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

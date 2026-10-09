@@ -2,7 +2,7 @@
 type: note
 section: architecture
 tags: [bunwa, architecture, storage, ops]
-updated: 2026-10-04
+updated: 2026-10-09
 source: src/core/storage/ (incl. storage-report.ts, storage-bootstrap.ts), src/core/engines/noweb/store/, src/core/media/, src/config.service.ts
 ---
 
@@ -84,8 +84,25 @@ The Infrastructure page is therefore a real switch: saving PostgreSQL writes
 `WAHA_DATABASE_DRIVER=postgres` + derives `WAHA_DATABASE_URL` from the form (credentials
 percent-encoded, `?sslmode=require` when SSL is on). Sessions **started after saving** use the new
 backend immediately; restart the server to apply it everywhere. Nothing is migrated between
-backends. Verified end-to-end on 2026-09-29 ([[Postgres on PGlite]]); note Postgres keeps **one
-global table set per database** — unlike SQLite, where each session gets its own file.
+backends. Verified end-to-end on 2026-09-29 ([[Postgres on PGlite]]).
+
+**Per-session isolation (since 2026-10-09).** Each NOWEB session keeps its chats, contacts, messages,
+groups, labels and LID map in its **own Postgres schema**, `bunwa_<session>` (case kept; names past
+the 63-byte identifier limit become `bunwa_<first 40 chars>_<12-char hash>`). Every query names the
+schema explicitly (`schemaScopedKnex` in `PostgresStorage.ts`), so isolation does not depend on
+`search_path`, which PGlite shares across connections. Before this, all sessions shared one table set
+in `public` with no session column: one session's chat list showed every session's chats, and rows
+of deleted sessions never went away.
+
+- The database user needs `CREATE` on the database (`GRANT CREATE ON DATABASE <db> TO <user>`);
+  `verifyStorageAtBoot()` checks this and stops startup with that message otherwise.
+- The old shared tables in `public` are no longer read or written. Boot logs a warning while they
+  exist; drop them when you no longer need the archive. Existing history was **not** migrated:
+  sessions start with an empty store and fill as messages arrive.
+- Deleting (or logging out) a session drops its schema on Postgres and removes its
+  `store.sqlite3` (+ `-wal`/`-shm`) on SQLite, so a new session with the same name starts empty.
+  Credentials in the session directory are left alone.
+- Templates stay in one shared `templates` table in `public`.
 
 `WHATSAPP_SESSIONS_MONGO_URL` and `WAHA_SQLITE_PATH` have getters in `WhatsappConfigService` but no
 runtime consumer; setting `WAHA_DATABASE_DRIVER=mongo` now stops startup instead of silently

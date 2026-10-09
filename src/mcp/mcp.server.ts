@@ -21,6 +21,7 @@ import type { ToolDescriptor } from './tool-descriptor';
 import { ToolRegistryService } from './tool-registry.service';
 import { container } from 'tsyringe';
 import { AuditService, AuditAction } from '../core/audit/audit.service';
+import { sendFailureMetadata } from '../core/audit/failure-reason';
 import { buildAllTools } from './tools';
 import { handleToolError, jsonToolResult, smartToolResult } from './tool-result';
 import { KeyRateLimiter, RateLimitError, readRateLimitConfig } from './mcp-rate-limit';
@@ -89,6 +90,7 @@ export function auditToolCall(
         destructive: tool.destructive ?? false,
         credential,
         source: 'mcp',
+        ...(outcome === 'failed' ? sendFailureMetadata(error) : {}),
       },
     };
     const entry =

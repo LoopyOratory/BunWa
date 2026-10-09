@@ -29,7 +29,14 @@ export function createMediaRouter(): Hono<{ Variables: { session: any; body: any
     policiesMiddleware(CanSession(Action.Read, FromParam('session'))),
     workingSessionResolver(),
     async (c) => {
-      return c.json({ data: 'base64-video-data' });
+      const session = c.get('session');
+      const body = await c.req.json();
+      if (!body?.file) {
+        return c.json({ statusCode: 400, message: 'file is required (URL, base64, or data URL)' }, 400);
+      }
+      const input = await materializeAudioBytes(body.file);
+      const mp4 = await (session as any).mediaConverter.video(input);
+      return c.json({ data: mp4.toString('base64'), mimetype: 'video/mp4' });
     }
   );
 

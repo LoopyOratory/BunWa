@@ -20,7 +20,7 @@ import {
   ErrorState,
   Metric,
 } from "@/components/primitives"
-import { mapSessionStatus, type StatusKind } from "@/lib/status"
+import { mapSessionStatus, STATUS_DOT_CLASS } from "@/lib/status"
 
 interface Template {
   id: string
@@ -33,12 +33,7 @@ interface Template {
   updatedAt: string
 }
 
-const SESSION_DOT: Record<StatusKind, string> = {
-  working: "bg-success",
-  starting: "bg-warning",
-  failed: "bg-error",
-  stopped: "bg-muted-foreground/60",
-}
+const SESSION_DOT = STATUS_DOT_CLASS
 
 function authHeaders() {
   return getApiAuthHeaders()

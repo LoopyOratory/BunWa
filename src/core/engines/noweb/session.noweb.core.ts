@@ -255,7 +255,6 @@ import {
 import { StatusStringToStatus } from '../../utils/acks';
 import promiseRetry from 'promise-retry';
 import { container } from 'tsyringe';
-import { SendingPolicyService } from '../../sending-policy/sending-policy.service';
 import {
   isUsernameAddress,
   isValidWhatsAppUsername,
@@ -1364,28 +1363,6 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   // ===== Anti-ban sending policy =====
 
-  private sendingPolicyService?: SendingPolicyService | null;
-
-  /**
-   * Lazy, optional access to the sending policy service. The engine is not
-   * DI-managed, so the service is pulled from the tsyringe container on first
-   * use and simply skipped when it was never registered (e.g. unit tests).
-   */
-  protected getSendingPolicy(): SendingPolicyService | null {
-    if (this.sendingPolicyService === undefined) {
-      this.sendingPolicyService = null;
-      try {
-        if (container.isRegistered(SendingPolicyService)) {
-          this.sendingPolicyService = container.resolve(SendingPolicyService);
-        }
-      } catch (error) {
-        this.logger.warn({ error }, 'Sending policy unavailable, sends are not gated');
-        this.sendingPolicyService = null;
-      }
-    }
-    return this.sendingPolicyService;
-  }
-
   /**
    * Normalize the chat id and run the sending-policy gate (caps, reachout
    * timelock, quiet hours) before a send. Returns the normalized chat id so
@@ -1862,7 +1839,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async sendButtonsReply(request: MessageButtonReply) {
-    const chatId = toJID(this.ensureSuffix(await this.resolveSendTarget(request.chatId)));
+    const chatId = await this.resolveAndGate(request.chatId);
     const message = {
       buttonsResponseMessage: {
         selectedButtonId: request.selectedButtonID,
@@ -1875,43 +1852,49 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       },
     };
     const options: any = await this.getMessageOptions(request);
-    return this.sock.sendMessage(chatId, message as any, options);
+    try {
+      const result = await this.sock.sendMessage(chatId, message as any, options);
+      this.policyRecord(chatId, false);
+      return result;
+    } catch (error) {
+      this.policyRecord(chatId, true);
+      throw error;
+    }
   }
 
-  @Activity()
-  async sendPollVote(request: MessagePollVoteRequest) {
-    const chatId = toJID(this.ensureSuffix(await this.resolveSendTarget(request.chatId)));
-    const key = parseMessageIdSerialized(request.pollMessageId);
-    const pollMessage = await this.store.loadMessage(key.remoteJid, key.id);
-    if (!pollMessage) {
-      throw new UnprocessableEntityException(
-        `Poll message with id '${request.pollMessageId}' not found`,
-      );
-    }
-    const pollUpdate = {
-      pollUpdateMessage: {
-        pollCreationMessageKey: key,
-        selectedOptions: request.votes.map((v: any) => Buffer.from(v)),
-      },
-    };
-    const options: any = await this.getMessageOptions(request);
-    return this.sock.sendMessage(chatId, pollUpdate as any, options);
+  /**
+   * A poll vote must be encrypted with the poll's message secret
+   * (pollUpdateMessage.vote = {encPayload, encIv}); Baileys only ships the
+   * decrypt side. The previous implementation sent the option names in clear,
+   * which WhatsApp does not count as a vote, while the API reported success.
+   */
+  async sendPollVote(request: MessagePollVoteRequest): Promise<any> {
+    this.notImplemented('Voting in a poll is not supported by the NOWEB engine yet.');
   }
 
   @Activity()
   async sendEvent(request: EventMessageRequest): Promise<WAMessage> {
-    const chatId = toJID(this.ensureSuffix(await this.resolveSendTarget(request.chatId)));
+    const event = request.event;
+    const chatId = await this.resolveAndGate(request.chatId);
     const message = {
-      eventMessage: {
-        name: request.text,
-        description: request.text,
-        startTime: Date.now(),
-        endTime: Date.now() + 3600000, // 1 hour default
-        isCanceled: false,
+      event: {
+        name: event.name,
+        description: event.description,
+        startDate: new Date(event.startTime * 1000),
+        endDate: event.endTime ? new Date(event.endTime * 1000) : undefined,
+        location: event.location?.name ? { name: event.location.name } : undefined,
+        extraGuestsAllowed: event.extraGuestsAllowed,
       },
     };
-    const options: any = await this.getMessageOptions(request);
-    return (await this.sock.sendMessage(chatId, message as any, options)) as any;
+    const options: any = await this.getMessageOptions(request as any);
+    try {
+      const result = await this.sock.sendMessage(chatId, message as any, options);
+      this.policyRecord(chatId, false);
+      return this.toWAMessage(result) as any;
+    } catch (error) {
+      this.policyRecord(chatId, true);
+      throw error;
+    }
   }
 
   @Activity()

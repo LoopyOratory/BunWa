@@ -3,6 +3,7 @@
 import {
   useRef,
   useEffect,
+  useLayoutEffect,
   useCallback,
   useState,
 } from "react"
@@ -116,13 +117,16 @@ export function groupMessages(
 
 export function useAutoScroll(
   messages: ChatMessageData[],
-  opts?: { threshold?: number }
+  opts?: { threshold?: number; ownSenderId?: string }
 ) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [isAtBottom, setIsAtBottom] = useState(true)
+  const isAtBottomRef = useRef(true)
   const [unseenCount, setUnseenCount] = useState(0)
-  const prevLengthRef = useRef(messages.length)
   const threshold = opts?.threshold ?? 100
+  const prevFirstIdRef = useRef<string | undefined>(undefined)
+  const prevLastIdRef = useRef<string | undefined>(undefined)
+  const prevScrollHeightRef = useRef(0)
 
   const scrollToBottom = useCallback(
     (behavior: ScrollBehavior = "smooth") => {
@@ -143,6 +147,7 @@ export function useAutoScroll(
       const distanceFromBottom =
         el.scrollHeight - el.scrollTop - el.clientHeight
       const atBottom = distanceFromBottom <= threshold
+      isAtBottomRef.current = atBottom
       setIsAtBottom(atBottom)
       if (atBottom) setUnseenCount(0)
     }
@@ -151,26 +156,39 @@ export function useAutoScroll(
     return () => el.removeEventListener("scroll", handleScroll)
   }, [threshold])
 
-  // Auto-scroll when new messages arrive and user is at bottom
-  useEffect(() => {
-    const newCount = messages.length - prevLengthRef.current
-    prevLengthRef.current = messages.length
-
-    if (newCount <= 0) return
-
-    if (isAtBottom) {
-      scrollToBottom("smooth")
-    } else {
-      setUnseenCount((c) => c + newCount)
+  // React to how the list changed, before paint so nothing visibly jumps:
+  // - older messages added at the top keep the reader's place,
+  // - a new message at the bottom follows the reader if they are at the
+  //   bottom, otherwise it counts as unseen,
+  // - a different conversation (both ends changed) starts at the bottom.
+  useLayoutEffect(() => {
+    const el = containerRef.current
+    const firstId = messages[0]?.id
+    const lastId = messages[messages.length - 1]?.id
+    const prevFirst = prevFirstIdRef.current
+    const prevLast = prevLastIdRef.current
+    if (el) {
+      if (prevLast === undefined || (firstId !== prevFirst && lastId !== prevLast)) {
+        el.scrollTop = el.scrollHeight
+        isAtBottomRef.current = true
+        setIsAtBottom(true)
+        setUnseenCount(0)
+      } else if (firstId !== prevFirst && lastId === prevLast) {
+        el.scrollTop += el.scrollHeight - prevScrollHeightRef.current
+      } else if (lastId !== prevLast) {
+        // Your own new message always brings you to it, like WhatsApp.
+        const own = !!opts?.ownSenderId && messages[messages.length - 1]?.senderId === opts.ownSenderId
+        if (isAtBottomRef.current || own) scrollToBottom("smooth")
+        else setUnseenCount((c) => c + 1)
+      } else if (isAtBottomRef.current && el.scrollHeight !== prevScrollHeightRef.current) {
+        // Same messages, taller content (a failure line, a reaction): stay pinned.
+        el.scrollTop = el.scrollHeight
+      }
+      prevScrollHeightRef.current = el.scrollHeight
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length])
-
-  // Scroll to bottom on mount
-  useEffect(() => {
-    scrollToBottom("instant")
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    prevFirstIdRef.current = firstId
+    prevLastIdRef.current = lastId
+  }, [messages, scrollToBottom, opts?.ownSenderId])
 
   return { containerRef, scrollToBottom, isAtBottom, unseenCount } as const
 }

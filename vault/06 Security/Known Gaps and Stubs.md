@@ -2,7 +2,7 @@
 type: note
 section: security
 tags: [bunwa, gap, reference]
-updated: 2026-10-04
+updated: 2026-10-09
 source: whole-repo audit (see each row)
 status: gap
 ---
@@ -51,24 +51,30 @@ Live drill against the running NOWEB engine, plus fixes for what it found.
 | `sendFile` dropped declared metadata | `{ mimetype, filename, data }` inputs were reduced to raw bytes, so every document went out as `application/pdf` named "file". The declared `mimetype`/`filename` are carried onto the Baileys message. |
 | vCard fields were empty | `toVcardV3` read `name`/`phone`, but the API documents `fullName`/`phoneNumber`; the sent vCard had empty FN and TEL. Both spellings are accepted and `organization` is emitted as ORG. |
 
+## 0.3 Resolved 2026-10-09: audit fixes and the UI rework
+
+| Item | Detail |
+|---|---|
+| Sessions index could be wiped | `.sessions-index.json` is written through `SessionIndexFile` (temp file + rename, serialized, `.bak` of the last good file). A file that does not parse is moved to `.corrupt-<ts>` and the backup is used; it no longer silently becomes `{}`. REST key `lastUsedAt` persists at most once a minute. |
+| WEBJS bypassed the sending policy | The policy gate moved to the session base class (`withSendingPolicy`); WEBJS text, media, location and reply sends are capped like NOWEB. |
+| Stub routes | `send/buttons/reply`, `GET`/`DELETE /chats/:chatId`, `POST /events` (WAHA event shape), `media/convert/video` (ffmpeg H.264/AAC), group picture and `contacts/about` now call the engine. `sendPollVote` answers **422**: votes must be encrypted and Baileys only ships the decrypt side. |
+| WebSocket auth | `/ws` follows the REST rules (`WAHA_ALLOW_NO_AUTH=false`, per-session `sk_ses_` keys pinned to their session) and the dashboard connects with a single-use ticket from `POST /api/ws/ticket` instead of putting the password in the URL. |
+| Postgres store shared by all sessions | One schema per session, see [[Data and Storage#Database switches]]. The overview id filter was also ignored on Postgres. |
+| Chat could not load history past 50 messages | The chat library's `ChatMessages` ignored `onLoadMore`; older pages now load on scroll with the reading position kept. Unread counts come from the store's `_chat.unreadCount` plus live increments (NOWEB still strips the top-level field). |
+| See-through toasts and menus | Sonner's rich-colour variables pointed at themselves (`--success-bg: var(--success-bg)`), which CSS treats as invalid, so toasts were transparent. Overlays now use the opaque `--surface-overlay`. |
+| Dashboard numbers from a 500-row sample | `GET /api/dashboard/summary` counts in SQL over the whole range and builds the attention list. |
+
 ## 1. Routes that can never succeed
 
 These are mounted and documented, but always fail:
 
 | Endpoint | Response | Cause |
 |---|---|---|
-| `POST /api/contacts/block` · `/unblock` | 500 "not available in NOWEB engine" | handler is a stub, even though the engine has the primitive |
 | `POST /api/:session/chats/:chatId/mute` · `/unmute` | 400 | guards on `typeof session.muteChat === 'function'`; **no engine defines `muteChat`** — so channel mute works, chat mute never does |
-| `GET /api/contacts/about` | `{about: ''}` | stub |
-| `GET /api/:session/chats/:chatId` | `{id}` only | stub, no chat data is read |
-| `DELETE /api/:session/chats/:chatId` | `{result: true}` | no-op stub, nothing is deleted |
-| `GET /api/:session/groups/:id/picture` | `{url: null}` | stub, no group picture is read |
 | `GET /api/:session/channels/search/views` · `/countries` · `/categories` | `[]` | hardcoded empty-array stubs |
-| `POST /api/:session/events` | fake `{id, timestamp}` | stub |
-| `POST /api/:session/media/convert/video` | placeholder string `'base64-video-data'` | stub |
 | `GET /api/:session/channels/:id/messages/preview` | `AvailableInPlusVersion` | Argo decoder missing |
 | `GET /api/session/channelsList` (engine method) | `NotImplementedByEngineError` | channel listing not implemented in the engine |
-| `POST /api/send/buttons/reply` | 200 `{result: true}` — **sends nothing** | route is a stub; the engine method `sendButtonsReply()` exists (`session.noweb.core.ts:1259`) but has **no caller anywhere** |
+| `POST /api/sendPollVote` | 422 | poll votes must be encrypted with the poll's secret; not implemented on any engine |
 
 ## 2. Functional dead ends
 

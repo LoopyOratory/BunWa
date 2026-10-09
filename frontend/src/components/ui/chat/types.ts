@@ -27,6 +27,8 @@ export interface ChatMessageData {
   // Metadata
   timestamp: Date | number
   status?: "sending" | "sent" | "delivered" | "read" | "failed"
+  /** Why a failed send failed; shown under the bubble with a Retry. */
+  error?: string
   replyTo?: { id: string; senderName: string; text: string }
   reactions?: { emoji: string; userIds: string[]; count: number }[]
   isEdited?: boolean
@@ -68,6 +70,10 @@ export interface ChatConfig {
   onDelete?: (messageId: string) => void
   onPin?: (messageId: string) => void
   onStar?: (messageId: string) => void
+  /** Resend a failed message. */
+  onRetry?: (messageId: string) => void
+  /** Sender names and avatars on incoming bubbles (groups); off for one-to-one chats. */
+  showSenders?: boolean
 }
 
 /** A group of consecutive messages from the same sender within the grouping interval */

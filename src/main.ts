@@ -9,6 +9,7 @@ import { globalErrorHandler } from './middleware/error-handler';
 import { createApiRouter } from './api';
 import { createMcpRouter } from './mcp';
 import { createWebSocketHandler, setSessionManager } from './api/websocket';
+import { authenticateWebSocket, resolveWsSession, wsTickets } from './api/websocket-auth';
 import { DashboardConfigServiceCore } from './core/config/DashboardConfigServiceCore';
 import { SwaggerConfigServiceCore } from './core/config/SwaggerConfigServiceCore';
 import { basicAuthMiddleware } from './middleware/basic-auth';
@@ -335,37 +336,28 @@ async function bootstrap() {
       // Handle WebSocket upgrade for /ws path
       const url = new URL(req.url);
       if (url.pathname === '/ws') {
-        // Authenticate WebSocket connections
-        // Browser WebSocket API doesn't support custom headers,
-        // so we accept Basic auth credentials as query params for WS only
-        const dashboardConfig = container.resolve(DashboardConfigServiceCore);
-        const dashboardCredentials = dashboardConfig.credentials;
-        const apiKey = config.getApiKey();
-
-        // Try Basic auth from query param (dashboard login)
-        const wsUser = url.searchParams.get('user');
-        const wsPass = url.searchParams.get('pass');
-        if (wsUser && wsPass && dashboardCredentials) {
-          if (safeCompare(wsUser, dashboardCredentials[0]) &&
-              safeCompare(wsPass, dashboardCredentials[1])) {
-            // Valid dashboard credentials — allow WS
-          } else {
-            log.info(`WS /ws 401 unauthorized (invalid credentials)`);
-            return new Response('Unauthorized', { status: 401 });
-          }
-        } else if (apiKey) {
-          // Fall back to API key auth
-          const providedKey = req.headers.get('x-api-key') || url.searchParams.get('x-api-key');
-          if (!providedKey || providedKey.length !== apiKey.length ||
-              !timingSafeEqual(Buffer.from(providedKey), Buffer.from(apiKey))) {
-            log.info(`WS /ws 401 unauthorized (no key)`);
-            return new Response('Unauthorized', { status: 401 });
-          }
+        // Same rules as the REST API: ticket, master or per-session key,
+        // dashboard credentials, or keyless dev mode (see websocket-auth.ts).
+        const auth = await authenticateWebSocket(req, url, {
+          apiKey: config.getApiKey(),
+          dashboardCredentials: container.resolve(DashboardConfigServiceCore).credentials,
+          allowNoAuth: process.env.WAHA_ALLOW_NO_AUTH !== 'false',
+          manager: sessionManager,
+          tickets: wsTickets,
+        });
+        if (!auth.ok) {
+          log.info(`WS /ws ${auth.status} unauthorized (${auth.reason})`);
+          return new Response('Unauthorized', { status: auth.status });
+        }
+        const scope = resolveWsSession(auth.principal, url.searchParams.get('session'));
+        if (!scope.ok) {
+          log.info('WS /ws 403 forbidden (session-scoped key asked for another session)');
+          return new Response('Forbidden', { status: 403 });
         }
 
-        log.info(`WS /ws upgrade attempt session=${url.searchParams.get('session') || '*'} events=${url.searchParams.get('events') || '*'}`);
+        log.info(`WS /ws upgrade attempt session=${scope.session} events=${url.searchParams.get('events') || '*'}`);
         const upgraded = server.upgrade(req, {
-          data: { url: req.url } as any,
+          data: { url: req.url, session: scope.session } as any,
         });
         if (upgraded) {
           return undefined; // WebSocket upgrade successful

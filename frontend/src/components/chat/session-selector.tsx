@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
+import { useSessionQr } from "@/hooks/chat/use-session-qr"
 import { motion, AnimatePresence } from "framer-motion"
-import QRCodeLib from "qrcode"
 import {
   Play,
   Square,
@@ -11,7 +11,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { EmptyState, Skeleton } from "@/components/primitives"
-import { api, type Session } from "@/lib/api"
+import type { Session } from "@/lib/api"
 
 interface SessionSelectorProps {
   sessions: Session[]
@@ -20,6 +20,8 @@ interface SessionSelectorProps {
   onStartSession: (name: string) => void
   onStopSession: (name: string) => void
   disabled?: boolean
+  /** Closest sending limit for the selected session, e.g. "92% of daily cap". */
+  limitLabel?: { text: string; tone: "ok" | "warning" | "error" } | null
 }
 
 function getSessionStatusTone(status: string): { dot: string; chip: string } {
@@ -30,11 +32,12 @@ function getSessionStatusTone(status: string): { dot: string; chip: string } {
         chip: "border border-success-border bg-success-bg text-success-foreground",
       }
     case "STARTING":
-    case "SCAN_QR_CODE":
       return {
         dot: "bg-warning",
         chip: "border border-warning-border bg-warning-bg text-warning-foreground",
       }
+    // Waiting for a scan needs the operator, like a failure.
+    case "SCAN_QR_CODE":
     case "FAILED":
       return {
         dot: "bg-error",
@@ -52,7 +55,7 @@ function getStatusLabel(status: string): string {
   switch (status) {
     case "WORKING": return "Connected"
     case "STARTING": return "Connecting"
-    case "SCAN_QR_CODE": return "Scan QR"
+    case "SCAN_QR_CODE": return "Needs QR"
     case "FAILED": return "Failed"
     case "STOPPED": return "Stopped"
     default: return status
@@ -66,36 +69,15 @@ export function SessionSelector({
   onStartSession,
   onStopSession,
   disabled,
+  limitLabel,
 }: SessionSelectorProps) {
   const [open, setOpen] = useState(false)
-  const [qrCode, setQrCode] = useState<string | null>(null)
-  const [loadingQR, setLoadingQR] = useState(false)
-  const [qrError, setQrError] = useState(false)
 
   const current = sessions.find((s) => s.name === selectedSession)
   const isScanning = current?.status === "SCAN_QR_CODE"
   const currentTone = getSessionStatusTone(current?.status || "STOPPED")
 
-  useEffect(() => {
-    if (!open || !isScanning) { setQrCode(null); setQrError(false); return }
-    let cancelled = false
-    const fetchQR = async () => {
-      setLoadingQR(true)
-      try {
-        const res = await api.getQRCode(selectedSession)
-        if (res.qr?.raw && !cancelled) {
-          const url = await QRCodeLib.toDataURL(res.qr.raw, { width: 256, margin: 1 })
-          if (!cancelled) { setQrCode(url); setQrError(false) }
-        }
-      } catch {
-        if (!cancelled) setQrError(true)
-      }
-      finally { if (!cancelled) setLoadingQR(false) }
-    }
-    fetchQR()
-    const iv = setInterval(fetchQR, 5000)
-    return () => { cancelled = true; clearInterval(iv) }
-  }, [open, isScanning, selectedSession])
+  const { qr: qrCode, loading: loadingQR, error: qrError } = useSessionQr(selectedSession, open && isScanning)
 
   return (
     <div className="relative">
@@ -115,12 +97,23 @@ export function SessionSelector({
           <p className="truncate text-[15px] font-bold leading-[21px] text-[var(--chat-text-primary)]">
             {current?.me?.pushName || selectedSession}
           </p>
-          <div className="flex items-center gap-1.5">
-            <span className={`size-1.5 rounded-full ${currentTone.dot}`} />
-            <span className="text-[11px] text-[var(--chat-text-tertiary)]">{getStatusLabel(current?.status || "STOPPED")}</span>
+          <div className="flex min-w-0 items-center gap-1.5 text-[12px] leading-4 text-[var(--chat-text-secondary)]">
+            <span className={`size-1.5 shrink-0 rounded-full ${currentTone.dot}`} />
+            <span className="shrink-0">{getStatusLabel(current?.status || "STOPPED")}</span>
             {current?.me?.id && (
-              <span className="metric truncate text-[10px] text-[var(--chat-text-tertiary)] opacity-50">
-                {current.me.id.split("@")[0]}
+              <span className="metric truncate">· {current.me.id.split("@")[0]}</span>
+            )}
+            {limitLabel && (
+              <span
+                className={`truncate ${
+                  limitLabel.tone === "error"
+                    ? "text-error-foreground"
+                    : limitLabel.tone === "warning"
+                      ? "text-warning-foreground"
+                      : ""
+                }`}
+              >
+                · {limitLabel.text}
               </span>
             )}
           </div>

@@ -165,6 +165,8 @@ describe('factories never fall back to SQLite', () => {
 
     const storage = new NowebStorageFactoryCore().createStorage(new LocalStoreCore(), 'default');
     expect(storage).toBeInstanceOf(PostgresStorage);
+    // Each session's store lives in its own schema, never the shared public one.
+    expect((storage as PostgresStorage).schema).toBe('bunwa_default');
     await storage.close();
   });
 
@@ -274,7 +276,7 @@ describe('verifyStorageAtBoot (sqlite)', () => {
  */
 const POSTGRES_TEST_URL = process.env.BUNWA_TEST_POSTGRES_URL;
 describe.skipIf(!POSTGRES_TEST_URL)('verifyStorageAtBoot (postgres integration)', () => {
-  it('connects and creates the session store and template tables', async () => {
+  it('connects, creates the template table, and leaves session stores to session start', async () => {
     process.env.WAHA_DATABASE_DRIVER = 'postgres';
     process.env.WAHA_DATABASE_URL = POSTGRES_TEST_URL!;
 
@@ -287,9 +289,7 @@ describe.skipIf(!POSTGRES_TEST_URL)('verifyStorageAtBoot (postgres integration)'
         `SELECT tablename FROM pg_tables WHERE schemaname = 'public'`,
       );
       const tables = result.rows.map((row: { tablename: string }) => row.tablename);
-      for (const expected of ['contacts', 'chats', 'groups', 'messages', 'labels', 'labelAssociations', 'lid_map', 'templates']) {
-        expect(tables).toContain(expected);
-      }
+      expect(tables).toContain('templates');
     } finally {
       await client.end();
     }

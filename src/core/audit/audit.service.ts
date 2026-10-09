@@ -97,6 +97,66 @@ function generateId(): string {
  *   AUDIT_RETENTION_DAYS — Days to keep audit logs (default: 90, <= 0 to disable)
  *   WAHA_STORAGE_DIR     — Directory for audit.db (default: './data')
  */
+export interface AuditSummaryOptions {
+  from: Date;
+  to: Date;
+  /** Width of one time-series bucket. */
+  bucketMs: number;
+  /** Only count rows for this session. */
+  session?: string;
+}
+
+export interface AuditSessionCounts {
+  sent: number;
+  failed: number;
+  /** Failed sends the sending policy refused (a subset of `failed`). */
+  refused: number;
+  webhookDelivered: number;
+  webhookFailed: number;
+}
+
+export interface AuditSummary {
+  perSession: Record<string, AuditSessionCounts>;
+  totals: AuditSessionCounts;
+  series: {
+    bucketStart: number[];
+    sent: number[];
+    failed: number[];
+    webhookDelivered: number[];
+    webhookFailed: number[];
+  };
+  /** Raw failure groups; `failureReasonLabel` folds them into display reasons. */
+  failures: Array<{
+    errorMessage: string | null;
+    metadata: Record<string, any> | null;
+    count: number;
+    lastAt: string;
+    session: string | null;
+  }>;
+  webhookFailures: Array<{
+    session: string | null;
+    url: string | null;
+    count: number;
+    lastAt: string;
+    lastError: string | null;
+  }>;
+}
+
+/**
+ * Outgoing message operations: REST sends (`message_*`) and MCP tools in the
+ * message category (`mcp_tool_*`), which the MCP path audits instead.
+ */
+const SENT_SQL = `(action = 'message_sent' OR (action = 'mcp_tool_called' AND json_extract(metadata, '$.category') = 'message'))`;
+const FAILED_SQL = `(action = 'message_failed' OR (action = 'mcp_tool_failed' AND json_extract(metadata, '$.category') = 'message'))`;
+
+const emptyCounts = (): AuditSessionCounts => ({
+  sent: 0,
+  failed: 0,
+  refused: 0,
+  webhookDelivered: 0,
+  webhookFailed: 0,
+});
+
 @injectable()
 export class AuditService {
   private db: Database;
@@ -271,6 +331,92 @@ export class AuditService {
     return { data: rows, total };
   }
 
+  /**
+   * Counts for the ops dashboard over a time range, aggregated in SQL so the
+   * numbers stay right however many rows the range holds.
+   */
+  summarize(options: AuditSummaryOptions): AuditSummary {
+    const fromIso = options.from.toISOString();
+    const toIso = options.to.toISOString();
+    const fromMs = options.from.getTime();
+    const bucketMs = Math.max(1, Math.floor(options.bucketMs));
+    const sessionSql = options.session ? ' AND sessionName = ?' : '';
+    const base = (extra: string) =>
+      `FROM audit_logs WHERE createdAt >= ? AND createdAt < ?${sessionSql} AND ${extra}`;
+    const params = options.session ? [fromIso, toIso, options.session] : [fromIso, toIso];
+
+    const kindSql = `CASE
+        WHEN ${SENT_SQL} THEN 'sent'
+        WHEN ${FAILED_SQL} AND json_extract(metadata, '$.reason') = 'policy' THEN 'refused'
+        WHEN ${FAILED_SQL} THEN 'failed'
+        WHEN action = 'webhook_triggered' THEN 'webhookDelivered'
+        WHEN action = 'webhook_failed' THEN 'webhookFailed'
+      END`;
+    const relevant = `action IN ('message_sent', 'message_failed', 'mcp_tool_called', 'mcp_tool_failed', 'webhook_triggered', 'webhook_failed')`;
+
+    const perSession: Record<string, AuditSessionCounts> = {};
+    const totals = emptyCounts();
+    const add = (counts: AuditSessionCounts, kind: string, n: number) => {
+      if (kind === 'refused') {
+        counts.refused += n;
+        counts.failed += n;
+      } else if (kind in counts) {
+        (counts as any)[kind] += n;
+      }
+    };
+
+    const grouped = this.db
+      .query(`SELECT sessionName AS session, ${kindSql} AS kind, COUNT(*) AS n ${base(relevant)} GROUP BY session, kind`)
+      .all(...params) as Array<{ session: string | null; kind: string | null; n: number }>;
+    for (const row of grouped) {
+      if (!row.kind) continue;
+      const key = row.session ?? '';
+      perSession[key] ??= emptyCounts();
+      add(perSession[key], row.kind, row.n);
+      add(totals, row.kind, row.n);
+    }
+
+    const bucketCount = Math.max(1, Math.ceil((options.to.getTime() - fromMs) / bucketMs));
+    const series = {
+      bucketStart: Array.from({ length: bucketCount }, (_, i) => fromMs + i * bucketMs),
+      sent: new Array(bucketCount).fill(0),
+      failed: new Array(bucketCount).fill(0),
+      webhookDelivered: new Array(bucketCount).fill(0),
+      webhookFailed: new Array(bucketCount).fill(0),
+    };
+    const bucketed = this.db
+      .query(
+        `SELECT (CAST(strftime('%s', createdAt) AS INTEGER) * 1000 - ?) / ? AS bucket, ${kindSql} AS kind, COUNT(*) AS n
+         ${base(relevant)} GROUP BY bucket, kind`,
+      )
+      .all(fromMs, bucketMs, ...params) as Array<{ bucket: number; kind: string | null; n: number }>;
+    for (const row of bucketed) {
+      if (!row.kind || row.bucket < 0 || row.bucket >= bucketCount) continue;
+      const kind = row.kind === 'refused' ? 'failed' : row.kind;
+      (series as any)[kind][row.bucket] += row.n;
+    }
+
+    // SQLite returns the other columns from the row that holds MAX(createdAt),
+    // so `session` and `lastError` describe the most recent occurrence.
+    const failures = (this.db
+      .query(
+        `SELECT errorMessage, metadata, COUNT(*) AS count, MAX(createdAt) AS lastAt, sessionName AS session
+         ${base(FAILED_SQL)} GROUP BY errorMessage ORDER BY count DESC LIMIT 50`,
+      )
+      .all(...params) as Array<{ errorMessage: string | null; metadata: string | null; count: number; lastAt: string; session: string | null }>)
+      .map((row) => ({ ...row, metadata: parseMetadata(row.metadata) }));
+
+    const webhookFailures = this.db
+      .query(
+        `SELECT sessionName AS session, json_extract(metadata, '$.url') AS url, COUNT(*) AS count,
+                MAX(createdAt) AS lastAt, errorMessage AS lastError
+         ${base(`action = 'webhook_failed'`)} GROUP BY session, url ORDER BY count DESC LIMIT 50`,
+      )
+      .all(...params) as AuditSummary['webhookFailures'];
+
+    return { perSession, totals, series, failures, webhookFailures };
+  }
+
   async getRecentByApiKey(apiKeyId: string, limit = 10): Promise<AuditLogEntry[]> {
     return this.db
       .query(`SELECT * FROM audit_logs WHERE apiKeyId = ? ORDER BY createdAt DESC LIMIT ${limit}`)
@@ -304,5 +450,14 @@ export class AuditService {
     } catch {
       // Already closed
     }
+  }
+}
+
+function parseMetadata(raw: string | null): Record<string, any> | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
   }
 }

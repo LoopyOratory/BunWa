@@ -71,8 +71,14 @@ export function createContactsRouter(): Hono<{ Variables: { session: any; body: 
 
   router.get('/contacts/about',
     policiesMiddleware(CanSession(Action.Read, FromQuery('session'))),
+    workingSessionQueryResolver(),
     async (c) => {
-      return c.json({ about: '' });
+      const session = c.get('session');
+      const contactId = c.req.query('contactId');
+      if (!contactId) {
+        return c.json({ statusCode: 400, message: 'session and contactId query params required' }, 400);
+      }
+      return c.json(await (session as any).getContactAbout({ contactId }));
     }
   );
 

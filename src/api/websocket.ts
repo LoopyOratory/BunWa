@@ -35,7 +35,9 @@ export function createWebSocketHandler() {
         // `server.upgrade(req, { data })`, so read it from `ws.data`.
         const urlString = ws.data?.url || 'http://localhost/ws';
         const url = new URL(urlString);
-        const sessionParam = url.searchParams.get('session') || '*';
+        // The upgrade handler resolved the session the caller may stream (a
+        // session-scoped key is pinned to its own); fall back to the query.
+        const sessionParam = ws.data?.session || url.searchParams.get('session') || '*';
         const eventsParam = url.searchParams.get('events') || '*';
 
         const events = EventWildUnmask(eventsParam) as WAHAEvents[];

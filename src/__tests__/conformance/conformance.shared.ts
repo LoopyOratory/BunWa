@@ -138,6 +138,22 @@ export function runDriverConformance(driver: ConformanceDriver, skipReason?: str
       expect(await chats.getById(chatId)).toBeNull();
     });
 
+    it('chats: the overview read honours an id filter', async () => {
+      const chats = harness.storage.getChatRepository();
+      const wanted = '444@s.whatsapp.net';
+      const other = '555@s.whatsapp.net';
+      await chats.save({ id: wanted, conversationTimestamp: 1700000001 } as any);
+      await chats.save({ id: other, conversationTimestamp: 1700000002 } as any);
+
+      const filtered = await chats.getAllWithMessages({ limit: 10, offset: 0 } as any, false, {
+        ids: [wanted],
+      } as any);
+      expect(filtered.map((chat: any) => chat.id)).toEqual([wanted]);
+
+      await chats.deleteById(wanted);
+      await chats.deleteById(other);
+    });
+
     // -------------------------------------------------------------- groups
     it('groups: save, read, delete', async () => {
       const groups = harness.storage.getGroupRepository();

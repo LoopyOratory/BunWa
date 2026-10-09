@@ -31,6 +31,8 @@ import { createInfraRouter } from './infra.routes';
 import { createMcpConfigRouter } from './mcp-config.routes';
 import { createApiKeysRouter } from './api-keys.routes';
 import { createFilesRouter } from './files.routes';
+import { createWsTicketRouter } from './websocket-auth';
+import { createDashboardRouter } from './dashboard.routes';
 
 export function createApiRouter(): Hono {
   const router = new Hono();
@@ -66,6 +68,8 @@ export function createApiRouter(): Hono {
   router.route('/api', createMcpConfigRouter());
   router.route('/api', createApiKeysRouter());
   router.route('/api/files', createFilesRouter());
+  router.route('/api', createWsTicketRouter());
+  router.route('/api', createDashboardRouter());
 
   return router;
 }

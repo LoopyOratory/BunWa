@@ -25,6 +25,12 @@ export class PostgresChatRepository implements IChatRepository {
     merge?: boolean,
   ): Promise<Chat[]> {
     let query = this.knex('chats').select('data');
+    // Honour the id filter like the SQLite repository does; without it a
+    // filtered overview (and GET /chats/:chatId) answered with every chat.
+    const ids = (filter as any)?.ids as string[] | undefined;
+    if (ids && ids.length > 0) {
+      query = query.whereIn('id', ids);
+    }
     // A caller that passes a pagination object without a limit means "all of
     // them", the way the SQLite path behaves. Defaulting to 50 here silently
     // truncated every unpaginated read on Postgres — contacts, chats, groups,
