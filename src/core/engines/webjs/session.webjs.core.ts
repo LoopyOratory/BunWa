@@ -624,7 +624,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       } catch {
         continue;
       }
-      const found = msgs.find((m: any) => this.messageIdSerialized(m.id) === request.messageId);
+      const found = msgs.find((m: any) => this.matchesMessageId(m, request.messageId));
       if (!found) continue;
 
       try {
@@ -656,7 +656,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     this.ensureClientReady();
     const chat = await this.getChatOrFail(request.chatId);
     const msgs = await chat.fetchMessages({ limit: 100 });
-    const target = msgs.find((m: any) => this.messageIdSerialized(m.id) === request.reply_to);
+    const target = msgs.find((m: any) => this.matchesMessageId(m, request.reply_to));
     if (!target) {
       throw new NotFoundException(`Message ${request.reply_to} not found for reply`);
     }
@@ -692,7 +692,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     this.ensureClientReady();
     const chat = await this.getChatOrFail(request.chatId);
     const msgs = await chat.fetchMessages({ limit: 100 });
-    const target = msgs.find((m: any) => this.messageIdSerialized(m.id) === request.messageId);
+    const target = msgs.find((m: any) => this.matchesMessageId(m, request.messageId));
     if (!target) {
       throw new NotFoundException(`Message ${request.messageId} not found for reaction`);
     }
@@ -795,7 +795,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     this.ensureClientReady();
     const chat = await this.getChatOrFail(chatId);
     const msgs = await chat.fetchMessages({ limit: 100 });
-    const found = msgs.find((m: any) => this.messageIdSerialized(m.id) === messageId);
+    const found = msgs.find((m: any) => this.matchesMessageId(m, messageId));
     if (!found) return null;
     const message = this.mapMessageToWAMessage(found);
     if (query?.downloadMedia && message.hasMedia) {
@@ -1096,6 +1096,15 @@ export class WhatsappSessionWebJs extends WhatsappSession {
    * passes the raw model id through untouched, so both spellings and the
    * component form are accepted.
    */
+  /**
+   * A message matches by its serialized ID or by the bare WhatsApp ID that
+   * sends return (key.id) — callers hold whichever they were given.
+   */
+  private matchesMessageId(message: any, messageId: string | undefined): boolean {
+    if (!messageId) return false;
+    return this.messageIdSerialized(message?.id) === messageId || message?.id?.id === messageId;
+  }
+
   private messageIdSerialized(id: any): string {
     if (!id) return '';
     if (typeof id === 'string') return id;

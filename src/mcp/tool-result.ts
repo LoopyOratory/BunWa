@@ -2,29 +2,46 @@
  * Tool result formatting for MCP responses.
  * No NestJS dependencies — uses plain Error classes.
  */
-import { randomUUID } from 'node:crypto';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'Mcp' });
 
 /**
- * Format a tool result, inlining small payloads as text and offloading large
- * ones (> 4 KB) to an embedded base64 resource so the response stays compact.
+ * Largest result returned, in bytes (MCP_MAX_RESULT_BYTES, default 16 MiB —
+ * room for the media tools' 8 MiB default once base64-encoded). Above it the
+ * call answers a clear error asking for a smaller request.
+ */
+export function maxResultBytes(): number {
+  const configured = Number.parseInt(process.env.MCP_MAX_RESULT_BYTES ?? '', 10);
+  return Number.isInteger(configured) && configured > 0 ? configured : 16 * 1024 * 1024;
+}
+
+/**
+ * Format a tool result as a single text block.
+ *
+ * Results over 4 KB used to be offloaded to an embedded base64 `resource`
+ * under an mcp://toolResult/... URI the server never published. MCP clients
+ * reject or cannot read that shape (Claude's client refused it with an invalid
+ * `_meta` error), so any message-history page past two or three messages
+ * failed. Every result is now plain text, which every client handles; tools
+ * keep their payloads small instead (see ChatGetMessages' compact messages).
  */
 export function smartToolResult(data: string | object | object[]): CallToolResult {
-  const text = typeof data === 'string' ? data : JSON.stringify(data);
-  const mimeType = typeof data === 'string' ? 'text/plain' : 'application/json';
-  const ext = typeof data === 'string' ? 'txt' : 'json';
-  if (text.length > 4096) {
-    const uri = `mcp://toolResult/${randomUUID()}.${ext}`;
-    const buffer = Buffer.from(text);
-    return {
-      content: [
-        { type: 'text', text: `Received resource ${uri} with ${buffer.byteLength} bytes` },
-        { type: 'resource', resource: { uri, mimeType, blob: buffer.toString('base64') } },
-      ],
-    };
+  const text = typeof data === 'string' ? data : JSON.stringify(data ?? null);
+  const bytes = Buffer.byteLength(text);
+  const limit = maxResultBytes();
+  if (bytes > limit) {
+    return jsonToolResult(
+      {
+        success: false,
+        name: 'ResultTooLarge',
+        message:
+          `The result is ${bytes} bytes, over the ${limit}-byte limit for one tool call. ` +
+          'Ask for less: a smaller limit or a later offset for message history, or a lower maxBytes for media.',
+      },
+      true,
+    );
   }
   return { content: [{ type: 'text', text }] };
 }

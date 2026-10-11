@@ -12,6 +12,23 @@ status: shipped
 Recent commit history, grouped by theme — the "what changed and why" that a fresh clone doesn't tell you.
 Newest work first within each theme.
 
+## Live MCP test findings (2026-10-11)
+
+A live test of the MCP against a paired session (one test recipient) found seven defects; all are
+fixed for both the MCP and the REST API, pinned by `live-test-findings.test.ts` and
+`mcp-results-e2e.test.ts` (the latter calls the HTTP endpoint with a session-scoped key and
+validates each result with the SDK's `CallToolResultSchema`).
+
+| Finding | Root cause → fix |
+|---|---|
+| Polls always failed | The engine read `poll.options`; the MCP tool sent `poll.values` (and zod stripped `options` when an agent tried it). `core/utils/poll.ts` accepts both vocabularies, `multipleAnswers` or `selectableCount` (clamped), and rejects duplicates / more than 12 options with clear messages. |
+| History past a few messages broke the client | `smartToolResult` moved results over 4 KB into an embedded `resource` blob the client rejected (reported as an invalid `_meta`). Every result is plain text now; `ChatGetMessages` / `ChatGetMessage` return compact messages without `_data` unless `includeRaw`. |
+| Reactions crashed on the bare ID a send returns | `parseMessageIdSerialized` gave `{ id }` only, so the reaction had no chat. `resolveMessageKey()` completes a bare ID from the stored message (right LID/PN address and participant) or the chat + sent-ID cache; used by reaction, star, pin, unpin, delete, edit and sendSeen. WEBJS matches bare IDs too. |
+| Templates sent literal `{{order}}` | `TemplateService.renderForSend` refuses (422, `missingVariables`) unless `allowMissingVariables`; preview reports `missingVariables`. |
+| No link previews | Baileys' builder needs `link-preview-js` (not installed) and only matches `https://` domains; `sendLinkPreview` passed `linkPreview: true`, which Baileys reads as an empty preview. `core/utils/link-preview.ts` builds the card (HTMLRewriter over Open Graph tags, sharp thumbnail, SSRF-guarded fetches, 5 s budget, 10 min cache). It stops reading at `</head>` (GitHub sends ~350 KB after a 2 s first byte), and a slow image only costs the thumbnail, not the card; `resolveAndPinFetch` now honours a caller `signal`. `link-custom-preview` now honours `preview{}` and the sending policy. |
+| Buttons/lists missing from history | They go out through `relayMessage`, which skips the `messages.upsert` that `sendMessage` emits. The engine emits it (`append`) so they are stored and fire `message.any`; `extractBody` reads interactive header/body/footer. |
+| Send results leaked media keys and thumbnails | `redactWireSecrets` on every MCP result and on REST send/status/history responses (structure kept; webhooks unchanged). |
+
 ## Postgres store bring-up (2026-09-29)
 
 The Postgres driver had never executed — no deployment, CI job or test touched it. The first run

@@ -343,6 +343,7 @@ and is denied on the one unscoped tool, `SessionList`.
 | `MCP_READONLY` | `false` | Set to `true` to expose only read-tier tools. |
 | `MCP_RATE_LIMIT_MAX` | `60` | Maximum MCP requests per key per window. |
 | `MCP_RATE_LIMIT_WINDOW_MS` | `60000` | Rate-limit window in milliseconds. |
+| `MCP_MAX_RESULT_BYTES` | `16777216` | Largest tool result returned (bytes); larger results answer a `ResultTooLarge` error asking for a smaller request. |
 
 The full tool list, per-tool tiers and policy behaviour are in
 [`vault/05 MCP/MCP Tools Reference.md`](vault/05%20MCP/MCP%20Tools%20Reference.md).

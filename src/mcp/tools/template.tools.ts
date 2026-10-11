@@ -149,11 +149,14 @@ export function templateTools(manager: SessionManager): ToolDescriptor[] {
       handler: async (input) => {
         const service = svc();
         const template = await resolveTemplate(service, input.sessionId, input.template);
+        const variables = (input.variables ?? {}) as Record<string, unknown>;
         return {
-          text: service.preview(template, (input.variables ?? {}) as Record<string, unknown>),
+          text: service.preview(template, variables),
           variables: service.extractVariables(
             [template.header, template.body, template.footer].filter(Boolean).join('\n'),
           ),
+          // Still shown as {{name}} in text; TemplateSend refuses until supplied.
+          missingVariables: service.missingVariables(template, variables),
           template: { id: template.id, name: template.name },
         };
       },
@@ -161,7 +164,7 @@ export function templateTools(manager: SessionManager): ToolDescriptor[] {
     {
       name: 'TemplateSend',
       description:
-        'Render a template with variable values and send it to a chat. The session must be running. Shapes the outbound message exactly like the REST send-template route.',
+        'Render a template with variable values and send it to a chat. The session must be running. Shapes the outbound message exactly like the REST send-template route. Refuses to send while any {{variable}} has no value (the error lists them) unless allowMissingVariables is true.',
       tier: 'write',
       category: 'template',
       sessionScoped: true,
@@ -171,11 +174,17 @@ export function templateTools(manager: SessionManager): ToolDescriptor[] {
         template: templateIdOrName,
         variables: variablesSchema,
         linkPreview: z.boolean().optional().describe('Enable link preview in the sent message'),
+        allowMissingVariables: z
+          .boolean()
+          .optional()
+          .describe('Send even if some {{variables}} have no value (they go out as literal {{name}}). Default false.'),
       }),
       handler: async (input) => {
         const service = svc();
         const template = await resolveTemplate(service, input.sessionId, input.template);
-        const text = service.preview(template, (input.variables ?? {}) as Record<string, unknown>);
+        const text = service.renderForSend(template, (input.variables ?? {}) as Record<string, unknown>, {
+          allowMissing: input.allowMissingVariables === true,
+        });
         const session = await manager.getWorkingSession(input.sessionId);
         const sent = await (session as any).sendText({
           session: input.sessionId,

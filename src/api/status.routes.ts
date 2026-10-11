@@ -3,6 +3,7 @@ import { container } from 'tsyringe';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanSession, Action, FromParam } from '../middleware/policies';
 import { workingSessionResolver } from '../middleware/session-resolver';
+import { redactWireSecrets } from '../core/utils/redact';
 
 export function createStatusRouter(): Hono<{ Variables: { session: any; body: any } }> {
   const router = new Hono<{ Variables: { session: any; body: any } }>();
@@ -16,7 +17,7 @@ export function createStatusRouter(): Hono<{ Variables: { session: any; body: an
       const session = c.get('session');
       const body = await c.req.json();
       const result = await (session as any).sendTextStatus(body);
-      return c.json(result);
+      return c.json(redactWireSecrets(result));
     }
   );
 
@@ -27,7 +28,7 @@ export function createStatusRouter(): Hono<{ Variables: { session: any; body: an
       const session = c.get('session');
       const body = await c.req.json();
       const result = await (session as any).sendImageStatus(body);
-      return c.json(result);
+      return c.json(redactWireSecrets(result));
     }
   );
 
@@ -38,7 +39,7 @@ export function createStatusRouter(): Hono<{ Variables: { session: any; body: an
       const session = c.get('session');
       const body = await c.req.json();
       const result = await (session as any).sendVoiceStatus(body);
-      return c.json(result);
+      return c.json(redactWireSecrets(result));
     }
   );
 
@@ -49,7 +50,7 @@ export function createStatusRouter(): Hono<{ Variables: { session: any; body: an
       const session = c.get('session');
       const body = await c.req.json();
       const result = await (session as any).sendVideoStatus(body);
-      return c.json(result);
+      return c.json(redactWireSecrets(result));
     }
   );
 

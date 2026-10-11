@@ -147,15 +147,28 @@ export const CURATED: Record<string, RouteDoc> = {
     responses: { '400': { description: 'Missing chatId or selectedButtonID' } },
   },
   'POST /api/send/link-custom-preview': {
-    summary: 'Send a link with a custom preview',
+    summary: 'Send a link with a custom preview card (title, description and image you supply)',
     tag: TAGS.chatting,
     body: {
       session: { type: 'string' },
       chatId: { type: 'string' },
-      url: { type: 'string' },
-      title: { type: 'string' },
-      description: { type: 'string' },
-      picture: { type: 'object' },
+      text: { type: 'string', description: 'Message text; preview.url is appended when it is not already in it' },
+      preview: {
+        type: 'object',
+        properties: {
+          url: { type: 'string' },
+          title: { type: 'string' },
+          description: { type: 'string' },
+          image: {
+            description: 'Thumbnail: an http(s) URL, a data URL / base64 string, or { url } / { data }',
+            oneOf: [{ type: 'string' }, { type: 'object' }],
+          },
+        },
+      },
+      linkPreviewHighQuality: { type: 'boolean', description: 'Upload the thumbnail as a high-quality preview' },
+      reply_to: { type: 'string' },
+      url: { type: 'string', description: 'Older flat form of preview.url' },
+      title: { type: 'string', description: 'Older flat form of preview.title' },
     },
   },
   'POST /api/{session}/messages/send-bulk': {
@@ -411,16 +424,28 @@ export const CURATED: Record<string, RouteDoc> = {
     tag: TAGS.templates,
   },
   'POST /api/sessions/{session}/templates/{id}/preview': {
-    summary: 'Render a template with values, without sending it',
+    summary:
+      'Render a template with values, without sending it. The answer lists missingVariables: ' +
+      'variables with no value, which stay as {{name}} in the text.',
     tag: TAGS.templates,
     body: { variables: { type: 'object' } },
   },
   'POST /api/sessions/{session}/templates/{id}/send': {
-    summary: 'Render a template and send it to a chat',
+    summary:
+      'Render a template and send it to a chat. Refused with 422 (listing missingVariables) while any ' +
+      '{{variable}} has no value, unless allowMissingVariables is true.',
     tag: TAGS.templates,
     body: {
       chatId: { type: 'string' },
       variables: { type: 'object' },
+      linkPreview: { type: 'boolean' },
+      allowMissingVariables: {
+        type: 'boolean',
+        description: 'Send even with unfilled variables (they go out as literal {{name}}). Default false.',
+      },
+    },
+    responses: {
+      '422': { description: 'Variables are missing; the body lists them in missingVariables' },
     },
   },
   'GET /api/sessions/{session}/webhooks': {

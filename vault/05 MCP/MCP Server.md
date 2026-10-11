@@ -114,9 +114,15 @@ Dashboard equivalent: **Session settings → MCP Tools** ([[Dashboard]]).
 - **Descriptor** — `name`, `description`, `inputSchema` (Zod), `tier: 'read' | 'write'`,
   `destructive?`, `idempotent?`, `sessionScoped?`, `category?`, `resultDisposition`, `handler`.
   MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`) are derived from these.
-- **Results** (`tool-result.ts`) — `smartToolResult` inlines text payloads under **4 KB** and wraps
-  larger ones in a `resource` with a base64 blob; `jsonToolResult` for compact JSON. Errors never leak
-  stack traces.
+- **Results** (`tool-result.ts`) — every result is one plain `text` block. Results over 4 KB used to be
+  wrapped in an embedded `resource` (base64 blob under an unpublished `mcp://toolResult/...` URI);
+  Claude's client rejected that shape, so any history page past a few messages failed. Above
+  `MCP_MAX_RESULT_BYTES` (default 16 MiB) the call answers a `ResultTooLarge` error instead.
+  `jsonToolResult` for compact JSON. Errors never leak stack traces.
+- **Redaction** — every tool result passes through `redactWireSecrets` (`core/utils/redact.ts`):
+  media keys, file hashes, thumbnails, waveforms and message secrets are stripped, binary leaves are
+  summarised as `<N bytes>`, structure (`key.id`, captions, `pushName`) is kept. The stdio transport
+  (`stdio.ts`) uses the same formatting and offers the same session-scoped tools as HTTP.
 
 ## Connecting
 

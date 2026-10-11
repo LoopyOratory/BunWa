@@ -201,7 +201,8 @@ export async function resolveAndPinFetch(rawUrl: string, init?: RequestInit): Pr
     for (let hop = 0; hop < 5; hop++) {
       const res: any = await fetch(url, {
         ...init,
-        signal: controller.signal,
+        // Honour the caller's own deadline as well as the guard's.
+        signal: init?.signal ? AbortSignal.any([controller.signal, init.signal]) : controller.signal,
         redirect: 'manual',
       });
 

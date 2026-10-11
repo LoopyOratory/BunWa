@@ -72,6 +72,9 @@ const fakeTemplates = {
   extractVariables(text: string) {
     return Array.from(text.matchAll(/\{\{(\w+)\}\}/g)).map((m) => m[1]);
   },
+  // The real missing-variable checks, running over this stub's preview/extract.
+  missingVariables: TemplateService.prototype.missingVariables,
+  renderForSend: TemplateService.prototype.renderForSend,
 };
 
 function tool(tools: ToolDescriptor[], name: string): ToolDescriptor {

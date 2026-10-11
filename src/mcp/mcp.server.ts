@@ -24,6 +24,7 @@ import { AuditService, AuditAction } from '../core/audit/audit.service';
 import { sendFailureMetadata } from '../core/audit/failure-reason';
 import { buildAllTools } from './tools';
 import { handleToolError, jsonToolResult, smartToolResult } from './tool-result';
+import { redactWireSecrets } from '../core/utils/redact';
 import { KeyRateLimiter, RateLimitError, readRateLimitConfig } from './mcp-rate-limit';
 
 const logger = pino({ name: 'McpServer' });
@@ -256,7 +257,10 @@ function buildServer(
 
           const credential = scopedSession ? 'session-key' : 'global-key';
           try {
-            const result = await tool.handler(input as never);
+            // Strip media keys, file hashes, thumbnails and other wire
+            // secrets: send results and raw message data carried them into
+            // agent transcripts and logs.
+            const result = redactWireSecrets(await tool.handler(input as never));
             auditToolCall(tool, input, credential, 'ok');
             return tool.resultDisposition === 'json'
               ? jsonToolResult(result as object)

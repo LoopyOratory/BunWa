@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import type { SessionManager } from '../../core/manager.core';
 import type { ToolDescriptor } from '../tool-descriptor';
+import { compactMessage, compactMessages } from './message-format';
 
 const sessionId = z
   .string()
@@ -27,7 +28,8 @@ export function chatTools(manager: SessionManager): ToolDescriptor[] {
       name: 'ChatGetMessages',
       description:
         'Get messages from a chat, newest first, with pagination. One page is 50 messages by default: ' +
-        'pass limit (up to 1000) and offset to page through history, one page at a time.',
+        'pass limit (up to 1000) and offset to page through history, one page at a time. ' +
+        'Messages come back compact (no raw protocol data); set includeRaw for it.',
       tier: 'read',
       category: 'chat',
       sessionScoped: true,
@@ -37,14 +39,19 @@ export function chatTools(manager: SessionManager): ToolDescriptor[] {
         limit: z.number().int().min(1).max(1000).optional().describe('Messages per page, up to 1000 (default 50)'),
         offset: z.number().int().min(0).optional().describe('Messages to skip before this page (default 0), for example 50 for the second page'),
         downloadMedia: z.boolean().optional().describe('Whether to download media attachments (default false)'),
+        includeRaw: z
+          .boolean()
+          .optional()
+          .describe('Include each message\'s raw protocol data (_data). Large; off by default'),
       }),
       handler: async (input) => {
         const session = await getSession(manager, input.sessionId);
-        return (session as any).getChatMessages(
+        const messages = await (session as any).getChatMessages(
           input.chatId,
           { limit: input.limit ?? 50, offset: input.offset ?? 0, downloadMedia: input.downloadMedia ?? false },
           {}
         );
+        return compactMessages(messages, input.includeRaw === true);
       },
     },
     {
@@ -56,11 +63,16 @@ export function chatTools(manager: SessionManager): ToolDescriptor[] {
       inputSchema: z.object({
         sessionId,
         chatId: z.string().describe('Chat JID containing the message'),
-        messageId: z.string().describe('ID of the message to fetch'),
+        messageId: z.string().describe('ID of the message to fetch: the bare ID a send returns, or the full serialized ID'),
+        includeRaw: z
+          .boolean()
+          .optional()
+          .describe('Include the raw protocol data (_data). Off by default'),
       }),
       handler: async (input) => {
         const session = await getSession(manager, input.sessionId);
-        return (session as any).getChatMessage(input.chatId, input.messageId, {});
+        const message = await (session as any).getChatMessage(input.chatId, input.messageId, {});
+        return compactMessage(message, input.includeRaw === true);
       },
     },
     {
@@ -89,7 +101,7 @@ export function chatTools(manager: SessionManager): ToolDescriptor[] {
       inputSchema: z.object({
         sessionId,
         chatId: z.string().describe('Chat JID containing the message'),
-        messageId: z.string().describe('ID of the message to pin'),
+        messageId: z.string().describe('ID of the message to pin: the bare ID a send returns (key.id) or the full serialized ID from ChatGetMessages'),
         duration: z.number().int().min(1).optional().describe('Pin duration in seconds (default 7)'),
       }),
       handler: async (input) => {

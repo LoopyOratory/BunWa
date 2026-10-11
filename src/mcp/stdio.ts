@@ -29,13 +29,10 @@ import { CryptoHasher } from 'bun';
 import { configureContainer } from '../di/container';
 import { SessionManager } from '../core/manager.core';
 import { ToolRegistryService } from './tool-registry.service';
-import { sessionTools } from './tools/session.tools';
-import { messageTools } from './tools/message.tools';
-import { contactTools } from './tools/contact.tools';
-import { chatTools } from './tools/chat.tools';
-import { statusTools } from './tools/status.tools';
-import { presenceTools } from './tools/presence.tools';
+import { buildAllTools } from './tools';
 import { isToolAllowed } from './mcp.server';
+import { handleToolError, jsonToolResult, smartToolResult } from './tool-result';
+import { redactWireSecrets } from '../core/utils/redact';
 
 const sessionName = process.env.BUNWA_SESSION;
 const mcpKey = process.env.BUNWA_MCP_KEY;
@@ -65,15 +62,10 @@ if (!config?.mcp?.apiKeyHash || config.mcp.apiKeyHash !== providedHash) {
   process.exit(1);
 }
 
-// Build the same tool set as the HTTP server, auto-scoped to this session
-const tools = [
-  ...sessionTools(manager),
-  ...messageTools(manager),
-  ...contactTools(manager),
-  ...chatTools(manager),
-  ...statusTools(manager),
-  ...presenceTools(manager),
-];
+// The same tools the HTTP server offers a session-scoped key: every
+// session-scoped tool, auto-scoped to this key's session. Global tools
+// (SessionList and friends) stay out, exactly as over HTTP.
+const tools = buildAllTools(manager).filter((tool) => tool.sessionScoped);
 const registry = new ToolRegistryService(tools);
 
 const server = new McpServer(
@@ -105,12 +97,21 @@ for (const tool of registry.list()) {
       // Check per-session policy (allow/deny/destructive)
       const { allowed, reason } = isToolAllowed(tool, config?.mcp);
       if (!allowed) {
-        return {
-          content: [{ type: 'text', text: JSON.stringify({ success: false, name: 'PermissionDenied', message: reason || 'Tool not allowed' }) }],
-          isError: true,
-        };
+        return jsonToolResult(
+          { success: false, name: 'PermissionDenied', message: reason || 'Tool not allowed' },
+          true,
+        );
       }
-      return tool.handler(input as never);
+      // Same result handling as the HTTP server: a valid MCP result (the raw
+      // handler value is not one), wire secrets stripped, errors mapped.
+      try {
+        const result = redactWireSecrets(await tool.handler(input as never));
+        return tool.resultDisposition === 'json'
+          ? jsonToolResult(result as object)
+          : smartToolResult(result as object);
+      } catch (error) {
+        return handleToolError(error);
+      }
     },
   );
 }

@@ -10,6 +10,7 @@ import { sendFailureMetadata } from '../core/audit/failure-reason';
 import { AuditService, AuditAction } from '../core/audit/audit.service';
 import { isClientFacingError } from '../core/exceptions';
 import { getChatMessagesViaEngine } from './chats.routes';
+import { redactWireSecrets } from '../core/utils/redact';
 
 // Get session name from body for policy enforcement. `validatedBody` is set
 // by policiesMiddleware for scoped principals (before route body middleware
@@ -37,7 +38,10 @@ async function sendAndAudit<T>(sessionName: string | undefined, action: string, 
       sessionName,
       metadata: { action },
     });
-    return result;
+    // The engine returns the raw protocol message: media keys, file hashes,
+    // thumbnails. Callers keep the structure (key.id, message.*, status) but
+    // never need the secrets.
+    return redactWireSecrets(result);
   } catch (error: any) {
     container.resolve(AuditService).logWarn(AuditAction.MESSAGE_FAILED, {
       sessionName,
@@ -64,6 +68,9 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
         chatId: body.chatId,
         text: body.text,
         reply_to: body.reply_to,
+        mentions: body.mentions,
+        linkPreview: body.linkPreview,
+        linkPreviewHighQuality: body.linkPreviewHighQuality,
       }));
       return c.json(result);
     }
@@ -249,6 +256,12 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
         const result = await sendAndAudit(body.session, 'sendLinkCustomPreview', () => (session as any).sendLinkCustomPreview?.({
           session: body.session,
           chatId: body.chatId,
+          // WAHA shape: text + preview { url, title, description, image }.
+          text: body.text,
+          preview: body.preview,
+          linkPreviewHighQuality: body.linkPreviewHighQuality,
+          reply_to: body.reply_to,
+          // Older flat shape, still accepted.
           url: body.url,
           title: body.title,
           body: body.bodyText,
@@ -496,7 +509,7 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
         offset,
         downloadMedia,
       });
-      return c.json(messages);
+      return c.json(redactWireSecrets(messages));
     }
   );
 

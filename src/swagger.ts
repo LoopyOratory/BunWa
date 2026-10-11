@@ -364,6 +364,13 @@ export function buildOpenApiSpec(routes?: RouteLike[]): any {
                     session: { type: 'string', example: 'default' },
                     chatId: { type: 'string', example: '1234567890@c.us' },
                     text: { type: 'string', example: 'Hello World!' },
+                    reply_to: { type: 'string', description: 'Message to quote: the bare ID or the serialized ID' },
+                    mentions: { type: 'array', items: { type: 'string' } },
+                    linkPreview: {
+                      type: 'boolean',
+                      description: 'A link in the text gets a preview card read from the page (default). false sends a bare link.',
+                    },
+                    linkPreviewHighQuality: { type: 'boolean', description: 'Upload the preview thumbnail in high quality' },
                   },
                 },
               },
@@ -1002,8 +1009,10 @@ export function buildOpenApiSpec(routes?: RouteLike[]): any {
                       required: ['name', 'options'],
                       properties: {
                         name: { type: 'string', description: 'Poll question' },
-                        options: { type: 'array', items: { type: 'string' }, description: 'Poll choices (at least one)' },
-                        multipleAnswers: { type: 'boolean', description: 'Allow selecting more than one option' },
+                        options: { type: 'array', items: { type: 'string' }, description: 'Poll choices: 1 to 12, unique' },
+                        values: { type: 'array', items: { type: 'string' }, description: 'Same as options (Baileys / MCP naming)' },
+                        multipleAnswers: { type: 'boolean', description: 'Allow selecting any number of options' },
+                        selectableCount: { type: 'integer', minimum: 1, description: 'Exact number of options a voter may pick' },
                       },
                     },
                     reply_to: { type: 'string' },
@@ -1071,7 +1080,10 @@ export function buildOpenApiSpec(routes?: RouteLike[]): any {
       '/api/sendLinkPreview': {
         post: {
           tags: ['📤 Chatting'],
-          summary: 'Send a link preview',
+          summary: 'Send a link with a preview card',
+          description:
+            'Sends the URL (with title as the first line, when given) and a preview card built from the page\'s Open Graph tags: ' +
+            'title, description and thumbnail. When the page cannot be read, the card shows title (or the host name) and the link.',
           operationId: 'sendLinkPreview',
           security: [{ apiKey: [] }],
           requestBody: {
@@ -1259,7 +1271,10 @@ export function buildOpenApiSpec(routes?: RouteLike[]): any {
                   properties: {
                     session: { type: 'string' },
                     chatId: { type: 'string' },
-                    messageId: { type: 'string' },
+                    messageId: {
+                      type: 'string',
+                      description: 'The bare ID a send returns (key.id, e.g. 3EB0D63EFF9D902C423C5F) or the serialized ID (false_123@c.us_3EB0...)',
+                    },
                     reaction: { type: 'string', description: 'Emoji, or empty string to remove the reaction', example: '👍' },
                   },
                 },

@@ -177,18 +177,27 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
     },
     {
       name: 'MessageSendPoll',
-      description: 'Send a poll message to a chat.',
+      description:
+        'Send a poll message to a chat. Give the question as poll.name and the choices as poll.options ' +
+        '(poll.values is accepted too). By default one choice can be picked; set multipleAnswers true to allow ' +
+        'any number, or selectableCount for an exact limit.',
       tier: 'write',
       category: 'message',
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
         chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
-        poll: z.object({
-          name: z.string().describe('Poll question'),
-          values: z.array(z.string()).min(2).describe('Poll options (2-12)'),
-          selectableCount: z.number().int().min(1).optional().describe('How many options can be selected'),
-        }),
+        poll: z
+          .object({
+            name: z.string().min(1).describe('Poll question'),
+            options: z.array(z.string().min(1)).min(1).max(12).optional().describe('Poll choices (1-12, unique)'),
+            values: z.array(z.string().min(1)).min(1).max(12).optional().describe('Same as options'),
+            multipleAnswers: z.boolean().optional().describe('Allow picking more than one choice'),
+            selectableCount: z.number().int().min(1).optional().describe('Exact number of choices a voter may pick'),
+          })
+          .refine((poll) => (poll.options?.length ?? 0) > 0 || (poll.values?.length ?? 0) > 0, {
+            message: 'poll.options (or poll.values) needs at least one choice',
+          }),
       }),
       handler: async (input) => {
         const session = await getSession(manager, input.sessionId);
@@ -224,7 +233,10 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
     },
     {
       name: 'MessageSendLinkPreview',
-      description: 'Send a message with a link preview.',
+      description:
+        'Send a link with a preview card (title, description and thumbnail read from the page\'s Open Graph tags). ' +
+        'title, if given, is sent as the first line of the text and used as the card title when the page cannot be read. ' +
+        'Links in MessageSendText get the same card automatically.',
       tier: 'write',
       category: 'message',
       sessionScoped: true,
@@ -253,7 +265,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       inputSchema: z.object({
         sessionId,
         chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
-        messageId: z.string().describe('ID of the message to reply to'),
+        messageId: z.string().describe('ID of the message to reply to: the bare ID a send returns (key.id) or the full serialized ID from ChatGetMessages'),
         text: z.string().min(1).describe('Reply text content'),
       }),
       handler: async (input) => {
@@ -296,7 +308,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       inputSchema: z.object({
         sessionId,
         chatId: z.string().describe('Chat JID containing the message'),
-        messageId: z.string().describe('ID of the message to react to'),
+        messageId: z.string().describe('ID of the message to react to: the bare ID a send returns (key.id) or the full serialized ID from ChatGetMessages'),
         reaction: z.string().describe('Emoji to react with. Empty string removes the reaction.'),
       }),
       handler: async (input) => {
@@ -319,7 +331,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       inputSchema: z.object({
         sessionId,
         chatId: z.string().describe('Destination chat: a JID (628123456789@c.us, groupId@g.us) or a WhatsApp username (handle or @handle)'),
-        messageId: z.string().describe('ID of the message'),
+        messageId: z.string().describe('ID of the message: the bare ID a send returns (key.id) or the full serialized ID from ChatGetMessages'),
         star: z.boolean().describe('true to star, false to unstar'),
       }),
       handler: async (input) => {

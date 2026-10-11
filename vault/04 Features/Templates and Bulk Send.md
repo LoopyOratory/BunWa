@@ -30,8 +30,8 @@ templates(id, sessionId, name, body, header, footer, createdAt, updatedAt,
 | `POST /api/sessions/:session/templates` | create/replace by name |
 | `DELETE /api/sessions/:session/templates/:id` | |
 | `PUT /api/sessions/:session/templates/:id` | edit name, body, header or footer (only the fields sent change) |
-| `POST /api/sessions/:session/templates/:id/preview` | render with `{variables}` and see the result, without sending |
-| `POST /api/sessions/:session/templates/:id/send` | render and send to `{chatId, variables}`; the id may be a template **name** |
+| `POST /api/sessions/:session/templates/:id/preview` | render with `{variables}` and see the result, without sending; `missingVariables` lists the ones with no value |
+| `POST /api/sessions/:session/templates/:id/send` | render and send to `{chatId, variables}`; the id may be a template **name**. **422** with `missingVariables` while any variable has no value (null and blank count), unless `allowMissingVariables: true` |
 
 **Variables**: `{{variable}}` placeholders, including nested dotted paths (`{{contact.city}}`), plus
 `render()` / `preview()` and `extractVariables()` so the dashboard can show which fields a template

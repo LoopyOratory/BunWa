@@ -4,6 +4,7 @@ import { injectable } from 'tsyringe';
 import { TemplateRepositoryFactory } from './TemplateRepositoryFactory';
 import type { ITemplateRepository } from './ITemplateRepository';
 import type { Template, TemplateCreateDto, TemplateUpdateDto } from './template.types';
+import { UnprocessableEntityException } from '../exceptions';
 
 export type { Template, TemplateCreateDto, TemplateUpdateDto } from './template.types';
 
@@ -12,6 +13,37 @@ const logger = pino({ name: 'TemplateService' });
 const NAME_MAX_LENGTH = 100;
 const BODY_MAX_LENGTH = 4096;
 const HEADER_FOOTER_MAX_LENGTH = 1024;
+
+/** A template's full text: header, body and footer, as preview() joins them. */
+export function templateText(template: Pick<Template, 'header' | 'body' | 'footer'>): string {
+  return [template.header, template.body, template.footer].filter(Boolean).join('\n');
+}
+
+/** Resolve `order` or `customer.name` against the supplied values; null counts as absent. */
+function lookupVariable(variables: Record<string, unknown>, name: string): unknown {
+  let value: unknown = variables;
+  for (const key of name.split('.')) {
+    if (value === null || value === undefined || typeof value !== 'object') {
+      return undefined;
+    }
+    value = (value as Record<string, unknown>)[key];
+  }
+  return value === null ? undefined : value;
+}
+
+/** A template send was refused because some {{variables}} had no value. */
+export class MissingTemplateVariablesError extends UnprocessableEntityException {
+  constructor(
+    templateName: string,
+    public readonly missingVariables: string[],
+  ) {
+    super(
+      `Template '${templateName}' needs values for: ${missingVariables.join(', ')}. ` +
+        'Pass them in `variables`, or set allowMissingVariables to send the placeholders as they are.',
+    );
+    this.name = 'MissingTemplateVariablesError';
+  }
+}
 
 function generateId(): string {
   return crypto.randomUUID();
@@ -230,14 +262,37 @@ export class TemplateService {
    */
   render(templateString: string, variables: Record<string, unknown>): string {
     return templateString.replace(/\{\{(\w+(?:\.\w+)*)\}\}/g, (match, varName: string) => {
-      const keys = varName.split('.');
-      let value: unknown = variables;
-      for (const key of keys) {
-        if (value === null || value === undefined) return match;
-        value = (value as Record<string, unknown>)[key];
-      }
-      return value === undefined || value === null ? match : String(value);
+      const value = lookupVariable(variables, varName);
+      return value === undefined ? match : String(value);
     });
+  }
+
+  /**
+   * The variables a template references that `variables` does not supply.
+   * A null or empty-string value counts as missing: both would send a gap.
+   */
+  missingVariables(template: Template, variables: Record<string, unknown>): string[] {
+    return this.extractVariables(templateText(template)).filter((name) => {
+      const value = lookupVariable(variables, name);
+      return value === undefined || (typeof value === 'string' && value.trim() === '');
+    });
+  }
+
+  /**
+   * Render a template for sending. Unlike preview(), a variable the caller did
+   * not supply is an error rather than a literal `{{name}}` in a customer's
+   * chat — which is what used to go out. Pass allowMissing to send anyway.
+   */
+  renderForSend(
+    template: Template,
+    variables: Record<string, unknown>,
+    options: { allowMissing?: boolean } = {},
+  ): string {
+    const missing = this.missingVariables(template, variables);
+    if (missing.length > 0 && !options.allowMissing) {
+      throw new MissingTemplateVariablesError(template.name, missing);
+    }
+    return this.preview(template, variables);
   }
 
   /**

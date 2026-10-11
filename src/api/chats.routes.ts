@@ -4,6 +4,7 @@ import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanSession, Action, FromParam } from '../middleware/policies';
 import { workingSessionResolver } from '../middleware/session-resolver';
 import { NotFoundException } from '../core/exceptions';
+import { redactWireSecrets } from '../core/utils/redact';
 
 /**
  * Single implementation for chat message history, shared by
@@ -117,7 +118,9 @@ export function createChatsRouter(): Hono<{ Variables: { session: any; body: any
         offset,
         downloadMedia,
       });
-      return c.json(messages);
+      // _data keeps its shape (the dashboard reads pushName etc. from it);
+      // only media keys, hashes and thumbnails are stripped.
+      return c.json(redactWireSecrets(messages));
     }
   );
 
@@ -141,7 +144,7 @@ export function createChatsRouter(): Hono<{ Variables: { session: any; body: any
       const chatId = c.req.param('chatId');
       const messageId = c.req.param('messageId');
       const message = await (session as any).getChatMessage(chatId, messageId, {});
-      return c.json(message);
+      return c.json(redactWireSecrets(message));
     }
   );
 

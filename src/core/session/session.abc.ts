@@ -1243,6 +1243,11 @@ export abstract class WhatsappSession {
     this.sentMessageIds.set(id, true);
   }
 
+  /** True when this session sent the message through the API recently. */
+  protected wasSentByApi(id: string): boolean {
+    return !!id && this.sentMessageIds.has(id);
+  }
+
   protected getMessageSource(id: string): MessageSource {
     if (!id) {
       return MessageSource.APP;

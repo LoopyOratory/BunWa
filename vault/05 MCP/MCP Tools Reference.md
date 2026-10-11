@@ -54,8 +54,8 @@ the MCP could neither, so an agent could send a picture but not read one back. T
 served under `/api` and needs the API key, so these return the bytes as base64 as well: an agent
 can pass the result straight to `MessageSendImage`, `MessageSendFile`, `MessageSendVoice` or
 `MessageSendVideo`, whose descriptions now say they accept a URL, a data URL, a base64 string or a
-local path. Large results arrive as an MCP resource (`mcp://toolResult/<id>.json`) rather than
-inline text, which is how the rest of the registry behaves.
+local path. Results come back as plain text like every other tool (embedded resources were
+dropped — clients rejected them); `maxBytes` keeps a download within `MCP_MAX_RESULT_BYTES`.
 
 | Tool | Tier | Notes |
 |---|---|---|
@@ -84,15 +84,15 @@ inline text, which is how the rest of the registry behaves.
 | `MessageSendVoice` | write | |
 | `MessageSendVideo` | write | |
 | `MessageSendLocation` | write | |
-| `MessageSendPoll` | write | |
+| `MessageSendPoll` | write | `poll.options` or `poll.values` (1–12, unique); `multipleAnswers` or `selectableCount` |
 | `MessageSendContactVCard` | write | |
-| `MessageSendLinkPreview` | write | |
+| `MessageSendLinkPreview` | write | card from the page's Open Graph tags; title + link card if the page can't be read |
 | `MessageSendButtons` | write | header media needs Plus |
 | `MessageSendList` | write | |
 | `MessageReply` | write | quoted reply |
 | `MessageForward` | write | |
-| `MessageReact` | write | |
-| `MessageStar` | write | |
+| `MessageReact` | write | bare ID (`key.id` from a send) or serialized ID |
+| `MessageStar` | write | bare or serialized ID |
 | `MessageMarkRead` | write | |
 | `MessageStartTyping` | write | |
 | `MessageStopTyping` | write | |
@@ -103,8 +103,8 @@ inline text, which is how the rest of the registry behaves.
 
 | Tool | Tier | Category | Notes |
 |---|---|---|---|
-| `ChatGetMessages` | read | chat | history for a chat |
-| `ChatGetMessage` | read | chat | single message |
+| `ChatGetMessages` | read | chat | history for a chat; compact messages (no `_data`) unless `includeRaw` |
+| `ChatGetMessage` | read | chat | single message; compact unless `includeRaw` |
 | `ChatMarkMessagesRead` | write | chat | |
 | `ChatPinMessage` | write | chat | pin / unpin |
 | `ChatSetLabels` | write | chat | assign labels (colour caveat — [[Channels and Labels]]) |
@@ -152,8 +152,8 @@ inline text, which is how the rest of the registry behaves.
 | `TemplateGet` | read | ✅ | by id or name |
 | `TemplateCreate` | write | ✅ | |
 | `TemplateUpdate` | write | ✅ | id only; only the fields sent change |
-| `TemplatePreview` | read | ✅ | render without sending |
-| `TemplateSend` | write | ✅ | render + send to a chat; session must be running |
+| `TemplatePreview` | read | ✅ | render without sending; lists `missingVariables` |
+| `TemplateSend` | write | ✅ | render + send; refuses while a `{{variable}}` has no value unless `allowMissingVariables` |
 | `TemplateDelete` | write ⚠️ | ✅ | needs `destructiveOps: true` |
 
 ## Category gaps

@@ -18,22 +18,27 @@ Sending and manipulating messages. This is the largest single route module:
 
 | Route | Payload | Notes |
 |---|---|---|
-| `POST /api/sendText` | `chatId`, `text`, `linkPreview?`, `mentions?` | link previews can be customised via `/api/send/link-custom-preview` |
+| `POST /api/sendText` | `chatId`, `text`, `linkPreview?`, `linkPreviewHighQuality?`, `mentions?` | a link gets a preview card built from the page's Open Graph tags (`core/utils/link-preview.ts`; Baileys' own builder needs `link-preview-js`, which is not installed). `linkPreview: false` sends a bare link. Custom cards via `/api/send/link-custom-preview` |
 | `POST /api/sendImage` | `file` (URL/base64/data-URL) + `caption` | media pipeline handles download + mimetype |
 | `POST /api/sendFile` | `file`, `filename` | documents, any mimetype in the allow-list |
 | `POST /api/sendVoice` | `file`, `convert` | `convert=true` runs **ffmpeg** → OGG/Opus (32 kbps, 48 kHz mono), which is the only format WhatsApp voice notes accept |
 | `POST /api/sendVideo` | `file`, `convert?` | video conversion is **not** implemented — send already-encoded files |
 | `POST /api/sendLocation` | `latitude`, `longitude` | sending works; ⚠️ the WAHA-shaped **response** has `location: null` because the `waproto` extractor is a stub ([[Known Gaps and Stubs]]) |
-| `POST /api/sendPoll` | `poll{}` | options + multiple-answers flag |
+| `POST /api/sendPoll` | `poll{}` | `options` (or `values`), 1–12 unique; `multipleAnswers` or `selectableCount` |
 | `POST /api/sendPollVote` | `pollMessageId`, `votes` | |
 | `POST /api/sendContactVcard` | `contacts[]` | sending works; ⚠️ same `waproto` stub → `vCards: null` in the response |
-| `POST /api/sendLinkPreview` | `url` + overrides | |
+| `POST /api/sendLinkPreview` | `url`, `title?` | card from the page; falls back to a `title` (or host) + link card when the page can't be read |
 | `POST /api/sendButtons` | `buttons[]`, `headerImage?` | header image needs Plus (`uploadMedia`) |
 | `POST /api/send/buttons/reply` | button reply | |
-| `POST /api/sendList` | `sections[]` | native-flow list node built inline in the engine |
+| `POST /api/sendList` | `sections[]` | native-flow list node built inline in the engine; buttons and lists go out via `relayMessage`, so the engine emits `messages.upsert` itself to record them in history |
 | `POST /api/sendSticker` | webp/png | routed through the media pipeline with `sendMediaAsSticker` |
 
 All of these take `session` **in the body** (WAHA dialect) — see [[REST API#Two path dialects]].
+
+Send results keep the raw Baileys shape (`key`, `message`, `status`) with wire secrets stripped
+(`redactWireSecrets`: media keys, hashes, thumbnails). Message actions (`reaction`, `star`, pin,
+delete, edit, `sendSeen`) accept the bare ID a send returns (`key.id`) as well as the serialized
+`false_123@c.us_ID` form; the engine completes a bare ID from the stored message or the chat.
 
 ## Acting on messages
 

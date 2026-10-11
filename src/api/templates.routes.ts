@@ -1,7 +1,14 @@
 import { Hono } from 'hono';
 import { container } from 'tsyringe';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
-import { TemplateService, type Template } from '../core/templates/template.service';
+import {
+  MissingTemplateVariablesError,
+  TemplateService,
+  templateText,
+  type Template,
+} from '../core/templates/template.service';
+import { redactWireSecrets } from '../core/utils/redact';
+import { isClientFacingError } from '../core/exceptions';
 import { workingSessionResolver } from '../middleware/session-resolver';
 
 export function createTemplatesRouter(): Hono<{ Variables: { session: unknown } }> {
@@ -76,7 +83,10 @@ export function createTemplatesRouter(): Hono<{ Variables: { session: unknown } 
       const variables = (body?.variables ?? {}) as Record<string, unknown>;
       return c.json({
         text: svc.preview(template, variables),
-        variables: svc.extractVariables([template.header, template.body, template.footer].filter(Boolean).join('\n')),
+        variables: svc.extractVariables(templateText(template)),
+        // Variables with no value stay as {{name}} in the preview text; a
+        // send with any of these missing is refused (see the send route).
+        missingVariables: svc.missingVariables(template, variables),
       });
     } catch (err) {
       return c.json({ statusCode: 404, message: (err as Error).message }, 404);
@@ -99,7 +109,11 @@ export function createTemplatesRouter(): Hono<{ Variables: { session: unknown } 
     const svc = container.resolve(TemplateService);
     try {
       const template = await resolveTemplate(svc, sessionName, id);
-      const text = svc.preview(template, (body?.variables ?? {}) as Record<string, unknown>);
+      // Refuses to send while a {{variable}} has no value, instead of putting
+      // the literal placeholder in a customer's chat.
+      const text = svc.renderForSend(template, (body?.variables ?? {}) as Record<string, unknown>, {
+        allowMissing: body?.allowMissingVariables === true,
+      });
       const session = c.get('session') as { sendText: (request: unknown) => Promise<unknown> };
       const sent = await session.sendText({
         session: sessionName,
@@ -107,8 +121,21 @@ export function createTemplatesRouter(): Hono<{ Variables: { session: unknown } 
         text,
         ...(body?.linkPreview !== undefined ? { linkPreview: body.linkPreview } : {}),
       });
-      return c.json({ ...(sent as object), template: { id: template.id, name: template.name }, text }, 201);
+      return c.json(
+        { ...(redactWireSecrets(sent) as object), template: { id: template.id, name: template.name }, text },
+        201,
+      );
     } catch (err) {
+      if (err instanceof MissingTemplateVariablesError) {
+        return c.json(
+          { statusCode: 422, message: err.message, missingVariables: err.missingVariables },
+          422,
+        );
+      }
+      if (isClientFacingError(err)) {
+        // Sending-policy blocks (429), username lookups (422) ... keep their status.
+        throw err;
+      }
       return c.json({ statusCode: 400, message: (err as Error).message }, 400);
     }
   });
@@ -128,7 +155,7 @@ export function createTemplatesRouter(): Hono<{ Variables: { session: unknown } 
   function withVariables(svc: TemplateService, template: Template) {
     return {
       ...template,
-      variables: svc.extractVariables([template.header, template.body, template.footer].filter(Boolean).join('\n')),
+      variables: svc.extractVariables(templateText(template)),
     };
   }
 

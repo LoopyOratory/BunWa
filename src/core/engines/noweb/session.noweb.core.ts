@@ -87,6 +87,14 @@ import { QR } from '../../QR';
 import { AckToStatus, StatusToAck } from '../../utils/acks';
 import { pairs } from '../../../utils/pairs';
 import { parseMessageIdSerialized } from '../../utils/ids';
+import { normalizePoll } from '../../utils/poll';
+import {
+  buildCustomLinkPreview,
+  buildLinkPreview,
+  type BuildLinkPreviewOptions,
+  type CustomPreviewInput,
+  type LinkPreviewInfo,
+} from '../../utils/link-preview';
 import { isJidNewsletter, normalizeJid, participantId, toCusFormat, toJID, JidFilter, jidsFromKey, isJidBroadcast } from '../../utils/jids';
 import { DistinctAck, DistinctMessages } from '../../utils/reactive';
 import { flipObject, splitAt } from '../../../helpers';
@@ -1494,13 +1502,12 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   async sendText(request: MessageTextRequest) {
     const chatId = await this.resolveAndGate(request.chatId);
     try {
-      const message = {
+      const message: any = {
         text: request.text,
         mentions: request.mentions?.map(toJID),
-        linkPreview: this.getLinkPreview(request),
+        linkPreview: await this.resolveLinkPreview(request.text, request),
       };
       const options: any = await this.getMessageOptions(request);
-      options.linkPreviewHighQuality = request.linkPreviewHighQuality;
       const result = await this.sock.sendMessage(chatId, message, options);
       this.policyRecord(chatId, false);
       return result;
@@ -1510,14 +1517,59 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     }
   }
 
+  /**
+   * The full protocol key for a message, from either ID form a caller holds:
+   *  - the serialized form `{fromMe}_{chat}_{id}[_{participant}]`, which
+   *    already carries everything, or
+   *  - the bare WhatsApp ID every send returns as `key.id` (3EB0D63EFF9D...).
+   * The bare form used to reach the protocol with no chat and no direction:
+   * reactions crashed on it, and pins, deletes and edits had no chat to go to.
+   * It is completed from the stored message when there is one (which also
+   * gives the right LID/PN address and group participant), otherwise from the
+   * chat the caller named and whether this API sent the message.
+   */
+  protected async resolveMessageKey(
+    chatId: string | undefined,
+    messageId: string,
+  ): Promise<WAMessageKey> {
+    if (!messageId) {
+      throw new UnprocessableEntityException('messageId is required');
+    }
+    const parsed = parseMessageIdSerialized(messageId);
+    if (parsed.remoteJid) {
+      return parsed;
+    }
+    const id: string = parsed.id;
+    const chatJid = chatId
+      ? toJID(this.ensureSuffix(await this.resolveSendTarget(chatId)))
+      : undefined;
+    const stored = await Promise.resolve(this.store?.loadMessage(chatJid ?? '', id)).catch(
+      () => undefined,
+    );
+    if (stored?.key?.id) {
+      return {
+        remoteJid: stored.key.remoteJid ?? chatJid,
+        fromMe: !!stored.key.fromMe,
+        id: stored.key.id,
+        participant: stored.key.participant ?? undefined,
+      };
+    }
+    if (!chatJid) {
+      throw new UnprocessableEntityException(
+        `Message '${messageId}' was not found. Pass the chatId with it, or the full serialized message ID.`,
+      );
+    }
+    return { remoteJid: chatJid, fromMe: this.wasSentByApi(id), id };
+  }
+
   @Activity()
-  public deleteMessage(chatId: string, messageId: string) {
+  public async deleteMessage(chatId: string, messageId: string) {
     const jid = toJID(this.ensureSuffix(chatId));
-    const key = parseMessageIdSerialized(messageId);
+    const key = await this.resolveMessageKey(chatId, messageId);
     const options = {
       messageId: this.generateMessageID(),
     };
-    return this.sock.sendMessage(jid, { delete: key }, options);
+    return this.sock.sendMessage(key.remoteJid || jid, { delete: key }, options);
   }
 
   @Activity()
@@ -1526,10 +1578,10 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     messageId: string,
     request: EditMessageRequest,
   ) {
-    const jid = toJID(this.ensureSuffix(chatId));
-    const key = parseMessageIdSerialized(messageId);
+    const key = await this.resolveMessageKey(chatId, messageId);
+    const jid = key.remoteJid || toJID(this.ensureSuffix(chatId));
     const stored = await this.store
-      ?.loadMessage(key.remoteJid, key.id)
+      ?.loadMessage(key.remoteJid ?? '', key.id ?? '')
       .catch(() => null);
     const content = extractMessageContent(stored?.message);
     let editedMessage = undefined;
@@ -1567,15 +1619,14 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       mentions: request.mentions?.map(toJID),
       edit: key,
       editedMessage: editedMessage,
-      linkPreview: this.getLinkPreview(request),
-      linkPreviewHighQuality: request.linkPreviewHighQuality,
+      linkPreview: await this.resolveLinkPreview(request.text, request),
     };
     const options = {
       messageId: this.generateMessageID(),
     };
     if (isJidNewsletter(jid)) {
       // Newsletter edits reuse the original message ID
-      options.messageId = key.id;
+      options.messageId = key.id ?? options.messageId;
     }
     return await this.sock.sendMessage(jid, message, options);
   }
@@ -1606,21 +1657,12 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     if (!request.poll) {
       throw new UnprocessableEntityException('Missing poll data');
     }
+    const { name, values, selectableCount } = normalizePoll(request.poll);
     const requestPoll = request.poll;
-    if (!requestPoll.name || !requestPoll.options?.length) {
-      throw new UnprocessableEntityException(
-        'Poll requires name and at least one option',
-      );
-    }
-    const values = requestPoll.options.map((opt: any) =>
-      typeof opt === 'string' ? opt : opt.name,
-    );
     const poll = {
-      name: requestPoll.name,
-      values: values,
-      selectableCount: requestPoll.multipleAnswers
-        ? values.length
-        : 1,
+      name,
+      values,
+      selectableCount,
       messageSecret: requestPoll.messageSecret,
     };
     const message = { poll: poll };
@@ -1901,15 +1943,60 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   async sendLinkCustomPreview(
     request: MessageLinkCustomPreviewRequest,
   ): Promise<any> {
-    const chatId = toJID(this.ensureSuffix(await this.resolveSendTarget(request.chatId)));
-    const text = request.text || (request as any).body || '';
-    const msg: any = {
-      text: text,
-      linkPreview: true,
-      linkPreviewHighQuality: request.linkPreviewHighQuality,
+    const preview: CustomPreviewInput = {
+      ...((request as any).preview ?? {}),
     };
-    const options: any = await this.getMessageOptions(request);
-    return this.sock.sendMessage(chatId, msg, options);
+    // Legacy flat fields some callers still send instead of `preview`.
+    preview.url ??= (request as any).url;
+    preview.title ??= (request as any).title;
+    let text: string = request.text || (request as any).body || '';
+    if (preview.url && !text.includes(preview.url)) {
+      // WhatsApp attaches the card to a URL that appears in the text.
+      text = text ? `${text}\n${preview.url}` : preview.url;
+    }
+    if (!text) {
+      throw new UnprocessableEntityException('A link preview needs text or preview.url.');
+    }
+    const chatId = await this.resolveAndGate(request.chatId);
+    try {
+      const linkPreview = await buildCustomLinkPreview(text, preview, {
+        highQuality: request.linkPreviewHighQuality === true,
+        upload: this.sock?.waUploadToServer,
+        logger: this.logger,
+      });
+      const msg: any = { text, linkPreview: linkPreview ?? null };
+      const options: any = await this.getMessageOptions(request);
+      const result = await this.sock.sendMessage(chatId, msg, options);
+      this.policyRecord(chatId, false);
+      return result;
+    } catch (error) {
+      this.policyRecord(chatId, true);
+      throw error;
+    }
+  }
+
+  /**
+   * Record a message sent with relayMessage() the way sendMessage() records
+   * everything else. Baileys emits messages.upsert ('append') for its own
+   * sends, and that event is what stores the message in chat history and
+   * fires message.any; relayMessage() skips it. Buttons and lists go out
+   * through relayMessage() (they need extra binary nodes), so they were
+   * delivered but never appeared in history, and reading them back by ID
+   * returned null.
+   */
+  private emitOwnMessage(message: any): void {
+    const id = message?.key?.id;
+    if (!id) {
+      return;
+    }
+    this.saveSentMessageId(id);
+    process.nextTick(() => {
+      try {
+        this.sock?.ev?.emit('messages.upsert', { messages: [message], type: 'append' });
+      } catch (error) {
+        this.logger.warn({ error, id }, 'Could not record a sent interactive message');
+      }
+    });
   }
 
   protected async uploadMedia(
@@ -1936,6 +2023,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
         request.body,
         request.footer,
       );
+      this.emitOwnMessage(result);
       this.policyRecord(chatId, false);
       return result;
     } catch (error) {
@@ -1993,6 +2081,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
         messageId: fullMessage.key.id ?? undefined,
         additionalNodes: buildButtonBinaryNodes(chatId),
       });
+      this.emitOwnMessage(fullMessage);
       this.policyRecord(chatId, false);
       return fullMessage;
     } catch (error) {
@@ -2046,9 +2135,16 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     const chatId = await this.resolveAndGate(request.chatId);
     try {
       const text = request.title ? `${request.title}\n${request.url}` : request.url;
+      // `linkPreview: true` used to go straight to Baileys, which reads it as
+      // an (empty) preview object: no title, no thumbnail, no fetch. Build the
+      // card here, and fall back to a minimal title + link card rather than a
+      // bare link when the page cannot be read — the caller asked for a preview.
       const msg: any = {
         text: text,
-        linkPreview: true,
+        linkPreview: await this.resolveLinkPreview(text, request as any, {
+          fallbackTitle: request.title,
+          alwaysPreview: true,
+        }),
       };
       const options: any = await this.getMessageOptions(request);
       const result = await this.sock.sendMessage(chatId, msg, options);
@@ -2067,11 +2163,13 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     // Build message keys to mark as read
     let messageKeys: any[];
     if (request.messageIds?.length) {
-      messageKeys = request.messageIds.map((id) => ({
-        key: parseMessageIdSerialized(id),
-      }));
+      messageKeys = await Promise.all(
+        request.messageIds.map(async (id) => ({
+          key: await this.resolveMessageKey(request.chatId, id),
+        })),
+      );
     } else if (request.messageId) {
-      messageKeys = [{ key: parseMessageIdSerialized(request.messageId) }];
+      messageKeys = [{ key: await this.resolveMessageKey(request.chatId, request.messageId) }];
     } else {
       // Fetch recent unread messages from store
       const messages = await this.store.getMessagesByJid(
@@ -2163,8 +2261,8 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     messageId: string,
     duration: PinDuration,
   ): Promise<boolean> {
-    const jid = toJID(chatId);
-    const key = parseMessageIdSerialized(messageId);
+    const key = await this.resolveMessageKey(chatId, messageId);
+    const jid = key.remoteJid || toJID(chatId);
     await this.sock.sendMessage(jid, {
       pin: key,
       type: proto.PinInChat.Type.PIN_FOR_ALL,
@@ -2178,8 +2276,8 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     chatId: string,
     messageId: string,
   ): Promise<boolean> {
-    const jid = toJID(chatId);
-    const key = parseMessageIdSerialized(messageId);
+    const key = await this.resolveMessageKey(chatId, messageId);
+    const jid = key.remoteJid || toJID(chatId);
     await this.sock.sendMessage(jid, {
       pin: key,
       type: proto.PinInChat.Type.UNPIN_FOR_ALL,
@@ -2189,7 +2287,9 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async setReaction(request: MessageReactionRequest) {
-    const key = parseMessageIdSerialized(request.messageId);
+    // Accepts the bare ID every send returns as well as the serialized form;
+    // the bare form used to crash here with no chat to react in.
+    const key: any = await this.resolveMessageKey(request.chatId, request.messageId);
     if (isJidNewsletter(key.remoteJid)) {
       let serverId = Number(key.id);
       if (!serverId) {
@@ -2222,15 +2322,15 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   @Activity()
   async setStar(request: MessageStarRequest) {
-    const key = parseMessageIdSerialized(request.messageId);
+    const key = await this.resolveMessageKey(request.chatId, request.messageId);
     await this.sock.chatModify(
       {
         star: {
-          messages: [{ id: key.id, fromMe: key.fromMe }],
+          messages: [{ id: key.id ?? '', fromMe: !!key.fromMe }],
           star: request.star,
         },
       },
-      toJID(await this.resolveSendTarget(request.chatId)),
+      key.remoteJid || toJID(await this.resolveSendTarget(request.chatId)),
     );
   }
 
@@ -2942,7 +3042,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   public async sendTextStatus(status: TextStatus) {
     const message = {
       text: status.text,
-      linkPreview: this.getLinkPreview(status),
+      linkPreview: await this.resolveLinkPreview(status.text, status),
     };
     const jids = await this.prepareJidsForStatus(status.contacts);
     if (!status.id) {
@@ -4134,20 +4234,32 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     };
   }
 
-  protected getLinkPreview(request: any): any {
-    // NOWEB works this way
-    // If it's undefined - it'll generate it
-    // If it's false - it will not generate it
-    let linkPreview: boolean | undefined;
-    switch (request.linkPreview) {
-      case false:
-        linkPreview = false;
-        break;
-      case true:
-      default:
-        linkPreview = undefined;
+  /**
+   * The `linkPreview` value handed to Baileys with a text message.
+   *  - false: the caller turned previews off.
+   *  - a preview object: built here (see core/utils/link-preview.ts), because
+   *    Baileys' own builder needs the `link-preview-js` package, which is not
+   *    installed, so it silently produced nothing.
+   *  - null: no URL or nothing to show. null (not undefined) also stops Baileys
+   *    retrying through that missing package and logging a warning per send.
+   */
+  protected async resolveLinkPreview(
+    text: string | undefined,
+    request: { linkPreview?: boolean; linkPreviewHighQuality?: boolean },
+    extra: BuildLinkPreviewOptions = {},
+  ): Promise<false | LinkPreviewInfo | null> {
+    if (request.linkPreview === false) {
+      return false;
     }
-    return linkPreview;
+    if (!text) {
+      return null;
+    }
+    return buildLinkPreview(text, {
+      highQuality: request.linkPreviewHighQuality === true,
+      upload: this.sock?.waUploadToServer,
+      logger: this.logger,
+      ...extra,
+    });
   }
 
   protected generateMessageID() {
@@ -4485,6 +4597,16 @@ export function extractBody(message: any): string | null {
         }
       }
       body = selected ?? interactive?.body?.text ?? params ?? null;
+    }
+  }
+
+  // Interactive messages themselves (the buttons and lists this API sends):
+  // the visible text is the header title, body and footer.
+  if (!body) {
+    const interactive = (content as any).interactiveMessage;
+    if (interactive) {
+      const parts = [interactive.header?.title, interactive.body?.text, interactive.footer?.text];
+      body = parts.filter(Boolean).join('\n') || null;
     }
   }
 
