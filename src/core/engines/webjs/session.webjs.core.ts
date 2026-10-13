@@ -1159,6 +1159,12 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     if (typeof file === 'string') {
       return file;
     }
+    // Raw bytes (an upload reference resolves to { data: Buffer }). Checked
+    // first: a Buffer has .includes but no .split, so binary data containing
+    // a comma would otherwise crash the data-URL branch below.
+    if (file && typeof file === 'object' && Buffer.isBuffer(file.data)) {
+      return file.data;
+    }
     if (file && typeof file === 'object' && file.data) {
       const base64 = file.data.includes(',') ? file.data.split(',')[1] : file.data;
       return Buffer.from(base64, 'base64');
