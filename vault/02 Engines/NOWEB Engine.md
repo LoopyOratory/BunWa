@@ -50,7 +50,7 @@ Notable socket options (`getSocketConfig()`):
 - **Browser spoofing** via `Browsers.macOS(...)`-style values driven by
   `sessionConfig.client.browserName` / `deviceName` (env defaults `WAHA_CLIENT_BROWSER_NAME`,
   `WAHA_CLIENT_DEVICE_NAME`).
-- `syncFullHistory` from `noweb.store.fullSync`; `markOnlineOnConnect` from `noweb.markOnline` (default `true`).
+- `syncFullHistory` from `noweb.store.fullSync` (**defaults to true when unset**, since 2026-10-13); with it on, `shouldSyncHistoryMessage: () => true`, because Baileys' default skips `FULL` batches. `markOnlineOnConnect` from `noweb.markOnline` (default `true`).
 - 30 s query and keepalive timeouts, retry caches.
 
 ## Resilience
@@ -96,6 +96,19 @@ Everything the API exposes, effectively:
 `MESSAGE_ANY`, `MESSAGE_REVOKED`, `MESSAGE_EDITED`, `MESSAGE_REACTION`, `MESSAGE_ACK`,
 group join/leave/update/participants, `SESSION_STATUS`, `PRESENCE_UPDATE`, `CALL_RECEIVED`, poll
 votes. See [[WebSocket Events]].
+
+## History sync
+
+WhatsApp pushes history only right after a device is **linked**. Each `messaging-history.set`
+batch is written by `NowebPersistentStore`, which then reports what it stored to a
+`HistorySyncTracker` (`store/HistorySyncTracker.ts`): batches, messages, chats, contacts,
+progress. The sync completes on progress 100 or after 2 minutes without a batch (WhatsApp does not
+always send a final marker). State persists in `history-sync.json` in the session directory
+(LocalStore only; logout's `*.json` cleanup resets it for the next link) and is emitted as
+`session.sync` (at most every 5 s, plus completion). Read it with `GET /api/{session}/sync` or
+the `SessionSyncStatus` MCP tool; the dashboard session card shows the progress.
+
+Re-syncing an already linked session means relinking it.
 
 ## Known rough edges
 

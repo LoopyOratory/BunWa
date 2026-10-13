@@ -12,6 +12,19 @@ status: shipped
 Recent commit history, grouped by theme — the "what changed and why" that a fresh clone doesn't tell you.
 Newest work first within each theme.
 
+## Uploads and NOWEB history sync (2026-10-13)
+
+Sending 22 ad cards (an 18 MB zip) from a laptop to a WhatsApp group was impossible: an MCP agent
+can only move bytes as base64 through the model and has no API key. Upload tickets fix that
+([[MCP Tools Reference#Uploads — `src/mcp/tools/upload.tools.ts` (3)]]). Found on the way:
+
+| Finding | Root cause → fix |
+|---|---|
+| Full history never arrived on NOWEB, even with `fullSync` on | Baileys' default `shouldSyncHistoryMessage` skips `FULL` history batches. With full sync on (now the default) it accepts every type. |
+| History sync stored messages from ignored chats | `syncMessagesHistory` picked real messages before applying the `JidFilter`, then upserted the unfiltered list. Filter first, as `messages.upsert` does (`history-sync-store.test.ts`). |
+| WEBJS crashed on binary `file.data` | `fileToBuffer` called `.split` on a Buffer that contained a comma byte. A Buffer is now returned as is. |
+| 14 group tests failed only in a full run | `group-participants.test.ts` resolved `SessionManager` from the shared tsyringe container, which other files fill with a fake. `getEngine` reads no instance state; it is called off the prototype. |
+
 ## Live MCP test findings (2026-10-11)
 
 A live test of the MCP against a paired session (one test recipient) found seven defects; all are

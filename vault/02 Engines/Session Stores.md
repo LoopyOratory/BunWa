@@ -77,7 +77,7 @@ label-association repo, while `SqlChatMethods.ts` and `SqlMessagesMethods.ts` ar
 
 | File | Role |
 |---|---|
-| `NowebPersistentStore.ts` | the default store (≈830 lines): event binding, history sync, upserts, group cache, LID sync, transaction wrapper |
+| `NowebPersistentStore.ts` | the default store (≈850 lines): event binding, history sync, upserts, group cache, LID sync, transaction wrapper. An optional `onHistoryBatch` callback receives the counts each history batch actually wrote (feeds the [[NOWEB Engine#History sync]] tracker); history messages are filtered by chat before the real-message filter, matching `messages.upsert` |
 | `store/metadata.ts` | column extractors for messages and label associations |
 | `store/utils.ts` | KV helpers |
 | `store/schemas.ts` | schema definitions + migrations |

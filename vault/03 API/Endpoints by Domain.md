@@ -149,6 +149,12 @@ Session arrives **in the body** (`{ session, chatId, text, … }`) for the class
 | POST | `/api/:session/media/convert/voice` | real ffmpeg → OGG/Opus |
 | POST | `/api/:session/media/convert/video` | ⚠️ stub — returns a placeholder string |
 | GET | `/api/files/:session/:filename` | serves local media, path-traversal guarded, ~180 s lifetime |
+| POST | `/api/:session/uploads/tickets` | API key → single-use upload URL `{uploadUrl, expiresAt, maxBytes, curl}` |
+| PUT | `/uploads/:token` | **ticket token, no API key**, outside `/api`; raw body streamed to disk, `?filename=` or `X-Filename`; 401 used/expired, 413 over the ticket cap |
+| POST | `/api/:session/uploads` | multipart field `file`; the only `/api` route past the 10 MB guard (cap `UPLOAD_MAX_BYTES`) |
+| GET | `/api/:session/uploads` | live uploads |
+| GET · DELETE | `/api/:session/uploads/:id` | one upload |
+| GET | `/api/:session/sync` | NOWEB history sync status; WEBJS answers `state: "unsupported"` |
 | GET | `/api/sessions/:session/templates` | list templates |
 | POST | `/api/sessions/:session/templates` | create/replace (`UNIQUE(session, name)`) |
 | DELETE | `/api/sessions/:session/templates/:id` | |

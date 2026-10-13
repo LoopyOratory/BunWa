@@ -10,6 +10,15 @@ feature rounds and the patch with fixes inside a round. See
 
 ### Added
 
+- **Uploads for media sends.** `POST /api/{session}/uploads/tickets` (and the MCP tool
+  `UploadCreateTicket`) returns a single-use URL; `curl -T` the file to it with no API key, or
+  post multipart to `POST /api/{session}/uploads`. Every image, file, voice and video send (REST
+  and MCP, plus status posts) accepts `upload:<id>`. Uploads are kept a day
+  (`UPLOAD_TTL_SECONDS`) and capped at 100 MB (`UPLOAD_MAX_BYTES`); every other route keeps 10 MB.
+- **NOWEB history sync you can see.** Full history sync is on by default for sessions that don't
+  set it, a tracker records batches/messages/progress, and the status is available at
+  `GET /api/{session}/sync`, as the `session.sync` event, through the `SessionSyncStatus` MCP tool
+  and on the dashboard session card.
 - **WhatsApp username addressing.** Handles are recognised and validated in the
   API, resolved to an address through a USync lookup and cached, accepted by every
   send route, `reply`, `forwardMessage`, `checkNumberStatus` and the typing and
@@ -28,6 +37,11 @@ feature rounds and the patch with fixes inside a round. See
 
 ### Fixed
 
+- NOWEB never received full history: Baileys skips `FULL` history batches unless
+  `shouldSyncHistoryMessage` accepts them.
+- History sync stored messages from chats the session ignores.
+- WEBJS could crash sending a file whose `data` was raw bytes containing a comma.
+- 14 group tests failed in a full test run because they depended on the shared DI container.
 - **The chat page reconnected its socket in a loop.** The hook's cleanup closed
   a socket whose `onclose` then armed a reconnect timer, so an unowned socket was
   opened every three seconds and retries could run alongside a connecting one.

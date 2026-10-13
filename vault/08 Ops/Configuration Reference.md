@@ -124,6 +124,12 @@ Details: [[Data and Storage#Database switches]].
 | `WHATSAPP_HEALTH_MEDIA_FILES_THRESHOLD_MB` / `_SESSION_FILES_THRESHOLD_MB` | 100 | health thresholds | ✅ |
 | `WHATSAPP_HEALTH_MONGO_TIMEOUT_MS` | 3000 | Mongo health timeout | ✅ |
 
+> Upload ticket URLs use `WAHA_BASE_URL`. Set it to the public address, or tickets created over MCP
+> point at the internal `schema://hostname:port`.
+| `UPLOAD_MAX_BYTES` | 104857600 | largest single upload; also the protocol-level `maxRequestBodySize` (every other `/api` route keeps 10 MB) | ✅ |
+| `UPLOAD_TTL_SECONDS` | 86400 | how long an upload is kept; swept on boot and every 10 min | ✅ |
+| `UPLOAD_TICKET_TTL_SECONDS` | 900 | how long an upload ticket URL is valid (single use) | ✅ |
+
 ## Webhook
 
 | Variable | Default | Purpose | Wired |

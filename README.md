@@ -293,6 +293,27 @@ session, and a cross-session request gets the same response whether or not the o
 MCP keys (`sk_mcp_...`) are a separate credential for `POST /mcp`: the REST API does not accept them,
 and the MCP endpoint does not accept REST keys.
 
+## Uploading files
+
+For a file on another machine (an agent's laptop, a script) you don't need a public URL or to
+paste base64:
+
+```bash
+# 1. Ask for a single-use upload URL (API key needed here only)
+curl -s -X POST "$BASE/api/default/uploads/tickets" -H "X-Api-Key: $KEY" \
+  -H 'Content-Type: application/json' -d '{"filename":"catalogue.zip"}'
+
+# 2. Upload to it from anywhere — no API key
+curl -sS -T ./catalogue.zip '<uploadUrl>'
+
+# 3. Send it by id
+curl -s -X POST "$BASE/api/sendFile" -H "X-Api-Key: $KEY" -H 'Content-Type: application/json' \
+  -d '{"session":"default","chatId":"15551234567@c.us","file":"upload:<id>"}'
+```
+
+MCP agents do the same with `UploadCreateTicket`. Uploads last 24 h and are capped at 100 MB
+(`UPLOAD_MAX_BYTES`). Set `WAHA_BASE_URL` to the public address so ticket links work from outside.
+
 ## MCP
 
 BunWa exposes a Model Context Protocol server with 80 tools for sessions, messaging, chats,

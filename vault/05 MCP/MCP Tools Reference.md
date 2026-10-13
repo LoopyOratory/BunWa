@@ -63,7 +63,32 @@ dropped — clients rejected them); `maxBytes` keeps a download within `MCP_MAX_
 | `MediaGetFile` | read | mirrors `GET /api/files/{session}/{filename}`; the same path-traversal guards as the route |
 | `MediaConvertVoice` | write | mirrors `POST /media/convert/voice`; needs ffmpeg, an Ogg/Opus input is returned unchanged |
 
-## Session — `src/mcp/tools/session.tools.ts` (6)
+## Uploads — `src/mcp/tools/upload.tools.ts` (3)
+
+Added 2026-10-13. An agent holding a local file could only hand it to the server as base64 through
+the model, which breaks past a few tens of KB, and it never sees the API key. A ticket gives it a
+single-use URL it can `curl` the file to from its own shell; the returned id sends as
+`upload:<id>` (or `{ upload: "<id>", filename?, mimetype? }`) through `MessageSendImage`,
+`MessageSendFile`, `MessageSendVideo`, `MessageSendVoice` and the image/voice/video status tools.
+
+| Tool | Tier | Notes |
+|---|---|---|
+| `UploadCreateTicket` | write | returns `{uploadUrl, expiresAt, maxBytes, curl}`; the URL works once and expires after `UPLOAD_TICKET_TTL_SECONDS` |
+| `UploadList` | read | live uploads for the session (id, filename, mimetype, size, expiresAt) |
+| `UploadDelete` | write ⚠️ destructive | delete now instead of waiting for `UPLOAD_TTL_SECONDS` |
+
+**Sending a local file:**
+
+```text
+UploadCreateTicket { filename: "ads.zip" }        → { uploadUrl, curl }
+shell: curl -sS -T ./ads.zip '<uploadUrl>'        → { id, size, mimetype, ... }
+MessageSendFile { chatId, file: "upload:<id>" }
+```
+
+The ticket URL is built from `WAHA_BASE_URL`; set it to the public address or the link points at
+the internal host.
+
+## Session — `src/mcp/tools/session.tools.ts` (7)
 
 | Tool | Tier | Scoped | Notes |
 |---|---|---|---|
@@ -73,6 +98,7 @@ dropped — clients rejected them); `maxBytes` keeps a download within `MCP_MAX_
 | `SessionStop` | write | ✅ | graceful stop |
 | `SessionRestart` | write | ✅ | |
 | `SessionCheckNumber` | read | ✅ | LID-aware registered-on-WhatsApp check |
+| `SessionSyncStatus` | read | NOWEB link-time history sync: state (`idle`/`syncing`/`complete`/`unsupported`), batches, messages, chats, contacts, progress; mirrors `GET /api/{session}/sync` |
 
 ## Message — `src/mcp/tools/message.tools.ts` (20)
 
