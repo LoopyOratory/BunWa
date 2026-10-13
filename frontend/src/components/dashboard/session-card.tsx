@@ -19,7 +19,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { EngineBadge, Metric, StatusBadge } from "@/components/primitives"
-import type { DashboardSession, LimitGauge } from "@/lib/api"
+import { useEffect, useState } from "react"
+import { api } from "@/lib/api"
+import type { DashboardSession, HistorySyncStatus, LimitGauge } from "@/lib/api"
 import { shortDuration, timeAgo } from "@/lib/time"
 import { cn } from "@/lib/utils"
 import { sessionSeverity } from "@/lib/session-severity"
@@ -95,6 +97,28 @@ function PrimaryAction({ session, onAction }: { session: DashboardSession; onAct
   }
 }
 
+/** Polls a NOWEB session's history sync while it is running. */
+function useHistorySync(name: string, enabled: boolean) {
+  const [sync, setSync] = useState<HistorySyncStatus | null>(null)
+  useEffect(() => {
+    if (!enabled) return
+    let stop = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const tick = async () => {
+      const next = await api.getHistorySync(name).catch(() => null)
+      if (stop) return
+      setSync(next)
+      if (next?.state === "syncing") timer = setTimeout(tick, 5000)
+    }
+    tick()
+    return () => {
+      stop = true
+      clearTimeout(timer)
+    }
+  }, [name, enabled])
+  return sync
+}
+
 export function SessionCard({
   session,
   now,
@@ -108,6 +132,7 @@ export function SessionCard({
   const since = session.statusSince ? shortDuration(now - Date.parse(session.statusSince)) : null
   const limits = session.limits
   const stopped = session.status === "STOPPED"
+  const sync = useHistorySync(session.name, session.status === "WORKING" && session.engine.toUpperCase() === "NOWEB")
 
   return (
     <article
@@ -140,6 +165,10 @@ export function SessionCard({
 
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <EngineBadge engine={session.engine} />
+        {sync?.state === "syncing" && (
+          <span className="metric">Syncing history{sync.progress != null ? ` ${sync.progress}%` : ""}</span>
+        )}
+        {sync?.state === "complete" && <span>History synced · {sync.messages} msgs</span>}
         {session.lastActivityAt && <span>active {timeAgo(session.lastActivityAt, now)}</span>}
       </div>
 

@@ -32,6 +32,7 @@ import { createMcpConfigRouter } from './mcp-config.routes';
 import { createApiKeysRouter } from './api-keys.routes';
 import { createFilesRouter } from './files.routes';
 import { createUploadsRouter, createUploadTicketRouter } from './uploads.routes';
+import { createSyncRouter } from './sync.routes';
 import { createWsTicketRouter } from './websocket-auth';
 import { createDashboardRouter } from './dashboard.routes';
 
@@ -71,6 +72,7 @@ export function createApiRouter(): Hono {
   router.route('/api/files', createFilesRouter());
   router.route('/api', createUploadsRouter());
   router.route('/uploads', createUploadTicketRouter());
+  router.route('/api', createSyncRouter());
   router.route('/api', createWsTicketRouter());
   router.route('/api', createDashboardRouter());
 

@@ -348,6 +348,14 @@ export interface SendingPolicyUsage {
   }
 }
 
+export interface HistorySyncStatus {
+  state: "idle" | "syncing" | "complete" | "unsupported"
+  progress: number | null
+  messages: number
+  chats: number
+  completedAt: string | null
+}
+
 export interface SendingPolicyState {
   session: string
   bypassed: boolean
@@ -377,6 +385,7 @@ export const api = {
   updateSession: (name: string, config: Record<string, any>) =>
     request<Session>(`/api/sessions/${name}`, { method: "PUT", body: JSON.stringify({ config }) }),
   getQRCode: (name: string) => request<QRCodeResponse>(`/api/${name}/auth/qr`),
+  getHistorySync: (name: string) => request<HistorySyncStatus>(`/api/${name}/sync`),
   requestPairingCode: (session: string, phoneNumber: string) =>
     request<{ code?: string }>(`/api/${session}/auth/request-code`, {
       method: "POST",

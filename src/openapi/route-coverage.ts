@@ -58,6 +58,10 @@ const sessionParam = {
 
 /** Curated documentation, keyed by `METHOD /api/{session}/...`. */
 export const CURATED: Record<string, RouteDoc> = {
+  'GET /api/{session}/sync': {
+    summary: 'Link-time history sync status (NOWEB); WEBJS reports state "unsupported"',
+    tag: TAGS.sessions,
+  },
   'POST /api/{session}/uploads/tickets': {
     summary: 'Create a single-use upload URL (no API key needed to use it)',
     tag: TAGS.media,

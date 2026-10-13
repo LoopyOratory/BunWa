@@ -133,5 +133,19 @@ export function sessionTools(manager: SessionManager): ToolDescriptor[] {
         };
       },
     },
+    {
+      name: 'SessionSyncStatus',
+      description:
+        'History sync status for a NOWEB session: state (idle, syncing, complete, unsupported), batches, messages, chats, contacts and progress. ' +
+        'WhatsApp only sends history right after a device is linked; to sync an already linked session again, relink it.',
+      tier: 'read',
+      category: 'session',
+      sessionScoped: true,
+      inputSchema: z.object({ sessionId }),
+      handler: async (input) => {
+        const session = await manager.getWorkingSession(input.sessionId);
+        return (session as any).getHistorySyncStatus();
+      },
+    },
   ];
 }
