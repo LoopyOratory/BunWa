@@ -11,6 +11,7 @@ import { AuditService, AuditAction } from '../core/audit/audit.service';
 import { isClientFacingError } from '../core/exceptions';
 import { getChatMessagesViaEngine } from './chats.routes';
 import { redactWireSecrets } from '../core/utils/redact';
+import { resolveUploadRefs } from '../core/uploads/resolve-upload-refs';
 
 // Get session name from body for policy enforcement. `validatedBody` is set
 // by policiesMiddleware for scoped principals (before route body middleware
@@ -83,6 +84,7 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
       const session = c.get('session');
       const body = c.get('body');
       try {
+        await resolveUploadRefs(body.session, body);
         const result = await sendAndAudit(body.session, 'sendImage', () => (session as any).sendImage({
           session: body.session,
           chatId: body.chatId,
@@ -106,6 +108,7 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
       const session = c.get('session');
       const body = c.get('body');
       try {
+        await resolveUploadRefs(body.session, body);
         const result = await sendAndAudit(body.session, 'sendFile', () => (session as any).sendFile({
           session: body.session,
           chatId: body.chatId,
@@ -129,6 +132,7 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
       const session = c.get('session');
       const body = c.get('body');
       try {
+        await resolveUploadRefs(body.session, body);
         const result = await sendAndAudit(body.session, 'sendVoice', () => (session as any).sendVoice({
           session: body.session,
           chatId: body.chatId,
@@ -151,6 +155,7 @@ export function createChattingRouter(): Hono<{ Variables: { session: any; body: 
       const session = c.get('session');
       const body = c.get('body');
       try {
+        await resolveUploadRefs(body.session, body);
         const result = await sendAndAudit(body.session, 'sendVideo', () => (session as any).sendVideo?.({
           session: body.session,
           chatId: body.chatId,

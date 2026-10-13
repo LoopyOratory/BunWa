@@ -4,6 +4,7 @@ import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanSession, Action, FromParam } from '../middleware/policies';
 import { workingSessionResolver } from '../middleware/session-resolver';
 import { redactWireSecrets } from '../core/utils/redact';
+import { resolveUploadRefs } from '../core/uploads/resolve-upload-refs';
 
 export function createStatusRouter(): Hono<{ Variables: { session: any; body: any } }> {
   const router = new Hono<{ Variables: { session: any; body: any } }>();
@@ -26,7 +27,7 @@ export function createStatusRouter(): Hono<{ Variables: { session: any; body: an
     workingSessionResolver(),
     async (c) => {
       const session = c.get('session');
-      const body = await c.req.json();
+      const body = await resolveUploadRefs(c.req.param('session'), await c.req.json());
       const result = await (session as any).sendImageStatus(body);
       return c.json(redactWireSecrets(result));
     }
@@ -37,7 +38,7 @@ export function createStatusRouter(): Hono<{ Variables: { session: any; body: an
     workingSessionResolver(),
     async (c) => {
       const session = c.get('session');
-      const body = await c.req.json();
+      const body = await resolveUploadRefs(c.req.param('session'), await c.req.json());
       const result = await (session as any).sendVoiceStatus(body);
       return c.json(redactWireSecrets(result));
     }
@@ -48,7 +49,7 @@ export function createStatusRouter(): Hono<{ Variables: { session: any; body: an
     workingSessionResolver(),
     async (c) => {
       const session = c.get('session');
-      const body = await c.req.json();
+      const body = await resolveUploadRefs(c.req.param('session'), await c.req.json());
       const result = await (session as any).sendVideoStatus(body);
       return c.json(redactWireSecrets(result));
     }
