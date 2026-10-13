@@ -27,6 +27,9 @@ import { verifyStorageAtBoot } from './core/storage/storage-bootstrap';
 import { Scalar } from '@scalar/hono-api-reference';
 import pino from 'pino';
 import { timingSafeEqual } from 'crypto';
+import { isUploadRoute } from './api/uploads.routes';
+import { UploadStore } from './core/uploads/upload-store';
+import { uploadMaxBytes } from './core/uploads/upload-config';
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -156,8 +159,10 @@ async function bootstrap() {
 
   app.use('/api/*', rateLimit({ windowMs: 60_000, max: 200 }));
 
-  // Body size limit — 10MB max for all API routes
+  // Body size limit — 10MB for every API route except the multipart upload,
+  // which has its own cap (UPLOAD_MAX_BYTES) enforced by the upload store.
   app.use('/api/*', async (c, next) => {
+    if (isUploadRoute(new URL(c.req.url).pathname, c.req.method)) return next();
     const contentLength = c.req.header('content-length');
     if (contentLength && parseInt(contentLength, 10) > 10 * 1024 * 1024) {
       return c.json({ statusCode: 413, message: 'Request body too large (max 10MB)' }, 413);
@@ -324,13 +329,20 @@ async function bootstrap() {
 
   const wsHandler = createWebSocketHandler();
 
+  // Expired uploads are deleted on boot and every 10 minutes.
+  const uploadSweep = () =>
+    new UploadStore().sweep().catch((err) => log.warn({ err }, 'Upload sweep failed'));
+  void uploadSweep();
+  setInterval(uploadSweep, 10 * 60 * 1000).unref?.();
+
   // Create server with WebSocket support
   const server = Bun.serve({
     port,
-    // Reject oversized bodies at the protocol level. The /api/* middleware below
-    // still returns a friendlier JSON 413, but it can only see a Content-Length
-    // header — this cap also applies to chunked requests that omit one.
-    maxRequestBodySize: 10 * 1024 * 1024,
+    // Reject oversized bodies at the protocol level. The cap is the upload
+    // limit (UPLOAD_MAX_BYTES), because uploads are the largest bodies we take;
+    // the /api/* middleware keeps every other route at 10MB and returns a
+    // friendlier JSON 413 when a Content-Length header is present.
+    maxRequestBodySize: uploadMaxBytes(),
     fetch: async (reqAny, server) => {
       const req = reqAny as any; // bun-types Request variance across versions
       // Handle WebSocket upgrade for /ws path

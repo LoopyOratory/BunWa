@@ -58,6 +58,27 @@ const sessionParam = {
 
 /** Curated documentation, keyed by `METHOD /api/{session}/...`. */
 export const CURATED: Record<string, RouteDoc> = {
+  'POST /api/{session}/uploads/tickets': {
+    summary: 'Create a single-use upload URL (no API key needed to use it)',
+    tag: TAGS.media,
+    body: { filename: { type: 'string' }, maxBytes: { type: 'integer' } },
+  },
+  'POST /api/{session}/uploads': {
+    summary: 'Upload a file (multipart field "file"); send it later as upload:<id>',
+    tag: TAGS.media,
+    responses: { '413': { description: 'Larger than UPLOAD_MAX_BYTES' } },
+  },
+  'GET /api/{session}/uploads': { summary: 'List live uploads', tag: TAGS.media },
+  'GET /api/{session}/uploads/{id}': { summary: 'Get one upload', tag: TAGS.media },
+  'DELETE /api/{session}/uploads/{id}': { summary: 'Delete an upload now', tag: TAGS.media },
+  'PUT /uploads/{token}': {
+    summary: 'Upload the raw body with a ticket token (single use, no API key)',
+    tag: TAGS.media,
+    responses: {
+      '401': { description: 'Ticket unknown, expired or used' },
+      '413': { description: 'Larger than the ticket limit' },
+    },
+  },
   // --- Chats ---
   'GET /api/{session}/chats/{chatId}': {
     summary: 'Get one chat by id',
