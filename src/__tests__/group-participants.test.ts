@@ -1,7 +1,5 @@
 import 'reflect-metadata';
 import { describe, it, expect } from 'bun:test';
-import { container } from 'tsyringe';
-import { configureContainer } from '../di/container';
 import { SessionManager } from '../core/manager.core';
 import { WAHAEngine } from '../structures/enums.dto';
 import { BadRequestException } from '../core/exceptions';
@@ -14,8 +12,15 @@ import { participantId, toJID } from '../core/utils/jids';
 // response: missing <group> node" after a 30 second timeout. These tests pin the
 // shared entry reader and the JIDs each engine hands to its transport.
 
+// getEngine only picks a class (by engine and tier) and reads no instance
+// state, so call it off the prototype. Resolving SessionManager from the
+// global container made these tests depend on test order: other files
+// register a fake SessionManager there, and in a full run this file got the
+// fake (no getEngine) and all 14 tests failed.
+const engineClass = (engine: WAHAEngine) => SessionManager.prototype.getEngine(engine);
+
 function makeNowebSession() {
-  const EngineClass = container.resolve(SessionManager).getEngine(WAHAEngine.NOWEB);
+  const EngineClass = engineClass(WAHAEngine.NOWEB);
   return new EngineClass({
     name: 'group-participants-noweb',
     printQR: false,
@@ -38,7 +43,7 @@ function makeNowebSession() {
 }
 
 function makeWebjsSession() {
-  const EngineClass = container.resolve(SessionManager).getEngine(WAHAEngine.WEBJS);
+  const EngineClass = engineClass(WAHAEngine.WEBJS);
   const session = new EngineClass({
     name: 'group-participants-webjs',
     printQR: false,
