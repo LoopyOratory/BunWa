@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import type { SessionManager } from '../../core/manager.core';
 import type { ToolDescriptor } from '../tool-descriptor';
+import { resolveUploadFile } from '../../core/uploads/resolve-upload-refs';
 
 const sessionId = z
   .string()
@@ -27,12 +28,13 @@ const fileInput = z
     z.object({
       url: z.string().optional(),
       data: z.string().optional(),
+      upload: z.string().optional(),
       mimetype: z.string().optional(),
       filename: z.string().optional(),
     }),
   ])
   .describe(
-    'The file: an http(s) URL, a data URL, a base64 string or a local path. Use the object form when a document needs a filename or an explicit mimetype, otherwise the recipient sees it named "file".',
+    'The file: an http(s) URL, a data URL, a base64 string, a local path on the server, or "upload:<id>" from UploadCreateTicket for a local file of any size. Use the object form when a document needs a filename or an explicit mimetype, otherwise the recipient sees it named "file".',
   );
 
 export function messageTools(manager: SessionManager): ToolDescriptor[] {
@@ -59,7 +61,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
     },
     {
       name: 'MessageSendImage',
-      description: 'Send an image message. file accepts an http(s) URL, a data URL, a base64 string or a local path on the server. MediaDownloadMessage returns base64 you can pass straight back here.',
+      description: 'Send an image message. file accepts an http(s) URL, a data URL, a base64 string or a local path on the server. MediaDownloadMessage returns base64 you can pass straight back here. For a local file, use UploadCreateTicket and send "upload:<id>".',
       tier: 'write',
       category: 'message',
       sessionScoped: true,
@@ -74,14 +76,14 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
         return (session as any).sendImage({
           session: input.sessionId,
           chatId: input.chatId,
-          file: input.file,
+          file: await resolveUploadFile((session as any).name ?? input.sessionId, input.file),
           caption: input.caption,
         });
       },
     },
     {
       name: 'MessageSendFile',
-      description: 'Send a file or document message. file accepts an http(s) URL, a data URL, a base64 string or a local path on the server. MediaDownloadMessage returns base64 you can pass straight back here. Set filename to control the name the recipient sees.',
+      description: 'Send a file or document message. file accepts an http(s) URL, a data URL, a base64 string or a local path on the server. MediaDownloadMessage returns base64 you can pass straight back here. Set filename to control the name the recipient sees. For a local file, use UploadCreateTicket and send "upload:<id>".',
       tier: 'write',
       category: 'message',
       sessionScoped: true,
@@ -96,7 +98,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
         return (session as any).sendFile({
           session: input.sessionId,
           chatId: input.chatId,
-          file: input.file,
+          file: await resolveUploadFile((session as any).name ?? input.sessionId, input.file),
           caption: input.caption,
         });
       },
@@ -106,7 +108,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
       description:
         'Send a voice note (PTT) via URL or base64. WhatsApp voice notes must be OGG/Opus — ' +
         'by default this server transcodes other formats (e.g. MP3, WAV) automatically via ffmpeg. ' +
-        'Set convert:false only if the file is already OGG/Opus, to skip the transcode step. file accepts an http(s) URL, a data URL, a base64 string or a local path on the server. MediaDownloadMessage returns base64 you can pass straight back here, and convert false sends the bytes as they are.',
+        'Set convert:false only if the file is already OGG/Opus, to skip the transcode step. file accepts an http(s) URL, a data URL, a base64 string or a local path on the server. MediaDownloadMessage returns base64 you can pass straight back here, and convert false sends the bytes as they are. For a local file, use UploadCreateTicket and send "upload:<id>".',
       tier: 'write',
       category: 'message',
       sessionScoped: true,
@@ -124,14 +126,14 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
         return (session as any).sendVoice({
           session: input.sessionId,
           chatId: input.chatId,
-          file: input.file,
+          file: await resolveUploadFile((session as any).name ?? input.sessionId, input.file),
           convert: input.convert ?? true,
         });
       },
     },
     {
       name: 'MessageSendVideo',
-      description: 'Send a video message. file accepts an http(s) URL, a data URL, a base64 string or a local path on the server. MediaDownloadMessage returns base64 you can pass straight back here.',
+      description: 'Send a video message. file accepts an http(s) URL, a data URL, a base64 string or a local path on the server. MediaDownloadMessage returns base64 you can pass straight back here. For a local file, use UploadCreateTicket and send "upload:<id>".',
       tier: 'write',
       category: 'message',
       sessionScoped: true,
@@ -146,7 +148,7 @@ export function messageTools(manager: SessionManager): ToolDescriptor[] {
         return (session as any).sendVideo({
           session: input.sessionId,
           chatId: input.chatId,
-          file: input.file,
+          file: await resolveUploadFile((session as any).name ?? input.sessionId, input.file),
           caption: input.caption,
         });
       },

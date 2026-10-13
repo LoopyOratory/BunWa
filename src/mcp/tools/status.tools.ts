@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import type { SessionManager } from '../../core/manager.core';
 import type { ToolDescriptor } from '../tool-descriptor';
+import { resolveUploadFile } from '../../core/uploads/resolve-upload-refs';
 
 const sessionId = z
   .string()
@@ -61,7 +62,7 @@ export function statusTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        file: z.string().describe('Image URL or base64 data'),
+        file: z.string().describe('Image URL or base64 data, or "upload:<id>" from UploadCreateTicket'),
         caption: z.string().max(1024).optional(),
         id: statusId,
         contacts: statusContacts,
@@ -69,7 +70,7 @@ export function statusTools(manager: SessionManager): ToolDescriptor[] {
       handler: async (input) => {
         const session = await getSession(manager, input.sessionId);
         return (session as any).sendImageStatus({
-          file: input.file,
+          file: await resolveUploadFile((session as any).name ?? input.sessionId, input.file),
           caption: input.caption,
           id: input.id,
           contacts: input.contacts,
@@ -88,7 +89,7 @@ export function statusTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        file: z.string().describe('Audio URL or base64 data (any common format)'),
+        file: z.string().describe('Audio URL or base64 data (any common format), or "upload:<id>" from UploadCreateTicket'),
         backgroundColor: z.string().optional().describe('Background color hex, e.g. "#000000"'),
         convert: z
           .boolean()
@@ -100,7 +101,7 @@ export function statusTools(manager: SessionManager): ToolDescriptor[] {
       handler: async (input) => {
         const session = await getSession(manager, input.sessionId);
         return (session as any).sendVoiceStatus({
-          file: input.file,
+          file: await resolveUploadFile((session as any).name ?? input.sessionId, input.file),
           backgroundColor: input.backgroundColor,
           convert: input.convert ?? true,
           id: input.id,
@@ -116,7 +117,7 @@ export function statusTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        file: z.string().describe('Video URL or base64 data'),
+        file: z.string().describe('Video URL or base64 data, or "upload:<id>" from UploadCreateTicket'),
         caption: z.string().max(1024).optional(),
         id: statusId,
         contacts: statusContacts,
@@ -124,7 +125,7 @@ export function statusTools(manager: SessionManager): ToolDescriptor[] {
       handler: async (input) => {
         const session = await getSession(manager, input.sessionId);
         return (session as any).sendVideoStatus({
-          file: input.file,
+          file: await resolveUploadFile((session as any).name ?? input.sessionId, input.file),
           caption: input.caption,
           id: input.id,
           contacts: input.contacts,
