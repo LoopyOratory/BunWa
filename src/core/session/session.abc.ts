@@ -140,6 +140,10 @@ import qrcode from 'qrcode-terminal';
 import { container } from 'tsyringe';
 import { SendingPolicyService } from '../sending-policy/sending-policy.service';
 import { toJID } from '../utils/jids';
+import {
+  emptyHistorySyncStatus,
+  type HistorySyncStatus,
+} from '../engines/noweb/store/HistorySyncTracker';
 
 export function ensureSuffix(phone: any) {
   const suffix = '@c.us';
@@ -306,6 +310,11 @@ export abstract class WhatsappSession {
       'The session ignores the following chat ids',
     );
     this.jids = new JidFilter(ignore);
+  }
+
+  /** Link-time history sync status. Only NOWEB tracks it. */
+  public getHistorySyncStatus(): HistorySyncStatus {
+    return emptyHistorySyncStatus('unsupported');
   }
 
   public getEventObservable(event: WAHAEvents) {

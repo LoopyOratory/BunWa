@@ -2,6 +2,7 @@ export const SECOND = 1000;
 
 export enum WAHAEvents {
   SESSION_STATUS = 'session.status',
+  SESSION_SYNC = 'session.sync',
   MESSAGE = 'message',
   MESSAGE_REACTION = 'message.reaction',
   MESSAGE_ANY = 'message.any',

@@ -44,6 +44,7 @@ import { INowebStore } from './INowebStore';
 import { LabelAssociationType } from '../labels/LabelAssociationType';
 import { StatusStringToStatus } from '../../../utils/acks';
 import AsyncLock from 'async-lock';
+import type { HistoryBatch } from './HistorySyncTracker';
 
 type ms = number;
 const HOUR: ms = 60 * 60 * 1000;
@@ -78,6 +79,7 @@ export class NowebPersistentStore implements INowebStore {
     private logger: Logger,
     public storage: INowebStorage,
     private jids: JidFilter,
+    private onHistoryBatch?: (batch: HistoryBatch) => void,
   ) {
     this.socket = null;
     this.chatRepo = storage.getChatRepository();
@@ -227,6 +229,7 @@ export class NowebPersistentStore implements INowebStore {
 
   private async onMessagingHistorySet(history: any) {
     const { contacts, chats, messages } = history;
+    let storedMessages = 0;
 
     await Promise.all([
       this.withLock('contacts', async () => {
@@ -240,20 +243,39 @@ export class NowebPersistentStore implements INowebStore {
         );
       }),
       this.withLock('chats', () => this.onChatUpsert(chats)),
-      this.withLock('messages', () => this.syncMessagesHistory(messages)),
+      this.withLock('messages', async () => {
+        storedMessages = await this.syncMessagesHistory(messages);
+      }),
     ]);
+
+    try {
+      this.onHistoryBatch?.({
+        messages: storedMessages,
+        chats: chats?.length ?? 0,
+        contacts: contacts?.length ?? 0,
+        progress: typeof history.progress === 'number' ? history.progress : null,
+        syncType: history.syncType ?? null,
+        isLatest: !!history.isLatest,
+      });
+    } catch (error) {
+      this.logger.warn(`history sync - tracker failed: ${error}`);
+    }
   }
 
-  private async syncMessagesHistory(messages: any) {
-    const realMessages = messages.filter(isRealMessage);
-    messages = messages.filter((msg: any) => this.jids.include(msg.key.remoteJid));
-    for (const message of messages) {
+  /** Store a history batch; returns how many messages were written. */
+  private async syncMessagesHistory(messages: any): Promise<number> {
+    // Same order as messages.upsert: drop filtered chats first, then keep only
+    // real messages. The old order upserted messages from filtered chats.
+    const scoped = messages.filter((msg: any) => this.jids.include(msg.key.remoteJid));
+    for (const message of scoped) {
       message.status = StatusStringToStatus(message.status);
     }
+    const realMessages = scoped.filter(isRealMessage);
     await this.messagesRepo.upsert(realMessages);
     this.logger.info(
       `history sync - '${messages.length}' got messages, '${realMessages.length}' real messages`,
     );
+    return realMessages.length;
   }
 
   private async onMessagesUpsert(update: any) {

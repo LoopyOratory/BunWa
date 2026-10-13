@@ -213,6 +213,11 @@ import {
 } from '../../../structures/webhooks.dto';
 import { readdir, unlink } from 'fs/promises';
 import { join } from 'path';
+import {
+  HistorySyncTracker,
+  emptyHistorySyncStatus,
+  type HistorySyncStatus,
+} from './store/HistorySyncTracker';
 import { LocalStore } from '../../storage/LocalStore';
 import { LoggerBuilder } from '../../../utils/logging';
 import { sleep, waitUntil } from '../../../utils/promiseTimeout';
@@ -235,6 +240,7 @@ import {
   partition,
   share,
   tap,
+  Subject,
 } from 'rxjs';
 import { debounceTime, map } from 'rxjs/operators';
 
@@ -505,12 +511,15 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   private qr: QR;
 
   private statusTracker = new StatusTracker();
+  private historySync: HistorySyncTracker | null = null;
+  private readonly historySync$ = new Subject<HistorySyncStatus>();
 
   public constructor(config: any) {
     super(config);
     this.shouldRestart = true;
 
     this.qr = new QR();
+    this.events2.get(WAHAEvents.SESSION_SYNC).switch(this.historySync$.asObservable());
     // external map to store retry counts of messages when decryption/encryption fails
     // keep this out of the socket itself, to prevent a message decryption/encryption loop across socket restarts
     this.msgRetryCounterCache = new NodeCache({
@@ -600,7 +609,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       }
     }
 
-    const fullSyncEnabled = this.sessionConfig?.noweb?.store?.fullSync ?? false;
+    const fullSyncEnabled = this.sessionConfig?.noweb?.store?.fullSync ?? true;
     let markOnlineOnConnect = this.sessionConfig?.noweb?.markOnline;
     if (markOnlineOnConnect == undefined) {
       markOnlineOnConnect = true;
@@ -618,6 +627,9 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       keepAliveIntervalMs: 30_000,
       getMessage: (key) => this.getMessage(key),
       syncFullHistory: fullSyncEnabled,
+      // Baileys' default skips FULL history batches even with syncFullHistory
+      // on; accept every history type when full sync is enabled.
+      ...(fullSyncEnabled ? { shouldSyncHistoryMessage: () => true } : {}),
       msgRetryCounterCache: this.msgRetryCounterCache,
       placeholderResendCache: this.placeholderResendCache,
       markOnlineOnConnect: markOnlineOnConnect,
@@ -673,10 +685,22 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       this.sessionStore,
       this.name,
     );
+    this.historySync?.dispose();
+    this.historySync = new HistorySyncTracker({
+      // Persisted next to the auth files on a LocalStore (logout's *.json
+      // cleanup then also resets it for the next link); in memory otherwise.
+      file:
+        this.sessionStore instanceof LocalStore
+          ? join(this.sessionStore.getSessionDirectory(this.name), 'history-sync.json')
+          : null,
+      onChange: (status) => this.historySync$.next(status),
+    });
+    await this.historySync.load();
     this.store = new NowebPersistentStore(
       this.loggerBuilder.child({ name: NowebPersistentStore.name }),
       storage,
       this.jids,
+      (batch) => this.historySync?.record(batch),
     );
     await this.store.init();
   }
@@ -866,8 +890,15 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     });
   }
 
+  public getHistorySyncStatus(): HistorySyncStatus {
+    const storeEnabled = this.sessionConfig?.noweb?.store?.enabled ?? true;
+    if (!storeEnabled) return emptyHistorySyncStatus('unsupported');
+    return this.historySync?.status() ?? emptyHistorySyncStatus('idle');
+  }
+
   async stop() {
     this.shouldRestart = false;
+    this.historySync?.dispose();
     this.startDelayedJob.cancel();
     this.autoRestartJob.stop();
 
