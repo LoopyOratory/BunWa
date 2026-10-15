@@ -41,7 +41,10 @@ it is published to npm on its own cadence. Its tags are prefixed
    `sha-<short>` to `loopyoratory/bunwa`. A tag is also when the release notes on
    GitHub should be filled in from the changelog.
 7. **Publish the n8n package separately** when it changed, with a
-   `n8n-nodes-bunwa-v<version>` tag and the `NPM_TOKEN` secret in place.
+   `n8n-nodes-bunwa-v<version>` tag. The publish workflow authenticates through
+   npm OIDC trusted publishing; the trusted publisher is configured once on
+   npmjs.com for this repository and `publish-n8n-node.yml` — no tokens or
+   secrets are stored for the release.
 
 ## Tag naming
 

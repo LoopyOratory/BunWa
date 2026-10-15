@@ -3,8 +3,15 @@ name: Publish n8n community node
 # Publishes integrations/n8n-nodes-bunwa to npm when a matching tag is pushed:
 #   git tag n8n-nodes-bunwa-v0.1.1 && git push origin n8n-nodes-bunwa-v0.1.1
 #
-# Required secret: NPM_TOKEN, an npm automation token with publish rights
-# (npmjs.com → Access Tokens → Generate New Token → Automation).
+# Authentication is npm OIDC trusted publishing — no NPM_TOKEN secret. The
+# package's trusted publisher is configured once on npmjs.com (package
+# settings) with:
+#   Organization or user: LoopyOratory
+#   Repository:           BunWa
+#   Workflow filename:    publish-n8n-node.yml
+#   Allowed actions:      npm publish
+# Provenance attestations are generated automatically for this public package
+# built from this public repository.
 # Manual runs are allowed so a release can be re-attempted without a new tag.
 
 on:
@@ -12,11 +19,13 @@ on:
     tags: ['n8n-nodes-bunwa-v*']
   workflow_dispatch:
 
+permissions:
+  id-token: write # OIDC authentication for npm trusted publishing
+  contents: read
+
 jobs:
   publish:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     defaults:
       run:
         working-directory: integrations/n8n-nodes-bunwa
@@ -25,8 +34,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+
+      - name: Install an npm CLI with trusted publishing support
+        run: npm install -g npm@latest
 
       - name: Install dependencies
         run: npm install
@@ -49,6 +62,4 @@ jobs:
         run: npm pack --dry-run 2>&1 | grep -qi 'LICENSE.md' || { echo "::error::LICENSE.md is not in the tarball"; exit 1; }
 
       - name: Publish
-        run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
