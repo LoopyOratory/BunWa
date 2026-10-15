@@ -44,6 +44,8 @@ The `BunWa API` credential has two fields:
 
 The credential test calls `GET /api/sessions`, an authenticated endpoint, so a wrong API key fails the test instead of silently passing.
 
+> **Use the master key, not a scoped key.** BunWa also offers per-session scoped keys (`sk_ses_...`, generated from a session's settings in the dashboard). Those only cover one session and its allowlisted actions — the credential test and every server-level operation reject them with `403 Forbidden`. Paste the server's master `WAHA_API_KEY` here instead.
+
 ## Nodes
 
 ### BunWa

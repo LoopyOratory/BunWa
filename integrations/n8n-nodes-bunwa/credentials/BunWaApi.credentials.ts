@@ -29,7 +29,7 @@ export class BunWaApi implements ICredentialType {
 			type: 'string',
 			typeOptions: { password: true },
 			default: '',
-			description: 'The WAHA_API_KEY configured on the BunWa server (sent as the x-api-key header)',
+			description: 'The master WAHA_API_KEY of the BunWa server (sent as the x-api-key header). Do not use a scoped sk_ses_ key: server-level operations reject those with 403 Forbidden.',
 			required: true,
 		},
 	];
