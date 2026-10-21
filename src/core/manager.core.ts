@@ -32,6 +32,7 @@ import { buildMediaStorage } from './media/MediaStorageFactory';
 import { MediaManager } from './media/MediaManager';
 import AsyncLock from 'async-lock';
 import pino from 'pino';
+import { buildLidResolver } from './webhook-lid-resolver';
 
 // Lazily computed (not a top-level const) so WAHA_LOCAL_STORE_BASE_DIR can be
 // overridden — e.g. by tests, via bunfig.toml's [test] preload — to point at
@@ -734,13 +735,20 @@ export class SessionManager {
       for (const event of webhookEvents) {
         try {
           const sub = session.getEventObservable(event).subscribe({
-            next: (data: any) => {
+            next: async (data: any) => {
+              // Map @lid senders to phone numbers so a Sender filter of a
+              // phone number matches them (only when a filter needs it).
+              const resolveLid = await buildLidResolver(
+                deliveryConfig.filters,
+                data,
+                (lid) => session.findPNByLid(lid),
+              ).catch(() => undefined);
               this.webhook!.deliver({
                 event,
                 session: name,
                 timestamp: Date.now(),
                 data,
-              }, deliveryConfig);
+              }, deliveryConfig, resolveLid);
             },
           });
           sink.push(sub);

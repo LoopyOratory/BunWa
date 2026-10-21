@@ -55,9 +55,9 @@ const canonicalActor = (jid: string, resolve?: LidResolver): string =>
 /** Canonical input — normalizes user-typed filter value. Bare digits become phone@c.us. */
 const canonicalInput = (value: string): string => {
   const trimmed = value.trim();
-  // Bare phone number (all digits) → normalize to @c.us
-  if (/^\d+$/.test(trimmed)) {
-    return `${trimmed}@c.us`;
+  // A phone number, however it was typed (+233 55 391-9737) → digits@c.us
+  if (/^\+?[\d\s().-]+$/.test(trimmed) && /\d/.test(trimmed)) {
+    return `${trimmed.replace(/\D/g, '')}@c.us`;
   }
   return toNeutralJid(trimmed).toLowerCase();
 };
@@ -68,6 +68,21 @@ const toStringArray = (value: unknown): string[] => {
   return [];
 };
 
+/**
+ * Filter values a person typed: a list, or one string with several values
+ * separated by commas ("233553919737, 233201234567" — what the dashboard
+ * saves). Blank entries are dropped.
+ */
+const toValueList = (value: unknown): string[] =>
+  toStringArray(value)
+    .flatMap((v) => v.split(','))
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+/** The chat a message belongs to: the other side for one you sent. */
+const chatOf = (data: Record<string, unknown>): string | undefined =>
+  data.fromMe === true ? str(data.to) : str(data.from);
+
 export type LidResolver = (jid: string) => string | null;
 
 export const FILTER_FIELDS: Record<string, FieldDefinition[]> = {
@@ -76,7 +91,9 @@ export const FILTER_FIELDS: Record<string, FieldDefinition[]> = {
       field: 'sender',
       kind: 'id',
       operators: ID_OPERATORS,
-      resolve: data => str(data.author) ?? str(data.from),
+      // In a group, `from` is the group: the person is `author` (WEBJS) or
+      // `participant` (NOWEB).
+      resolve: data => str(data.author) ?? str(data.participant) ?? str(data.from),
     },
     {
       field: 'recipient',
@@ -101,7 +118,8 @@ export const FILTER_FIELDS: Record<string, FieldDefinition[]> = {
       field: 'isGroup',
       kind: 'boolean',
       operators: BOOLEAN_OPERATORS,
-      resolve: data => data.isGroup === true,
+      // Messages carry no isGroup flag; a group chat id ends in @g.us.
+      resolve: data => data.isGroup === true || (chatOf(data)?.endsWith('@g.us') ?? false),
     },
     {
       field: 'fromMe',
@@ -113,7 +131,8 @@ export const FILTER_FIELDS: Record<string, FieldDefinition[]> = {
       field: 'hasMedia',
       kind: 'boolean',
       operators: BOOLEAN_OPERATORS,
-      resolve: data => data.media != null,
+      // hasMedia is set on every message; `media` only once it was downloaded.
+      resolve: data => data.hasMedia === true || data.media != null,
     },
     {
       field: 'mentions',
@@ -145,21 +164,21 @@ function evaluateCondition(
 
   switch (def.kind) {
     case 'id': {
-      const candidates = new Set(toStringArray(value).map(canonicalInput));
+      const candidates = new Set(toValueList(value).map(canonicalInput));
       const actual = typeof resolved === 'string' ? resolved : undefined;
       const isMatch = actual != null && candidates.has(canonicalActor(actual, resolve));
       return operator === 'isNot' ? !isMatch : isMatch;
     }
 
     case 'enum': {
-      const candidates = new Set(toStringArray(value));
+      const candidates = new Set(toValueList(value));
       const actual = typeof resolved === 'string' ? resolved : undefined;
       const isMatch = actual != null && candidates.has(actual);
       return operator === 'isNot' ? !isMatch : isMatch;
     }
 
     case 'idArray': {
-      const candidates = new Set(toStringArray(value).map(canonicalInput));
+      const candidates = new Set(toValueList(value).map(canonicalInput));
       const actual = toStringArray(resolved).map(jid => canonicalActor(jid, resolve));
       const intersects = actual.some(v => candidates.has(v));
       return operator === 'isNot' ? !intersects : intersects;

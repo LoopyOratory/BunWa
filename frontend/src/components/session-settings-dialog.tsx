@@ -695,7 +695,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
     if (!value && idx !== -1) {
       wf.conditions.splice(idx, 1)
     } else if (value) {
-      const cond = { field, operator: field === "body" ? "contains" : "is", value: field === "sender" ? value.replace(/[^\d,]/g, "").split(",").map(s => s.trim()).filter(Boolean).join(",") : value }
+      const cond = { field, operator: field === "body" ? "contains" : "is", value: field === "sender" ? value.replace(/[^\d,+\s]/g, "") : value }
       if (idx !== -1) wf.conditions[idx] = cond
       else wf.conditions.push(cond)
     }
@@ -865,7 +865,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1">
                           <Label className="text-xs">Sender</Label>
-                          <Input placeholder="1234567890 (comma-separated)" value={getFilterValue(webhook, "sender")} onChange={(e) => setFilterValue(wi, "sender", e.target.value)} className="h-8" />
+                          <Input placeholder="233553919737, 233201234567" value={getFilterValue(webhook, "sender")} onChange={(e) => setFilterValue(wi, "sender", e.target.value)} className="h-8" />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">Body contains</Label>

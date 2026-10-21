@@ -326,10 +326,15 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       try {
         const waMsg = this.mapIncomingMessage(msg);
 
-        // Attach sender contact info
+        // Attach sender contact info. In a group `from` must stay the group
+        // (it is the chat); the person is `author`.
         try {
           const contact = await msg.getContact();
-          if (contact) waMsg.from = contact.id?._serialized || waMsg.from;
+          const contactId = contact?.id?._serialized;
+          if (contactId) {
+            if (String(waMsg.from).endsWith('@g.us')) waMsg.author = contactId;
+            else waMsg.from = contactId;
+          }
         } catch {}
 
         msg$.next(waMsg);
@@ -1222,6 +1227,8 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       id: this.messageIdSerialized(msg.id),
       from: msg.from || '',
       to: msg.to || '',
+      // The sender inside a group chat (unset in a 1:1 chat).
+      author: msg.author || undefined,
       body: msg.body || '',
       type: mapWwebjsMessageType(msg.type || 'text'),
       timestamp: msg.timestamp || Math.floor(Date.now() / 1000),

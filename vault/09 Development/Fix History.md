@@ -310,6 +310,17 @@ no moving background, pink only for state and action, retuned status colours, an
 re-validated against the new card surface (all checks pass, worst colour-blind pair ΔE 8.4).
 The light theme is unchanged.
 
+## Webhook filters that never matched (2026-10-21)
+
+| Filter | Problem | Fix |
+|---|---|---|
+| Group only | Read `data.isGroup`, which messages never carry: never fired | Group = chat id ends in `@g.us` |
+| Sender (groups) | Read `author ?? from`; NOWEB has no `author` and `from` is the group | `author` → `participant` → `from` |
+| Sender (several numbers) | The dashboard saved `"a,b"` as one value; typing a comma also deleted it | Comma lists split server-side; the input keeps commas, spaces and `+` |
+| Sender (`@lid` contacts) | No LID resolver was ever passed, so LID senders never matched a number | `buildLidResolver()` before delivery |
+| Has media | Read the downloaded `media`, null unless media download is on | `hasMedia` |
+| WEBJS groups | The incoming handler replaced `from` (the group) with the sender | Sender goes to `author`, `from` stays the chat |
+
 ## Related
 
 [[OpenWA Parity]] · [[Roadmap]] · [[Testing]] · [[Dashboard]] · [[Known Gaps and Stubs]]

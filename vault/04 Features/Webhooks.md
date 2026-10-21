@@ -100,6 +100,22 @@ verification and the idempotency key.
 `evaluateFilters()` (`src/common/security/webhook-filters.ts`) supports AND-composed conditions on
 sender, recipient, body, type, `isGroup`, `fromMe`, `hasMedia` and `mentions`, with JID
 normalisation via `wa-id.ts`. Guard rails: max 20 conditions, 100 values, 1000 chars.
+Only `message*` events are filtered; other events always pass.
+
+How each field is read from a message (the payloads carry no `isGroup` or `author` on NOWEB):
+
+| Field | Read from |
+|---|---|
+| sender | `author` (WEBJS group) → `participant` (NOWEB group) → `from`; a list or a comma-separated string; `+233 55 …` style numbers are accepted |
+| isGroup | the chat id ends in `@g.us` (`to` for messages you sent, `from` otherwise) |
+| hasMedia | `hasMedia`, or a downloaded `media` |
+| fromMe | `fromMe` |
+| body | case-insensitive `contains` / `equals` |
+
+Senders addressed by a private LID (`…@lid`) are mapped to their phone number before the check
+(`buildLidResolver()` in `src/core/webhook-lid-resolver.ts`): first from the phone the message key
+carries (`remoteJidAlt` / `participantAlt`), then from the session's LID store. The lookup only runs
+when a sender, recipient or mentions filter is set.
 
 ## SSRF protection
 
