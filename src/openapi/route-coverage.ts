@@ -368,6 +368,11 @@ export const CURATED: Record<string, RouteDoc> = {
     summary: 'Analytics: send/refused/failed and webhook series, per-session and per-feature (REST action or MCP tool) usage, failure reasons, activity by hour of day, session stability, MCP and auth activity (admin only; ?range=1h|24h|7d|30d, ?session=<name>)',
     tag: TAGS.audit,
   },
+  'GET /api/dashboard/calendar': {
+    summary: 'Sends and failures per day for one month, server local time (admin only; ?month=YYYY-MM, default this month; ?session=<name>)',
+    tag: TAGS.audit,
+    responses: { '400': { description: 'Malformed month' } },
+  },
   'GET /api/dashboard/errors': {
     summary: 'Error report, newest first, with counts per kind (admin only; ?range=, ?session=, ?kind=send|refused|webhook|mcp|session|auth, ?q=<text>, ?limit=1-500, ?offset=)',
     tag: TAGS.audit,

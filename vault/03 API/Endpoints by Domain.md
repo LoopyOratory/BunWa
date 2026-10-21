@@ -22,6 +22,7 @@ document (which lags: [[API Docs]]). `⚠️` = stub or permanently-failing rout
 | GET | `/api/dashboard/login` | Basic-auth check for the dashboard UI; 401 naming the env vars when the API needs a key but no dashboard login is set |
 | GET | `/api/dashboard/summary` | ops dashboard: session health, limits, attention list (`?range=`, `?session=`) |
 | GET | `/api/dashboard/analytics` | analytics page: send/refused/failed and webhook series, per-session and per-feature usage, failure reasons, hour-of-day activity, session stability, MCP and auth activity |
+| GET | `/api/dashboard/calendar` | sends and failures per day for one month, server local time (`?month=YYYY-MM`, `?session=`) |
 | GET | `/api/dashboard/errors` | error report, newest first, counts per kind (`?kind=send\|refused\|webhook\|mcp\|session\|auth`, `?q=`, `?limit=`, `?offset=`) |
 
 ## Server & infra

@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react"
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { Card } from "@/components/ui/card"
 import { Metric } from "@/components/primitives"
 import type { AnalyticsData, DashboardRange } from "@/lib/api"
@@ -22,6 +22,8 @@ const SERIES = {
   failed: { label: "Failed", color: "var(--series-failed)" },
   delivered: { label: "Delivered", color: "var(--series-sent)" },
   webhookFailed: { label: "Failed", color: "var(--series-failed)" },
+  messageRate: { label: "Messages", color: "var(--series-sent)" },
+  webhookRate: { label: "Webhooks", color: "var(--series-webhook)" },
 } as const
 
 type SeriesKey = keyof typeof SERIES
@@ -39,7 +41,19 @@ function bucketLabel(ms: number, range: DashboardRange): string {
 
 type TipItem = { name?: string; value?: number | string; color?: string; dataKey?: string }
 
-function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: TipItem[]; label?: string }) {
+function ChartTooltip({
+  active,
+  payload,
+  label,
+  unit = "",
+  showTotal = true,
+}: {
+  active?: boolean
+  payload?: TipItem[]
+  label?: string
+  unit?: string
+  showTotal?: boolean
+}) {
   if (!active || !payload?.length) return null
   const total = payload.reduce((n, p) => n + (typeof p.value === "number" ? p.value : 0), 0)
   return (
@@ -49,10 +63,12 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
         <p key={p.dataKey ?? p.name} className="flex items-center gap-1.5 text-muted-foreground">
           <span className="filter-dot" style={{ background: p.color }} />
           {p.name}
-          <span className="ms-auto ps-3 font-semibold tabular-nums text-foreground">{p.value}</span>
+          <span className="ms-auto ps-3 font-semibold tabular-nums text-foreground">
+            {p.value === null || p.value === undefined ? "no data" : `${p.value}${unit}`}
+          </span>
         </p>
       ))}
-      {payload.length > 1 && (
+      {showTotal && payload.length > 1 && (
         <p className="mt-1 flex border-t border-border/60 pt-1 text-muted-foreground">
           Total<span className="ms-auto ps-3 font-semibold tabular-nums text-foreground">{total}</span>
         </p>
@@ -151,7 +167,16 @@ export function ChartCard({
   )
 }
 
-/* ── Messages over time: sent / refused / failed, stacked ───────────── */
+/* ── Messages over time: smooth stacked areas (sent / refused / failed) ── */
+function AreaGradient({ id, color }: { id: string; color: string }) {
+  return (
+    <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stopColor={color} stopOpacity={0.55} />
+      <stop offset="100%" stopColor={color} stopOpacity={0.04} />
+    </linearGradient>
+  )
+}
+
 export function MessagesOverTime({ data }: { data: AnalyticsData }) {
   const rows = useMemo(
     () =>
@@ -167,26 +192,90 @@ export function MessagesOverTime({ data }: { data: AnalyticsData }) {
     [data],
   )
   const total = data.totals.sent + data.totals.failed
+  const keys = ["sent", "refused", "failed"] as const
   return (
     <ChartCard
       title="Messages over time"
-      hint="Outgoing messages per interval (REST, bulk and MCP)"
-      legend={["sent", "refused", "failed"]}
+      hint="Outgoing messages per interval (REST, bulk and MCP), stacked"
+      legend={[...keys]}
       empty={total === 0 ? "No messages were sent in this range." : null}
       table={{ columns: ["Time", "Sent", "Refused", "Failed"], rows: rows.map((r) => [r.label, r.sent, r.refused, r.failed]) }}
       className="lg:col-span-2"
     >
-      <div className="h-[240px]">
+      <div className="h-[260px]">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={rows} margin={{ top: 6, right: 8, bottom: 0, left: 0 }} barCategoryGap="20%">
+          <AreaChart data={rows} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+            <defs>
+              {keys.map((key) => (
+                <AreaGradient key={key} id={`area-${key}`} color={SERIES[key].color} />
+              ))}
+            </defs>
             <CartesianGrid {...GRID} />
             <XAxis dataKey="label" tickLine={false} axisLine={false} tick={TICK} interval="preserveStartEnd" minTickGap={24} />
             <YAxis width={34} allowDecimals={false} tickLine={false} axisLine={false} tick={TICK} />
-            <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--primary)", fillOpacity: 0.06 }} />
-            <Bar dataKey="sent" name={SERIES.sent.label} stackId="m" fill={SERIES.sent.color} {...GAP} maxBarSize={16} />
-            <Bar dataKey="refused" name={SERIES.refused.label} stackId="m" fill={SERIES.refused.color} {...GAP} maxBarSize={16} />
-            <Bar dataKey="failed" name={SERIES.failed.label} stackId="m" fill={SERIES.failed.color} {...GAP} maxBarSize={16} radius={[4, 4, 0, 0]} />
-          </BarChart>
+            <Tooltip content={<ChartTooltip />} cursor={{ stroke: "var(--muted-foreground)", strokeDasharray: "3 3" }} />
+            {keys.map((key) => (
+              <Area
+                key={key}
+                type="monotone"
+                dataKey={key}
+                name={SERIES[key].label}
+                stackId="m"
+                stroke={SERIES[key].color}
+                strokeWidth={2}
+                fill={`url(#area-${key})`}
+                activeDot={{ r: 4, stroke: "var(--card)", strokeWidth: 2 }}
+              />
+            ))}
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </ChartCard>
+  )
+}
+
+/* ── Success rate over time: messages vs webhooks, one % axis ──────────── */
+export function SuccessRateTrend({ data }: { data: AnalyticsData }) {
+  const rate = (ok: number, bad: number) => (ok + bad > 0 ? Math.round((ok / (ok + bad)) * 1000) / 10 : null)
+  const rows = useMemo(
+    () =>
+      data.series.bucketStart.map((start, i) => ({
+        label: bucketLabel(start, data.range.key),
+        messageRate: rate(data.series.sent[i] ?? 0, data.series.failed[i] ?? 0),
+        webhookRate: rate(data.series.webhookDelivered[i] ?? 0, data.series.webhookFailed[i] ?? 0),
+      })),
+    [data],
+  )
+  const hasData = rows.some((r) => r.messageRate !== null || r.webhookRate !== null)
+  const cell = (v: number | null) => (v === null ? "-" : `${v}%`)
+  return (
+    <ChartCard
+      title="Success rate over time"
+      hint="Share of messages sent and webhooks delivered per interval; gaps mean no traffic"
+      legend={["messageRate", "webhookRate"]}
+      empty={hasData ? null : "No traffic in this range."}
+      table={{ columns: ["Time", "Messages", "Webhooks"], rows: rows.map((r) => [r.label, cell(r.messageRate), cell(r.webhookRate)]) }}
+    >
+      <div className="h-[240px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={rows} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+            <CartesianGrid {...GRID} />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} tick={TICK} interval="preserveStartEnd" minTickGap={24} />
+            <YAxis width={40} domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tickFormatter={(v) => `${v}%`} tickLine={false} axisLine={false} tick={TICK} />
+            <Tooltip content={<ChartTooltip unit="%" showTotal={false} />} cursor={{ stroke: "var(--muted-foreground)", strokeDasharray: "3 3" }} />
+            {(["messageRate", "webhookRate"] as const).map((key) => (
+              <Line
+                key={key}
+                type="monotone"
+                dataKey={key}
+                name={SERIES[key].label}
+                stroke={SERIES[key].color}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, stroke: "var(--card)", strokeWidth: 2 }}
+              />
+            ))}
+          </LineChart>
         </ResponsiveContainer>
       </div>
     </ChartCard>
@@ -256,9 +345,9 @@ function RankedBars({
 
 const rankedHeight = (n: number) => Math.max(120, n * 34 + 30)
 
-/* ── Sessions compared ─────────────────────────────────────────────────── */
+/* ── Sessions compared: grouped bars per session ───────────────────────── */
 export function SessionsCompared({ data }: { data: AnalyticsData }) {
-  const rows = data.perSession.slice(0, 12).map((s) => ({
+  const rows = data.perSession.slice(0, 10).map((s) => ({
     name: s.session,
     sent: s.sent,
     refused: s.refused,
@@ -267,7 +356,7 @@ export function SessionsCompared({ data }: { data: AnalyticsData }) {
   return (
     <ChartCard
       title="Messages by session"
-      hint={data.perSession.length > 12 ? "Top 12 sessions by volume" : "Every session with sends in this range"}
+      hint={data.perSession.length > 10 ? "Top 10 sessions by volume" : "Sent, refused and failed side by side"}
       legend={["sent", "refused", "failed"]}
       empty={rows.length === 0 ? "No session sent anything in this range." : null}
       table={{
@@ -275,7 +364,19 @@ export function SessionsCompared({ data }: { data: AnalyticsData }) {
         rows: data.perSession.map((s) => [s.session, s.sent, s.refused, s.failed - s.refused, s.webhookDelivered, s.webhookFailed]),
       }}
     >
-      <RankedBars rows={rows} height={rankedHeight(rows.length)} />
+      <div className="h-[260px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={rows} margin={{ top: 6, right: 8, bottom: 0, left: 0 }} barCategoryGap="24%" barGap={2}>
+            <CartesianGrid {...GRID} />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={TICK} interval={0} />
+            <YAxis width={34} allowDecimals={false} tickLine={false} axisLine={false} tick={TICK} />
+            <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--primary)", fillOpacity: 0.06 }} />
+            {(["sent", "refused", "failed"] as const).map((key) => (
+              <Bar key={key} dataKey={key} name={SERIES[key].label} fill={SERIES[key].color} maxBarSize={22} radius={[4, 4, 0, 0]} />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </ChartCard>
   )
 }

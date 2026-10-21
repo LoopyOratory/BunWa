@@ -292,9 +292,12 @@ An outside audit (ChatGPT) listed problems; each was checked against the code be
 | Dashboard login | README promised admin/admin, code had no default: login accepted anything, then every call failed | Login answers 401 naming `WAHA_DASHBOARD_USERNAME` / `WAHA_DASHBOARD_PASSWORD`; docs corrected |
 | Per-session ignore | Dashboard `ignore` settings were saved but never applied | Merged over server defaults, applied live, WEBJS filters too (commit `7aef4b8`) |
 
-New: the **Analytics** page (`/analytics`, `GET /api/dashboard/analytics`, `GET /api/dashboard/errors`) with
-range and session filters, KPI tiles, charts (messages and webhooks over time, per session, per feature,
-failure reasons, hour of day), session stability, MCP tool use and a filterable error report with CSV export.
+New: the **Analytics** page (`/analytics`, `GET /api/dashboard/analytics`, `/calendar`, `/errors`) with
+range and session filters, KPI tiles, success-rate rings (messages, webhooks, MCP, sessions working),
+a smooth stacked area of sends over time, success-rate lines (messages vs webhooks), grouped bars per
+session, sending-limit progress bars per session, a monthly activity calendar (quartile-graded), failure
+reasons, feature usage, hour of day, webhook deliveries, session stability, MCP tool use and a filterable
+error report with CSV export.
 Chart series use `--series-*` tokens validated for colour-vision separation in light and dark.
 
 ## Related

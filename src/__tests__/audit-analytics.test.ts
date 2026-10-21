@@ -76,6 +76,14 @@ describe('audit analytics', () => {
     expect(result.features).toEqual([{ feature: 'sendImage', channel: 'api', sent: 0, failed: 1, refused: 0 }]);
   });
 
+  it('counts sends per local calendar day', () => {
+    const days = audit.daily({ from: new Date(Date.now() - 86_400_000), to: new Date(Date.now() + 86_400_000) });
+    const today = days.find((d) => d.date === new Date().toLocaleDateString('en-CA'));
+    expect(today).toEqual({ date: new Date().toLocaleDateString('en-CA'), sent: 3, failed: 2 });
+    expect(audit.daily({ from: new Date(Date.now() - 86_400_000), to: new Date(Date.now() + 86_400_000), session: 'support' }))
+      .toEqual([{ date: new Date().toLocaleDateString('en-CA'), sent: 0, failed: 1 }]);
+  });
+
   it('lists errors by kind, newest first, with search and paging', () => {
     const all = audit.errors(window());
     expect(all.byKind).toEqual({ send: 1, refused: 1, webhook: 1, mcp: 1, session: 1, auth: 1 });

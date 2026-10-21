@@ -15,8 +15,10 @@ import {
   FeatureUsage,
   MessagesOverTime,
   SessionsCompared,
+  SuccessRateTrend,
   WebhooksOverTime,
 } from "@/components/analytics/analytics-charts"
+import { ActivityCalendar, LimitUsage, SuccessGauges } from "@/components/analytics/analytics-visuals"
 import { api, type AnalyticsData, type DashboardRange, type ErrorKind, type ErrorReport } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
@@ -153,6 +155,7 @@ export function AnalyticsPage() {
           <>
             {error && <p className="text-xs text-warning-foreground">Showing the last answer; the latest refresh failed: {error}</p>}
             <Kpis data={fresh ?? data} />
+            <SuccessGauges data={data} />
 
             <section className="space-y-3">
               <SectionHeading title="Messages" description={`Last ${data.range.key}${data.session ? ` · ${data.session}` : " · all sessions"}`} />
@@ -161,10 +164,17 @@ export function AnalyticsPage() {
                 <FailureReasons data={data} />
               </div>
               <div className="grid gap-4 lg:grid-cols-2">
+                <SuccessRateTrend data={data} />
                 <SessionsCompared data={data} />
-                <FeatureUsage data={data} />
               </div>
-              <ActivityByHour data={data} />
+              <div className="grid gap-4 lg:grid-cols-2">
+                <ActivityCalendar session={session} />
+                <LimitUsage data={data} />
+              </div>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <FeatureUsage data={data} />
+                <ActivityByHour data={data} />
+              </div>
             </section>
 
             <section className="space-y-3">

@@ -591,6 +591,27 @@ export class AuditService {
     };
   }
 
+  /**
+   * Sends per calendar day (server local time) between two dates, for the
+   * analytics calendar. Days with no sends are omitted.
+   */
+  daily(options: { from: Date; to: Date; session?: string }): Array<{ date: string; sent: number; failed: number }> {
+    const sessionSql = options.session ? ' AND sessionName = ?' : '';
+    const params = options.session
+      ? [options.from.toISOString(), options.to.toISOString(), options.session]
+      : [options.from.toISOString(), options.to.toISOString()];
+    const rows = this.db
+      .query(
+        `SELECT date(createdAt, 'localtime') AS date,
+                SUM(CASE WHEN ${SENT_SQL} THEN 1 ELSE 0 END) AS sent,
+                SUM(CASE WHEN ${FAILED_SQL} THEN 1 ELSE 0 END) AS failed
+         FROM audit_logs WHERE createdAt >= ? AND createdAt < ?${sessionSql} AND (${SENT_SQL} OR ${FAILED_SQL})
+         GROUP BY date ORDER BY date`,
+      )
+      .all(...params) as Array<{ date: string; sent: number; failed: number }>;
+    return rows;
+  }
+
   /** Error report: every failure-like row in a range, newest first, filterable. */
   errors(query: AuditErrorQuery): { total: number; byKind: Record<AuditErrorKind, number>; rows: AuditErrorRow[] } {
     const conditions = ['createdAt >= ?', 'createdAt < ?', `(${ERROR_KIND_SQL}) IS NOT NULL`];

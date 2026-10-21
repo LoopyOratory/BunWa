@@ -30,7 +30,19 @@ export interface AnalyticsData {
   generatedAt: string
   range: { key: DashboardRange; from: string; to: string; bucketMs: number }
   session: string | null
-  sessions: Array<{ name: string; status: string; engine: string }>
+  sessions: Array<{
+    name: string
+    status: string
+    engine: string
+    /** Sending-limit usage now; a cap of 0 means no limit. Null when the policy is unavailable. */
+    limits: {
+      enabled: boolean
+      minute: { used: number; cap: number }
+      hour: { used: number; cap: number }
+      day: { used: number; cap: number }
+      newChats: { used: number; cap: number }
+    } | null
+  }>
   totals: DashboardCounts
   perSession: Array<DashboardCounts & { session: string }>
   series: {
@@ -49,6 +61,12 @@ export interface AnalyticsData {
   stability: Array<{ session: string; connected: number; disconnected: number; qr: number; stopped: number; errors: number }>
   mcp: { calls: number; failed: number; tools: Array<{ tool: string; calls: number; failed: number }> }
   auth: { failed: number }
+}
+
+export interface CalendarMonth {
+  /** YYYY-MM */
+  month: string
+  days: Array<{ date: string; sent: number; failed: number }>
 }
 
 export type ErrorKind = "send" | "refused" | "webhook" | "mcp" | "session" | "auth"
@@ -448,6 +466,11 @@ export const api = {
     const q = new URLSearchParams({ range })
     if (session) q.set("session", session)
     return request<AnalyticsData>(`/api/dashboard/analytics?${q.toString()}`)
+  },
+  getCalendar: (month: string, session?: string) => {
+    const q = new URLSearchParams({ month })
+    if (session) q.set("session", session)
+    return request<CalendarMonth>(`/api/dashboard/calendar?${q.toString()}`)
   },
   getErrorReport: (params: { range: DashboardRange; session?: string; kind?: ErrorKind; q?: string; limit?: number; offset?: number }) => {
     const q = new URLSearchParams({ range: params.range })

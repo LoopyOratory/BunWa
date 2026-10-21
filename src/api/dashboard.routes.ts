@@ -118,11 +118,31 @@ export function createDashboardRouter(): Hono {
     const window = { from: new Date(now - spec.ms), to: new Date(now), bucketMs: spec.bucketMs, session };
     const summary = audit.summarize(window);
     const analytics = audit.analytics(window);
-    const sessions = (await manager.getSessions(true)).map((info) => ({
-      name: info.name,
-      status: String(info.status),
-      engine: String((info.config as any)?.engine || VERSION.engine || 'NOWEB').toUpperCase(),
-    }));
+    const policy = container.isRegistered(SendingPolicyService) ? container.resolve(SendingPolicyService) : null;
+    const sessions = (await manager.getSessions(true)).map((info) => {
+      // Sending-limit usage right now (caps of 0 mean no limit).
+      let limits = null;
+      if (policy) {
+        try {
+          const usage = policy.getUsage(info.name);
+          limits = {
+            enabled: usage.effective.enabled && !policy.isBypassed(info.name),
+            minute: { used: usage.counts.lastMinute, cap: usage.effective.maxPerMinute },
+            hour: { used: usage.counts.lastHour, cap: usage.effective.maxPerHour },
+            day: { used: usage.counts.lastDay, cap: usage.effective.maxPerDay },
+            newChats: { used: usage.counts.newChatsLastDay, cap: usage.effective.newChatsPerDay },
+          };
+        } catch {
+          limits = null;
+        }
+      }
+      return {
+        name: info.name,
+        status: String(info.status),
+        engine: String((info.config as any)?.engine || VERSION.engine || 'NOWEB').toUpperCase(),
+        limits,
+      };
+    });
 
     return c.json({
       generatedAt: new Date(now).toISOString(),
@@ -143,6 +163,31 @@ export function createDashboardRouter(): Hono {
       mcp: analytics.mcp,
       auth: analytics.auth,
     });
+  });
+
+  /**
+   * `GET /api/dashboard/calendar?month=YYYY-MM&session=`
+   *
+   * Sends per day for one calendar month (server local time), for the
+   * analytics calendar. Defaults to the current month.
+   */
+  router.get('/dashboard/calendar', policiesMiddleware(CanServer(Action.Read)), async (c) => {
+    const monthParam = c.req.query('month');
+    const now = new Date();
+    let year = now.getFullYear();
+    let month = now.getMonth();
+    if (monthParam) {
+      const match = /^(\d{4})-(\d{2})$/.exec(monthParam);
+      if (!match || Number(match[2]) < 1 || Number(match[2]) > 12) {
+        return c.json({ statusCode: 400, message: 'month must look like 2026-10' }, 400);
+      }
+      year = Number(match[1]);
+      month = Number(match[2]) - 1;
+    }
+    const from = new Date(year, month, 1);
+    const to = new Date(year, month + 1, 1);
+    const days = container.resolve(AuditService).daily({ from, to, session: c.req.query('session') || undefined });
+    return c.json({ month: `${year}-${String(month + 1).padStart(2, '0')}`, days });
   });
 
   /**
