@@ -45,7 +45,8 @@ function LimitBar({ gauge, caption }: { gauge: LimitGauge; caption?: string }) {
       <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
         <span className="first-letter:uppercase">{gauge.label}</span>
         <span>
-          <Metric className="text-foreground">{gauge.used}</Metric>/<Metric>{gauge.cap}</Metric>
+          <Metric className="text-foreground">{gauge.used}</Metric>/
+          {gauge.cap > 0 ? <Metric>{gauge.cap}</Metric> : <span>no limit</span>}
           {caption && <span className="ms-1">{caption}</span>}
         </span>
       </div>
@@ -54,7 +55,7 @@ function LimitBar({ gauge, caption }: { gauge: LimitGauge; caption?: string }) {
         role="meter"
         aria-label={gauge.label}
         aria-valuemin={0}
-        aria-valuemax={gauge.cap}
+        aria-valuemax={gauge.cap > 0 ? gauge.cap : undefined}
         aria-valuenow={gauge.used}
       >
         <div className={cn("h-full rounded-full transition-[width]", tone)} style={{ width: `${pct}%` }} />

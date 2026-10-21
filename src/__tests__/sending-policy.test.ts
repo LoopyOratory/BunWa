@@ -152,6 +152,62 @@ describe('sending policy: volume caps', () => {
   });
 });
 
+describe('sending policy: literal limits', () => {
+  it('a limit of N allows exactly N sends, from the first day', () => {
+    for (const cap of [1, 2, 5]) {
+      withEnv({ SEND_MAX_PER_MINUTE: String(cap), REACHOUT_MIN_INTERVAL_SECONDS: '0' }, () => {
+        const clock = fakeClock();
+        const policy = makeService(clock);
+        for (let i = 0; i < cap; i++) {
+          policy.assertSendAllowed('s1', 'chat@c.us');
+          policy.recordSend('s1', 'chat@c.us');
+        }
+        expectThrown(() => policy.assertSendAllowed('s1', 'chat@c.us'));
+        expect(policy.getUsage('s1').effective.maxPerMinute).toBe(cap);
+      });
+    }
+  });
+
+  it('0 means no limit, for every cap', () => {
+    withEnv(
+      {
+        SEND_MAX_PER_MINUTE: '0',
+        SEND_MAX_PER_HOUR: '0',
+        SEND_MAX_PER_DAY: '0',
+        NEW_CHATS_PER_DAY: '0',
+        REACHOUT_MIN_INTERVAL_SECONDS: '0',
+      },
+      () => {
+        const clock = fakeClock();
+        const policy = makeService(clock);
+        for (let i = 0; i < 50; i++) {
+          policy.assertSendAllowed('s1', `chat${i}@c.us`);
+          policy.recordSend('s1', `chat${i}@c.us`);
+        }
+        const usage = policy.getUsage('s1');
+        expect(usage.counts.lastMinute).toBe(50);
+        expect(usage.effective.maxPerMinute).toBe(0);
+        expect(usage.nextAllowedAt.minuteCap).toBeNull();
+        expect(usage.nextAllowedAt.newChatsPerDay).toBeNull();
+      },
+    );
+  });
+
+  it('a per-session override of 1 or 0 applies as set', () => {
+    withEnv({ SEND_MAX_PER_MINUTE: '20', REACHOUT_MIN_INTERVAL_SECONDS: '0' }, () => {
+      const clock = fakeClock();
+      const policy = makeService(clock);
+      policy.setOverrides('s1', { maxPerMinute: 1 });
+      policy.assertSendAllowed('s1', 'a@c.us');
+      policy.recordSend('s1', 'a@c.us');
+      expectThrown(() => policy.assertSendAllowed('s1', 'a@c.us'));
+
+      policy.setOverrides('s1', { maxPerMinute: 0 });
+      policy.assertSendAllowed('s1', 'a@c.us');
+    });
+  });
+});
+
 describe('sending policy: reachout timelock', () => {
   const REACHOUT_ENV = {
     REACHOUT_MIN_INTERVAL_SECONDS: '60',
@@ -250,10 +306,13 @@ describe('sending policy: warm-up ramp', () => {
     expect(warmupFactor(40 * 86_400_000, 0, { warmupDays: 14, warmupFloorPercent: 20 })).toBeCloseTo(1);
     // No first-seen yet: no scaling
     expect(warmupFactor(0, null, {})).toBe(1);
+    // Warm-up is off unless a ramp length is set
+    expect(warmupFactor(0, 0, {})).toBe(1);
+    expect(warmupFactor(0, 0, { warmupDays: 0, warmupFloorPercent: 20 })).toBe(1);
   });
 
-  it('starts a fresh session at the floor and lifts it as the session ages', () => {
-    withEnv({ SEND_MAX_PER_MINUTE: '10', REACHOUT_MIN_INTERVAL_SECONDS: '0' }, () => {
+  it('starts a fresh session at the floor and lifts it as the session ages (when opted in)', () => {
+    withEnv({ SEND_MAX_PER_MINUTE: '10', REACHOUT_MIN_INTERVAL_SECONDS: '0', SEND_WARMUP_DAYS: '14' }, () => {
       const clock = fakeClock();
       const policy = makeService(clock);
 

@@ -23,7 +23,7 @@ export interface SendingPolicyConfig {
   maxPerDay?: number;
   newChatsPerDay?: number;
   reachoutMinIntervalSeconds?: number;
-  /** Warm-up ramp length in days (default 14). */
+  /** Warm-up ramp length in days; 0 (the default) turns warm-up off. */
   warmupDays?: number;
   /** Warm-up floor as a percent of the caps (default 20). */
   warmupFloorPercent?: number;
@@ -139,22 +139,35 @@ export function quietHoursRemainingMs(value: string | undefined, now: number): n
 }
 
 /**
- * Fraction of the caps a session may use given its age. Day 0 sits at the
- * floor (20% by default) and ramps linearly to 100% over warmupDays (14).
+ * Fraction of the caps a session may use given its age. Warm-up is opt-in:
+ * with warmupDays 0 (the default) every cap applies exactly as set. With a
+ * ramp, day 0 sits at the floor (20% by default) and rises linearly to 100%.
  */
 export function warmupFactor(
   now: number,
   firstSeenAtMs: number | null,
   config: { warmupDays?: number; warmupFloorPercent?: number },
 ): number {
-  const rampDays = clamp(config.warmupDays ?? 14, 1, 365);
-  const floor = clamp((config.warmupFloorPercent ?? 20) / 100, 0.01, 1);
-  if (firstSeenAtMs === null) {
+  if (firstSeenAtMs === null || !config.warmupDays || config.warmupDays <= 0) {
     return 1;
   }
+  const rampDays = clamp(config.warmupDays, 1, 365);
+  const floor = clamp((config.warmupFloorPercent ?? 20) / 100, 0.01, 1);
   const ageDays = Math.max(0, (now - firstSeenAtMs) / DAY_MS);
   const progress = Math.min(1, ageDays / rampDays);
   return floor + (1 - floor) * progress;
+}
+
+/**
+ * The cap a limit allows right now. Limits are literal: 1 means one, 2 means
+ * two, and 0 means no limit (answered as 0 here, so callers must treat 0 as
+ * "unlimited"). Only an opted-in warm-up lowers a cap, and never below 1.
+ */
+export function effectiveCap(cap: number, factor: number): number {
+  if (!Number.isFinite(cap) || cap <= 0) {
+    return 0;
+  }
+  return Math.max(1, Math.ceil(Math.floor(cap) * factor));
 }
 
 /**
@@ -170,13 +183,13 @@ export function warmupFactor(
  * `policy` table, which takes precedence):
  *   SEND_POLICY_ENABLED           — global off-switch (default true)
  *   SEND_POLICY_BYPASS_SESSIONS   — comma-separated session names to never gate
- *   SEND_MAX_PER_MINUTE           — per-minute cap (default 20)
- *   SEND_MAX_PER_HOUR             — per-hour cap (default 200)
- *   SEND_MAX_PER_DAY              — per-day cap (default 1000)
- *   REACHOUT_MIN_INTERVAL_SECONDS — minimum spacing between cold outreaches (default 60)
- *   NEW_CHATS_PER_DAY             — first-time chats per day (default 100)
+ *   SEND_MAX_PER_MINUTE           — per-minute cap (default 20; 0 = no limit)
+ *   SEND_MAX_PER_HOUR             — per-hour cap (default 200; 0 = no limit)
+ *   SEND_MAX_PER_DAY              — per-day cap (default 1000; 0 = no limit)
+ *   REACHOUT_MIN_INTERVAL_SECONDS — minimum spacing between cold outreaches (default 60; 0 = none)
+ *   NEW_CHATS_PER_DAY             — first-time chats per day (default 100; 0 = no limit)
  *   SEND_QUIET_HOURS              — 'HH:MM-HH:MM' local window, empty = off
- *   SEND_WARMUP_DAYS              — ramp length (default 14)
+ *   SEND_WARMUP_DAYS              — ramp length (default 0 = off)
  *   SEND_WARMUP_FLOOR_PERCENT     — floor percent of the caps (default 20)
  *
  * Recording semantics: successful sends always record a row (caps). A FAILED
@@ -343,7 +356,7 @@ export class SendingPolicyService {
       maxPerDay: envInt('SEND_MAX_PER_DAY', 1000),
       newChatsPerDay: envInt('NEW_CHATS_PER_DAY', 100),
       reachoutMinIntervalSeconds: envInt('REACHOUT_MIN_INTERVAL_SECONDS', 60),
-      warmupDays: envInt('SEND_WARMUP_DAYS', 14),
+      warmupDays: envInt('SEND_WARMUP_DAYS', 0),
       warmupFloorPercent: envInt('SEND_WARMUP_FLOOR_PERCENT', 20),
       quietHours: process.env.SEND_QUIET_HOURS ?? '',
       enabled: envBool('SEND_POLICY_ENABLED', true),
@@ -489,9 +502,7 @@ export class SendingPolicyService {
     // First-seen drives the warm-up ramp; recording it here is idempotent.
     const firstSeenAtMs = this.ensureFirstSeen(session, now);
     const factor = warmupFactor(now, firstSeenAtMs, config);
-    // A cap of 0 or less blocks all sends; otherwise the warm-up floor keeps
-    // at least one send per window available.
-    const scaled = (cap: number) => (cap <= 0 ? 0 : Math.max(1, Math.ceil(cap * factor)));
+    const scaled = (cap: number) => effectiveCap(cap, factor);
 
     // Quiet hours
     const quietMs = quietHoursRemainingMs(config.quietHours, now);
@@ -520,7 +531,7 @@ export class SendingPolicyService {
     if (this.isNewChat(session, chatId)) {
       const newChats = this.distinctNewChatsSince(session, now - DAY_MS);
       const newChatCap = scaled(config.newChatsPerDay);
-      if (newChats >= newChatCap) {
+      if (newChatCap > 0 && newChats >= newChatCap) {
         const oldest = this.oldestNewChatSince(session, now - DAY_MS);
         const wait = oldest === null ? DAY_MS : oldest + DAY_MS - now;
         throw new TooManyRequestsException(
@@ -543,8 +554,11 @@ export class SendingPolicyService {
     }
   }
 
-  /** Retry-after for a sliding-window cap, null when under the limit. */
+  /** Retry-after for a sliding-window cap, null when under it or unlimited (0). */
   private capWait(session: string, now: number, windowMs: number, limit: number): number | null {
+    if (limit <= 0) {
+      return null;
+    }
     const count = this.countSince(session, now - windowMs);
     if (count < limit) {
       return null;
@@ -590,8 +604,9 @@ export class SendingPolicyService {
     const config = this.resolveConfig(session);
     const firstSeenAtMs = this.getFirstSeen(session);
     const factor = warmupFactor(now, firstSeenAtMs, config);
-    const scaled = (cap: number) => Math.max(1, Math.ceil(cap * factor));
+    const scaled = (cap: number) => effectiveCap(cap, factor);
 
+    // 0 in `effective` means no limit, as in the config.
     const effective: SendingPolicyEffectiveConfig = {
       ...config,
       maxPerMinute: scaled(config.maxPerMinute),
@@ -611,7 +626,7 @@ export class SendingPolicyService {
       ms === null ? null : new Date(ms).toISOString();
 
     const capNext = (windowMs: number, limit: number, count: number): string | null => {
-      if (count < limit) {
+      if (limit <= 0 || count < limit) {
         return null;
       }
       const oldest = this.oldestSince(session, now - windowMs);
@@ -635,7 +650,7 @@ export class SendingPolicyService {
         hourCap: capNext(HOUR_MS, effective.maxPerHour, counts.lastHour),
         dayCap: capNext(DAY_MS, effective.maxPerDay, counts.lastDay),
         newChatsPerDay:
-          counts.newChatsLastDay >= effective.newChatsPerDay
+          effective.newChatsPerDay > 0 && counts.newChatsLastDay >= effective.newChatsPerDay
             ? toIso((this.oldestNewChatSince(session, now - DAY_MS) ?? now) + DAY_MS)
             : null,
         reachout:

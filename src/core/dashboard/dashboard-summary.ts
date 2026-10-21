@@ -117,11 +117,12 @@ export interface DashboardSummaryInput {
 }
 
 const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOString());
+// A cap of 0 means no limit, so it is never "near" or "at" its cap.
 const gauge = (label: string, used: number, cap: number): LimitGauge => ({
   label,
   used,
   cap,
-  ratio: cap > 0 ? used / cap : used > 0 ? 1 : 0,
+  ratio: cap > 0 ? used / cap : 0,
 });
 const emptyCounts = (): AuditSessionCounts => ({
   sent: 0,
@@ -273,7 +274,7 @@ function attentionFor(input: DashboardSummaryInput, sessions: DashboardSession[]
   return items.sort((a, b) => rank[a.severity] - rank[b.severity]);
 }
 
-function failureReasons(audit: AuditSummary): DashboardSummary['failureReasons'] {
+export function failureReasons(audit: AuditSummary): DashboardSummary['failureReasons'] {
   const byReason = new Map<string, DashboardSummary['failureReasons'][number]>();
   for (const row of audit.failures) {
     const reason = failureReasonLabel(row.errorMessage, row.metadata);

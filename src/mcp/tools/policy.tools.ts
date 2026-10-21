@@ -33,19 +33,19 @@ async function requireSession(manager: SessionManager, name: string): Promise<vo
 
 const overrideFields = {
   maxPerMinute: z.number().min(0).nullable().optional()
-    .describe('Max sends per rolling minute (0 blocks all sends)'),
+    .describe('Max sends per rolling minute, exactly as set (0 = no limit)'),
   maxPerHour: z.number().min(0).nullable().optional()
-    .describe('Max sends per rolling hour'),
+    .describe('Max sends per rolling hour (0 = no limit)'),
   maxPerDay: z.number().min(0).nullable().optional()
-    .describe('Max sends per rolling 24 hours'),
+    .describe('Max sends per rolling 24 hours (0 = no limit)'),
   newChatsPerDay: z.number().min(0).nullable().optional()
-    .describe('Max first messages to never-contacted chats per day'),
+    .describe('Max first messages to never-contacted chats per day (0 = no limit)'),
   reachoutMinIntervalSeconds: z.number().min(0).nullable().optional()
-    .describe('Minimum gap between cold-outreach first messages, in seconds'),
+    .describe('Minimum gap between cold-outreach first messages, in seconds (0 = none)'),
   warmupDays: z.number().min(0).nullable().optional()
-    .describe('Warm-up ramp length in days (default 14)'),
+    .describe('Warm-up ramp length in days; 0 (default) = off, caps apply exactly as set'),
   warmupFloorPercent: z.number().min(0).nullable().optional()
-    .describe('Warm-up floor as a percent of the caps (default 20)'),
+    .describe('Warm-up floor as a percent of the caps while a ramp is on (default 20)'),
   quietHours: z.string().nullable().optional()
     .describe("'HH:MM-HH:MM' local quiet window; '' disables quiet hours"),
   enabled: z.boolean().nullable().optional()
@@ -104,7 +104,7 @@ export function policyTools(manager: SessionManager): ToolDescriptor[] {
     {
       name: 'SendingPolicyUsage',
       description:
-        'Get live sending-policy usage for a session: sliding-window counts, the effective caps in force (after warm-up scaling), warm-up state and when the next send becomes allowed.',
+        'Get live sending-policy usage for a session: sliding-window counts, the effective caps in force (0 = no limit; lowered only by an opted-in warm-up), warm-up state and when the next send becomes allowed.',
       tier: 'read',
       category: 'policy',
       sessionScoped: true,
