@@ -309,7 +309,11 @@ export abstract class WhatsappSession {
       { ignore: ignore },
       'The session ignores the following chat ids',
     );
-    this.jids = new JidFilter(ignore);
+    this.jids = new JidFilter({ ...ignore, ...sessionConfig?.ignore });
+  }
+
+  public updateIgnoreConfig(ignore: IgnoreJidConfig): void {
+    this.jids.ignore = ignore;
   }
 
   /** Link-time history sync status. Only NOWEB tracks it. */

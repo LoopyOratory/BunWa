@@ -565,6 +565,10 @@ export class SessionManager {
         }
       }
       this.sessionConfigs.set(name, config);
+      this.sessions.get(name)?.updateIgnoreConfig({
+        ...this.config.getIgnoreChatsConfig(),
+        ...config.ignore,
+      });
     }
     if (!this.sessions.has(name)) {
       this.sessions.set(name, null as any);

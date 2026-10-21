@@ -322,6 +322,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
     // Incoming messages
     this.client.on('message', async (msg: any) => {
+      if (!this.jids.include(msg.fromMe ? msg.to : msg.from)) return;
       try {
         const waMsg = this.mapIncomingMessage(msg);
 
@@ -341,12 +342,14 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     // Outgoing messages (from me)
     this.client.on('message_create', (msg: any) => {
       if (!msg.fromMe) return;
+      if (!this.jids.include(msg.to)) return;
       const waMsg = this.mapIncomingMessage(msg);
       msgAny$.next(waMsg);
     });
 
     // Message acknowledgements
     this.client.on('message_ack', (msg: any, ack: number) => {
+      if (!this.jids.include(msg.fromMe ? msg.to : msg.from)) return;
       msgAck$.next({
         id: this.messageIdSerialized(msg.id),
         from: msg.from,
