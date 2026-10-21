@@ -58,6 +58,13 @@ const WEBHOOK_EVENTS = [
   { value: "engine.event", label: "Engine event" },
 ]
 
+/** A non-negative whole number from a number input; blank means "use the default". 0 stays 0. */
+function wholeOrUndefined(value: string): number | undefined {
+  if (value.trim() === "") return undefined
+  const n = parseInt(value, 10)
+  return Number.isFinite(n) && n >= 0 ? n : undefined
+}
+
 const RETRY_POLICIES = [
   { value: "linear", label: "Linear" },
   { value: "exponential", label: "Exponential" },
@@ -91,15 +98,21 @@ const REST_KEY_ACTION_OPTIONS = [
   { value: "manage", label: "Manage" },
 ]
 
+// Limits apply exactly as typed: 1 means 1, 2 means 2, 0 means no limit.
 const POLICY_NUMBER_FIELDS = [
-  { key: "maxPerMinute", label: "Per minute" },
-  { key: "maxPerHour", label: "Per hour" },
-  { key: "maxPerDay", label: "Per 24 hours" },
-  { key: "newChatsPerDay", label: "New chats per day" },
-  { key: "reachoutMinIntervalSeconds", label: "Cold-outreach gap (seconds)" },
-  { key: "warmupDays", label: "Warm-up length (days)" },
-  { key: "warmupFloorPercent", label: "Warm-up floor (%)" },
+  { key: "maxPerMinute", label: "Per minute", hint: "0 = no limit" },
+  { key: "maxPerHour", label: "Per hour", hint: "0 = no limit" },
+  { key: "maxPerDay", label: "Per 24 hours", hint: "0 = no limit" },
+  { key: "newChatsPerDay", label: "New chats per day", hint: "0 = no limit" },
+  { key: "reachoutMinIntervalSeconds", label: "Cold-outreach gap (seconds)", hint: "0 = no gap" },
+  { key: "warmupDays", label: "Warm-up length (days)", hint: "0 = off, limits apply as set" },
+  { key: "warmupFloorPercent", label: "Warm-up floor (%)", hint: "only while warm-up is on" },
 ] as const
+
+/** A cap as shown to people: 0 is "no limit". */
+function capLabel(cap: number): string {
+  return cap > 0 ? String(cap) : "no limit"
+}
 
 function formatDuration(ms: number): string {
   if (ms <= 0) return "now"
@@ -263,6 +276,8 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
   const [mcpEnabled, setMcpEnabled] = useState(true)
   const [mcpDestructiveOps, setMcpDestructiveOps] = useState(false)
   const [mcpDeniedTools, setMcpDeniedTools] = useState<string[]>([])
+  // Set over the API only (no control here); kept so a dashboard save never widens access.
+  const mcpAllowedTools = useRef<string[]>([])
   const [mcpTools, setMcpTools] = useState<{ tools: any[]; byCategory: Record<string, any[]> } | null>(null)
   const [mcpLoading, setMcpLoading] = useState(false)
   const [mcpLoadError, setMcpLoadError] = useState(false)
@@ -345,6 +360,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
         setMcpDestructiveOps(c.mcp.destructiveOps ?? false)
         setMcpDeniedTools(c.mcp.deniedTools ?? [])
       }
+      mcpAllowedTools.current = c?.mcp?.allowedTools ?? []
     }
   }, [session])
 
@@ -386,6 +402,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
       setMcpEnabled(config.enabled)
       setMcpDestructiveOps(config.destructiveOps)
       setMcpDeniedTools(config.deniedTools || [])
+      mcpAllowedTools.current = config.allowedTools || []
       // Check if a key already exists (hash present, plaintext gone)
       const hasKey = !!(config as any).apiKeyHash
       setMcpKeyExists(hasKey)
@@ -452,11 +469,15 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
       const raw = (policyNum[key] ?? "").trim()
       if (!raw) continue
       const value = Number(raw)
+      const label = POLICY_NUMBER_FIELDS.find((f) => f.key === key)?.label ?? key
       if (!Number.isFinite(value) || value < 0) {
-        throw new Error(`Sending limits: '${key}' must be a non-negative number`)
+        throw new Error(`Sending limits: "${label}" must be 0 or more`)
       }
-      ;(overrides as Record<string, number>)[key] =
-        key === "reachoutMinIntervalSeconds" ? value : Math.floor(value)
+      // A limit is a count: 2 means 2, so a fraction is a typo, not 1.
+      if (key !== "reachoutMinIntervalSeconds" && !Number.isInteger(value)) {
+        throw new Error(`Sending limits: "${label}" must be a whole number`)
+      }
+      ;(overrides as Record<string, number>)[key] = value
     }
     if (policyQuietMode === "custom") {
       const quiet = policyQuietValue.trim()
@@ -556,7 +577,14 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
     if (!session) return
     setLoading(true)
     try {
-      const config: Record<string, any> = {}
+      // Start from the stored config so settings this dialog has no control for
+      // (an API-set MCP allowlist, other engine options) survive a save.
+      // The server keeps the key hashes itself.
+      const config: Record<string, any> = { ...(session.config ?? {}) }
+      delete config.restApiKeys
+      delete config.webhooks
+      delete config.proxy
+      delete config.metadata
       if (webhooks.length > 0) {
         config.webhooks = webhooks.filter(w => w.url).map(w => ({
           ...(w.id && { id: w.id }),
@@ -574,14 +602,18 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
       }
       config.engine = engineType.toUpperCase()
       if (engineType === "webjs") {
-        config.webjs = { authTimeout: parseInt(authTimeout) || undefined }
+        config.webjs = { ...config.webjs, authTimeout: parseInt(authTimeout) || undefined }
       } else {
-        config.noweb = { store: { enabled: storeEnabled, fullSync }, markOnline }
+        config.noweb = {
+          ...config.noweb,
+          store: { ...config.noweb?.store, enabled: storeEnabled, fullSync },
+          markOnline,
+        }
       }
-      const client: Record<string, string> = {}
-      if (deviceName) client.deviceName = deviceName
-      if (browserName) client.browserName = browserName
-      if (Object.keys(client).length) config.client = client
+      const client: Record<string, string> = { ...config.client }
+      if (deviceName) client.deviceName = deviceName; else delete client.deviceName
+      if (browserName) client.browserName = browserName; else delete client.browserName
+      if (Object.keys(client).length) config.client = client; else delete config.client
       config.ignore = { status: ignoreStatus, groups: ignoreGroups, channels: ignoreChannels, broadcast: ignoreBroadcast, dm: ignoreDm }
       config.debug = { mode: debugMode }
       config.autoStart = autoStart
@@ -590,7 +622,11 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
         metadata.forEach(m => { if (m.key) config.metadata[m.key] = m.value })
       }
       // MCP config
+      const storedMcp = { ...config.mcp }
+      delete storedMcp.apiKeyHash
       config.mcp = {
+        ...storedMcp,
+        ...(mcpAllowedTools.current.length > 0 && { allowedTools: mcpAllowedTools.current }),
         enabled: mcpEnabled,
         destructiveOps: mcpDestructiveOps,
         deniedTools: mcpDeniedTools.length > 0 ? mcpDeniedTools : undefined,
@@ -805,11 +841,11 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
                       </div>
                       <div className="space-y-2">
                         <Label>Max retries</Label>
-                        <Input type="number" placeholder="3" value={webhook.retries?.attempts || ""} onChange={(e) => updateWebhook(wi, "retries", { ...webhook.retries, attempts: parseInt(e.target.value) || undefined })} className="w-full" />
+                        <Input type="number" placeholder="3" min={0} value={webhook.retries?.attempts ?? ""} onChange={(e) => updateWebhook(wi, "retries", { ...webhook.retries, attempts: wholeOrUndefined(e.target.value) })} className="w-full" />
                       </div>
                       <div className="space-y-2">
                         <Label>Retry delay (s)</Label>
-                        <Input type="number" placeholder="2" value={webhook.retries?.delaySeconds || ""} onChange={(e) => updateWebhook(wi, "retries", { ...webhook.retries, delaySeconds: parseInt(e.target.value) || undefined })} className="w-full" />
+                        <Input type="number" placeholder="2" min={0} value={webhook.retries?.delaySeconds ?? ""} onChange={(e) => updateWebhook(wi, "retries", { ...webhook.retries, delaySeconds: wholeOrUndefined(e.target.value) })} className="w-full" />
                       </div>
                     </div>
                     <div className="space-y-2">
@@ -945,7 +981,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
                   <div className="space-y-0.5">
                     <h4 className="text-sm font-medium">Anti-ban sending limits</h4>
                     <p className="text-xs text-muted-foreground">
-                      Caps how much this session can send, protects cold outreach and new chats, and eases a fresh number in with a warm-up ramp. Blocked sends answer 429 with a Retry-After.
+                      Caps how much this session can send and protects cold outreach and new chats. A warm-up ramp for a fresh number is optional. Blocked sends answer 429 with a Retry-After.
                     </p>
                   </div>
                   <Button variant="ghost" size="sm" onClick={() => setPolicyReload((n) => n + 1)} disabled={policyLoading}>
@@ -996,7 +1032,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
                           <div className="text-xs text-muted-foreground">{tile.label}</div>
                           <div className="mt-1 text-lg font-semibold tabular-nums">
                             {tile.value}
-                            <span className="text-xs font-normal text-muted-foreground"> / {tile.cap}</span>
+                            <span className="text-xs font-normal text-muted-foreground"> / {capLabel(tile.cap)}</span>
                           </div>
                         </div>
                       ))}
@@ -1014,7 +1050,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
                       <div className="space-y-0.5">
                         <h4 className="text-sm font-medium">Per-session overrides</h4>
                         <p className="text-xs text-muted-foreground">
-                          Leave a field empty to inherit the deployment default. Overrides apply to this session only.
+                          Limits apply exactly as typed: 1 allows one message, 2 allows two, and 0 means no limit. Leave a field empty to inherit the deployment default. Overrides apply to this session only.
                         </p>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1027,6 +1063,7 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
                               value={policyNum[field.key] ?? ""}
                               onChange={(e) => setPolicyNum({ ...policyNum, [field.key]: e.target.value })}
                             />
+                            <p className="text-xs text-muted-foreground">{field.hint}</p>
                           </div>
                         ))}
                         <div className="space-y-2">

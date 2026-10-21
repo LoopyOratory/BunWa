@@ -3,6 +3,7 @@ import { container } from 'tsyringe';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanSession, Action, FromParam } from '../middleware/policies';
 import { workingSessionResolver } from '../middleware/session-resolver';
+import { CHANNEL_CATEGORIES, CHANNEL_VIEWS, channelCountries } from '../core/channels/directory';
 
 export function createChannelsRouter(): Hono<{ Variables: { session: any; body: any } }> {
   const router = new Hono<{ Variables: { session: any; body: any } }>();
@@ -137,7 +138,7 @@ export function createChannelsRouter(): Hono<{ Variables: { session: any; body: 
     policiesMiddleware(CanSession(Action.Read, FromParam('session'))),
     workingSessionResolver(),
     async (c) => {
-      return c.json([]);
+      return c.json(CHANNEL_VIEWS);
     }
   );
 
@@ -145,7 +146,7 @@ export function createChannelsRouter(): Hono<{ Variables: { session: any; body: 
     policiesMiddleware(CanSession(Action.Read, FromParam('session'))),
     workingSessionResolver(),
     async (c) => {
-      return c.json([]);
+      return c.json(channelCountries());
     }
   );
 
@@ -153,7 +154,7 @@ export function createChannelsRouter(): Hono<{ Variables: { session: any; body: 
     policiesMiddleware(CanSession(Action.Read, FromParam('session'))),
     workingSessionResolver(),
     async (c) => {
-      return c.json([]);
+      return c.json(CHANNEL_CATEGORIES);
     }
   );
 

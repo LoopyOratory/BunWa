@@ -155,6 +155,42 @@ describe("useChatList", () => {
     expect(result.current.chats.map((c) => c.unreadCount)).toEqual([3, 1])
   })
 
+  test("mark unread shows the badge at once, without a refetch", async () => {
+    const { result } = renderHook(() => useChatList("alpha", true), undefined)
+    await act(async () => calls.overview[0].reply.resolve([chat("a@c.us"), chat("b@c.us", { _chat: { unreadCount: 2 } })]))
+
+    act(() => result.current.markUnread("a@c.us"))
+    expect(result.current.chats.find((c) => c.id === "a@c.us")?.unreadCount).toBe(1)
+    // A chat that already has unread messages keeps its count.
+    act(() => result.current.markUnread("b@c.us"))
+    expect(result.current.chats.find((c) => c.id === "b@c.us")?.unreadCount).toBe(2)
+    expect(calls.overview).toHaveLength(1)
+  })
+
+  test("a local read count gives way once the server shows a newer message", async () => {
+    const lastMessage = (id: string) => ({ id, timestamp: 1, from: "a@c.us", fromMe: false, body: id })
+    const { result } = renderHook(() => useChatList("alpha", true), undefined)
+    await act(async () =>
+      calls.overview[0].reply.resolve([chat("a@c.us", { _chat: { unreadCount: 3 }, lastMessage: lastMessage("m1") })]),
+    )
+    act(() => result.current.markRead("a@c.us"))
+    expect(result.current.chats[0].unreadCount).toBe(0)
+
+    // The server still reports the old count for the same last message: keep 0.
+    act(() => void result.current.refresh())
+    await act(async () =>
+      calls.overview[1].reply.resolve([chat("a@c.us", { _chat: { unreadCount: 3 }, lastMessage: lastMessage("m1") })]),
+    )
+    expect(result.current.chats[0].unreadCount).toBe(0)
+
+    // New messages arrived while this page was not listening: the server count wins.
+    act(() => void result.current.refresh())
+    await act(async () =>
+      calls.overview[2].reply.resolve([chat("a@c.us", { _chat: { unreadCount: 2 }, lastMessage: lastMessage("m3") })]),
+    )
+    expect(result.current.chats[0].unreadCount).toBe(2)
+  })
+
   test("loads the next page from the current length", async () => {
     const { result } = renderHook(() => useChatList("alpha", true), undefined)
     const first = Array.from({ length: 50 }, (_, i) => chat(`c${i}@c.us`))

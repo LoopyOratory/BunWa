@@ -1,7 +1,7 @@
 import { injectable, inject, container } from 'tsyringe';
 import { existsSync } from 'fs';
 import { join } from 'path';
-import { EMPTY, merge, Observable, map } from 'rxjs';
+import { EMPTY, merge, Observable, map, Subject } from 'rxjs';
 import { WhatsappConfigService } from '../config.service';
 import { WhatsappSession } from './session/session.abc';
 import { WhatsappSessionNoWebCore } from './engines/noweb/session.noweb.core';
@@ -54,6 +54,12 @@ const REST_KEY_TOUCH_PERSIST_MS = 60_000;
 @injectable()
 export class SessionManager {
   private sessions: Map<string, WhatsappSession> = new Map();
+  /**
+   * Emits each time a session object is created (start or restart). Services
+   * that listen to a session's events (Chatwoot) subscribe here so they reach
+   * the new instance, not the stopped one.
+   */
+  readonly sessionStarted$ = new Subject<{ name: string; session: WhatsappSession }>();
   private sessionConfigs: Map<string, SessionConfig> = new Map();
   private lock: any;
   private logger: any;
@@ -129,6 +135,11 @@ export class SessionManager {
   get EngineClass(): new (...args: any[]) => WhatsappSession {
     // Default to NOWEB, session config overrides in start()
     return this.getEngine(WAHAEngine.NOWEB);
+  }
+
+  /** The running session object, or undefined when it is stopped or unknown. */
+  getRunningSession(name: string): WhatsappSession | undefined {
+    return this.sessions.get(name) ?? undefined;
   }
 
   getSessionEvent(session: string, event: WAHAEvents): Observable<any> {
@@ -304,6 +315,7 @@ export class SessionManager {
 
     // Store subscriptions for later resync/cleanup
     this.subscriptions.set(name, sessionSubs);
+    this.sessionStarted$.next({ name, session });
 
     // Start the session in background
     (session as any).start().catch((error: any) => {
@@ -706,6 +718,7 @@ export class SessionManager {
         secret: wh.hmac?.key,
         retries: wh.retries?.attempts ?? 3,
         retryDelayMs: (wh.retries?.delaySeconds ?? 2) * 1000,
+        retryPolicy: wh.retries?.policy,
         customHeaders: wh.customHeaders?.reduce((acc: Record<string, string>, h: any) => {
           acc[h.name] = h.value;
           return acc;

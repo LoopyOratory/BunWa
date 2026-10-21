@@ -62,7 +62,7 @@ mock.module('../common/security/ssrf-guard', () => ({
 }));
 
 // ----- Test imports (after mock.module) -----
-import { WebhookDelivery } from '../core/webhook-delivery';
+import { WebhookDelivery, retryDelay } from '../core/webhook-delivery';
 import { WhatsappConfigService } from '../config.service';
 import { container as tsyringeContainer } from 'tsyringe';
 import { AuditService } from '../core/audit/audit.service';
@@ -301,5 +301,57 @@ describe('WebhookDelivery', () => {
 
     const found = sentHeaders['x-custom'] || sentHeaders['X-Custom'];
     expect(found).toBe('my-value');
+  });
+});
+
+describe('WebhookDelivery: retry settings and GET webhooks', () => {
+  const payload = { event: 'message', session: 's1', timestamp: 1, data: { body: 'hi' } };
+
+  afterEach(() => {
+    mockFetchFn = null;
+  });
+
+  it('spaces retries by the chosen policy', () => {
+    const base = 1000;
+    const without = (ms: number) => Math.floor(ms / 100) * 100; // drop the <100 ms jitter
+    expect([0, 1, 2].map((a) => without(retryDelay('constant', a, base)))).toEqual([1000, 1000, 1000]);
+    expect([0, 1, 2].map((a) => without(retryDelay('linear', a, base)))).toEqual([1000, 2000, 3000]);
+    expect([0, 1, 2].map((a) => without(retryDelay('exponential', a, base)))).toEqual([1000, 2000, 4000]);
+    // Unset keeps the old exponential behaviour
+    expect(without(retryDelay(undefined, 2, base))).toBe(4000);
+  });
+
+  it('retries: 0 means one attempt and no retry', async () => {
+    let attempts = 0;
+    mockFetchFn = async () => {
+      attempts += 1;
+      return new Response('down', { status: 503 });
+    };
+    const result = await new WebhookDelivery(mockConfigService).deliver(payload, {
+      url: 'https://hooks.example/x',
+      retries: 0,
+      retryDelayMs: 1,
+    });
+    expect(result.ok).toBe(false);
+    expect(attempts).toBe(1);
+  });
+
+  it('a GET webhook still carries the signature and custom headers', async () => {
+    let seen: { url: string; headers: Record<string, string> } | null = null;
+    mockFetchFn = async (url, init) => {
+      seen = { url, headers: (init?.headers ?? {}) as Record<string, string> };
+      return new Response('ok', { status: 200 });
+    };
+    const result = await new WebhookDelivery(mockConfigService).deliver(payload, {
+      url: 'https://hooks.example/x',
+      method: 'GET',
+      secret: 'shh',
+      customHeaders: { 'X-Tenant': 'vivita' },
+    });
+    expect(result.ok).toBe(true);
+    expect(seen!.url).toContain('?payload=');
+    expect(seen!.headers['X-WAHA-Signature']).toBeTruthy();
+    expect(seen!.headers['X-Tenant']).toBe('vivita');
+    expect(seen!.headers['Content-Type']).toBeUndefined();
   });
 });

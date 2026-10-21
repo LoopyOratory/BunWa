@@ -27,7 +27,7 @@ SessionConfig.webhooks[] = {
   url: string,
   events: WAHAEvents[] | ['*'],     // '*' expands to every event
   hmac: { key: string },
-  retries: { attempts, delaySeconds },
+  retries: { attempts, delaySeconds, policy },   // policy: exponential | linear | constant
   customHeaders: [{ name, value }],
   filters: { … }                    // see below
 }
@@ -76,14 +76,18 @@ Custom headers are allowed, except names starting with `X-WAHA-` and `Content-Ty
 ### Retries
 
 Only **5xx responses** and **network errors** are retried (a 4xx is treated as your endpoint's final
-answer). Backoff is exponential with jitter:
+answer). The wait between attempts follows `retries.policy` (`retryDelay()` in
+`src/core/webhook-delivery.ts`), plus 0–100 ms of jitter:
 
 ```text
-delay = 2^attempt × retryDelayMs + jitter(0–100 ms)
-defaults: attempts = 3, delaySeconds = 2 → 2 s, 4 s, 8 s (± jitter)
+exponential (default)  2^attempt × delay  → 2 s, 4 s, 8 s
+linear                 (attempt+1) × delay → 2 s, 4 s, 6 s
+constant               delay               → 2 s, 2 s, 2 s
+defaults: attempts = 3, delaySeconds = 2; attempts = 0 means one try, no retry
 ```
 
-Each attempt has a 10 s timeout. `GET` subscriptions receive the payload as `?payload=<json>`.
+Each attempt has a 10 s timeout. `GET` subscriptions receive the payload as `?payload=<json>` and
+still carry the `X-WAHA-*` headers, the signature and custom headers (only `Content-Type` is dropped).
 
 ### HMAC signing
 

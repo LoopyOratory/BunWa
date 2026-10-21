@@ -2460,6 +2460,18 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   }
 
   @Activity()
+  public async muteChat(chatId: string, durationSeconds?: number): Promise<any> {
+    // Baileys takes the end of the mute in ms; WhatsApp uses -1 for "always".
+    const until = durationSeconds && durationSeconds > 0 ? Date.now() + durationSeconds * 1000 : -1;
+    return await this.sock.chatModify({ mute: until }, toJID(chatId));
+  }
+
+  @Activity()
+  public async unmuteChat(chatId: string): Promise<any> {
+    return await this.sock.chatModify({ mute: null }, toJID(chatId));
+  }
+
+  @Activity()
   public async chatsUnreadChat(chatId: string): Promise<any> {
     const jid = toJID(chatId);
     const messages = await this.store.getMessagesByJid(jid, {}, { limit: 1 });

@@ -26,7 +26,7 @@ labels work but their colours are wrong.
 | `POST /api/:session/channels/:id/follow` · `/unfollow` | |
 | `POST /api/:session/channels/:id/mute` · `/unmute` | |
 | `POST /api/:session/channels/search/by-view` · `/by-text` | directory search |
-| `GET /api/:session/channels/search/views` · `/countries` · `/categories` | directory facets |
+| `GET /api/:session/channels/search/views` · `/countries` · `/categories` | directory facets: fixed `{ value, name }` lists (views, six categories, ISO countries) |
 
 ### Directory search — the interesting part
 

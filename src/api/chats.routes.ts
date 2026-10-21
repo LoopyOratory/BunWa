@@ -261,11 +261,13 @@ export function createChatsRouter(): Hono<{ Variables: { session: any; body: any
       const session = c.get('session');
       const chatId = c.req.param('chatId');
       const body = await c.req.json().catch(() => ({}));
-      if (typeof (session as any).muteChat === 'function') {
-        await (session as any).muteChat(chatId, body.duration);
-        return c.json({ success: true, chatId, muted: true });
+      // `duration` in seconds; omitted or 0 mutes until unmuted.
+      const duration = body?.duration;
+      if (duration !== undefined && (typeof duration !== 'number' || !Number.isFinite(duration) || duration < 0)) {
+        return c.json({ statusCode: 400, message: 'duration must be a number of seconds (0 or omitted mutes until unmuted)' }, 400);
       }
-      return c.json({ success: false, error: 'mute not supported by this engine' }, 400);
+      await session.muteChat(chatId, duration);
+      return c.json({ success: true, chatId, muted: true, until: duration ? Date.now() + duration * 1000 : null });
     }
   );
 
@@ -275,11 +277,8 @@ export function createChatsRouter(): Hono<{ Variables: { session: any; body: any
     async (c) => {
       const session = c.get('session');
       const chatId = c.req.param('chatId');
-      if (typeof (session as any).unmuteChat === 'function') {
-        await (session as any).unmuteChat(chatId);
-        return c.json({ success: true, chatId, muted: false });
-      }
-      return c.json({ success: false, error: 'unmute not supported by this engine' }, 400);
+      await session.unmuteChat(chatId);
+      return c.json({ success: true, chatId, muted: false });
     }
   );
 

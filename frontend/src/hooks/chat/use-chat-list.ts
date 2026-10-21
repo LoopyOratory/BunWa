@@ -49,7 +49,10 @@ export function useChatList(session: string, enabled: boolean) {
   // Bumped on every session change; async results from an older generation are ignored.
   const generationRef = useRef(0)
   const chatsRef = useRef<ChatOverview[]>([])
-  const localUnreadRef = useRef<Map<string, number>>(new Map())
+  // Unread counts known here before the server catches up (a live message,
+  // read, mark unread), each tied to the chat's last message at the time:
+  // once the server row has moved on to a newer message, its count wins.
+  const localUnreadRef = useRef<Map<string, { count: number; lastId?: string }>>(new Map())
   const unknownRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const commit = useCallback((next: Partial<ChatListState>) => {
@@ -63,10 +66,12 @@ export function useChatList(session: string, enabled: boolean) {
   /** Apply the local unread overlay to a server page. */
   const withUnread = useCallback((rows: OverviewRow[]): ChatOverview[] => {
     const overlay = localUnreadRef.current
-    return rows.map((row) => ({
-      ...row,
-      unreadCount: overlay.has(row.id) ? overlay.get(row.id) : serverUnread(row),
-    }))
+    return rows.map((row) => {
+      const local = overlay.get(row.id)
+      if (local && local.lastId !== row.lastMessage?.id) overlay.delete(row.id)
+      const current = overlay.get(row.id)
+      return { ...row, unreadCount: current ? current.count : serverUnread(row) }
+    })
   }, [])
 
   const fetchPage = useCallback(
@@ -178,7 +183,7 @@ export function useChatList(session: string, enabled: boolean) {
       let unread = existing?.unreadCount ?? 0
       if (!message.fromMe && chatId !== openChatId && existing?.lastMessage?.id !== message.id) {
         unread += 1
-        overlay.set(chatId, unread)
+        overlay.set(chatId, { count: unread, lastId: message.id })
       }
       const raw = (message as Message & { _data?: { pushName?: string } })._data
       const row: ChatOverview = {
@@ -206,14 +211,24 @@ export function useChatList(session: string, enabled: boolean) {
     [commit],
   )
 
-  const markRead = useCallback(
-    (chatId: string) => {
-      localUnreadRef.current.set(chatId, 0)
+  const setLocalUnread = useCallback(
+    (chatId: string, count: (current: number) => number) => {
       const current = chatsRef.current
-      if (!current.some((c) => c.id === chatId && (c.unreadCount ?? 0) > 0)) return
-      commit({ chats: current.map((c) => (c.id === chatId ? { ...c, unreadCount: 0 } : c)) })
+      const chat = current.find((c) => c.id === chatId)
+      const next = count(chat?.unreadCount ?? 0)
+      localUnreadRef.current.set(chatId, { count: next, lastId: chat?.lastMessage?.id })
+      if (!chat || chat.unreadCount === next) return
+      commit({ chats: current.map((c) => (c.id === chatId ? { ...c, unreadCount: next } : c)) })
     },
     [commit],
+  )
+
+  const markRead = useCallback((chatId: string) => setLocalUnread(chatId, () => 0), [setLocalUnread])
+
+  /** Show the unread badge right away, as WhatsApp does for "mark as unread". */
+  const markUnread = useCallback(
+    (chatId: string) => setLocalUnread(chatId, (current) => Math.max(1, current)),
+    [setLocalUnread],
   )
 
   /** Put a chat the list does not have yet at the top (new-chat dialog). */
@@ -232,5 +247,5 @@ export function useChatList(session: string, enabled: boolean) {
     [],
   )
 
-  return { ...state, refresh, loadMore, applyMessage, markRead, ensureChat }
+  return { ...state, refresh, loadMore, applyMessage, markRead, markUnread, ensureChat }
 }

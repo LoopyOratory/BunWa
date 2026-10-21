@@ -579,12 +579,18 @@ export function ChatPage({ initialSession }: ChatPageProps) {
                 })
                 .catch(() => toast.error("Could not archive the chat"))
             }
-            onMarkUnread={() =>
+            onMarkUnread={() => {
+              const chatId = selectedChat.id
               api
-                .unreadChat(selectedSession, selectedChat.id)
-                .then(() => toast.success("Marked unread"))
+                .unreadChat(selectedSession, chatId)
+                .then(() => {
+                  // Close the chat first: an open chat counts as read.
+                  setSelectedChatId(null)
+                  list.markUnread(chatId)
+                  toast.success("Marked unread")
+                })
                 .catch(() => toast.error("Could not mark the chat unread"))
-            }
+            }}
             search={search}
             onSearchChange={setSearch}
             starredOnly={starredOnly}

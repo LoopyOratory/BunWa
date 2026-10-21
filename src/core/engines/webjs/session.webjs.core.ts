@@ -333,6 +333,8 @@ export class WhatsappSessionWebJs extends WhatsappSession {
         } catch {}
 
         msg$.next(waMsg);
+        // message.any carries every message, incoming included (as on NOWEB).
+        msgAny$.next(waMsg);
         this.maintainPresenceOnline();
       } catch (err) {
         this.logger.error({ err }, 'Error processing incoming message');
@@ -759,7 +761,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
               body: c.lastMessage.body || '',
               type: mapWwebjsMessageType(c.lastMessage.type || 'text'),
               timestamp: c.lastMessage.timestamp || 0,
-              isFromMe: c.lastMessage.fromMe || false,
+              fromMe: Boolean(c.lastMessage.fromMe),
             }
           : undefined,
       }));
@@ -781,6 +783,33 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       );
     }
     return messages;
+  }
+
+  async chatsArchiveChat(chatId: string): Promise<any> {
+    this.ensureClientReady();
+    return this.client!.archiveChat(this.ensureSuffix(chatId));
+  }
+
+  async chatsUnarchiveChat(chatId: string): Promise<any> {
+    this.ensureClientReady();
+    return this.client!.unarchiveChat(this.ensureSuffix(chatId));
+  }
+
+  async chatsUnreadChat(chatId: string): Promise<any> {
+    this.ensureClientReady();
+    return this.client!.markChatUnread(this.ensureSuffix(chatId));
+  }
+
+  async muteChat(chatId: string, durationSeconds?: number): Promise<any> {
+    this.ensureClientReady();
+    // whatsapp-web.js mutes until a Date, or for always when none is given.
+    const until = durationSeconds && durationSeconds > 0 ? new Date(Date.now() + durationSeconds * 1000) : undefined;
+    return this.client!.muteChat(this.ensureSuffix(chatId), until);
+  }
+
+  async unmuteChat(chatId: string): Promise<any> {
+    this.ensureClientReady();
+    return this.client!.unmuteChat(this.ensureSuffix(chatId));
   }
 
   async readChatMessages(
@@ -1197,7 +1226,9 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       type: mapWwebjsMessageType(msg.type || 'text'),
       timestamp: msg.timestamp || Math.floor(Date.now() / 1000),
       isForwarded: Boolean(msg.isForwarded),
-      isFromMe: Boolean(msg.fromMe),
+      // `fromMe`, the field NOWEB and every consumer (dashboard, Chatwoot,
+      // webhooks) read; this used to be `isFromMe`.
+      fromMe: Boolean(msg.fromMe),
       hasMedia: Boolean(msg.hasMedia),
       mediaMimeType: msg._data?.mimetype || undefined,
     };

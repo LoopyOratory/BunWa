@@ -784,6 +784,15 @@ export abstract class WhatsappSession {
     throw this.notImplemented();
   }
 
+  /** Mute a chat for `durationSeconds`, or until unmuted when it is omitted or 0. */
+  public muteChat(chatId: string, durationSeconds?: number): Promise<any> {
+    throw this.notImplemented();
+  }
+
+  public unmuteChat(chatId: string): Promise<any> {
+    throw this.notImplemented();
+  }
+
   /**
    * Labels methods
    */

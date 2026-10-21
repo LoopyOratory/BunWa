@@ -24,7 +24,10 @@ export class ChatwootAppService {
   private repository: ChatwootAppRepository;
   private logger: pino.Logger;
   private initialized = false;
-  private subscriptions: (() => void)[] = [];
+  private sessionManager: SessionManager | null = null;
+  /** Message subscription per session, rebuilt on session start and app changes. */
+  private sessionSubscriptions = new Map<string, () => void>();
+  private startedSubscription: (() => void) | null = null;
 
   constructor() {
     this.repository = new ChatwootAppRepository();
@@ -36,18 +39,30 @@ export class ChatwootAppService {
 
     await this.repository.init();
     this.logger.info(`Chatwoot app initialized with ${(await this.repository.findAll()).length} config(s)`);
+    this.sessionManager = sessionManager;
 
-    // Subscribe to WhatsApp message events for all enabled apps
-    await this.subscribeToEvents(sessionManager);
+    // Sessions usually start after this runs, and restart later on: follow
+    // every start instead of subscribing once at boot.
+    const started = sessionManager.sessionStarted$.subscribe(({ name }) => {
+      this.syncSession(name).catch((err) => this.logger.warn({ err, session: name }, 'Chatwoot resubscribe failed'));
+    });
+    this.startedSubscription = () => started.unsubscribe();
+
+    // And pick up sessions that are already running.
+    for (const app of await this.repository.findAllEnabled()) {
+      await this.syncSession(app.session);
+    }
 
     this.initialized = true;
   }
 
   async shutdown(): Promise<void> {
-    for (const unsub of this.subscriptions) {
+    this.startedSubscription?.();
+    this.startedSubscription = null;
+    for (const unsub of this.sessionSubscriptions.values()) {
       try { unsub(); } catch {}
     }
-    this.subscriptions = [];
+    this.sessionSubscriptions.clear();
     this.initialized = false;
   }
 
@@ -69,6 +84,7 @@ export class ChatwootAppService {
     };
     await this.repository.save(app);
     this.logger.info({ appId: app.id, session: app.session }, 'Chatwoot app created');
+    await this.syncSession(app.session);
     return app;
   }
 
@@ -78,51 +94,53 @@ export class ChatwootAppService {
     const updated = { ...existing, ...updates, id, app: 'chatwoot' as const };
     await this.repository.save(updated);
     this.logger.info({ appId: id }, 'Chatwoot app updated');
+    await this.syncSession(updated.session);
+    if (existing.session !== updated.session) {
+      await this.syncSession(existing.session);
+    }
     return updated;
   }
 
   async deleteApp(id: string): Promise<boolean> {
+    const existing = await this.repository.findById(id);
     const existed = await this.repository.delete(id);
     if (existed) {
       this.logger.info({ appId: id }, 'Chatwoot app deleted');
+      if (existing) await this.syncSession(existing.session);
     }
     return existed;
   }
 
   // ── EVENT SUBSCRIPTION ─────────────────────────────────────────
 
-  private async subscribeToEvents(sessionManager: SessionManager): Promise<void> {
-    const apps = await this.repository.findAllEnabled();
-    if (apps.length === 0) {
-      this.logger.info('No enabled Chatwoot apps — skipping event subscription');
-      return;
-    }
+  /**
+   * Make a session's subscription match its apps: drop the old one, then
+   * subscribe to the running session when it has an enabled app.
+   */
+  private async syncSession(session: string): Promise<void> {
+    this.sessionSubscriptions.get(session)?.();
+    this.sessionSubscriptions.delete(session);
 
-    // Subscribe to message events from each session that has a chatwoot app
-    const subscribedSessions = new Set<string>();
-    for (const app of apps) {
-      if (subscribedSessions.has(app.session)) continue;
-      subscribedSessions.add(app.session);
+    const running = this.sessionManager?.getRunningSession(session);
+    if (!running || !(await this.repository.findBySession(session))) return;
 
-      try {
-        const observable = sessionManager.getSessionEvent(app.session, WAHAEvents.MESSAGE_ANY);
-        const sub = observable.subscribe({
-          next: async (data: any) => {
-            try {
-              await this.handleIncomingMessage(app.session, data);
-            } catch (err) {
-              this.logger.error({ err, session: app.session }, 'Error handling incoming WhatsApp message');
-            }
-          },
-          error: (err: any) => {
-            this.logger.error({ err, session: app.session }, 'Event subscription error');
-          },
-        });
-        this.subscriptions.push(() => sub.unsubscribe());
-        this.logger.info({ session: app.session }, 'Subscribed to WhatsApp message events for Chatwoot');
-      } catch (err) {
-        this.logger.warn({ err, session: app.session }, 'Could not subscribe to events — session may not exist yet');
-      }
+    try {
+      const sub = running.getEventObservable(WAHAEvents.MESSAGE_ANY).subscribe({
+        next: async (data: any) => {
+          try {
+            await this.handleIncomingMessage(session, data);
+          } catch (err) {
+            this.logger.error({ err, session }, 'Error handling incoming WhatsApp message');
+          }
+        },
+        error: (err: any) => {
+          this.logger.error({ err, session }, 'Event subscription error');
+        },
+      });
+      this.sessionSubscriptions.set(session, () => sub.unsubscribe());
+      this.logger.info({ session }, 'Subscribed to WhatsApp message events for Chatwoot');
+    } catch (err) {
+      this.logger.warn({ err, session }, 'Could not subscribe to events');
     }
   }
 

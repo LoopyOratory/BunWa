@@ -70,8 +70,6 @@ These are mounted and documented, but always fail:
 
 | Endpoint | Response | Cause |
 |---|---|---|
-| `POST /api/:session/chats/:chatId/mute` · `/unmute` | 400 | guards on `typeof session.muteChat === 'function'`; **no engine defines `muteChat`** — so channel mute works, chat mute never does |
-| `GET /api/:session/channels/search/views` · `/countries` · `/categories` | `[]` | hardcoded empty-array stubs |
 | `GET /api/:session/channels/:id/messages/preview` | `AvailableInPlusVersion` | Argo decoder missing |
 | `GET /api/session/channelsList` (engine method) | `NotImplementedByEngineError` | channel listing not implemented in the engine |
 | `POST /api/sendPollVote` | 422 | poll votes must be encrypted with the poll's secret; not implemented on any engine |

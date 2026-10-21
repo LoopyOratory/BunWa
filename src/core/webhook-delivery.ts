@@ -31,8 +31,27 @@ interface WebhookConfig {
   secret?: string;
   retries?: number;
   retryDelayMs?: number;
+  /** How the wait grows between attempts. Default: exponential. */
+  retryPolicy?: string;
   customHeaders?: Record<string, string>;
   filters?: WebhookFilters;
+}
+
+/**
+ * Wait before retry number `attempt + 1`: constant keeps the base delay,
+ * linear grows it by one base step per attempt, exponential doubles it.
+ * A little jitter keeps many failing webhooks from retrying in lockstep.
+ */
+export function retryDelay(policy: string | undefined, attempt: number, baseMs: number): number {
+  const jitter = Math.random() * 100;
+  switch (policy) {
+    case 'constant':
+      return baseMs + jitter;
+    case 'linear':
+      return baseMs * (attempt + 1) + jitter;
+    default:
+      return Math.pow(2, attempt) * baseMs + jitter;
+  }
 }
 
 /**
@@ -47,6 +66,11 @@ export function webhookUrlLabel(url: string): string {
   } catch {
     return 'invalid URL';
   }
+}
+
+function withoutContentType(headers: Record<string, string>): Record<string, string> {
+  const { 'Content-Type': _contentType, ...rest } = headers;
+  return rest;
 }
 
 @injectable()
@@ -124,7 +148,8 @@ export class WebhookDelivery {
 
         const res: any = await resolveAndPinFetch(fetchUrl, {
           method: httpMethod,
-          headers: isGet ? {} : headers,
+          // A GET has no body, but still carries the signature and custom headers.
+          headers: isGet ? withoutContentType(headers) : headers,
           body: isGet ? undefined : bodyStr,
           signal: AbortSignal.timeout(10_000),
         });
@@ -140,7 +165,7 @@ export class WebhookDelivery {
         }
 
         if (res.status >= 500 && attempt < maxRetries) {
-          const delay = Math.pow(2, attempt) * retryDelayMs + Math.random() * 100;
+          const delay = retryDelay(webhookConfig?.retryPolicy, attempt, retryDelayMs);
           await Bun.sleep(delay);
           continue;
         }
@@ -164,7 +189,7 @@ export class WebhookDelivery {
           return { ok: false, error: error.message };
         }
         if (attempt < maxRetries) {
-          const delay = Math.pow(2, attempt) * retryDelayMs + Math.random() * 100;
+          const delay = retryDelay(webhookConfig?.retryPolicy, attempt, retryDelayMs);
           await Bun.sleep(delay);
           continue;
         }

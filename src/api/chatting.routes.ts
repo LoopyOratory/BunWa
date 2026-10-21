@@ -572,21 +572,25 @@ export function createBulkRouter(): Hono<{ Variables: { session: any; body: any 
     // batch reported sessionId 'default'.
     const key = (session as any).name ?? 'default';
     if (!batches.has(key)) {
+      // Look the session up at send time, not once: after a restart the
+      // object from the first request is a stopped instance, and a batch
+      // that outlives it must reach the new one.
+      const live = async (): Promise<any> => container.resolve(SessionManager).getWorkingSession(key);
       batches.set(key, new BulkMessageService(
         // The engine sends through its request-shaped methods (sendText,
         // sendImage, ...). The old delegates called sendTextMessage /
         // sendImageMessage / ... which no session class defines, so every
         // recipient failed with "is not a function" while the batch reported
         // 201 created.
-        (chatId: string, text: string) => (session as any).sendText({ session: key, chatId, text }),
-        (chatId: string, buffer: Buffer, caption?: string) =>
-          (session as any).sendImage({ session: key, chatId, file: buffer, caption }),
-        (chatId: string, buffer: Buffer, caption?: string) =>
-          (session as any).sendVideo({ session: key, chatId, file: buffer, caption }),
-        (chatId: string, buffer: Buffer) =>
-          (session as any).sendVoice({ session: key, chatId, file: buffer }),
-        (chatId: string, buffer: Buffer, filename?: string, mimetype?: string) =>
-          (session as any).sendFile({
+        async (chatId: string, text: string) => (await live()).sendText({ session: key, chatId, text }),
+        async (chatId: string, buffer: Buffer, caption?: string) =>
+          (await live()).sendImage({ session: key, chatId, file: buffer, caption }),
+        async (chatId: string, buffer: Buffer, caption?: string) =>
+          (await live()).sendVideo({ session: key, chatId, file: buffer, caption }),
+        async (chatId: string, buffer: Buffer) =>
+          (await live()).sendVoice({ session: key, chatId, file: buffer }),
+        async (chatId: string, buffer: Buffer, filename?: string, mimetype?: string) =>
+          (await live()).sendFile({
             session: key,
             chatId,
             file: { mimetype: mimetype || 'application/octet-stream', filename, data: buffer },
