@@ -154,7 +154,7 @@ describe('sending policy: volume caps', () => {
 
 describe('sending policy: literal limits', () => {
   it('a limit of N allows exactly N sends, from the first day', () => {
-    for (const cap of [1, 2, 5]) {
+    for (const cap of [1, 2, 5, 10, 24]) {
       withEnv({ SEND_MAX_PER_MINUTE: String(cap), REACHOUT_MIN_INTERVAL_SECONDS: '0' }, () => {
         const clock = fakeClock();
         const policy = makeService(clock);
