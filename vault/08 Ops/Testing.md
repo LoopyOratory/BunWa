@@ -52,7 +52,12 @@ commit `30ac09c` applied to the webhook tests. Details in [[Dependency Injection
 | `webjs-engine.test.ts` | WEBJS engine wiring |
 | `button-types.test.ts` | button payload DTOs — one style per send |
 | `interactive-replies.test.ts` | inbound button/list/flow replies → structured `interactive` field |
-| `sending-policy.test.ts` | anti-ban policy service: caps, warm-up ramp, quiet hours, bypass |
+| `sending-policy.test.ts` | anti-ban policy service: literal caps (0 = no limit), opt-in warm-up ramp, quiet hours, bypass |
+| `audit-analytics.test.ts` | analytics and error-report queries: per-feature usage, refusals, stability, MCP/auth, filters and paging |
+| `chatwoot-lifecycle.test.ts` | Chatwoot follows session starts, restarts and app changes |
+| `chat-actions-engines.test.ts` | WEBJS `message.any` + `fromMe`; chat mute/unmute/archive/unread on both engines; channel facets |
+| `bulk-restart.test.ts` | bulk batches reach the restarted session object |
+| `ignore-status.test.ts` | per-session ignore settings merged over defaults and applied live |
 | `templates-store.test.ts` | template repository + driver switch (SQLite path) |
 | `policy-tools.test.ts` | MCP policy tools: get/set/usage + destructive gating |
 | `template-tools.test.ts` | MCP template tools: CRUD, preview, send gating |

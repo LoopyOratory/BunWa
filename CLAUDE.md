@@ -65,8 +65,8 @@ Key env vars (see .env.example):
 |----------|---------|-------------|
 | WHATSAPP_API_PORT | 3001 | HTTP server port |
 | WAHA_API_KEY | - | API key for programmatic access (required header: X-Api-Key) |
-| DASHBOARD_USERNAME | admin | Dashboard login username |
-| DASHBOARD_PASSWORD | admin | Dashboard login password |
+| WAHA_DASHBOARD_USERNAME | - | Dashboard login username (no default) |
+| WAHA_DASHBOARD_PASSWORD | - | Dashboard login password (no default) |
 | LOG_LEVEL | info | Logging verbosity |
 | MCP_ENABLED | true | Enable MCP server at POST /mcp |
 | WAHA_DB_TYPE | sqlite | Database driver (sqlite or postgres) |

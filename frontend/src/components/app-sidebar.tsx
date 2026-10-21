@@ -7,13 +7,14 @@ import {
 } from "@/components/ui/sidebar"
 import {
   Home, MessageSquare, Eye, Server, LogOut, BookOpen,
-  Sun, Moon, Plug, FileText, Activity, Send, Settings, ListOrdered, MessageCircle,
+  Sun, Moon, Plug, FileText, Activity, Send, Settings, ListOrdered, MessageCircle, BarChart3,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth"
 import { useTheme } from "@/components/theme-provider"
 
 const menuItems = [
   { path: "/", label: "Dashboard", icon: Home },
+  { path: "/analytics", label: "Analytics", icon: BarChart3 },
   { path: "/sessions", label: "Sessions", icon: MessageSquare },
   { path: "/chat", label: "Chat", icon: MessageCircle },
   { path: "/templates", label: "Templates", icon: FileText },

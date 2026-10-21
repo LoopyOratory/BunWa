@@ -216,6 +216,19 @@ async function bootstrap() {
       }
       return c.json({ ok: false, message: 'Invalid credentials' }, 401);
     });
+  } else if (apiKey || !allowNoAuth) {
+    // The API needs credentials but no dashboard login is set: say so, instead
+    // of accepting any login and failing every request after it.
+    log.warn('No dashboard login configured: set WAHA_DASHBOARD_USERNAME and WAHA_DASHBOARD_PASSWORD to use the dashboard.');
+    app.get('/api/dashboard/login', (c) =>
+      c.json(
+        {
+          ok: false,
+          message: 'Dashboard login is not configured on the server. Set WAHA_DASHBOARD_USERNAME and WAHA_DASHBOARD_PASSWORD, then restart.',
+        },
+        401,
+      ),
+    );
   } else {
     app.get('/api/dashboard/login', (c) => c.json({ ok: true }));
   }

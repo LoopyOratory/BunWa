@@ -13,6 +13,7 @@ import { LoginPage } from "./pages/login-page"
 import { AppsPage } from "./pages/apps-page"
 import { TemplatesPage } from "./pages/templates-page"
 import { LogsPage } from "./pages/logs-page"
+import { AnalyticsPage } from "@/pages/analytics-page"
 import { MessageTesterPage } from "./pages/message-tester-page"
 import { InfrastructurePage } from "./pages/infrastructure-page"
 import { QueuePage } from "./pages/queue-page"
@@ -53,6 +54,7 @@ function AppRoutes() {
         <Route path="/templates" element={<TemplatesPage />} />
         <Route path="/messages" element={<MessageTesterPage />} />
         <Route path="/messages/:chatId" element={<MessageTesterPage />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/logs" element={<LogsPage />} />
         <Route path="/infrastructure" element={<InfrastructurePage />} />
         <Route path="/queue" element={<QueuePage />} />

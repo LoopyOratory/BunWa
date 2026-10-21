@@ -103,11 +103,11 @@ export const CURATED: Record<string, RouteDoc> = {
     tag: TAGS.chats,
   },
   'POST /api/{session}/chats/{chatId}/mute': {
-    summary: 'Mute a chat (not implemented by any engine yet, answers 400 naming the engine)',
+    summary: 'Mute a chat. Body: { duration?: seconds } — omitted or 0 mutes until unmuted (NOWEB and WEBJS)',
     tag: TAGS.chats,
   },
   'POST /api/{session}/chats/{chatId}/unmute': {
-    summary: 'Unmute a chat (not implemented by any engine yet, answers 400 naming the engine)',
+    summary: 'Unmute a chat (NOWEB and WEBJS)',
     tag: TAGS.chats,
   },
   'GET /api/{session}/chats/{chatId}/messages/{messageId}/media': {
@@ -309,15 +309,15 @@ export const CURATED: Record<string, RouteDoc> = {
 
   // --- Channels ---
   'GET /api/{session}/channels/search/views': {
-    summary: 'List channel directory views (stub, returns an empty list)',
+    summary: 'List channel directory views ({ value, name }) for search/by-view',
     tag: TAGS.channels,
   },
   'GET /api/{session}/channels/search/countries': {
-    summary: 'List channel directory countries (stub, returns an empty list)',
+    summary: 'List channel directory countries (ISO 3166-1 alpha-2 { value, name })',
     tag: TAGS.channels,
   },
   'GET /api/{session}/channels/search/categories': {
-    summary: 'List channel directory categories (stub, returns an empty list)',
+    summary: 'List channel directory categories ({ value, name })',
     tag: TAGS.channels,
   },
   'GET /api/{session}/channels/{id}/messages/preview': {
@@ -363,6 +363,15 @@ export const CURATED: Record<string, RouteDoc> = {
   'GET /api/dashboard/summary': {
     summary: 'Ops dashboard summary: session health and limits, send and webhook outcomes, and what needs attention (admin only; ?range=1h|24h|7d|30d, ?session=<name>)',
     tag: TAGS.audit,
+  },
+  'GET /api/dashboard/analytics': {
+    summary: 'Analytics: send/refused/failed and webhook series, per-session and per-feature (REST action or MCP tool) usage, failure reasons, activity by hour of day, session stability, MCP and auth activity (admin only; ?range=1h|24h|7d|30d, ?session=<name>)',
+    tag: TAGS.audit,
+  },
+  'GET /api/dashboard/errors': {
+    summary: 'Error report, newest first, with counts per kind (admin only; ?range=, ?session=, ?kind=send|refused|webhook|mcp|session|auth, ?q=<text>, ?limit=1-500, ?offset=)',
+    tag: TAGS.audit,
+    responses: { '400': { description: 'Unknown kind' } },
   },
   'POST /api/ws/ticket': {
     summary: 'Get a single-use WebSocket ticket (valid 30 s): connect with /ws?ticket=<ticket> instead of putting credentials in the URL',

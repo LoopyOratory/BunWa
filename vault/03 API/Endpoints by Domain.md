@@ -19,7 +19,10 @@ document (which lags: [[API Docs]]). `⚠️` = stub or permanently-failing rout
 | GET | `/ping` | liveness, no auth |
 | GET | `/health` | health; returns 503 while draining ([[Health and Observability]]) |
 | GET | `/api/version` | `{version, engine, tier, platform, worker}` |
-| GET | `/api/dashboard/login` | Basic-auth check for the dashboard UI |
+| GET | `/api/dashboard/login` | Basic-auth check for the dashboard UI; 401 naming the env vars when the API needs a key but no dashboard login is set |
+| GET | `/api/dashboard/summary` | ops dashboard: session health, limits, attention list (`?range=`, `?session=`) |
+| GET | `/api/dashboard/analytics` | analytics page: send/refused/failed and webhook series, per-session and per-feature usage, failure reasons, hour-of-day activity, session stability, MCP and auth activity |
+| GET | `/api/dashboard/errors` | error report, newest first, counts per kind (`?kind=send\|refused\|webhook\|mcp\|session\|auth`, `?q=`, `?limit=`, `?offset=`) |
 
 ## Server & infra
 
@@ -106,7 +109,7 @@ Session arrives **in the body** (`{ session, chatId, text, … }`) for the class
 | POST | `.../:messageId/pin` · `.../unpin` | |
 | POST | `/api/:session/chats/:chatId/messages/read` | mark read |
 | POST | `/api/:session/chats/:chatId/archive` · `/unarchive` · `/read` · `/unread` | |
-| POST | `/api/:session/chats/:chatId/mute` · `/unmute` | ⚠️ always 400 — no engine implements `muteChat` |
+| POST | `/api/:session/chats/:chatId/mute` · `/unmute` | NOWEB and WEBJS; body `{ duration?: seconds }`, omitted or 0 mutes until unmuted |
 | GET | `/api/:session/chats/:chatId/picture` | |
 | GET | `/api/contacts` · `/contacts/all` · `/contacts/check-exists` · `/contacts/profile-picture` | picture lookups carry a 5 s bound and a 10 minute negative cache, so an unresolvable id answers at once instead of holding the request for 30 s |
 | GET | `/api/contacts/about` | ⚠️ stub — returns `{about: ''}` |
@@ -127,7 +130,7 @@ Session arrives **in the body** (`{ session, chatId, text, … }`) for the class
 | DELETE | `/api/:session/channels/:id` | |
 | POST | `/api/:session/channels/:id/follow` · `/unfollow` · `/mute` · `/unmute` | all four verified live 2026-10-04 (follow 0 to 1, unfollow back to 0) |
 | POST | `/api/:session/channels/search/by-view` · `/by-text` | `by-text` works and returns real channels with invite and preview links; `by-view` is refused by WhatsApp's GraphQL with 400 for every view value tested, so it is effectively unusable against the current build; both name a missing field with 400 |
-| GET | `/api/:session/channels/search/views` · `/countries` · `/categories` | ⚠️ hardcoded `[]` stubs |
+| GET | `/api/:session/channels/search/views` · `/countries` · `/categories` | fixed `{ value, name }` lists for `search/by-view` (`src/core/channels/directory.ts`) |
 | GET | `/api/:session/labels` · `/:labelId/chats` | |
 | POST | `/api/:session/labels` | create (colour mapping is faked) |
 | PUT | `/api/:session/labels/:labelId` | |

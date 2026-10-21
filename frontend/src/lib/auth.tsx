@@ -3,14 +3,15 @@ import { createContext, useContext, useState, useCallback, useEffect, type React
 interface AuthState {
   isAuthenticated: boolean
   username: string
-  login: (username: string, password: string) => Promise<boolean>
+  /** Resolves to null on success, or the reason sign-in failed. */
+  login: (username: string, password: string) => Promise<string | null>
   logout: () => void
 }
 
 const AuthContext = createContext<AuthState>({
   isAuthenticated: false,
   username: "",
-  login: async () => false,
+  login: async () => "Not available",
   logout: () => {},
 })
 
@@ -62,11 +63,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUsername(user)
         localStorage.setItem(STORAGE_KEY, encoded)
         localStorage.setItem(USERNAME_KEY, user)
-        return true
+        return null
       }
-      return false
+      // The server explains a misconfiguration (no dashboard login set).
+      const body = await res.json().catch(() => null)
+      return typeof body?.message === "string" && res.status !== 429 && body.message !== "Invalid credentials"
+        ? body.message
+        : res.status === 429
+          ? "Too many attempts. Wait a minute and try again."
+          : "Sign in failed. Check the username and password."
     } catch {
-      return false
+      return "Could not reach the server."
     }
   }, [])
 

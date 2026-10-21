@@ -28,10 +28,8 @@ export function LoginPage() {
     setError("")
     setLoading(true)
     try {
-      const ok = await login(username, password)
-      if (!ok) {
-        setError("Sign in failed. Check the username and password.")
-      }
+      const failure = await login(username, password)
+      if (failure) setError(failure)
     } catch {
       setError("Sign in failed. Check the username and password.")
     } finally {

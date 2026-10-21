@@ -24,6 +24,52 @@ export interface ServerVersion {
   tier: string
 }
 
+/* ── Analytics (GET /api/dashboard/analytics, /api/dashboard/errors) ── */
+
+export interface AnalyticsData {
+  generatedAt: string
+  range: { key: DashboardRange; from: string; to: string; bucketMs: number }
+  session: string | null
+  sessions: Array<{ name: string; status: string; engine: string }>
+  totals: DashboardCounts
+  perSession: Array<DashboardCounts & { session: string }>
+  series: {
+    bucketStart: number[]
+    sent: number[]
+    /** Includes refused. */
+    failed: number[]
+    refused: number[]
+    webhookDelivered: number[]
+    webhookFailed: number[]
+  }
+  failureReasons: Array<{ reason: string; count: number; lastAt: string; session: string | null; example: string | null }>
+  webhooks: { failing: Array<{ session: string | null; url: string | null; count: number; lastAt: string; lastError: string | null }> }
+  features: Array<{ feature: string; channel: "api" | "mcp"; sent: number; failed: number; refused: number }>
+  byHour: { sent: number[]; failed: number[] }
+  stability: Array<{ session: string; connected: number; disconnected: number; qr: number; stopped: number; errors: number }>
+  mcp: { calls: number; failed: number; tools: Array<{ tool: string; calls: number; failed: number }> }
+  auth: { failed: number }
+}
+
+export type ErrorKind = "send" | "refused" | "webhook" | "mcp" | "session" | "auth"
+
+export interface ErrorReport {
+  total: number
+  byKind: Record<ErrorKind, number>
+  rows: Array<{
+    id: string
+    at: string
+    kind: ErrorKind
+    action: string
+    severity: string
+    session: string | null
+    errorMessage: string | null
+    statusCode: number | null
+    path: string | null
+    metadata: Record<string, unknown> | null
+  }>
+}
+
 /* ── Ops dashboard summary (GET /api/dashboard/summary) ─────────────── */
 
 export type DashboardRange = "1h" | "24h" | "7d" | "30d"
@@ -397,6 +443,20 @@ export const api = {
     const q = new URLSearchParams({ range })
     if (session) q.set("session", session)
     return request<DashboardSummary>(`/api/dashboard/summary?${q.toString()}`)
+  },
+  getAnalytics: (range: DashboardRange, session?: string) => {
+    const q = new URLSearchParams({ range })
+    if (session) q.set("session", session)
+    return request<AnalyticsData>(`/api/dashboard/analytics?${q.toString()}`)
+  },
+  getErrorReport: (params: { range: DashboardRange; session?: string; kind?: ErrorKind; q?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams({ range: params.range })
+    if (params.session) q.set("session", params.session)
+    if (params.kind) q.set("kind", params.kind)
+    if (params.q) q.set("q", params.q)
+    if (params.limit !== undefined) q.set("limit", String(params.limit))
+    if (params.offset !== undefined) q.set("offset", String(params.offset))
+    return request<ErrorReport>(`/api/dashboard/errors?${q.toString()}`)
   },
   getAudit: (params?: { limit?: number; offset?: number; severity?: string }) => {
     const q = new URLSearchParams()

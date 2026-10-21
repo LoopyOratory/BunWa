@@ -274,6 +274,29 @@ unusable anywhere Chrome isn't at a hardcoded system path.
 | Fix | `useSessionGuard` in `frontend/src/lib/use-session-guard.ts`: capture the session a request was issued for, drop the answer once the selection moved on. Applied to all six loaders. |
 | Proof | `frontend/tests/session-guard.test.tsx` fails against the unguarded pattern (3 of 4 cases) and passes with it. The socket path was already correct: the handler drops events whose `session` differs from the selected one. |
 
+## Audit follow-ups, literal limits and analytics (2026-10-21)
+
+An outside audit (ChatGPT) listed problems; each was checked against the code before fixing.
+
+| Area | Problem | Fix |
+|---|---|---|
+| MCP permissions | Saving session settings rebuilt `config.mcp` and dropped an API-set `allowedTools`, widening agent access; other options the dialog has no control for were dropped too | The dialog starts from the stored config and keeps `allowedTools` |
+| Bulk send | The sender kept the session object from its first request; after a restart batches went to the stopped instance | Delegates look up the working session at send time |
+| Chatwoot | Subscribed once at boot (usually before sessions run); apps added later and restarts were never subscribed | `SessionManager.sessionStarted$`; Chatwoot re-syncs a session on start and on app create/update/delete |
+| WEBJS live messages | Incoming messages never reached `message.any`; payload used `isFromMe` | Emitted to both; field is `fromMe` |
+| Webhooks | Retry policy ignored; 0 retries became 3 in the dashboard; GET dropped signature and custom headers | `retryDelay()` per policy; 0 kept; GET keeps headers except `Content-Type` |
+| Mark unread | The list never updated; a local 0 hid later server counts | `markUnread`; local counts are tied to the last message and give way when the server moves on |
+| Chat mute | No engine implemented it (always 400) | NOWEB `chatModify({ mute })`, WEBJS `muteChat`; WEBJS also gained archive, unarchive and mark unread |
+| Channel facets | `views` / `countries` / `categories` answered `[]` | Fixed lists in `src/core/channels/directory.ts` |
+| Sending limits | 0 blocked all sends; a 14-day warm-up scaled every cap down (2 meant 1) | Limits are literal, 0 = no limit, warm-up is opt-in (`SEND_WARMUP_DAYS` default 0) |
+| Dashboard login | README promised admin/admin, code had no default: login accepted anything, then every call failed | Login answers 401 naming `WAHA_DASHBOARD_USERNAME` / `WAHA_DASHBOARD_PASSWORD`; docs corrected |
+| Per-session ignore | Dashboard `ignore` settings were saved but never applied | Merged over server defaults, applied live, WEBJS filters too (commit `7aef4b8`) |
+
+New: the **Analytics** page (`/analytics`, `GET /api/dashboard/analytics`, `GET /api/dashboard/errors`) with
+range and session filters, KPI tiles, charts (messages and webhooks over time, per session, per feature,
+failure reasons, hour of day), session stability, MCP tool use and a filterable error report with CSV export.
+Chart series use `--series-*` tokens validated for colour-vision separation in light and dark.
+
 ## Related
 
 [[OpenWA Parity]] · [[Roadmap]] · [[Testing]] · [[Dashboard]] · [[Known Gaps and Stubs]]

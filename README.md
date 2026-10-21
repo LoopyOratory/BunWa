@@ -40,9 +40,9 @@ independently for Bun. The project is at version 2026.10.0; its recorded gate at
 | Webhooks and events | Global and per-session subscriptions, HMAC-SHA256 signatures, idempotency keys, delivery ids, bounded retries with backoff, message filters, SSRF protection and a real test delivery endpoint. Webhook subscriptions and the `/ws` event monitor use the `WAHAEvents` list, which defines 30 event types. |
 | MCP | 80 tools over HTTP (`POST /mcp`) and stdio. Per-session keys scoped to one session, per-session allow and deny policies, a destructive-operations gate, rate limiting and a read-only mode. |
 | Templates and bulk send | Per-session templates with `{{variables}}` (including dotted paths), create, edit, delete, preview and send, addressed by id or name. Bulk sends return a batch id with sent, failed and remaining counts, and can be cancelled. |
-| Anti-ban sending policy | Per-session caps per minute, hour and day, a cold-outreach timelock between new chats, a new-chat daily quota, quiet hours, a warm-up ramp for new sessions, per-session overrides and a bypass list. Blocked sends answer 429 with a `Retry-After` header. |
+| Anti-ban sending policy | Per-session caps per minute, hour and day, a cold-outreach timelock between new chats, a new-chat daily quota, quiet hours, an optional warm-up ramp for new sessions, per-session overrides and a bypass list. Blocked sends answer 429 with a `Retry-After` header. |
 | Security | API key and dashboard Basic auth, per-session MCP keys stored as SHA-256 hashes, auth-exempt path list, audit log with retention, 10 MB request body cap, 200 requests per minute per IP on `/api/*`, and SSRF-hardened webhook delivery. |
-| Dashboard | React 19, Vite and Tailwind dashboard served by the same process: sessions and QR pairing, live chat, templates, message tester, audit logs, WebSocket event monitor, infrastructure settings, MCP key management, worker list and API docs. |
+| Dashboard | React 19, Vite and Tailwind dashboard served by the same process: sessions and QR pairing, live chat, templates, message tester, analytics (charts per session and feature, error report with CSV export), audit logs, WebSocket event monitor, infrastructure settings, MCP key management, worker list and API docs. |
 | Integrations | n8n community node with 131 operations across 10 resources plus a webhook trigger, Chatwoot webhook app, and S3-compatible media storage. |
 
 ## Quick start (local)
@@ -70,8 +70,9 @@ bun run start            # production server on http://localhost:3000 (same as b
 bun run dev              # API on http://localhost:3001, Vite dev server with HMR on http://localhost:5173
 ```
 
-The dashboard is served at `http://localhost:3000` and the default login is `admin` / `admin`
-(change it with `WAHA_DASHBOARD_USERNAME` and `WAHA_DASHBOARD_PASSWORD`).
+The dashboard is served at `http://localhost:3000`. Set its login with `WAHA_DASHBOARD_USERNAME`
+and `WAHA_DASHBOARD_PASSWORD`; there is no built-in default. When `WAHA_API_KEY` is set and no
+dashboard login is, the login screen says so instead of letting you in.
 
 > Set `WAHA_API_KEY` to a strong random value and `WAHA_ALLOW_NO_AUTH=false`. With no API key and
 > the default `WAHA_ALLOW_NO_AUTH=true`, the API, dashboard, WebSocket and MCP endpoint all accept
@@ -436,7 +437,7 @@ These are the essentials:
 | `PORT` | `3000` | HTTP port. Takes precedence over `WHATSAPP_API_PORT`. |
 | `WAHA_API_KEY` | unset | API key for `X-Api-Key` (and the MCP endpoint). Set it in production. |
 | `WAHA_ALLOW_NO_AUTH` | `true` | Set to `false` to reject requests without a key. |
-| `WAHA_DASHBOARD_USERNAME` / `WAHA_DASHBOARD_PASSWORD` | `admin` / `admin` | Dashboard login. |
+| `WAHA_DASHBOARD_USERNAME` / `WAHA_DASHBOARD_PASSWORD` | unset | Dashboard login. Required for the dashboard whenever `WAHA_API_KEY` is set. |
 | `WHATSAPP_DEFAULT_ENGINE` | `NOWEB` | `NOWEB` (Baileys) or `WEBJS` (whatsapp-web.js + Chrome). |
 | `WAHA_DATABASE_DRIVER` | `sqlite` | `sqlite`, `postgres` or `postgresql`. An unrecognised value, including `mongo`, fails the boot. |
 | `WAHA_STORAGE_TYPE` | `local` | Media storage backend: `local` or `s3`. |
@@ -468,8 +469,8 @@ These are the essentials:
 | `WAHA_ALLOW_NO_AUTH` | `true` | When `false`, requests without an API key are rejected. Set to `false` in production. |
 | `WHATSAPP_API_KEY_EXCLUDE_PATH` | unset | Comma-separated API paths excluded from API-key auth, for example `/api/health,/api/version`. |
 | `WAHA_DASHBOARD_ENABLED` | `true` | Enable or disable the dashboard UI. |
-| `WAHA_DASHBOARD_USERNAME` | `admin` | Dashboard Basic Auth username. |
-| `WAHA_DASHBOARD_PASSWORD` | `admin` | Dashboard Basic Auth password. |
+| `WAHA_DASHBOARD_USERNAME` | unset | Dashboard Basic Auth username. |
+| `WAHA_DASHBOARD_PASSWORD` | unset | Dashboard Basic Auth password. |
 | `WHATSAPP_SWAGGER_ENABLED` | `true` | Enable the interactive API docs at `/api-docs`. |
 | `WHATSAPP_SWAGGER_USERNAME` | `admin` | API docs Basic Auth username. |
 | `WHATSAPP_SWAGGER_PASSWORD` | empty | API docs Basic Auth password. Empty means no auth. |
@@ -539,14 +540,14 @@ REST surface is `GET /api/sessions/:session/policy` for the effective configurat
 | --- | --- | --- |
 | `SEND_POLICY_ENABLED` | `true` | Master switch. Set to `false` to disable all checks. |
 | `SEND_POLICY_BYPASS_SESSIONS` | unset | Comma-separated session names that are never gated. |
-| `SEND_MAX_PER_MINUTE` | `20` | Maximum messages sent per sliding minute, per session. |
+| `SEND_MAX_PER_MINUTE` | `20` | Maximum messages sent per sliding minute, per session. Applies exactly as set; `0` means no limit (as do the other caps). |
 | `SEND_MAX_PER_HOUR` | `200` | Maximum messages sent per sliding hour, per session. |
 | `SEND_MAX_PER_DAY` | `1000` | Maximum messages sent per sliding day, per session. |
 | `REACHOUT_MIN_INTERVAL_SECONDS` | `60` | Minimum interval between messages to distinct chats the session has never written to before. |
-| `NEW_CHATS_PER_DAY` | `100` | Maximum first-time chats a session may start per day. |
+| `NEW_CHATS_PER_DAY` | `100` | Maximum first-time chats a session may start per day (`0` = no limit). |
 | `SEND_QUIET_HOURS` | unset | Quiet-hours window in server-local time, format `HH:MM-HH:MM`, may wrap midnight. Empty disables. |
-| `SEND_WARMUP_DAYS` | `14` | Days over which a new session ramps from the warm-up floor to full caps, based on its first-seen date. |
-| `SEND_WARMUP_FLOOR_PERCENT` | `20` | Starting percentage of the caps for a new session. |
+| `SEND_WARMUP_DAYS` | `0` | Optional warm-up: days over which a new session ramps from the floor to full caps. `0` turns it off, so caps apply exactly as set. |
+| `SEND_WARMUP_FLOOR_PERCENT` | `20` | Starting percentage of the caps while a warm-up ramp is on. |
 
 </details>
 

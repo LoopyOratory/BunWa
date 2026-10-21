@@ -142,12 +142,80 @@ export interface AuditSummary {
   }>;
 }
 
+/** One row of the "which features are used" breakdown. */
+export interface AuditFeatureUsage {
+  /** The REST action (sendText, sendImage, ...) or the MCP tool name. */
+  feature: string;
+  channel: 'api' | 'mcp';
+  sent: number;
+  failed: number;
+  refused: number;
+}
+
+export interface AuditSessionStability {
+  session: string;
+  connected: number;
+  disconnected: number;
+  qr: number;
+  stopped: number;
+  /** Stops that carried an error (a failed start or a crash). */
+  errors: number;
+}
+
+export interface AuditAnalytics {
+  features: AuditFeatureUsage[];
+  /** Sends (ok + failed) by hour of day, server local time, 24 entries. */
+  byHour: { sent: number[]; failed: number[] };
+  /** Refused sends per bucket, aligned with `summarize().series.bucketStart`. */
+  refusedSeries: number[];
+  stability: AuditSessionStability[];
+  mcp: { calls: number; failed: number; tools: Array<{ tool: string; calls: number; failed: number }> };
+  auth: { failed: number };
+}
+
+export type AuditErrorKind = 'send' | 'refused' | 'webhook' | 'mcp' | 'session' | 'auth';
+
+export interface AuditErrorQuery {
+  from: Date;
+  to: Date;
+  session?: string;
+  kind?: AuditErrorKind;
+  /** Case-insensitive text match on the error, path and metadata. */
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface AuditErrorRow {
+  id: string;
+  at: string;
+  kind: AuditErrorKind;
+  action: string;
+  severity: string;
+  session: string | null;
+  errorMessage: string | null;
+  statusCode: number | null;
+  path: string | null;
+  metadata: Record<string, any> | null;
+}
+
 /**
  * Outgoing message operations: REST sends (`message_*`) and MCP tools in the
  * message category (`mcp_tool_*`), which the MCP path audits instead.
  */
 const SENT_SQL = `(action = 'message_sent' OR (action = 'mcp_tool_called' AND json_extract(metadata, '$.category') = 'message'))`;
 const FAILED_SQL = `(action = 'message_failed' OR (action = 'mcp_tool_failed' AND json_extract(metadata, '$.category') = 'message'))`;
+
+/** Which error-report kind a warn/error row is, in SQL (NULL = not an error). */
+const ERROR_KIND_SQL = `CASE
+    WHEN ${FAILED_SQL} AND json_extract(metadata, '$.reason') = 'policy' THEN 'refused'
+    WHEN ${FAILED_SQL} THEN 'send'
+    WHEN action = 'webhook_failed' THEN 'webhook'
+    WHEN action = 'mcp_tool_failed' THEN 'mcp'
+    WHEN action IN ('session_disconnected', 'session_force_killed')
+      OR (action = 'session_stopped' AND errorMessage IS NOT NULL) THEN 'session'
+    WHEN action = 'api_key_auth_failed' THEN 'auth'
+  END`;
 
 const emptyCounts = (): AuditSessionCounts => ({
   sent: 0,
@@ -415,6 +483,153 @@ export class AuditService {
       .all(...params) as AuditSummary['webhookFailures'];
 
     return { perSession, totals, series, failures, webhookFailures };
+  }
+
+  /**
+   * The analytics view on top of summarize(): what is used (per feature and
+   * channel), when (hour of day), refused sends over time, how stable each
+   * session is, and MCP / auth activity. Aggregated in SQL.
+   */
+  analytics(options: AuditSummaryOptions): AuditAnalytics {
+    const fromIso = options.from.toISOString();
+    const toIso = options.to.toISOString();
+    const fromMs = options.from.getTime();
+    const bucketMs = Math.max(1, Math.floor(options.bucketMs));
+    const sessionSql = options.session ? ' AND sessionName = ?' : '';
+    const base = (extra: string) =>
+      `FROM audit_logs WHERE createdAt >= ? AND createdAt < ?${sessionSql} AND ${extra}`;
+    const params = options.session ? [fromIso, toIso, options.session] : [fromIso, toIso];
+    const sendKind = `CASE WHEN ${SENT_SQL} THEN 'sent'
+        WHEN ${FAILED_SQL} AND json_extract(metadata, '$.reason') = 'policy' THEN 'refused'
+        ELSE 'failed' END`;
+    const sends = `(${SENT_SQL} OR ${FAILED_SQL})`;
+
+    const features = new Map<string, AuditFeatureUsage>();
+    const featureRows = this.db
+      .query(
+        `SELECT COALESCE(json_extract(metadata, '$.tool'), json_extract(metadata, '$.action'), 'unknown') AS feature,
+                CASE WHEN action LIKE 'mcp_%' THEN 'mcp' ELSE 'api' END AS channel,
+                ${sendKind} AS kind, COUNT(*) AS n
+         ${base(sends)} GROUP BY feature, channel, kind`,
+      )
+      .all(...params) as Array<{ feature: string; channel: 'api' | 'mcp'; kind: string; n: number }>;
+    for (const row of featureRows) {
+      const key = `${row.channel}:${row.feature}`;
+      const entry = features.get(key) ?? { feature: row.feature, channel: row.channel, sent: 0, failed: 0, refused: 0 };
+      if (row.kind === 'sent') entry.sent += row.n;
+      else {
+        entry.failed += row.n;
+        if (row.kind === 'refused') entry.refused += row.n;
+      }
+      features.set(key, entry);
+    }
+
+    const byHour = { sent: Array.from({ length: 24 }, () => 0), failed: Array.from({ length: 24 }, () => 0) };
+    const hourRows = this.db
+      .query(
+        `SELECT CAST(strftime('%H', createdAt, 'localtime') AS INTEGER) AS hour,
+                CASE WHEN ${SENT_SQL} THEN 'sent' ELSE 'failed' END AS kind, COUNT(*) AS n
+         ${base(sends)} GROUP BY hour, kind`,
+      )
+      .all(...params) as Array<{ hour: number; kind: 'sent' | 'failed'; n: number }>;
+    for (const row of hourRows) {
+      if (row.hour >= 0 && row.hour < 24) byHour[row.kind][row.hour] += row.n;
+    }
+
+    const bucketCount = Math.max(1, Math.ceil((options.to.getTime() - fromMs) / bucketMs));
+    const refusedSeries = Array.from({ length: bucketCount }, () => 0);
+    const refusedRows = this.db
+      .query(
+        `SELECT (CAST(strftime('%s', createdAt) AS INTEGER) * 1000 - ?) / ? AS bucket, COUNT(*) AS n
+         ${base(`${FAILED_SQL} AND json_extract(metadata, '$.reason') = 'policy'`)} GROUP BY bucket`,
+      )
+      .all(fromMs, bucketMs, ...params) as Array<{ bucket: number; n: number }>;
+    for (const row of refusedRows) {
+      if (row.bucket >= 0 && row.bucket < bucketCount) refusedSeries[row.bucket] += row.n;
+    }
+
+    const stability = this.db
+      .query(
+        `SELECT sessionName AS session,
+                SUM(action = 'session_connected') AS connected,
+                SUM(action = 'session_disconnected') AS disconnected,
+                SUM(action = 'session_qr_generated') AS qr,
+                SUM(action = 'session_stopped') AS stopped,
+                SUM((action = 'session_stopped' AND errorMessage IS NOT NULL) OR action = 'session_force_killed') AS errors
+         ${base(`sessionName IS NOT NULL AND action IN ('session_connected', 'session_disconnected', 'session_qr_generated', 'session_stopped', 'session_force_killed')`)}
+         GROUP BY sessionName ORDER BY sessionName`,
+      )
+      .all(...params) as AuditSessionStability[];
+
+    const tools = this.db
+      .query(
+        `SELECT json_extract(metadata, '$.tool') AS tool, COUNT(*) AS calls, SUM(action = 'mcp_tool_failed') AS failed
+         ${base(`action IN ('mcp_tool_called', 'mcp_tool_failed')`)} GROUP BY tool ORDER BY calls DESC LIMIT 15`,
+      )
+      .all(...params) as Array<{ tool: string | null; calls: number; failed: number }>;
+    const mcpTotals = this.db
+      .query(
+        `SELECT COUNT(*) AS calls, COALESCE(SUM(action = 'mcp_tool_failed'), 0) AS failed
+         ${base(`action IN ('mcp_tool_called', 'mcp_tool_failed')`)}`,
+      )
+      .get(...params) as { calls: number; failed: number };
+    const authFailed = this.db
+      .query(`SELECT COUNT(*) AS n ${base(`action = 'api_key_auth_failed'`)}`)
+      .get(...params) as { n: number };
+
+    return {
+      features: [...features.values()].sort((a, b) => b.sent + b.failed - (a.sent + a.failed)),
+      byHour,
+      refusedSeries,
+      stability,
+      mcp: {
+        calls: mcpTotals?.calls ?? 0,
+        failed: mcpTotals?.failed ?? 0,
+        tools: tools.map((t) => ({ tool: t.tool ?? 'unknown', calls: t.calls, failed: t.failed })),
+      },
+      auth: { failed: authFailed?.n ?? 0 },
+    };
+  }
+
+  /** Error report: every failure-like row in a range, newest first, filterable. */
+  errors(query: AuditErrorQuery): { total: number; byKind: Record<AuditErrorKind, number>; rows: AuditErrorRow[] } {
+    const conditions = ['createdAt >= ?', 'createdAt < ?', `(${ERROR_KIND_SQL}) IS NOT NULL`];
+    const params: (string | number)[] = [query.from.toISOString(), query.to.toISOString()];
+    if (query.session) {
+      conditions.push('sessionName = ?');
+      params.push(query.session);
+    }
+    const scoped = [...conditions];
+    const scopedParams = [...params];
+    if (query.kind) {
+      conditions.push(`(${ERROR_KIND_SQL}) = ?`);
+      params.push(query.kind);
+    }
+    if (query.search?.trim()) {
+      conditions.push(`(LOWER(COALESCE(errorMessage, '') || ' ' || COALESCE(path, '') || ' ' || COALESCE(metadata, '') || ' ' || COALESCE(sessionName, '')) LIKE ?)`);
+      params.push(`%${query.search.trim().toLowerCase()}%`);
+    }
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    const limit = Math.min(500, Math.max(1, Math.floor(query.limit ?? 50)));
+    const offset = Math.max(0, Math.floor(query.offset ?? 0));
+
+    const total = (this.db.query(`SELECT COUNT(*) AS n FROM audit_logs ${where}`).get(...params) as { n: number })?.n ?? 0;
+    const byKind: Record<AuditErrorKind, number> = { send: 0, refused: 0, webhook: 0, mcp: 0, session: 0, auth: 0 };
+    const kindRows = this.db
+      .query(`SELECT ${ERROR_KIND_SQL} AS kind, COUNT(*) AS n FROM audit_logs WHERE ${scoped.join(' AND ')} GROUP BY kind`)
+      .all(...scopedParams) as Array<{ kind: AuditErrorKind; n: number }>;
+    for (const row of kindRows) {
+      if (row.kind in byKind) byKind[row.kind] = row.n;
+    }
+    const rows = (this.db
+      .query(
+        `SELECT id, createdAt AS at, ${ERROR_KIND_SQL} AS kind, action, severity, sessionName AS session,
+                errorMessage, statusCode, path, metadata
+         FROM audit_logs ${where} ORDER BY createdAt DESC LIMIT ? OFFSET ?`,
+      )
+      .all(...params, limit, offset) as Array<Omit<AuditErrorRow, 'metadata'> & { metadata: string | null }>)
+      .map((row) => ({ ...row, metadata: parseMetadata(row.metadata) }));
+    return { total, byKind, rows };
   }
 
   async getRecentByApiKey(apiKeyId: string, limit = 10): Promise<AuditLogEntry[]> {
