@@ -153,92 +153,108 @@ body { -webkit-font-smoothing: antialiased; }
     --z-toast: 60;
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   NIGHT — a calm graphite theme.
+
+   The day theme is a dreamy sky; at night that turned into a purple haze
+   with moving colour behind translucent cards, which muddied every
+   surface and chart. Night is deliberately quieter:
+
+     - one neutral grey family with a faint cool cast (hue 260), stepped
+       by lightness only: page 0.16 < sidebar 0.18 < card 0.205 < raised 0.23
+     - solid surfaces: nothing moves behind content, so text and charts
+       sit on clean ground
+     - one accent (BunWa pink), used for state and action only
+     - status and chart colours tuned for these surfaces (series validated
+       for colour-vision separation against --card)
+   ═══════════════════════════════════════════════════════════════════ */
 .dark {
-    --background: oklch(0.185 0.034 312);
-    --foreground: oklch(0.96 0.015 80);
-    --card: oklch(0.225 0.036 315);
-    --card-foreground: oklch(0.96 0.015 80);
-    --popover: oklch(0.235 0.038 315);
-    --surface-overlay: oklch(0.245 0.038 315);
-    --surface-overlay-border: oklch(0.36 0.04 320);
-    --popover-foreground: oklch(0.96 0.015 80);
-    --primary: oklch(0.76 0.17 352);
-    --primary-foreground: oklch(0.22 0.05 345);
-    --primary-soft: color-mix(in oklab, var(--primary) 20%, var(--background));
-    --primary-strong: oklch(0.84 0.12 350);
-    --secondary: oklch(0.29 0.045 55);
-    --secondary-foreground: oklch(0.93 0.02 70);
-    --muted: oklch(0.27 0.03 315);
-    --muted-foreground: oklch(0.80 0.028 320);
-    --accent: oklch(0.31 0.05 340);
-    --accent-foreground: oklch(0.955 0.02 340);
-    --destructive: oklch(0.68 0.19 25);
-    --border: oklch(1 0 0 / 12%);
-    --input: oklch(1 0 0 / 16%);
-    --ring: oklch(0.76 0.14 352);
-    --chart-1: oklch(0.76 0.17 350);
-    --chart-2: oklch(0.82 0.12 60);
-    --chart-3: oklch(0.74 0.13 295);
-    --chart-4: oklch(0.80 0.12 165);
-    --chart-5: oklch(0.76 0.11 235);
-    /* Dark steps of the same series, validated against the dark card. */
-    --series-sent: oklch(0.58 0.14 160);
-    --series-refused: oklch(0.67 0.14 78);
-    --series-failed: oklch(0.60 0.20 25);
-    --series-webhook: oklch(0.62 0.14 265);
-    --sidebar: oklch(0.215 0.03 315);
-    --sidebar-foreground: oklch(0.96 0.015 80);
-    --sidebar-primary: oklch(0.76 0.17 352);
-    --sidebar-primary-foreground: oklch(0.22 0.05 345);
-    --sidebar-accent: oklch(0.30 0.045 340);
-    --sidebar-accent-foreground: oklch(0.955 0.02 340);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.76 0.14 352);
-    --sidebar-active-bg: color-mix(in oklab, var(--primary) 24%, transparent);
-    --sidebar-active-fg: oklch(0.88 0.13 350);
-    --sidebar-active-border: color-mix(in oklab, var(--primary) 32%, transparent);
+    --background: oklch(0.16 0.008 260);
+    --foreground: oklch(0.95 0.004 260);
+    --card: oklch(0.205 0.009 260);
+    --card-foreground: oklch(0.95 0.004 260);
+    --popover: oklch(0.23 0.01 260);
+    --surface-overlay: oklch(0.23 0.01 260);
+    --surface-overlay-border: oklch(0.32 0.012 260);
+    --popover-foreground: oklch(0.95 0.004 260);
+    --primary: oklch(0.75 0.14 352);
+    --primary-foreground: oklch(0.2 0.035 352);
+    --primary-soft: color-mix(in oklab, var(--primary) 14%, var(--card));
+    --primary-strong: oklch(0.83 0.10 352);
+    --secondary: oklch(0.255 0.01 260);
+    --secondary-foreground: oklch(0.93 0.005 260);
+    --muted: oklch(0.25 0.01 260);
+    --muted-foreground: oklch(0.71 0.012 260);
+    --accent: oklch(0.265 0.012 260);
+    --accent-foreground: oklch(0.96 0.004 260);
+    --destructive: oklch(0.66 0.17 22);
+    --border: oklch(1 0 0 / 8%);
+    --input: oklch(1 0 0 / 12%);
+    --ring: oklch(0.75 0.12 352);
+    --chart-1: oklch(0.72 0.13 352);
+    --chart-2: oklch(0.76 0.11 70);
+    --chart-3: oklch(0.70 0.11 295);
+    --chart-4: oklch(0.72 0.11 165);
+    --chart-5: oklch(0.70 0.10 240);
+    /* Validated against --card: all checks pass, worst CVD pair ΔE 8.4. */
+    --series-sent: oklch(0.60 0.13 165);
+    --series-refused: oklch(0.665 0.13 90);
+    --series-failed: oklch(0.53 0.18 15);
+    --series-webhook: oklch(0.62 0.13 260);
+    --sidebar: oklch(0.18 0.008 260);
+    --sidebar-foreground: oklch(0.92 0.005 260);
+    --sidebar-primary: oklch(0.75 0.14 352);
+    --sidebar-primary-foreground: oklch(0.2 0.035 352);
+    --sidebar-accent: oklch(0.24 0.01 260);
+    --sidebar-accent-foreground: oklch(0.96 0.004 260);
+    --sidebar-border: oklch(1 0 0 / 7%);
+    --sidebar-ring: oklch(0.75 0.12 352);
+    --sidebar-active-bg: color-mix(in oklab, var(--primary) 14%, transparent);
+    --sidebar-active-fg: oklch(0.86 0.09 352);
+    --sidebar-active-border: color-mix(in oklab, var(--primary) 24%, transparent);
 
-    /* Night aurora — pulled brighter so ribbons glow against the plum sky. */
-    --aur-1: oklch(0.68 0.17 350);
-    --aur-2: oklch(0.70 0.13 60);
-    --aur-3: oklch(0.62 0.15 295);
-    --aur-4: oklch(0.60 0.11 235);
+    /* The sky is retired at night; these only tint a few hairlines. */
+    --aur-1: oklch(0.75 0.14 352);
+    --aur-2: oklch(0.75 0.14 352);
+    --aur-3: oklch(0.40 0.02 260);
+    --aur-4: oklch(0.40 0.02 260);
 
-    /* Glass on night surfaces: a soft frosted plum, not grey. */
-    --glass-a: rgb(255 255 255 / 0.085);
-    --glass-b: rgb(255 255 255 / 0.035);
-    --glass-hl: rgb(255 255 255 / 0.12);
-    --glass-line-a: rgb(255 255 255 / 0.24);
-    --glass-line-b: color-mix(in oklab, var(--primary) 42%, transparent);
-    --glass-line-c: color-mix(in oklab, oklch(0.72 0.14 295) 38%, transparent);
-    --glass-shadow: 0 24px 55px -26px oklch(0.02 0.02 300 / 0.85), 0 8px 22px -14px oklch(0.02 0.02 300 / 0.6);
-    --glass-shadow-strong: 0 34px 75px -30px oklch(0.01 0.02 300 / 0.95), 0 12px 30px -16px oklch(0.01 0.02 300 / 0.7);
-    --pop-a: color-mix(in oklab, oklch(0.245 0.038 315) 88%, transparent);
-    --pop-b: color-mix(in oklab, oklch(0.225 0.036 315) 82%, transparent);
+    /* Surfaces are solid: a 3% top-light gradient, a neutral hairline that
+       is a little brighter at the top edge, and a soft shadow. */
+    --glass-a: oklch(0.215 0.009 260);
+    --glass-b: oklch(0.2 0.009 260);
+    --glass-hl: rgb(255 255 255 / 0.045);
+    --glass-line-a: rgb(255 255 255 / 0.11);
+    --glass-line-b: rgb(255 255 255 / 0.06);
+    --glass-line-c: rgb(255 255 255 / 0.05);
+    --glass-shadow: 0 1px 2px oklch(0 0 0 / 0.35), 0 14px 32px -18px oklch(0 0 0 / 0.65);
+    --glass-shadow-strong: 0 2px 6px oklch(0 0 0 / 0.35), 0 26px 60px -24px oklch(0 0 0 / 0.8);
+    --pop-a: oklch(0.23 0.01 260);
+    --pop-b: oklch(0.23 0.01 260);
 
-    --shadow-xs: 0 1px 2px 0 oklch(0.06 0.02 300 / 0.5);
-    --shadow-sm: 0 2px 4px -1px oklch(0.06 0.02 300 / 0.5), 0 1px 2px -1px oklch(0.06 0.02 300 / 0.5);
-    --shadow-md: 0 6px 16px -6px oklch(0.06 0.02 300 / 0.55), 0 2px 6px -2px oklch(0.06 0.02 300 / 0.5);
-    --shadow-lg: 0 14px 30px -10px oklch(0.06 0.02 300 / 0.6), 0 5px 12px -5px oklch(0.06 0.02 300 / 0.55);
-    --shadow-xl: 0 24px 50px -16px oklch(0.04 0.02 300 / 0.65), 0 10px 20px -10px oklch(0.04 0.02 300 / 0.6);
-    --shadow-2xl: 0 32px 70px -20px oklch(0.03 0.02 300 / 0.8);
-    --shadow-primary: 0 6px 18px -6px oklch(0.76 0.17 352 / 0.40);
-    --shadow-primary-lg: 0 12px 30px -8px oklch(0.76 0.17 352 / 0.50);
+    --shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 0.4);
+    --shadow-sm: 0 2px 4px -1px oklch(0 0 0 / 0.4), 0 1px 2px -1px oklch(0 0 0 / 0.4);
+    --shadow-md: 0 6px 16px -6px oklch(0 0 0 / 0.5), 0 2px 6px -2px oklch(0 0 0 / 0.4);
+    --shadow-lg: 0 14px 30px -10px oklch(0 0 0 / 0.55), 0 5px 12px -5px oklch(0 0 0 / 0.45);
+    --shadow-xl: 0 24px 50px -16px oklch(0 0 0 / 0.6), 0 10px 20px -10px oklch(0 0 0 / 0.5);
+    --shadow-2xl: 0 32px 70px -20px oklch(0 0 0 / 0.75);
+    --shadow-primary: 0 6px 18px -8px oklch(0.75 0.14 352 / 0.35);
+    --shadow-primary-lg: 0 12px 28px -10px oklch(0.75 0.14 352 / 0.45);
 
-    --success-bg: oklch(0.24 0.05 160);
-    --success-border: oklch(0.33 0.07 160);
-    --success-foreground: oklch(0.86 0.11 160);
-    --warning-bg: oklch(0.25 0.05 78);
-    --warning-border: oklch(0.34 0.07 78);
-    --warning-foreground: oklch(0.87 0.11 78);
-    --error-bg: oklch(0.245 0.05 27);
-    --error-border: oklch(0.335 0.08 27);
-    --error-foreground: oklch(0.86 0.11 27);
-    --success: oklch(0.76 0.17 158);
-    --warning: oklch(0.82 0.15 78);
-    --error: oklch(0.70 0.18 27);
-    --info: oklch(0.72 0.13 245);
-    --overlay: color-mix(in oklab, oklch(0.10 0.02 300) 65%, transparent);
+    --success-bg: oklch(0.25 0.035 165);
+    --success-border: oklch(0.35 0.06 165);
+    --success-foreground: oklch(0.84 0.1 165);
+    --warning-bg: oklch(0.26 0.035 85);
+    --warning-border: oklch(0.37 0.06 85);
+    --warning-foreground: oklch(0.86 0.1 85);
+    --error-bg: oklch(0.25 0.04 20);
+    --error-border: oklch(0.36 0.07 20);
+    --error-foreground: oklch(0.84 0.09 20);
+    --success: oklch(0.72 0.14 165);
+    --warning: oklch(0.80 0.13 82);
+    --error: oklch(0.66 0.17 22);
+    --info: oklch(0.72 0.11 245);
+    --overlay: color-mix(in oklab, oklch(0.08 0.006 260) 72%, transparent);
 }
 
 @theme inline {
@@ -352,10 +368,10 @@ body { -webkit-font-smoothing: antialiased; }
         background: color-mix(in oklab, var(--primary) 50%, var(--muted));
     }
     .dark ::-webkit-scrollbar-thumb {
-        background: color-mix(in oklab, var(--primary) 22%, var(--muted));
+        background: oklch(1 0 0 / 12%);
     }
     .dark ::-webkit-scrollbar-thumb:hover {
-        background: color-mix(in oklab, var(--primary) 38%, var(--muted));
+        background: oklch(1 0 0 / 20%);
     }
     /* Focus ring styles */
     :focus-visible {
@@ -372,7 +388,7 @@ body { -webkit-font-smoothing: antialiased; }
         color: inherit;
     }
     .dark ::selection {
-        background: color-mix(in oklab, var(--primary) 32%, transparent);
+        background: color-mix(in oklab, var(--primary) 28%, transparent);
     }
 }
 
@@ -457,7 +473,7 @@ body { -webkit-font-smoothing: antialiased; }
     animation: shimmer-sweep 1.6s ease-in-out infinite;
 }
 .dark .skeleton-shimmer::after {
-    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 8%), transparent);
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 5%), transparent);
 }
 @media (prefers-reduced-motion: reduce) {
     .skeleton-shimmer::after { animation: none; }
@@ -504,11 +520,17 @@ body { -webkit-font-smoothing: antialiased; }
 }
 .dark .aurora-sky {
     background:
-        radial-gradient(115% 80% at 50% -18%, color-mix(in oklab, var(--aur-1) 34%, transparent), transparent 60%),
-        radial-gradient(80% 55% at 90% 4%, color-mix(in oklab, var(--aur-3) 32%, transparent), transparent 56%),
-        radial-gradient(90% 65% at 4% 104%, color-mix(in oklab, var(--aur-2) 22%, transparent), transparent 58%),
-        linear-gradient(172deg, oklch(0.185 0.034 308), oklch(0.162 0.04 306) 48%, oklch(0.148 0.045 268));
+        radial-gradient(70% 45% at 50% -12%, color-mix(in oklab, var(--primary) 7%, transparent), transparent 70%),
+        var(--background);
 }
+/* Night keeps only the plain sky and a whisper of grain: nothing moves
+   behind content. */
+.dark .aurora-bloom,
+.dark .aurora-blob,
+.dark .aurora-stars,
+.dark .aurora-bokeh,
+.dark .aurora-sparkle,
+.dark .aurora-veil { display: none; }
 
 /* Soft light source at the very top, like a window out of frame. */
 .aurora-bloom {
@@ -562,7 +584,6 @@ body { -webkit-font-smoothing: antialiased; }
     background: radial-gradient(closest-side, color-mix(in oklab, var(--aur-4) 46%, transparent), transparent 72%);
     animation: aurora-b 34s ease-in-out infinite reverse;
 }
-.dark .aurora-blob { opacity: 0.55; }
 
 @keyframes aurora-a {
     0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
@@ -591,7 +612,6 @@ body { -webkit-font-smoothing: antialiased; }
     inset: 0;
     display: none;
 }
-.dark .aurora-stars { display: block; }
 .aurora-stars-a {
     background-image:
         radial-gradient(1.4px 1.4px at 25px 35px, rgb(255 255 255 / 0.95), transparent 100%),
@@ -677,7 +697,7 @@ body { -webkit-font-smoothing: antialiased; }
     background-repeat: repeat;
     opacity: 0.035;
 }
-.dark .aurora-grain { opacity: 0.06; }
+.dark .aurora-grain { opacity: 0.025; }
 
 @media (prefers-reduced-motion: reduce) {
     .aurora-blob, .aurora-bloom, .aurora-stars, .aurora-bokeh, .aurora-sparkle { animation: none; }
@@ -715,8 +735,8 @@ body { -webkit-font-smoothing: antialiased; }
 }
 .dark .glass-card {
     background:
-        linear-gradient(160deg, var(--glass-a), var(--glass-b)) padding-box,
-        linear-gradient(150deg, var(--glass-line-a), rgb(255 255 255 / 0.08) 36%, var(--glass-line-b) 68%, var(--glass-line-c)) border-box;
+        linear-gradient(180deg, var(--glass-a), var(--glass-b)) padding-box,
+        linear-gradient(180deg, var(--glass-line-a), var(--glass-line-b) 40%, var(--glass-line-c)) border-box;
 }
 
 /* Frosted variant for fixed, sticky and hero surfaces (blur allowed there). */
@@ -728,6 +748,12 @@ body { -webkit-font-smoothing: antialiased; }
    purpose: these float over arbitrary content, and a translucent fill let the
    page show through and made their text unreadable. The gradient hairline
    keeps them in the glass family. */
+.dark .glass-pop,
+.dark .surface-overlay {
+    background:
+        linear-gradient(var(--surface-overlay), var(--surface-overlay)) padding-box,
+        linear-gradient(180deg, oklch(1 0 0 / 14%), oklch(1 0 0 / 7%)) border-box;
+}
 .glass-pop,
 .surface-overlay {
     border: 1px solid transparent;
@@ -762,21 +788,21 @@ body { -webkit-font-smoothing: antialiased; }
 }
 .dark .glass-field {
     background:
-        linear-gradient(180deg, rgb(255 255 255 / 0.07), rgb(255 255 255 / 0.03)) padding-box,
-        linear-gradient(180deg, rgb(255 255 255 / 0.2), color-mix(in oklab, var(--primary) 22%, transparent)) border-box;
-    box-shadow: inset 0 1.5px 3px oklch(0.02 0.02 300 / 0.35);
+        linear-gradient(oklch(0.175 0.008 260), oklch(0.175 0.008 260)) padding-box,
+        linear-gradient(oklch(1 0 0 / 11%), oklch(1 0 0 / 11%)) border-box;
+    box-shadow: inset 0 1px 2px oklch(0 0 0 / 0.3);
 }
 .dark .glass-field:hover {
     background:
-        linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.05)) padding-box,
-        linear-gradient(180deg, rgb(255 255 255 / 0.26), color-mix(in oklab, var(--primary) 34%, transparent)) border-box;
+        linear-gradient(oklch(0.185 0.008 260), oklch(0.185 0.008 260)) padding-box,
+        linear-gradient(oklch(1 0 0 / 18%), oklch(1 0 0 / 18%)) border-box;
 }
 .dark .glass-field:focus-visible,
 .dark .glass-field[data-state="open"] {
     background:
-        linear-gradient(180deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.07)) padding-box,
-        linear-gradient(180deg, color-mix(in oklab, var(--primary) 60%, transparent), color-mix(in oklab, var(--primary) 30%, transparent)) border-box;
-    box-shadow: inset 0 1.5px 3px oklch(0.02 0.02 300 / 0.3), 0 0 0 4px color-mix(in oklab, var(--primary) 18%, transparent);
+        linear-gradient(oklch(0.185 0.008 260), oklch(0.185 0.008 260)) padding-box,
+        linear-gradient(color-mix(in oklab, var(--primary) 70%, transparent), color-mix(in oklab, var(--primary) 70%, transparent)) border-box;
+    box-shadow: inset 0 1px 2px oklch(0 0 0 / 0.3), 0 0 0 3px color-mix(in oklab, var(--primary) 18%, transparent);
 }
 
 /* Hover float for cards that should physically lift toward the light. */
@@ -827,16 +853,16 @@ body { -webkit-font-smoothing: antialiased; }
 }
 .dark .filter-chip {
     background:
-        linear-gradient(180deg, rgb(255 255 255 / 0.08), rgb(255 255 255 / 0.04)) padding-box,
-        linear-gradient(180deg, rgb(255 255 255 / 0.2), color-mix(in oklab, var(--primary) 20%, transparent)) border-box;
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
+        linear-gradient(oklch(1 0 0 / 4%), oklch(1 0 0 / 4%)) padding-box,
+        linear-gradient(oklch(1 0 0 / 10%), oklch(1 0 0 / 10%)) border-box;
+    box-shadow: none;
 }
 .dark .filter-chip[data-active="true"] {
     color: var(--primary-strong);
     background:
-        linear-gradient(130deg, color-mix(in oklab, var(--primary) 34%, transparent), color-mix(in oklab, var(--primary) 14%, transparent)) padding-box,
-        linear-gradient(130deg, color-mix(in oklab, var(--primary) 60%, transparent), color-mix(in oklab, var(--primary) 28%, transparent)) border-box;
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 6px 18px -8px color-mix(in oklab, var(--primary) 60%, transparent);
+        linear-gradient(color-mix(in oklab, var(--primary) 16%, transparent), color-mix(in oklab, var(--primary) 16%, transparent)) padding-box,
+        linear-gradient(color-mix(in oklab, var(--primary) 40%, transparent), color-mix(in oklab, var(--primary) 40%, transparent)) border-box;
+    box-shadow: none;
 }
 .filter-dot {
     width: 0.45rem;
@@ -863,8 +889,10 @@ body { -webkit-font-smoothing: antialiased; }
 }
 .dark [data-slot="sidebar-inner"] {
     background:
-        linear-gradient(165deg, var(--glass-a), var(--glass-b)) padding-box,
-        linear-gradient(150deg, var(--glass-line-a), rgb(255 255 255 / 0.07) 40%, var(--glass-line-b) 72%, var(--glass-line-c)) border-box;
+        linear-gradient(var(--sidebar), var(--sidebar)) padding-box,
+        linear-gradient(180deg, oklch(1 0 0 / 10%), oklch(1 0 0 / 5%)) border-box;
+    box-shadow: var(--glass-shadow);
+    backdrop-filter: none;
 }
 [data-slot="sidebar-inset"] {
     background: transparent;
@@ -879,7 +907,7 @@ body { -webkit-font-smoothing: antialiased; }
   @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45);
 }
-.dark .status-badge { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08); }
+.dark .status-badge { box-shadow: none; }
 .status-working { @apply border border-success-border bg-success-bg text-success-foreground; }
 .status-starting { @apply border border-warning-border bg-warning-bg text-warning-foreground; }
 .status-qr { @apply border border-error-border bg-error-bg text-error-foreground; }
@@ -950,15 +978,24 @@ body { -webkit-font-smoothing: antialiased; }
 }
 .dark .btn-glass {
   background:
-    linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.05)) padding-box,
-    linear-gradient(180deg, rgb(255 255 255 / 0.26), color-mix(in oklab, var(--primary) 30%, transparent)) border-box;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 8px 18px -12px oklch(0.02 0.02 300 / 0.7);
+    linear-gradient(oklch(1 0 0 / 5%), oklch(1 0 0 / 5%)) padding-box,
+    linear-gradient(180deg, oklch(1 0 0 / 16%), oklch(1 0 0 / 9%)) border-box;
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.3);
 }
 .dark .btn-glass:hover {
   background:
-    linear-gradient(180deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.08)) padding-box,
-    linear-gradient(180deg, rgb(255 255 255 / 0.34), color-mix(in oklab, var(--primary) 46%, transparent)) border-box;
+    linear-gradient(oklch(1 0 0 / 9%), oklch(1 0 0 / 9%)) padding-box,
+    linear-gradient(180deg, oklch(1 0 0 / 24%), oklch(1 0 0 / 14%)) border-box;
 }
+/* The primary button: flat pink with a soft lift, no sheen at night. */
+.dark .btn-dream {
+  background-image: linear-gradient(180deg, color-mix(in oklab, white 8%, var(--primary)), var(--primary));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 25%), var(--shadow-primary);
+}
+.dark .btn-dream:hover {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 30%), var(--shadow-primary-lg);
+}
+.dark .btn-dream::after { display: none; }
 
 /* ── Nav pill: the sliding active item in the sidebar ── */
 .nav-pill {
@@ -966,7 +1003,8 @@ body { -webkit-font-smoothing: antialiased; }
   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 30%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.35), var(--shadow-xs);
 }
 .dark .nav-pill {
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 36%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.12), var(--shadow-xs);
+  background: color-mix(in oklab, var(--primary) 13%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 22%, transparent);
 }
 
 /* Stat card: gradient icon chips + hover float */
@@ -1005,6 +1043,12 @@ body { -webkit-font-smoothing: antialiased; }
 .dark .chip-sky > svg { color: oklch(0.80 0.11 235); }
 .dark .chip-rose > svg { color: oklch(0.80 0.13 25); }
 .dark .icon-chip > svg { color: var(--primary-strong); }
+/* Icon chips: flat tinted squares at night, no glow. */
+.dark .icon-chip { box-shadow: none; background: color-mix(in oklab, var(--primary) 14%, transparent); }
+.dark .chip-peach { background: color-mix(in oklab, oklch(0.80 0.14 55) 14%, transparent); }
+.dark .chip-mint { background: color-mix(in oklab, oklch(0.78 0.14 160) 14%, transparent); }
+.dark .chip-sky { background: color-mix(in oklab, oklch(0.76 0.11 235) 14%, transparent); }
+.dark .chip-rose { background: color-mix(in oklab, oklch(0.72 0.15 25) 14%, transparent); }
 
 /* Sticky table headers ride the glass language. */
 [data-slot="table-header"] th, thead tr th {
@@ -1015,7 +1059,11 @@ body { -webkit-font-smoothing: antialiased; }
   backdrop-filter: blur(10px);
 }
 .dark [data-slot="table-header"] th, .dark thead tr th {
-  background: color-mix(in oklab, var(--card) 55%, transparent);
+  background: var(--card);
+  backdrop-filter: none;
+}
+.dark tbody tr:hover {
+  background: oklch(1 0 0 / 3%);
 }
 
 /* Table row hover */
@@ -1044,6 +1092,11 @@ tbody tr:hover {
   backdrop-filter: blur(18px) saturate(1.4);
   border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
 }
+.dark .page-header {
+  background: color-mix(in oklab, var(--background) 82%, transparent);
+  border-bottom-color: var(--border);
+}
+.dark .page-header::after { display: none; }
 .page-header::after {
   content: "";
   position: absolute;
@@ -1068,8 +1121,10 @@ tbody tr:hover {
   backdrop-filter: blur(10px);
 }
 .dark .empty-state {
-  border-color: color-mix(in oklab, var(--primary) 34%, var(--border));
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07);
+  border-color: oklch(1 0 0 / 12%);
+  background: oklch(1 0 0 / 2%);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 /* ── Blob art: the little friend that lives in empty states ── */

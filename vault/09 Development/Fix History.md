@@ -300,6 +300,16 @@ reasons, feature usage, hour of day, webhook deliveries, session stability, MCP 
 error report with CSV export.
 Chart series use `--series-*` tokens validated for colour-vision separation in light and dark.
 
+## Night theme redesign (2026-10-21)
+
+The dark theme was a purple-tinted sky with moving pink/purple/blue glows, stars and sparkles behind
+translucent cards, so every surface was hazy and charts looked muddy. Night is now a calm graphite
+theme (`.dark` in `frontend/src/index.css`, plus `.dark` overrides in `App.css`): one neutral grey family
+(hue 260) stepped by lightness (page < sidebar < card < raised), solid surfaces with a neutral hairline,
+no moving background, pink only for state and action, retuned status colours, and chart series
+re-validated against the new card surface (all checks pass, worst colour-blind pair ΔE 8.4).
+The light theme is unchanged.
+
 ## Related
 
 [[OpenWA Parity]] · [[Roadmap]] · [[Testing]] · [[Dashboard]] · [[Known Gaps and Stubs]]

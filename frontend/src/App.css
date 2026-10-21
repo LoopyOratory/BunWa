@@ -11,6 +11,22 @@
             var(--sidebar) 46%,
             color-mix(in oklab, var(--aur-2) 14%, var(--sidebar)) 100%);
 }
+/* Night: the sidebar is plain graphite, one step below the cards. */
+.dark [data-slot="sidebar"] [data-slot="sidebar-inner"] {
+    background: var(--sidebar);
+}
+.dark [data-slot="sidebar-group-label"] {
+    color: var(--muted-foreground);
+}
+.dark [data-slot="sidebar-menu-button"]:hover:not([data-active="true"]) {
+    background: oklch(1 0 0 / 5%);
+}
+.dark [data-slot="table-row"]:hover {
+    background: oklch(1 0 0 / 3%);
+}
+.dark .session-active button:enabled {
+    box-shadow: none;
+}
 
 /* Sidebar section labels */
 [data-slot="sidebar-group-label"] {
