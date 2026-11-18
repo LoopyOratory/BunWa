@@ -909,6 +909,25 @@ export function installAudioTap(): void {
         return originalAddEventListener.call(this, type, listener, ...rest);
       };
     }
+    // Last resort for peer connections whose handlers were installed before
+    // this tap: once the remote description is applied, the receiver already
+    // holds the remote audio track.
+    const originalSetRemoteDescription = pcProto?.setRemoteDescription;
+    if (typeof originalSetRemoteDescription === 'function') {
+      pcProto.setRemoteDescription = async function (...args: any[]) {
+        const result = await originalSetRemoteDescription.apply(this, args);
+        try {
+          for (const receiver of this.getReceivers()) {
+            if (receiver?.track?.kind === 'audio') {
+              attachStream(new g.MediaStream([receiver.track]));
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+        return result;
+      };
+    }
     (OriginalPC as any).__bunwaPatched = true;
   }
   // WhatsApp often creates the call's <audio> element and assigns srcObject
