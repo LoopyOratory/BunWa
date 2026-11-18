@@ -59,6 +59,45 @@ describe('agent store', () => {
     await store.close();
   });
 
+  test('stores MCP skill settings with the agent', async () => {
+    const store = makeStore();
+    await store.init();
+
+    const agent = await store.createAgent({
+      name: 'MCP agent',
+      settings: {
+        mcp: {
+          enabled: true,
+          allowedTools: ['MessageSendText', 'SessionGet'],
+          deniedTools: [],
+          destructiveOps: false,
+        },
+      },
+    });
+
+    expect(agent.settings.mcp).toEqual({
+      enabled: true,
+      allowedTools: ['MessageSendText', 'SessionGet'],
+      deniedTools: [],
+      destructiveOps: false,
+    });
+
+    const updated = await store.updateAgent(agent.id, {
+      settings: {
+        ...agent.settings,
+        mcp: {
+          enabled: false,
+          allowedTools: ['MessageSendText'],
+          deniedTools: [],
+          destructiveOps: false,
+        },
+      },
+    });
+    expect((updated?.settings.mcp as any).enabled).toBe(false);
+    expect((updated?.settings.mcp as any).allowedTools).toEqual(['MessageSendText']);
+    await store.close();
+  });
+
   test('adds and removes skills', async () => {
     const store = makeStore();
     await store.init();

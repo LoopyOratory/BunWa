@@ -58,6 +58,28 @@ Supported provider types today:
 Agents also carry their own `model` and `fallbackModel` fields, so each bot can
 choose different models on the same provider connection.
 
+## MCP skills
+
+BunWa's MCP server exposes WhatsApp capabilities as tools. The Agents dashboard
+lists every tool the server publishes, grouped by category, so the admin can
+select exactly which ones an agent may call.
+
+`GET /api/mcp/tools` returns the full catalogue.
+`GET /api/agents/:id/mcp` returns the agent's MCP settings.
+`PUT /api/agents/:id/mcp` updates them:
+
+```json
+{
+  "enabled": true,
+  "allowedTools": ["MessageSendText", "SessionGet"],
+  "deniedTools": [],
+  "destructiveOps": false
+}
+```
+
+`enabled: false` keeps the selections but stops the agent from calling MCP.
+An empty `allowedTools` list means the agent has no MCP access.
+
 
 
 `GET /api/agents/builder/questions` returns the question list.

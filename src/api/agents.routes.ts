@@ -243,6 +243,48 @@ export function createAgentsRouter(): Hono {
     },
   );
 
+  router.get(
+    '/:id/mcp',
+    policiesMiddleware(CanServer(Action.Retrieve)),
+    async (c) => {
+      const agent = await agentService.getAgent(c.req.param('id'));
+      if (!agent) return notFound(c, 'Agent not found');
+      const mcp = (agent.settings?.mcp as Record<string, unknown> | undefined) ?? {
+        enabled: false,
+        allowedTools: [],
+        deniedTools: [],
+        destructiveOps: false,
+      };
+      return c.json({ mcp });
+    },
+  );
+
+  router.put(
+    '/:id/mcp',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      const agent = await agentService.getAgent(c.req.param('id'));
+      if (!agent) return notFound(c, 'Agent not found');
+      const body = await c.req.json().catch(() => ({}));
+      const current = (agent.settings?.mcp as Record<string, unknown> | undefined) ?? {
+        enabled: false,
+        allowedTools: [],
+        deniedTools: [],
+        destructiveOps: false,
+      };
+      const next: Record<string, unknown> = { ...current };
+      if (body.enabled !== undefined) next.enabled = body.enabled !== false;
+      if (Array.isArray(body.allowedTools)) next.allowedTools = body.allowedTools.map(String);
+      if (Array.isArray(body.deniedTools)) next.deniedTools = body.deniedTools.map(String);
+      if (body.destructiveOps !== undefined) next.destructiveOps = body.destructiveOps === true;
+      const updated = await agentService.updateAgent(c.req.param('id'), {
+        settings: { ...agent.settings, mcp: next },
+      });
+      if (!updated) return notFound(c, 'Agent not found');
+      return c.json({ mcp: updated.settings?.mcp ?? next });
+    },
+  );
+
   router.put(
     '/:id',
     policiesMiddleware(CanServer(Action.Manage)),

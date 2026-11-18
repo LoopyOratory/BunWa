@@ -55,7 +55,23 @@ export interface AgentAnalytics {
   events: Array<{ type: string; count: number }>
 }
 
-export type ModelProviderType = 'openai-compatible' | 'anthropic'
+export type ModelProviderType = "openai-compatible" | "anthropic"
+
+export interface McpToolInfo {
+  name: string
+  description: string
+  tier: "read" | "write"
+  category?: string
+  destructive?: boolean
+  sessionScoped?: boolean
+}
+
+export interface AgentMcpConfig {
+  enabled: boolean
+  allowedTools: string[]
+  deniedTools: string[]
+  destructiveOps: boolean
+}
 
 export interface ModelSettings {
   id: string
@@ -231,6 +247,18 @@ export const agentApi = {
 
   testModelSettings: () =>
     request<{ results: ModelProbeResult[] }>("/api/agents/models/settings/test", { method: "POST" }).then((r) => r.results),
+
+  mcpTools: () =>
+    request<{ tools: McpToolInfo[]; byCategory: Record<string, McpToolInfo[]> }>("/api/mcp/tools"),
+
+  agentMcp: (id: string) =>
+    request<{ mcp: AgentMcpConfig }>(`/api/agents/${id}/mcp`).then((r) => r.mcp),
+
+  updateAgentMcp: (id: string, input: Partial<AgentMcpConfig>) =>
+    request<{ mcp: AgentMcpConfig }>(`/api/agents/${id}/mcp`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }).then((r) => r.mcp),
 
   events: (filter: { agentId?: string; conversationId?: string; type?: string; limit?: number } = {}) => {
     const params = new URLSearchParams()

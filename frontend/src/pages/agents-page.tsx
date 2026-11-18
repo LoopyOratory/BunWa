@@ -11,6 +11,7 @@ import {
   Trash2,
 } from "lucide-react"
 import { toast } from "sonner"
+import { McpSkillPicker } from "@/components/mcp-skill-picker"
 import { PageLayout } from "@/components/page-layout"
 import { EmptyState, ErrorState, SectionHeading } from "@/components/primitives"
 import { Badge } from "@/components/ui/badge"
@@ -45,6 +46,7 @@ import {
   type AgentSkill,
   type BuilderQuestion,
   type KnowledgeSource,
+  type McpToolInfo,
   type ModelProbeResult,
   type ModelProviderType,
   type ModelSettings,
@@ -53,7 +55,7 @@ import {
 type DraftSkill = { name: string; description: string; instructions: string; enabled: boolean }
 type DraftKnowledge = { name: string; kind: "text" | "url" | "file"; content: string }
 
-const STEPS = ["Basics", "Prompt", "Skills", "Knowledge", "Review"] as const
+const STEPS = ["Basics", "Prompt", "Skills", "Knowledge", "MCP", "Review"] as const
 type Step = (typeof STEPS)[number]
 
 function stepIndex(step: Step) {
@@ -444,6 +446,8 @@ function CreateAgentDialog({
   const [knowledgeName, setKnowledgeName] = useState("")
   const [knowledgeKind, setKnowledgeKind] = useState<"text" | "url">("text")
   const [knowledgeContent, setKnowledgeContent] = useState("")
+  const [mcpTools, setMcpTools] = useState<McpToolInfo[]>([])
+  const [selectedMcpTools, setSelectedMcpTools] = useState<string[]>([])
   const [reviewEnabled, setReviewEnabled] = useState(true)
   const [busy, setBusy] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -471,9 +475,14 @@ function CreateAgentDialog({
     setKnowledgeName("")
     setKnowledgeKind("text")
     setKnowledgeContent("")
+    setSelectedMcpTools([])
     setReviewEnabled(true)
     setBusy(false)
     setSaving(false)
+    void agentApi
+      .mcpTools()
+      .then((catalog) => setMcpTools(catalog.tools))
+      .catch(() => toast.error("Could not load MCP skills"))
     void agentApi
       .builderQuestions()
       .then((list) => {
@@ -567,7 +576,15 @@ function CreateAgentDialog({
         model: model.trim() || null,
         fallbackModel: fallbackModel.trim() || null,
         voice: voice.trim() || null,
-        settings: { reviewEnabled },
+        settings: {
+          reviewEnabled,
+          mcp: {
+            enabled: selectedMcpTools.length > 0,
+            allowedTools: selectedMcpTools,
+            deniedTools: [],
+            destructiveOps: false,
+          },
+        },
         skills: skills.map((skill) => ({
           name: skill.name,
           description: skill.description,
@@ -824,6 +841,28 @@ function CreateAgentDialog({
               </div>
             )}
 
+            {step === "MCP" && (
+              <div className="space-y-4">
+                <SectionHeading
+                  title="MCP skills"
+                  description="Pick the tools the MCP server exposes. The agent can only call what you select here."
+                />
+                <McpSkillPicker
+                  tools={mcpTools}
+                  selected={selectedMcpTools}
+                  onToggle={(name, checked) =>
+                    setSelectedMcpTools((current) =>
+                      checked ? [...current, name] : current.filter((tool) => tool !== name),
+                    )
+                  }
+                  onToggleAll={(checked) =>
+                    setSelectedMcpTools(checked ? mcpTools.map((tool) => tool.name) : [])
+                  }
+                  compact
+                />
+              </div>
+            )}
+
             {step === "Review" && (
               <div className="space-y-4">
                 <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
@@ -835,9 +874,10 @@ function CreateAgentDialog({
                     {model || "Default model"} {fallbackModel ? `· fallback ${fallbackModel}` : ""} {voice ? `· ${voice}` : ""}
                   </p>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-4">
                   <StatCard label="Skills" value={String(skills.length)} />
                   <StatCard label="Knowledge" value={String(knowledge.length)} />
+                  <StatCard label="MCP skills" value={String(selectedMcpTools.length)} />
                   <StatCard label="Reviews" value={reviewEnabled ? "On" : "Off"} hint="10s before close" />
                 </div>
                 <div className="rounded-2xl border border-border/70 p-4">
@@ -894,6 +934,9 @@ function AgentDetailDialog({
   const [knowledgeName, setKnowledgeName] = useState("")
   const [knowledgeKind, setKnowledgeKind] = useState<"text" | "url">("text")
   const [knowledgeContent, setKnowledgeContent] = useState("")
+  const [mcpTools, setMcpTools] = useState<McpToolInfo[]>([])
+  const [selectedMcpTools, setSelectedMcpTools] = useState<string[]>([])
+  const [mcpEnabled, setMcpEnabled] = useState(false)
 
   useEffect(() => {
     if (!agent) return
@@ -906,12 +949,17 @@ function AgentDetailDialog({
       agentApi.listKnowledge(agent.id),
       agentApi.analytics(agent.id),
       agentApi.events({ agentId: agent.id, limit: 20 }),
+      agentApi.mcpTools(),
+      agentApi.agentMcp(agent.id),
     ])
-      .then(([skillList, knowledgeList, stats, eventList]) => {
+      .then(([skillList, knowledgeList, stats, eventList, toolCatalog, mcpConfig]) => {
         setSkills(skillList)
         setKnowledge(knowledgeList)
         setAnalytics(stats)
         setEvents(eventList)
+        setMcpTools(toolCatalog.tools)
+        setSelectedMcpTools(mcpConfig.allowedTools)
+        setMcpEnabled(mcpConfig.enabled)
       })
       .catch(() => toast.error("Could not load agent details"))
       .finally(() => setLoading(false))
@@ -943,6 +991,25 @@ function AgentDetailDialog({
       onChanged()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the model settings")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const saveMcp = async () => {
+    if (!agent) return
+    setSaving(true)
+    try {
+      await agentApi.updateAgentMcp(agent.id, {
+        enabled: mcpEnabled,
+        allowedTools: selectedMcpTools,
+        deniedTools: [],
+        destructiveOps: false,
+      })
+      toast.success("MCP skills saved")
+      onChanged()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save the MCP skills")
     } finally {
       setSaving(false)
     }
@@ -1052,6 +1119,7 @@ function AgentDetailDialog({
                 <TabsTrigger value="model">Model</TabsTrigger>
                 <TabsTrigger value="skills">Skills</TabsTrigger>
                 <TabsTrigger value="knowledge">Knowledge</TabsTrigger>
+                <TabsTrigger value="mcp">MCP</TabsTrigger>
                 <TabsTrigger value="analytics">Analytics</TabsTrigger>
               </TabsList>
             </div>
@@ -1144,6 +1212,37 @@ function AgentDetailDialog({
                       </div>
                     </div>
                   ))}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="mcp" className="mt-0 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-muted/30 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-semibold">MCP access</p>
+                    <p className="text-xs text-muted-foreground">
+                      The agent can only call the MCP tools selected below.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-muted-foreground">Enabled</span>
+                    <Switch checked={mcpEnabled} onCheckedChange={setMcpEnabled} aria-label="Toggle MCP access" />
+                  </div>
+                </div>
+                <McpSkillPicker
+                  tools={mcpTools}
+                  selected={selectedMcpTools}
+                  onToggle={(name, checked) =>
+                    setSelectedMcpTools((current) =>
+                      checked ? [...current, name] : current.filter((tool) => tool !== name),
+                    )
+                  }
+                  onToggleAll={(checked) =>
+                    setSelectedMcpTools(checked ? mcpTools.map((tool) => tool.name) : [])
+                  }
+                  compact
+                />
+                <div className="flex justify-end">
+                  <Button onClick={saveMcp} disabled={saving}>{saving ? "Saving…" : "Save MCP skills"}</Button>
                 </div>
               </TabsContent>
 
