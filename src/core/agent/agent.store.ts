@@ -8,8 +8,11 @@ import type {
   CreateKnowledgeInput,
   CreateSkillInput,
   KnowledgeSource,
+  ModelSettings,
+  ModelSettingsSecrets,
   RecordEventInput,
   UpdateAgentInput,
+  UpdateModelSettingsInput,
   UpsertUserProfileInput,
   UserProfile,
 } from './agent.types';
@@ -23,6 +26,10 @@ export interface AgentStore {
   getAgent(id: string): Promise<Agent | null>;
   updateAgent(id: string, input: UpdateAgentInput): Promise<Agent | null>;
   deleteAgent(id: string): Promise<boolean>;
+
+  getModelSettings(): Promise<ModelSettings>;
+  getModelSettingsSecrets(): Promise<ModelSettingsSecrets>;
+  updateModelSettings(input: UpdateModelSettingsInput): Promise<ModelSettings>;
 
   addSkill(agentId: string, input: CreateSkillInput): Promise<AgentSkill>;
   listSkills(agentId: string): Promise<AgentSkill[]>;

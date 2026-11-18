@@ -14,8 +14,11 @@ import type {
   CreateKnowledgeInput,
   CreateSkillInput,
   KnowledgeSource,
+  ModelSettings,
+  ModelSettingsSecrets,
   RecordEventInput,
   UpdateAgentInput,
+  UpdateModelSettingsInput,
   UpsertUserProfileInput,
   UserProfile,
 } from './agent.types';
@@ -25,12 +28,14 @@ import type {
 /* -------------------------------------------------------------------------- */
 
 export interface SqlClient {
+  dialect: 'sqlite' | 'postgres';
   query<T = any>(sql: string, params?: any[]): Promise<T[]>;
   execute(sql: string, params?: any[]): Promise<void>;
   close(): Promise<void>;
 }
 
 class KnexSqlClient implements SqlClient {
+  readonly dialect = 'postgres' as const;
   constructor(private readonly knex: Knex.Knex) {}
 
   async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
@@ -48,6 +53,7 @@ class KnexSqlClient implements SqlClient {
 }
 
 export class BunSqliteClient implements SqlClient {
+  readonly dialect = 'sqlite' as const;
   constructor(private readonly db: Database) {}
 
   async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
@@ -97,9 +103,25 @@ function rowToAgent(row: any): Agent {
     status: row.status,
     prompt: row.prompt ?? '',
     model: asNullableString(row.model),
+    fallbackModel: asNullableString(row.fallback_model),
     voice: asNullableString(row.voice),
     settings: json(row.settings, {}),
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function rowToModelSettings(row: any): ModelSettings {
+  return {
+    id: row.id,
+    provider: row.provider ?? 'openai-compatible',
+    baseUrl: row.base_url ?? '',
+    hasApiKey: typeof row.api_key === 'string' && row.api_key.length > 0,
+    model: row.model ?? '',
+    fallbackProvider: row.fallback_provider ?? 'openai-compatible',
+    fallbackBaseUrl: row.fallback_base_url ?? '',
+    hasFallbackApiKey: typeof row.fallback_api_key === 'string' && row.fallback_api_key.length > 0,
+    fallbackModel: row.fallback_model ?? '',
     updatedAt: row.updated_at,
   };
 }
@@ -190,12 +212,25 @@ const SCHEMA: string[] = [
     status TEXT NOT NULL DEFAULT 'draft',
     prompt TEXT NOT NULL DEFAULT '',
     model TEXT,
+    fallback_model TEXT,
     voice TEXT,
     settings TEXT NOT NULL DEFAULT '{}',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS bunwa_agents_status_idx ON bunwa_agents (status)`,
+  `CREATE TABLE IF NOT EXISTS bunwa_model_settings (
+    id TEXT PRIMARY KEY,
+    provider TEXT NOT NULL DEFAULT 'openai-compatible',
+    base_url TEXT NOT NULL DEFAULT '',
+    api_key TEXT,
+    model TEXT NOT NULL DEFAULT '',
+    fallback_provider TEXT NOT NULL DEFAULT 'openai-compatible',
+    fallback_base_url TEXT NOT NULL DEFAULT '',
+    fallback_api_key TEXT,
+    fallback_model TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS bunwa_agent_skills (
     id TEXT PRIMARY KEY,
     agent_id TEXT NOT NULL,
@@ -273,6 +308,22 @@ export class SqlAgentStore implements AgentStore {
     for (const sql of SCHEMA) {
       await this.client.execute(sql);
     }
+    // Older databases were created before agents had a fallback model.
+    if (!(await this.columnExists('bunwa_agents', 'fallback_model'))) {
+      await this.client.execute('ALTER TABLE bunwa_agents ADD COLUMN fallback_model TEXT');
+    }
+  }
+
+  private async columnExists(table: string, column: string): Promise<boolean> {
+    if (this.client.dialect === 'sqlite') {
+      const rows = await this.client.query(`PRAGMA table_info(${table})`);
+      return rows.some((row: any) => row.name === column);
+    }
+    const rows = await this.client.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_name = ?`,
+      [table],
+    );
+    return rows.some((row: any) => row.column_name === column);
   }
 
   async close(): Promise<void> {
@@ -292,15 +343,16 @@ export class SqlAgentStore implements AgentStore {
       status: 'draft',
       prompt: input.prompt ?? '',
       model: input.model ?? null,
+      fallbackModel: input.fallbackModel ?? null,
       voice: input.voice ?? null,
       settings: input.settings ?? {},
       createdAt: at,
       updatedAt: at,
     };
     await this.client.execute(
-      `INSERT INTO bunwa_agents (id, name, status, prompt, model, voice, settings, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [agent.id, agent.name, agent.status, agent.prompt, agent.model, agent.voice, JSON.stringify(agent.settings), at, at],
+      `INSERT INTO bunwa_agents (id, name, status, prompt, model, fallback_model, voice, settings, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [agent.id, agent.name, agent.status, agent.prompt, agent.model, agent.fallbackModel, agent.voice, JSON.stringify(agent.settings), at, at],
     );
     return agent;
   }
@@ -324,13 +376,14 @@ export class SqlAgentStore implements AgentStore {
       status: input.status ?? current.status,
       prompt: input.prompt ?? current.prompt,
       model: input.model !== undefined ? input.model : current.model,
+      fallbackModel: input.fallbackModel !== undefined ? input.fallbackModel : current.fallbackModel,
       voice: input.voice !== undefined ? input.voice : current.voice,
       settings: input.settings ?? current.settings,
       updatedAt: now(),
     };
     await this.client.execute(
-      `UPDATE bunwa_agents SET name = ?, status = ?, prompt = ?, model = ?, voice = ?, settings = ?, updated_at = ? WHERE id = ?`,
-      [next.name, next.status, next.prompt, next.model, next.voice, JSON.stringify(next.settings), next.updatedAt, id],
+      `UPDATE bunwa_agents SET name = ?, status = ?, prompt = ?, model = ?, fallback_model = ?, voice = ?, settings = ?, updated_at = ? WHERE id = ?`,
+      [next.name, next.status, next.prompt, next.model, next.fallbackModel, next.voice, JSON.stringify(next.settings), next.updatedAt, id],
     );
     return next;
   }
@@ -342,6 +395,89 @@ export class SqlAgentStore implements AgentStore {
     await this.client.execute(`DELETE FROM bunwa_knowledge_sources WHERE agent_id = ?`, [id]);
     await this.client.execute(`DELETE FROM bunwa_agents WHERE id = ?`, [id]);
     return true;
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Model settings                                                          */
+  /* ---------------------------------------------------------------------- */
+
+  async getModelSettings(): Promise<ModelSettings> {
+    const rows = await this.client.query(`SELECT * FROM bunwa_model_settings WHERE id = ? LIMIT 1`, ['default']);
+    if (rows[0]) return rowToModelSettings(rows[0]);
+
+    const at = now();
+    const settings: ModelSettings = {
+      id: 'default',
+      provider: 'openai-compatible',
+      baseUrl: '',
+      hasApiKey: false,
+      model: '',
+      fallbackProvider: 'openai-compatible',
+      fallbackBaseUrl: '',
+      hasFallbackApiKey: false,
+      fallbackModel: '',
+      updatedAt: at,
+    };
+    await this.client.execute(
+      `INSERT INTO bunwa_model_settings (id, provider, base_url, api_key, model, fallback_provider, fallback_base_url, fallback_api_key, fallback_model, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['default', settings.provider, settings.baseUrl, null, settings.model, settings.fallbackProvider, settings.fallbackBaseUrl, null, settings.fallbackModel, at],
+    );
+    return settings;
+  }
+
+  async getModelSettingsSecrets(): Promise<ModelSettingsSecrets> {
+    const settings = await this.getModelSettings();
+    const rows = await this.client.query(`SELECT * FROM bunwa_model_settings WHERE id = ? LIMIT 1`, [settings.id]);
+    const raw = rows[0] ?? {};
+    return {
+      ...settings,
+      apiKey: asNullableString(raw.api_key),
+      fallbackApiKey: asNullableString(raw.fallback_api_key),
+    };
+  }
+
+  async updateModelSettings(input: UpdateModelSettingsInput): Promise<ModelSettings> {
+    const current = await this.getModelSettings();
+    const rows = await this.client.query(`SELECT * FROM bunwa_model_settings WHERE id = ? LIMIT 1`, [current.id]);
+    const raw = rows[0] ?? {};
+    const existingApiKey = asNullableString(raw.api_key);
+    const existingFallbackApiKey = asNullableString(raw.fallback_api_key);
+
+    // Keys are write-only from the API's point of view: undefined keeps the
+    // stored value, null clears it, and a string replaces it.
+    const apiKey = input.apiKey === undefined ? existingApiKey : asNullableString(input.apiKey);
+    const fallbackApiKey = input.fallbackApiKey === undefined ? existingFallbackApiKey : asNullableString(input.fallbackApiKey);
+
+    const settings: ModelSettings = {
+      id: current.id,
+      provider: input.provider ?? current.provider,
+      baseUrl: input.baseUrl ?? current.baseUrl,
+      hasApiKey: apiKey !== null,
+      model: input.model ?? current.model,
+      fallbackProvider: input.fallbackProvider ?? current.fallbackProvider,
+      fallbackBaseUrl: input.fallbackBaseUrl ?? current.fallbackBaseUrl,
+      hasFallbackApiKey: fallbackApiKey !== null,
+      fallbackModel: input.fallbackModel ?? current.fallbackModel,
+      updatedAt: now(),
+    };
+
+    await this.client.execute(
+      `UPDATE bunwa_model_settings SET provider = ?, base_url = ?, api_key = ?, model = ?, fallback_provider = ?, fallback_base_url = ?, fallback_api_key = ?, fallback_model = ?, updated_at = ? WHERE id = ?`,
+      [
+        settings.provider,
+        settings.baseUrl,
+        apiKey,
+        settings.model,
+        settings.fallbackProvider,
+        settings.fallbackBaseUrl,
+        fallbackApiKey,
+        settings.fallbackModel,
+        settings.updatedAt,
+        settings.id,
+      ],
+    );
+    return settings;
   }
 
   /* ---------------------------------------------------------------------- */

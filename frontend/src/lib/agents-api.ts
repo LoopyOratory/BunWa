@@ -8,6 +8,7 @@ export interface Agent {
   status: AgentStatus
   prompt: string
   model: string | null
+  fallbackModel: string | null
   voice: string | null
   settings: Record<string, unknown>
   createdAt: string
@@ -52,6 +53,29 @@ export interface AgentAnalytics {
   conversions: number
   conversionRate: number | null
   events: Array<{ type: string; count: number }>
+}
+
+export type ModelProviderType = 'openai-compatible' | 'anthropic'
+
+export interface ModelSettings {
+  id: string
+  provider: ModelProviderType
+  baseUrl: string
+  hasApiKey: boolean
+  model: string
+  fallbackProvider: ModelProviderType
+  fallbackBaseUrl: string
+  hasFallbackApiKey: boolean
+  fallbackModel: string
+  updatedAt: string
+}
+
+export interface ModelProbeResult {
+  served: 'primary' | 'fallback'
+  model: string
+  ok: boolean
+  ms: number
+  detail: string
 }
 
 export interface AgentEvent {
@@ -124,6 +148,7 @@ export const agentApi = {
     name: string
     prompt?: string
     model?: string | null
+    fallbackModel?: string | null
     voice?: string | null
     settings?: Record<string, unknown>
     skills?: Array<{ name: string; description?: string; instructions: string; enabled?: boolean }>
@@ -134,7 +159,7 @@ export const agentApi = {
       body: JSON.stringify(input),
     }).then((r) => r.agent),
 
-  update: (id: string, input: Partial<Pick<Agent, "name" | "status" | "prompt" | "model" | "voice" | "settings">>) =>
+  update: (id: string, input: Partial<Pick<Agent, "name" | "status" | "prompt" | "model" | "fallbackModel" | "voice" | "settings">>) =>
     request<{ agent: Agent }>(`/api/agents/${id}`, {
       method: "PUT",
       body: JSON.stringify(input),
@@ -185,6 +210,27 @@ export const agentApi = {
 
   analytics: (agentId?: string) =>
     request<AgentAnalytics>(`/api/agents/analytics${agentId ? `?agentId=${encodeURIComponent(agentId)}` : ""}`),
+
+  modelSettings: () =>
+    request<{ settings: ModelSettings }>("/api/agents/models/settings").then((r) => r.settings),
+
+  updateModelSettings: (input: {
+    provider?: ModelProviderType
+    baseUrl?: string
+    apiKey?: string | null
+    model?: string
+    fallbackProvider?: ModelProviderType
+    fallbackBaseUrl?: string
+    fallbackApiKey?: string | null
+    fallbackModel?: string
+  }) =>
+    request<{ settings: ModelSettings }>("/api/agents/models/settings", {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }).then((r) => r.settings),
+
+  testModelSettings: () =>
+    request<{ results: ModelProbeResult[] }>("/api/agents/models/settings/test", { method: "POST" }).then((r) => r.results),
 
   events: (filter: { agentId?: string; conversationId?: string; type?: string; limit?: number } = {}) => {
     const params = new URLSearchParams()

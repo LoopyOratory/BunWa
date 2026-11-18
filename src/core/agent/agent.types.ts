@@ -14,6 +14,7 @@ export interface Agent {
   status: AgentStatus;
   prompt: string;
   model: string | null;
+  fallbackModel: string | null;
   voice: string | null;
   settings: Record<string, unknown>;
   createdAt: string;
@@ -94,6 +95,7 @@ export interface CreateAgentInput {
   name: string;
   prompt?: string;
   model?: string | null;
+  fallbackModel?: string | null;
   voice?: string | null;
   settings?: Record<string, unknown>;
 }
@@ -103,8 +105,50 @@ export interface UpdateAgentInput {
   status?: AgentStatus;
   prompt?: string;
   model?: string | null;
+  fallbackModel?: string | null;
   voice?: string | null;
   settings?: Record<string, unknown>;
+}
+
+export type ModelProviderType = 'openai-compatible' | 'anthropic';
+
+export interface ModelSettings {
+  id: string;
+  provider: ModelProviderType;
+  baseUrl: string;
+  /** The key is never returned to the browser; this says whether one is stored. */
+  hasApiKey: boolean;
+  model: string;
+  fallbackProvider: ModelProviderType;
+  fallbackBaseUrl: string;
+  hasFallbackApiKey: boolean;
+  fallbackModel: string;
+  updatedAt: string;
+}
+
+export interface ModelSettingsSecrets extends ModelSettings {
+  apiKey: string | null;
+  fallbackApiKey: string | null;
+}
+
+export interface UpdateModelSettingsInput {
+  provider?: ModelProviderType;
+  baseUrl?: string;
+  /** Omit to keep the stored key; null clears it. */
+  apiKey?: string | null;
+  model?: string;
+  fallbackProvider?: ModelProviderType;
+  fallbackBaseUrl?: string;
+  fallbackApiKey?: string | null;
+  fallbackModel?: string;
+}
+
+export interface ModelProbeResult {
+  served: 'primary' | 'fallback';
+  model: string;
+  ok: boolean;
+  ms: number;
+  detail: string;
 }
 
 export interface CreateSkillInput {

@@ -37,7 +37,28 @@ database. Bun's built-in Redis client is used, so this adds no dependency.
 Cached today: the agent analytics summary (10 s TTL). Cache failures are
 ignored — Redis is never the source of truth.
 
-## Prompt builder
+## Model provider
+
+`GET /api/agents/models/settings` returns the primary and fallback provider
+settings. The API never returns the stored keys; it only reports whether one is
+present.
+
+`PUT /api/agents/models/settings` updates the provider, base URL, model, and
+fallback model. Keys are write-only: omit them to keep the stored value, or send
+`null` to clear.
+
+`POST /api/agents/models/settings/test` calls the configured primary and
+fallback models with a tiny prompt and reports each result in plain words.
+
+Supported provider types today:
+
+- `openai-compatible`
+- `anthropic`
+
+Agents also carry their own `model` and `fallbackModel` fields, so each bot can
+choose different models on the same provider connection.
+
+
 
 `GET /api/agents/builder/questions` returns the question list.
 `POST /api/agents/builder/next` takes the answers so far and returns the next

@@ -60,6 +60,53 @@ export function createAgentsRouter(): Hono {
     async (c) => c.json(await agentService.analytics(c.req.query('agentId') || undefined)),
   );
 
+  /* ---------------------------------------------------------------------- */
+  /* Model provider settings                                                */
+  /* ---------------------------------------------------------------------- */
+
+  router.get(
+    '/models/settings',
+    policiesMiddleware(CanServer(Action.Retrieve)),
+    async (c) => c.json({ settings: await agentService.getModelSettings() }),
+  );
+
+  router.put(
+    '/models/settings',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      const body = await c.req.json().catch(() => ({}));
+      const provider = body.provider === 'anthropic' ? 'anthropic' : body.provider === 'openai-compatible' ? 'openai-compatible' : undefined;
+      const fallbackProvider =
+        body.fallbackProvider === 'anthropic'
+          ? 'anthropic'
+          : body.fallbackProvider === 'openai-compatible'
+            ? 'openai-compatible'
+            : undefined;
+      const settings = await agentService.updateModelSettings({
+        provider,
+        baseUrl: typeof body.baseUrl === 'string' ? body.baseUrl : undefined,
+        apiKey: body.apiKey === null ? null : typeof body.apiKey === 'string' && body.apiKey.trim() ? body.apiKey.trim() : undefined,
+        model: typeof body.model === 'string' ? body.model : undefined,
+        fallbackProvider,
+        fallbackBaseUrl: typeof body.fallbackBaseUrl === 'string' ? body.fallbackBaseUrl : undefined,
+        fallbackApiKey:
+          body.fallbackApiKey === null
+            ? null
+            : typeof body.fallbackApiKey === 'string' && body.fallbackApiKey.trim()
+              ? body.fallbackApiKey.trim()
+              : undefined,
+        fallbackModel: typeof body.fallbackModel === 'string' ? body.fallbackModel : undefined,
+      });
+      return c.json({ settings });
+    },
+  );
+
+  router.post(
+    '/models/settings/test',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => c.json({ results: await agentService.testModelSettings() }),
+  );
+
   router.get(
     '/',
     policiesMiddleware(CanServer(Action.Retrieve)),
@@ -76,6 +123,7 @@ export function createAgentsRouter(): Hono {
         name: body.name,
         prompt: typeof body.prompt === 'string' ? body.prompt : '',
         model: typeof body.model === 'string' ? body.model : null,
+        fallbackModel: typeof body.fallbackModel === 'string' ? body.fallbackModel : null,
         voice: typeof body.voice === 'string' ? body.voice : null,
         settings: body.settings && typeof body.settings === 'object' ? body.settings : {},
       });
@@ -205,6 +253,7 @@ export function createAgentsRouter(): Hono {
         status: body.status,
         prompt: typeof body.prompt === 'string' ? body.prompt : undefined,
         model: body.model === null || typeof body.model === 'string' ? body.model : undefined,
+        fallbackModel: body.fallbackModel === null || typeof body.fallbackModel === 'string' ? body.fallbackModel : undefined,
         voice: body.voice === null || typeof body.voice === 'string' ? body.voice : undefined,
         settings: body.settings && typeof body.settings === 'object' ? body.settings : undefined,
       });

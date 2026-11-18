@@ -17,6 +17,8 @@ import type {
 } from './agent.types';
 import { composePrompt, BUILDER_QUESTIONS, nextQuestion, type BuilderAnswers, type BuilderQuestion } from './agent.builder';
 import { cache } from '../cache/redis-cache';
+import { probeModelSettings } from './model-probe';
+import type { ModelProbeResult, ModelSettings, UpdateModelSettingsInput } from './agent.types';
 
 let storePromise: Promise<AgentStore> | null = null;
 
@@ -81,6 +83,19 @@ export class AgentService {
     await cache.del('bunwa:agents:analytics:all');
     await cache.del(`bunwa:agents:analytics:${id}`);
     return removed;
+  }
+
+  async getModelSettings(): Promise<ModelSettings> {
+    return (await getStore()).getModelSettings();
+  }
+
+  async updateModelSettings(input: UpdateModelSettingsInput): Promise<ModelSettings> {
+    return (await getStore()).updateModelSettings(input);
+  }
+
+  async testModelSettings(): Promise<ModelProbeResult[]> {
+    const settings = await (await getStore()).getModelSettingsSecrets();
+    return probeModelSettings(settings);
   }
 
   async addSkill(agentId: string, input: CreateSkillInput): Promise<AgentSkill> {

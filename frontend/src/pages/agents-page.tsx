@@ -3,6 +3,7 @@ import {
   Bot,
   Check,
   ChevronRight,
+  KeyRound,
   MessageSquare,
   Plus,
   RefreshCw,
@@ -44,6 +45,9 @@ import {
   type AgentSkill,
   type BuilderQuestion,
   type KnowledgeSource,
+  type ModelProbeResult,
+  type ModelProviderType,
+  type ModelSettings,
 } from "@/lib/agents-api"
 
 type DraftSkill = { name: string; description: string; instructions: string; enabled: boolean }
@@ -85,7 +89,9 @@ function AgentCard({ agent, onOpen }: { agent: Agent; onOpen: (agent: Agent) => 
             <div className="min-w-0">
               <CardTitle className="truncate text-base">{agent.name}</CardTitle>
               <CardDescription className="truncate">
-                {agent.model || "No model set"} {agent.voice ? `· ${agent.voice}` : ""}
+                {agent.model || "No model set"}
+                {agent.fallbackModel ? ` · fallback ${agent.fallbackModel}` : ""}
+                {agent.voice ? ` · ${agent.voice}` : ""}
               </CardDescription>
             </div>
           </div>
@@ -191,6 +197,225 @@ function BuilderChat({
   )
 }
 
+function ModelSettingsDialog({
+  open,
+  onOpenChange,
+  onSaved,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSaved: () => void
+}) {
+  const [settings, setSettings] = useState<ModelSettings | null>(null)
+  const [apiKey, setApiKey] = useState("")
+  const [fallbackApiKey, setFallbackApiKey] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [results, setResults] = useState<ModelProbeResult[]>([])
+
+  useEffect(() => {
+    if (!open) return
+    setApiKey("")
+    setFallbackApiKey("")
+    setResults([])
+    setLoading(true)
+    agentApi
+      .modelSettings()
+      .then((current) => setSettings(current))
+      .catch(() => toast.error("Could not load model settings"))
+      .finally(() => setLoading(false))
+  }, [open])
+
+  const save = async () => {
+    if (!settings) return
+    setSaving(true)
+    try {
+      const next = await agentApi.updateModelSettings({
+        provider: settings.provider,
+        baseUrl: settings.baseUrl,
+        apiKey: apiKey.trim() ? apiKey.trim() : undefined,
+        model: settings.model,
+        fallbackProvider: settings.fallbackProvider,
+        fallbackBaseUrl: settings.fallbackBaseUrl,
+        fallbackApiKey: fallbackApiKey.trim() ? fallbackApiKey.trim() : undefined,
+        fallbackModel: settings.fallbackModel,
+      })
+      setSettings(next)
+      setApiKey("")
+      setFallbackApiKey("")
+      toast.success("Model settings saved")
+      onSaved()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save model settings")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const test = async () => {
+    setTesting(true)
+    try {
+      const next = await agentApi.testModelSettings()
+      setResults(next)
+      if (next.every((result) => result.ok)) toast.success("Primary and fallback models responded")
+      else if (next.some((result) => result.ok)) toast.warning("One model responded; check the failing one")
+      else toast.error("Neither model responded")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not test model settings")
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  const providerButton = (value: ModelProviderType, current: ModelProviderType | undefined, onPick: (value: ModelProviderType) => void, label: string) => (
+    <Button
+      type="button"
+      variant={current === value ? "default" : "outline"}
+      size="sm"
+      onClick={() => onPick(value)}
+    >
+      {label}
+    </Button>
+  )
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[92dvh] max-w-3xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <KeyRound className="size-5 text-primary" /> Model provider
+          </DialogTitle>
+          <DialogDescription>
+            Configure the provider BunWa uses for chat and calls, plus the model to fall back to when the primary fails.
+          </DialogDescription>
+        </DialogHeader>
+
+        {loading || !settings ? (
+          <div className="space-y-3">
+            {[0, 1, 2].map((row) => (
+              <div key={row} className="h-10 animate-pulse rounded-xl bg-muted" />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-5">
+            <section className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Primary model</p>
+              <div className="flex flex-wrap gap-2">
+                {providerButton("openai-compatible", settings.provider, (provider) => setSettings({ ...settings, provider }), "OpenAI-compatible")}
+                {providerButton("anthropic", settings.provider, (provider) => setSettings({ ...settings, provider }), "Anthropic")}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="model-base-url">Base URL</Label>
+                  <Input
+                    id="model-base-url"
+                    value={settings.baseUrl}
+                    onChange={(event) => setSettings({ ...settings, baseUrl: event.target.value })}
+                    placeholder="https://api.openai.com/v1"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="model-api-key">API key</Label>
+                  <Input
+                    id="model-api-key"
+                    type="password"
+                    value={apiKey}
+                    onChange={(event) => setApiKey(event.target.value)}
+                    placeholder={settings.hasApiKey ? "Leave blank to keep the current key" : "Paste the provider API key"}
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="model-name">Model</Label>
+                  <Input
+                    id="model-name"
+                    value={settings.model}
+                    onChange={(event) => setSettings({ ...settings, model: event.target.value })}
+                    placeholder="gpt-4o-mini"
+                  />
+                </div>
+              </div>
+            </section>
+
+            <Separator />
+
+            <section className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fallback model</p>
+              <div className="flex flex-wrap gap-2">
+                {providerButton("openai-compatible", settings.fallbackProvider, (provider) => setSettings({ ...settings, fallbackProvider: provider }), "OpenAI-compatible")}
+                {providerButton("anthropic", settings.fallbackProvider, (provider) => setSettings({ ...settings, fallbackProvider: provider }), "Anthropic")}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="fallback-base-url">Fallback base URL</Label>
+                  <Input
+                    id="fallback-base-url"
+                    value={settings.fallbackBaseUrl}
+                    onChange={(event) => setSettings({ ...settings, fallbackBaseUrl: event.target.value })}
+                    placeholder="https://api.openai.com/v1"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fallback-api-key">Fallback API key</Label>
+                  <Input
+                    id="fallback-api-key"
+                    type="password"
+                    value={fallbackApiKey}
+                    onChange={(event) => setFallbackApiKey(event.target.value)}
+                    placeholder={settings.hasFallbackApiKey ? "Leave blank to keep the current key" : "Paste the fallback API key"}
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="fallback-model">Fallback model</Label>
+                  <Input
+                    id="fallback-model"
+                    value={settings.fallbackModel}
+                    onChange={(event) => setSettings({ ...settings, fallbackModel: event.target.value })}
+                    placeholder="gpt-4o-mini"
+                  />
+                </div>
+              </div>
+            </section>
+
+            {results.length > 0 && (
+              <section className="space-y-2 rounded-2xl border border-border/70 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Connection test</p>
+                <div className="space-y-2">
+                  {results.map((result) => (
+                    <div key={`${result.served}-${result.model}`} className="flex items-start justify-between gap-3 rounded-xl bg-muted/40 px-3 py-2 text-sm">
+                      <div className="min-w-0">
+                        <p className="font-medium">
+                          {result.served === "primary" ? "Primary" : "Fallback"} · {result.model || "not set"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{result.detail}</p>
+                      </div>
+                      <Badge variant={result.ok ? "default" : "outline"}>{result.ok ? `${result.ms} ms` : "failed"}</Badge>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          <div className="flex w-full items-center justify-between gap-2">
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={test} disabled={testing || !settings}>
+                {testing ? "Testing…" : "Test connection"}
+              </Button>
+              <Button onClick={save} disabled={saving || !settings}>
+                {saving ? "Saving…" : "Save settings"}
+              </Button>
+            </div>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function CreateAgentDialog({
   open,
   onOpenChange,
@@ -203,6 +428,7 @@ function CreateAgentDialog({
   const [step, setStep] = useState<Step>("Basics")
   const [name, setName] = useState("")
   const [model, setModel] = useState("")
+  const [fallbackModel, setFallbackModel] = useState("")
   const [voice, setVoice] = useState("")
   const [prompt, setPrompt] = useState("")
   const [promptMode, setPromptMode] = useState<"builder" | "paste">("builder")
@@ -229,6 +455,7 @@ function CreateAgentDialog({
     setStep("Basics")
     setName("")
     setModel("")
+    setFallbackModel("")
     setVoice("")
     setPrompt("")
     setPromptMode("builder")
@@ -338,6 +565,7 @@ function CreateAgentDialog({
         name: name.trim(),
         prompt: prompt.trim(),
         model: model.trim() || null,
+        fallbackModel: fallbackModel.trim() || null,
         voice: voice.trim() || null,
         settings: { reviewEnabled },
         skills: skills.map((skill) => ({
@@ -412,6 +640,16 @@ function CreateAgentDialog({
                   <Label htmlFor="agent-model">Model</Label>
                   <Input id="agent-model" value={model} onChange={(event) => setModel(event.target.value)} placeholder="gemini-3.8-flash" />
                   <p className="text-xs text-muted-foreground">Leave blank to use the platform default.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="agent-fallback-model">Fallback model</Label>
+                  <Input
+                    id="agent-fallback-model"
+                    value={fallbackModel}
+                    onChange={(event) => setFallbackModel(event.target.value)}
+                    placeholder="gpt-4o-mini"
+                  />
+                  <p className="text-xs text-muted-foreground">Used when the primary model fails or times out.</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="agent-voice">Voice</Label>
@@ -594,7 +832,7 @@ function CreateAgentDialog({
                     <Badge variant="outline">draft</Badge>
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {model || "Default model"} {voice ? `· ${voice}` : ""}
+                    {model || "Default model"} {fallbackModel ? `· fallback ${fallbackModel}` : ""} {voice ? `· ${voice}` : ""}
                   </p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
@@ -647,6 +885,8 @@ function AgentDetailDialog({
   const [analytics, setAnalytics] = useState<AgentAnalytics | null>(null)
   const [events, setEvents] = useState<AgentEvent[]>([])
   const [prompt, setPrompt] = useState("")
+  const [model, setModel] = useState("")
+  const [fallbackModel, setFallbackModel] = useState("")
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [skillName, setSkillName] = useState("")
@@ -658,6 +898,8 @@ function AgentDetailDialog({
   useEffect(() => {
     if (!agent) return
     setPrompt(agent.prompt)
+    setModel(agent.model ?? "")
+    setFallbackModel(agent.fallbackModel ?? "")
     setLoading(true)
     Promise.all([
       agentApi.listSkills(agent.id),
@@ -684,6 +926,23 @@ function AgentDetailDialog({
       onChanged()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the prompt")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const saveModel = async () => {
+    if (!agent) return
+    setSaving(true)
+    try {
+      await agentApi.update(agent.id, {
+        model: model.trim() || null,
+        fallbackModel: fallbackModel.trim() || null,
+      })
+      toast.success("Model settings saved")
+      onChanged()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save the model settings")
     } finally {
       setSaving(false)
     }
@@ -760,7 +1019,9 @@ function AgentDetailDialog({
                   {agent && <StatusBadge status={agent.status} />}
                 </DialogTitle>
                 <DialogDescription>
-                  {agent?.model || "Default model"} {agent?.voice ? `· ${agent.voice}` : ""}
+                  {agent?.model || "Default model"}
+                  {agent?.fallbackModel ? ` · fallback ${agent.fallbackModel}` : ""}
+                  {agent?.voice ? ` · ${agent.voice}` : ""}
                 </DialogDescription>
               </div>
               {agent && (
@@ -788,6 +1049,7 @@ function AgentDetailDialog({
             <div className="border-b border-border/70 px-6 py-3">
               <TabsList>
                 <TabsTrigger value="prompt">Prompt</TabsTrigger>
+                <TabsTrigger value="model">Model</TabsTrigger>
                 <TabsTrigger value="skills">Skills</TabsTrigger>
                 <TabsTrigger value="knowledge">Knowledge</TabsTrigger>
                 <TabsTrigger value="analytics">Analytics</TabsTrigger>
@@ -802,6 +1064,29 @@ function AgentDetailDialog({
                 />
                 <div className="flex justify-end">
                   <Button onClick={savePrompt} disabled={saving}>{saving ? "Saving…" : "Save prompt"}</Button>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="model" className="mt-0 space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="detail-model">Primary model</Label>
+                    <Input id="detail-model" value={model} onChange={(event) => setModel(event.target.value)} placeholder="gemini-3.8-flash" />
+                    <p className="text-xs text-muted-foreground">Leave blank to use the platform default.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="detail-fallback-model">Fallback model</Label>
+                    <Input
+                      id="detail-fallback-model"
+                      value={fallbackModel}
+                      onChange={(event) => setFallbackModel(event.target.value)}
+                      placeholder="gpt-4o-mini"
+                    />
+                    <p className="text-xs text-muted-foreground">Used when the primary model fails or times out.</p>
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <Button onClick={saveModel} disabled={saving}>{saving ? "Saving…" : "Save models"}</Button>
                 </div>
               </TabsContent>
 
@@ -926,6 +1211,7 @@ export function AgentsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  const [modelSettingsOpen, setModelSettingsOpen] = useState(false)
   const [selected, setSelected] = useState<Agent | null>(null)
 
   const load = async () => {
@@ -953,9 +1239,14 @@ export function AgentsPage() {
       title="Agents"
       description="Build the chatbot and call agent, attach skills and knowledge, and track how conversations perform."
       actions={
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="size-4" /> New agent
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => setModelSettingsOpen(true)}>
+            <KeyRound className="size-4" /> Model provider
+          </Button>
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="size-4" /> New agent
+          </Button>
+        </div>
       }
     >
       <div className="space-y-6">
@@ -1006,6 +1297,7 @@ export function AgentsPage() {
       </div>
 
       <CreateAgentDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={() => void load()} />
+      <ModelSettingsDialog open={modelSettingsOpen} onOpenChange={setModelSettingsOpen} onSaved={() => void load()} />
       <AgentDetailDialog agent={selected} onOpenChange={(open) => !open && setSelected(null)} onChanged={() => void load()} />
     </PageLayout>
   )

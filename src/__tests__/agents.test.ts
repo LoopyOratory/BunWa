@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { BunSqliteClient, SqlAgentStore } from '../core/agent/agent.sql';
 import { composePrompt, nextQuestion, isComplete } from '../core/agent/agent.builder';
+import { probeModelSettings } from '../core/agent/model-probe';
 
 function makeStore(): SqlAgentStore {
   return new SqlAgentStore(new BunSqliteClient(new Database(':memory:')));
@@ -47,9 +48,10 @@ describe('agent store', () => {
     expect(agent.status).toBe('draft');
     expect(agent.name).toBe('Support');
 
-    const updated = await store.updateAgent(agent.id, { prompt: 'Be helpful', status: 'active' });
+    const updated = await store.updateAgent(agent.id, { prompt: 'Be helpful', status: 'active', fallbackModel: 'backup-model' });
     expect(updated?.prompt).toBe('Be helpful');
     expect(updated?.status).toBe('active');
+    expect(updated?.fallbackModel).toBe('backup-model');
 
     expect(await store.listAgents()).toHaveLength(1);
     expect(await store.deleteAgent(agent.id)).toBe(true);
@@ -88,6 +90,68 @@ describe('agent store', () => {
     expect(await store.listKnowledge(agent.id)).toHaveLength(1);
     expect(await store.deleteKnowledge(agent.id, source.id)).toBe(true);
     await store.close();
+  });
+
+  test('stores model provider settings without returning the key', async () => {
+    const store = makeStore();
+    await store.init();
+
+    const initial = await store.getModelSettings();
+    expect(initial.provider).toBe('openai-compatible');
+    expect(initial.hasApiKey).toBe(false);
+
+    await store.updateModelSettings({
+      provider: 'openai-compatible',
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'primary-key',
+      model: 'primary-model',
+      fallbackProvider: 'anthropic',
+      fallbackBaseUrl: 'https://api.anthropic.com',
+      fallbackApiKey: 'fallback-key',
+      fallbackModel: 'fallback-model',
+    });
+
+    const saved = await store.getModelSettings();
+    expect(saved.baseUrl).toBe('https://api.example.com/v1');
+    expect(saved.model).toBe('primary-model');
+    expect(saved.hasApiKey).toBe(true);
+    expect(saved.fallbackProvider).toBe('anthropic');
+    expect(saved.hasFallbackApiKey).toBe(true);
+    expect(saved.fallbackModel).toBe('fallback-model');
+
+    const secrets = await store.getModelSettingsSecrets();
+    expect(secrets.apiKey).toBe('primary-key');
+    expect(secrets.fallbackApiKey).toBe('fallback-key');
+
+    // Omitting the key keeps the stored one.
+    await store.updateModelSettings({ model: 'renamed-model' });
+    const kept = await store.getModelSettingsSecrets();
+    expect(kept.model).toBe('renamed-model');
+    expect(kept.apiKey).toBe('primary-key');
+    expect(kept.fallbackApiKey).toBe('fallback-key');
+    await store.close();
+  });
+
+  test('probes primary and fallback models and reports plain errors', async () => {
+    const results = await probeModelSettings({
+      id: 'default',
+      provider: 'openai-compatible',
+      baseUrl: '',
+      hasApiKey: false,
+      model: '',
+      apiKey: null,
+      fallbackProvider: 'anthropic',
+      fallbackBaseUrl: '',
+      hasFallbackApiKey: false,
+      fallbackModel: '',
+      fallbackApiKey: null,
+      updatedAt: new Date().toISOString(),
+    });
+    expect(results).toHaveLength(2);
+    expect(results[0].served).toBe('primary');
+    expect(results[0].ok).toBe(false);
+    expect(results[1].served).toBe('fallback');
+    expect(results[1].ok).toBe(false);
   });
 
   test('upserts a user profile with important details', async () => {
