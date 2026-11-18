@@ -9,7 +9,15 @@ export class RedisCache {
   private readonly client: Bun.RedisClient | null;
 
   constructor(url = process.env.BUNWA_REDIS_URL || process.env.REDIS_URL) {
-    this.client = url ? new Bun.RedisClient(url) : null;
+    this.client = url
+      ? new Bun.RedisClient(url, {
+          // Redis is an optional cache: fail fast instead of letting a dead
+          // server stall every request that tries to read or write a cache key.
+          connectionTimeout: 2000,
+          autoReconnect: false,
+          enableOfflineQueue: false,
+        })
+      : null;
   }
 
   get enabled(): boolean {

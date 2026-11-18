@@ -42,7 +42,7 @@ export interface SqlClient {
   close(): Promise<void>;
 }
 
-class KnexSqlClient implements SqlClient {
+export class KnexSqlClient implements SqlClient {
   readonly dialect = 'postgres' as const;
   constructor(private readonly knex: Knex.Knex) {}
 
