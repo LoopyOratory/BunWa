@@ -39,6 +39,7 @@ const env = {
   pulseServer: Bun.env.PULSE_SERVER || 'unix:/tmp/pulse-native',
   pulseLib: Bun.env.PULSE_LD_LIBRARY_PATH
     || '/opt/data/pulse/usr/lib/x86_64-linux-gnu:/opt/data/pulse/usr/lib/x86_64-linux-gnu/pulseaudio:/opt/data/pulse/usr/lib/pulse-17.0+dfsg1/modules:/opt/data/pulse/lib/x86_64-linux-gnu',
+  debug: Bun.env.FISH_BRIDGE_DEBUG === '1',
 };
 
 /** Stateful 16k -> 48k linear upsampler. */
@@ -156,6 +157,14 @@ export class FishBridge {
       void this.pumpAgentAudio(track);
     });
     this.room.on(RoomEvent.Disconnected, (reason) => console.log('livekit disconnected', reason));
+    this.room.registerTextStreamHandler('lk.transcription', async (reader, participantInfo) => {
+      try {
+        const text = await reader.readAll();
+        if (text.trim()) console.log('transcription', participantInfo.identity, JSON.stringify(text));
+      } catch (error) {
+        console.log('transcription error', error instanceof Error ? error.message : error);
+      }
+    });
 
     await this.room.connect(session.livekit_url, session.token, { autoSubscribe: true });
     console.log('livekit connected');
@@ -211,6 +220,10 @@ export class FishBridge {
         console.log('agent frames', this.agentFrames, 'samples', frame.samplesPerChannel);
       }
       const pcm = Buffer.from(frame.data.buffer, frame.data.byteOffset, frame.data.byteLength);
+      let sum = 0;
+      for (let i = 0; i < frame.data.length; i++) sum += frame.data[i] * frame.data[i];
+      const rms = Math.sqrt(sum / Math.max(1, frame.data.length));
+      if (env.debug && rms > 300) console.log('agent speech frame', this.agentFrames, 'rms', Math.round(rms));
       await this.sink.write(pcm);
     }
   }
