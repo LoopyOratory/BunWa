@@ -182,6 +182,86 @@ function runSuite(name: string, makeStore: () => Promise<SqlAgentStore>) {
       await store.close();
     });
 
+    test('stores evidence-linked profile facts, summaries, and segments', async () => {
+      const store = await makeStore();
+      await store.upsertUserProfile({
+        userId: '233500000001@c.us',
+        displayName: 'Ama',
+        phone: '233500000001',
+        tags: ['vip'],
+        preferences: { language: 'en' },
+        importantDetails: { plan: 'gold' },
+      });
+
+      const first = await store.createUserProfileFact({
+        userId: '233500000001@c.us',
+        kind: 'communication',
+        key: 'tone',
+        value: 'concise',
+        confidence: 0.9,
+        source: 'manual',
+        evidence: 'User asked for short answers.',
+      });
+      expect(first.status).toBe('active');
+      expect(first.value).toBe('concise');
+
+      const confirmed = await store.createUserProfileFact({
+        userId: '233500000001@c.us',
+        kind: 'communication',
+        key: 'tone',
+        value: 'concise',
+        confidence: 0.95,
+        source: 'manual',
+      });
+      expect(confirmed.id).toBe(first.id);
+      expect(confirmed.confidence).toBe(0.95);
+
+      const changed = await store.createUserProfileFact({
+        userId: '233500000001@c.us',
+        kind: 'communication',
+        key: 'tone',
+        value: 'detailed',
+        confidence: 0.8,
+        source: 'manual',
+      });
+      expect(changed.id).not.toBe(first.id);
+      const allFacts = await store.listUserProfileFacts('233500000001@c.us', true);
+      expect(allFacts).toHaveLength(2);
+      expect(allFacts.find((fact) => fact.id === first.id)?.status).toBe('superseded');
+
+      const summary = await store.upsertUserProfileSummary({
+        userId: '233500000001@c.us',
+        summary: 'Ama prefers concise answers.',
+        sourceFactIds: [changed.id],
+      });
+      expect(summary.version).toBe(1);
+      expect((await store.getUserProfileSummary('233500000001@c.us'))?.summary).toContain('concise');
+
+      const segment = await store.upsertUserSegment({
+        userId: '233500000001@c.us',
+        segmentType: 'lifecycle',
+        segmentValue: 'active',
+        score: 1,
+        reason: 'Messaged recently',
+      });
+      expect(segment.segmentValue).toBe('active');
+      expect(await store.listUserSegments('233500000001@c.us')).toHaveLength(1);
+
+      const context = await store.buildProfileContext('233500000001@c.us');
+      expect(context?.text).toContain('<user_profile>');
+      expect(context?.text).toContain('Identity: Ama');
+      expect(context?.text).toContain('Communication: tone=detailed');
+      expect(context?.text).toContain('Segments: lifecycle=active');
+      expect(context?.text).not.toContain('Summary:');
+
+      const profiles = await store.listUserProfiles();
+      expect(profiles.some((profile) => profile.userId === '233500000001@c.us')).toBe(true);
+
+      expect(await store.deleteUserProfileFact(changed.id)).toBe(true);
+      expect(await store.deleteUserSegment(segment.id)).toBe(true);
+      await store.close();
+    });
+
     test('records and filters analytics events', async () => {
       const store = await makeStore();
       const agent = await store.createAgent({ name: 'Support' });

@@ -14,6 +14,7 @@ import type {
   CreateKnowledgeInput,
   CreateSkillInput,
   CreateExternalMcpServerInput,
+  CreateUserProfileFactInput,
   ExternalMcpServer,
   ExternalMcpTool,
   KnowledgeSource,
@@ -21,9 +22,16 @@ import type {
   ModelSettingsSecrets,
   ModelRole,
   ModelRoleSettings,
+  ProfileContext,
   UpdateExternalMcpServerInput,
   UpdateModelRoleSettingsInput,
+  UpdateUserProfileFactInput,
   UpsertExternalMcpToolInput,
+  UpsertUserProfileSummaryInput,
+  UpsertUserSegmentInput,
+  UserProfileFact,
+  UserProfileSummary,
+  UserSegment,
   RecordEventInput,
   UpdateAgentInput,
   UpdateModelSettingsInput,
@@ -89,6 +97,27 @@ function json<T>(value: string | null | undefined, fallback: T): T {
     return JSON.parse(value) as T;
   } catch {
     return fallback;
+  }
+}
+
+function jsonValue(value: string | null | undefined): unknown {
+  if (value === null || value === undefined) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function formatProfileValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.map((item) => formatProfileValue(item)).filter(Boolean).join(', ');
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
   }
 }
 
@@ -222,6 +251,52 @@ function rowToUserProfile(row: any): UserProfile {
     lastSeenAt: asNullableString(row.last_seen_at),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function rowToUserProfileFact(row: any): UserProfileFact {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    kind: row.kind ?? 'other',
+    key: row.key,
+    value: jsonValue(row.value),
+    confidence: Number(row.confidence ?? 0.7),
+    source: row.source ?? 'manual',
+    sourceRef: asNullableString(row.source_ref),
+    evidence: asNullableString(row.evidence),
+    firstSeenAt: row.first_seen_at,
+    lastConfirmedAt: row.last_confirmed_at,
+    expiresAt: asNullableString(row.expires_at),
+    sensitivity: row.sensitivity ?? 'normal',
+    status: row.status ?? 'active',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function rowToUserProfileSummary(row: any): UserProfileSummary {
+  return {
+    userId: row.user_id,
+    summary: row.summary ?? '',
+    version: Number(row.version ?? 1),
+    tokenCount: Number(row.token_count ?? 0),
+    model: row.model ?? '',
+    sourceFactIds: json(row.source_fact_ids, []),
+    generatedAt: row.generated_at,
+  };
+}
+
+function rowToUserSegment(row: any): UserSegment {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    segmentType: row.segment_type,
+    segmentValue: row.segment_value,
+    score: row.score == null ? null : Number(row.score),
+    reason: row.reason ?? '',
+    computedAt: row.computed_at,
+    expiresAt: asNullableString(row.expires_at),
   };
 }
 
@@ -361,6 +436,47 @@ const SCHEMA: string[] = [
     updated_at TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS bunwa_user_profiles_user_idx ON bunwa_user_profiles (user_id)`,
+  `CREATE TABLE IF NOT EXISTS bunwa_user_profile_facts (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'other',
+    key TEXT NOT NULL,
+    value TEXT NOT NULL DEFAULT 'null',
+    confidence REAL NOT NULL DEFAULT 0.7,
+    source TEXT NOT NULL DEFAULT 'manual',
+    source_ref TEXT,
+    evidence TEXT,
+    first_seen_at TEXT NOT NULL,
+    last_confirmed_at TEXT NOT NULL,
+    expires_at TEXT,
+    sensitivity TEXT NOT NULL DEFAULT 'normal',
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS bunwa_user_profile_facts_user_idx ON bunwa_user_profile_facts (user_id)`,
+  `CREATE INDEX IF NOT EXISTS bunwa_user_profile_facts_status_idx ON bunwa_user_profile_facts (user_id, status)`,
+  `CREATE TABLE IF NOT EXISTS bunwa_user_profile_summaries (
+    user_id TEXT PRIMARY KEY,
+    summary TEXT NOT NULL DEFAULT '',
+    version INTEGER NOT NULL DEFAULT 1,
+    token_count INTEGER NOT NULL DEFAULT 0,
+    model TEXT NOT NULL DEFAULT '',
+    source_fact_ids TEXT NOT NULL DEFAULT '[]',
+    generated_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS bunwa_user_segments (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    segment_type TEXT NOT NULL,
+    segment_value TEXT NOT NULL,
+    score REAL,
+    reason TEXT NOT NULL DEFAULT '',
+    computed_at TEXT NOT NULL,
+    expires_at TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS bunwa_user_segments_user_idx ON bunwa_user_segments (user_id)`,
+  `CREATE INDEX IF NOT EXISTS bunwa_user_segments_type_idx ON bunwa_user_segments (user_id, segment_type)`,
   `CREATE TABLE IF NOT EXISTS bunwa_conversations (
     id TEXT PRIMARY KEY,
     agent_id TEXT NOT NULL,
@@ -920,6 +1036,259 @@ export class SqlAgentStore implements AgentStore {
       );
     }
     return profile;
+  }
+
+  async listUserProfiles(limit = 100): Promise<UserProfile[]> {
+    const safeLimit = Math.max(1, Math.min(limit, 500));
+    const rows = await this.client.query(
+      `SELECT * FROM bunwa_user_profiles ORDER BY COALESCE(last_seen_at, updated_at) DESC LIMIT ${safeLimit}`,
+    );
+    return rows.map(rowToUserProfile);
+  }
+
+  async listUserProfileFacts(userId: string, includeInactive = false): Promise<UserProfileFact[]> {
+    const rows = await this.client.query(
+      includeInactive
+        ? `SELECT * FROM bunwa_user_profile_facts WHERE user_id = ? ORDER BY kind ASC, key ASC`
+        : `SELECT * FROM bunwa_user_profile_facts WHERE user_id = ? AND status = 'active' ORDER BY kind ASC, key ASC`,
+      [userId],
+    );
+    return rows.map(rowToUserProfileFact);
+  }
+
+  async createUserProfileFact(input: CreateUserProfileFactInput): Promise<UserProfileFact> {
+    const at = now();
+    const active = (await this.listUserProfileFacts(input.userId)).find((fact) => fact.key === input.key);
+    const value = input.value ?? null;
+
+    // Same key + same value: confirm the existing fact instead of creating a
+    // duplicate. Same key + different value: keep history by superseding.
+    if (active && JSON.stringify(active.value) === JSON.stringify(value)) {
+      const updated = await this.updateUserProfileFact(active.id, {
+        confidence: Math.max(active.confidence, input.confidence ?? 0.7),
+        source: input.source ?? active.source,
+        sourceRef: input.sourceRef ?? active.sourceRef,
+        evidence: input.evidence ?? active.evidence,
+        expiresAt: input.expiresAt ?? active.expiresAt,
+        sensitivity: input.sensitivity ?? active.sensitivity,
+      });
+      if (updated) return updated;
+    }
+    if (active) {
+      await this.client.execute(`UPDATE bunwa_user_profile_facts SET status = 'superseded', updated_at = ? WHERE id = ?`, [at, active.id]);
+    }
+
+    const fact: UserProfileFact = {
+      id: Bun.randomUUIDv7(),
+      userId: input.userId,
+      kind: input.kind,
+      key: input.key.trim(),
+      value,
+      confidence: Math.max(0, Math.min(1, input.confidence ?? 0.7)),
+      source: input.source ?? 'manual',
+      sourceRef: input.sourceRef ?? null,
+      evidence: input.evidence ?? null,
+      firstSeenAt: at,
+      lastConfirmedAt: at,
+      expiresAt: input.expiresAt ?? null,
+      sensitivity: input.sensitivity ?? 'normal',
+      status: 'active',
+      createdAt: at,
+      updatedAt: at,
+    };
+
+    await this.client.execute(
+      `INSERT INTO bunwa_user_profile_facts
+        (id, user_id, kind, key, value, confidence, source, source_ref, evidence, first_seen_at, last_confirmed_at, expires_at, sensitivity, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        fact.id,
+        fact.userId,
+        fact.kind,
+        fact.key,
+        JSON.stringify(fact.value),
+        fact.confidence,
+        fact.source,
+        fact.sourceRef,
+        fact.evidence,
+        fact.firstSeenAt,
+        fact.lastConfirmedAt,
+        fact.expiresAt,
+        fact.sensitivity,
+        fact.status,
+        fact.createdAt,
+        fact.updatedAt,
+      ],
+    );
+    return fact;
+  }
+
+  async updateUserProfileFact(id: string, input: UpdateUserProfileFactInput): Promise<UserProfileFact | null> {
+    const rows = await this.client.query(`SELECT * FROM bunwa_user_profile_facts WHERE id = ? LIMIT 1`, [id]);
+    if (!rows[0]) return null;
+    const current = rowToUserProfileFact(rows[0]);
+    const at = now();
+    const fact: UserProfileFact = {
+      ...current,
+      kind: input.kind ?? current.kind,
+      key: input.key !== undefined ? input.key.trim() : current.key,
+      value: input.value !== undefined ? input.value : current.value,
+      confidence: input.confidence !== undefined ? Math.max(0, Math.min(1, input.confidence)) : current.confidence,
+      source: input.source ?? current.source,
+      sourceRef: input.sourceRef !== undefined ? input.sourceRef : current.sourceRef,
+      evidence: input.evidence !== undefined ? input.evidence : current.evidence,
+      expiresAt: input.expiresAt !== undefined ? input.expiresAt : current.expiresAt,
+      sensitivity: input.sensitivity ?? current.sensitivity,
+      status: input.status ?? current.status,
+      lastConfirmedAt: at,
+      updatedAt: at,
+    };
+    await this.client.execute(
+      `UPDATE bunwa_user_profile_facts
+       SET kind = ?, key = ?, value = ?, confidence = ?, source = ?, source_ref = ?, evidence = ?, last_confirmed_at = ?, expires_at = ?, sensitivity = ?, status = ?, updated_at = ?
+       WHERE id = ?`,
+      [
+        fact.kind,
+        fact.key,
+        JSON.stringify(fact.value),
+        fact.confidence,
+        fact.source,
+        fact.sourceRef,
+        fact.evidence,
+        fact.lastConfirmedAt,
+        fact.expiresAt,
+        fact.sensitivity,
+        fact.status,
+        fact.updatedAt,
+        fact.id,
+      ],
+    );
+    return fact;
+  }
+
+  async deleteUserProfileFact(id: string): Promise<boolean> {
+    const rows = await this.client.query(`SELECT id FROM bunwa_user_profile_facts WHERE id = ? LIMIT 1`, [id]);
+    if (!rows[0]) return false;
+    await this.client.execute(`UPDATE bunwa_user_profile_facts SET status = 'deleted', updated_at = ? WHERE id = ?`, [now(), id]);
+    return true;
+  }
+
+  async getUserProfileSummary(userId: string): Promise<UserProfileSummary | null> {
+    const rows = await this.client.query(`SELECT * FROM bunwa_user_profile_summaries WHERE user_id = ? LIMIT 1`, [userId]);
+    return rows[0] ? rowToUserProfileSummary(rows[0]) : null;
+  }
+
+  async upsertUserProfileSummary(input: UpsertUserProfileSummaryInput): Promise<UserProfileSummary> {
+    const current = await this.getUserProfileSummary(input.userId);
+    const at = now();
+    const summary: UserProfileSummary = {
+      userId: input.userId,
+      summary: input.summary,
+      version: (current?.version ?? 0) + 1,
+      tokenCount: input.tokenCount ?? Math.ceil(input.summary.length / 4),
+      model: input.model ?? current?.model ?? '',
+      sourceFactIds: input.sourceFactIds ?? current?.sourceFactIds ?? [],
+      generatedAt: at,
+    };
+    if (current) {
+      await this.client.execute(
+        `UPDATE bunwa_user_profile_summaries SET summary = ?, version = ?, token_count = ?, model = ?, source_fact_ids = ?, generated_at = ? WHERE user_id = ?`,
+        [summary.summary, summary.version, summary.tokenCount, summary.model, JSON.stringify(summary.sourceFactIds), at, summary.userId],
+      );
+    } else {
+      await this.client.execute(
+        `INSERT INTO bunwa_user_profile_summaries (user_id, summary, version, token_count, model, source_fact_ids, generated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [summary.userId, summary.summary, summary.version, summary.tokenCount, summary.model, JSON.stringify(summary.sourceFactIds), at],
+      );
+    }
+    return summary;
+  }
+
+  async listUserSegments(userId: string): Promise<UserSegment[]> {
+    const at = now();
+    const rows = await this.client.query(
+      `SELECT * FROM bunwa_user_segments WHERE user_id = ? AND (expires_at IS NULL OR expires_at > ?) ORDER BY segment_type ASC`,
+      [userId, at],
+    );
+    return rows.map(rowToUserSegment);
+  }
+
+  async upsertUserSegment(input: UpsertUserSegmentInput): Promise<UserSegment> {
+    const rows = await this.client.query(
+      `SELECT * FROM bunwa_user_segments WHERE user_id = ? AND segment_type = ? LIMIT 1`,
+      [input.userId, input.segmentType],
+    );
+    const at = now();
+    const segment: UserSegment = {
+      id: rows[0]?.id ?? Bun.randomUUIDv7(),
+      userId: input.userId,
+      segmentType: input.segmentType,
+      segmentValue: input.segmentValue,
+      score: input.score ?? null,
+      reason: input.reason ?? '',
+      computedAt: at,
+      expiresAt: input.expiresAt ?? null,
+    };
+    if (rows[0]) {
+      await this.client.execute(
+        `UPDATE bunwa_user_segments SET segment_value = ?, score = ?, reason = ?, computed_at = ?, expires_at = ? WHERE id = ?`,
+        [segment.segmentValue, segment.score, segment.reason, segment.computedAt, segment.expiresAt, segment.id],
+      );
+    } else {
+      await this.client.execute(
+        `INSERT INTO bunwa_user_segments (id, user_id, segment_type, segment_value, score, reason, computed_at, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [segment.id, segment.userId, segment.segmentType, segment.segmentValue, segment.score, segment.reason, segment.computedAt, segment.expiresAt],
+      );
+    }
+    return segment;
+  }
+
+  async deleteUserSegment(id: string): Promise<boolean> {
+    const rows = await this.client.query(`SELECT id FROM bunwa_user_segments WHERE id = ? LIMIT 1`, [id]);
+    if (!rows[0]) return false;
+    await this.client.execute(`DELETE FROM bunwa_user_segments WHERE id = ?`, [id]);
+    return true;
+  }
+
+  async buildProfileContext(userId: string, options: { includeSensitive?: boolean } = {}): Promise<ProfileContext | null> {
+    const profile = await this.getUserProfile(userId);
+    if (!profile) return null;
+    const facts = (await this.listUserProfileFacts(userId)).filter(
+      (fact) =>
+        fact.status === 'active' &&
+        fact.confidence >= 0.7 &&
+        (options.includeSensitive === true || fact.sensitivity !== 'sensitive') &&
+        (fact.expiresAt === null || fact.expiresAt > now()),
+    );
+    const segments = await this.listUserSegments(userId);
+    const summary = await this.getUserProfileSummary(userId);
+
+    const lines: string[] = ['<user_profile>'];
+    const identity = [profile.displayName, profile.phone, profile.email, profile.timezone, profile.locale].filter(Boolean);
+    if (identity.length) lines.push(`Identity: ${identity.join('; ')}.`);
+    if (profile.tags.length) lines.push(`Tags: ${profile.tags.join(', ')}.`);
+
+    const preferenceEntries = Object.entries(profile.preferences).map(([key, value]) => `${key}: ${formatProfileValue(value)}`);
+    if (preferenceEntries.length) lines.push(`Preferences: ${preferenceEntries.join('; ')}.`);
+
+    const importantEntries = Object.entries(profile.importantDetails).map(([key, value]) => `${key}: ${formatProfileValue(value)}`);
+    if (importantEntries.length) lines.push(`Important: ${importantEntries.join('; ')}.`);
+
+    for (const kind of ['communication', 'relationship', 'goal', 'constraint', 'preference', 'identity', 'other'] as const) {
+      const group = facts.filter((fact) => fact.kind === kind);
+      if (!group.length) continue;
+      lines.push(`${kind[0].toUpperCase()}${kind.slice(1)}: ${group.map((fact) => `${fact.key}=${formatProfileValue(fact.value)}`).join('; ')}.`);
+    }
+
+    if (segments.length) {
+      lines.push(`Segments: ${segments.map((segment) => `${segment.segmentType}=${segment.segmentValue}`).join(', ')}.`);
+    }
+    if (profile.notes) lines.push(`Notes: ${profile.notes}`);
+    lines.push('</user_profile>');
+
+    return { userId, text: lines.join('\n'), profile, facts, segments, summary };
   }
 
   /* ---------------------------------------------------------------------- */

@@ -167,6 +167,59 @@ export interface UserProfile {
   updatedAt: string
 }
 
+export type ProfileFactKind = "identity" | "preference" | "constraint" | "goal" | "relationship" | "communication" | "other"
+export type ProfileFactSensitivity = "normal" | "personal" | "sensitive"
+export type ProfileFactStatus = "active" | "superseded" | "deleted"
+
+export interface UserProfileFact {
+  id: string
+  userId: string
+  kind: ProfileFactKind
+  key: string
+  value: unknown
+  confidence: number
+  source: string
+  sourceRef: string | null
+  evidence: string | null
+  firstSeenAt: string
+  lastConfirmedAt: string
+  expiresAt: string | null
+  sensitivity: ProfileFactSensitivity
+  status: ProfileFactStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export interface UserProfileSummary {
+  userId: string
+  summary: string
+  version: number
+  tokenCount: number
+  model: string
+  sourceFactIds: string[]
+  generatedAt: string
+}
+
+export interface UserSegment {
+  id: string
+  userId: string
+  segmentType: string
+  segmentValue: string
+  score: number | null
+  reason: string
+  computedAt: string
+  expiresAt: string | null
+}
+
+export interface ProfileContext {
+  userId: string
+  text: string
+  profile: UserProfile
+  facts: UserProfileFact[]
+  segments: UserSegment[]
+  summary: UserProfileSummary | null
+}
+
 const API_BASE = window.location.origin
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -387,4 +440,90 @@ export const agentApi = {
       method: "PUT",
       body: JSON.stringify(input),
     }).then((r) => r.profile),
+
+  profiles: (limit = 100) =>
+    request<{ profiles: UserProfile[] }>(`/api/agents/profiles?limit=${limit}`).then((r) => r.profiles),
+
+  profileFacts: (userId: string, includeInactive = false) =>
+    request<{ facts: UserProfileFact[] }>(
+      `/api/agents/profiles/${encodeURIComponent(userId)}/facts${includeInactive ? "?includeInactive=1" : ""}`,
+    ).then((r) => r.facts),
+
+  createProfileFact: (userId: string, input: {
+    kind: ProfileFactKind
+    key: string
+    value: unknown
+    confidence?: number
+    source?: string
+    sourceRef?: string | null
+    evidence?: string | null
+    expiresAt?: string | null
+    sensitivity?: ProfileFactSensitivity
+  }) =>
+    request<{ fact: UserProfileFact }>(`/api/agents/profiles/${encodeURIComponent(userId)}/facts`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }).then((r) => r.fact),
+
+  updateProfileFact: (userId: string, factId: string, input: Partial<UserProfileFact>) =>
+    request<{ fact: UserProfileFact }>(
+      `/api/agents/profiles/${encodeURIComponent(userId)}/facts/${encodeURIComponent(factId)}`,
+      { method: "PUT", body: JSON.stringify(input) },
+    ).then((r) => r.fact),
+
+  deleteProfileFact: (userId: string, factId: string) =>
+    request<{ ok: boolean }>(
+      `/api/agents/profiles/${encodeURIComponent(userId)}/facts/${encodeURIComponent(factId)}`,
+      { method: "DELETE" },
+    ).then((r) => r.ok),
+
+  profileContext: (userId: string, includeSensitive = false) =>
+    request<{ context: ProfileContext }>(
+      `/api/agents/profiles/${encodeURIComponent(userId)}/context${includeSensitive ? "?includeSensitive=1" : ""}`,
+    ).then((r) => r.context),
+
+  extractProfileFacts: (userId: string, messages: Array<{ role: string; content: string }>) =>
+    request<{ facts: UserProfileFact[] }>(`/api/agents/profiles/${encodeURIComponent(userId)}/extract`, {
+      method: "POST",
+      body: JSON.stringify({ messages }),
+    }).then((r) => r.facts),
+
+  profileSummary: (userId: string) =>
+    request<{ summary: UserProfileSummary | null }>(`/api/agents/profiles/${encodeURIComponent(userId)}/summary`).then(
+      (r) => r.summary,
+    ),
+
+  upsertProfileSummary: (userId: string, summary: string) =>
+    request<{ summary: UserProfileSummary }>(`/api/agents/profiles/${encodeURIComponent(userId)}/summary`, {
+      method: "PUT",
+      body: JSON.stringify({ summary }),
+    }).then((r) => r.summary),
+
+  summarizeProfile: (userId: string) =>
+    request<{ summary: UserProfileSummary }>(`/api/agents/profiles/${encodeURIComponent(userId)}/summarize`, {
+      method: "POST",
+    }).then((r) => r.summary),
+
+  profileSegments: (userId: string) =>
+    request<{ segments: UserSegment[] }>(`/api/agents/profiles/${encodeURIComponent(userId)}/segments`).then(
+      (r) => r.segments,
+    ),
+
+  createProfileSegment: (userId: string, input: {
+    segmentType: string
+    segmentValue: string
+    score?: number | null
+    reason?: string
+    expiresAt?: string | null
+  }) =>
+    request<{ segment: UserSegment }>(`/api/agents/profiles/${encodeURIComponent(userId)}/segments`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }).then((r) => r.segment),
+
+  deleteProfileSegment: (userId: string, segmentId: string) =>
+    request<{ ok: boolean }>(
+      `/api/agents/profiles/${encodeURIComponent(userId)}/segments/${encodeURIComponent(segmentId)}`,
+      { method: "DELETE" },
+    ).then((r) => r.ok),
 }

@@ -23,6 +23,9 @@ Tables:
 - `bunwa_agent_skills`
 - `bunwa_knowledge_sources`
 - `bunwa_user_profiles`
+- `bunwa_user_profile_facts`
+- `bunwa_user_profile_summaries`
+- `bunwa_user_segments`
 - `bunwa_conversations`
 - `bunwa_analytics_events`
 
@@ -123,7 +126,89 @@ and caches the tools locally. Those tools then appear in the same
 `/api/mcp/tools` catalogue, grouped under the server's name, so agents select
 them exactly like internal tools.
 
+## User profiles
 
+A profile is a small set of decision-relevant facts about one person, shared by
+chat and calls. It is not a biography: it should change how the agent replies,
+not become a dossier.
+
+Three layers:
+
+- `bunwa_user_profiles` — identity, tags, preferences, important details, notes.
+- `bunwa_user_profile_facts` — evidence-linked facts with `kind`, `key`, `value`,
+  `confidence`, `source`, `evidence`, `sensitivity`, and `status`.
+- `bunwa_user_segments` — computed labels such as `lifecycle=active` or
+  `value=high`, each with a reason.
+
+Facts are superseded, not overwritten: when a new value contradicts an active
+fact with the same key, the old row becomes `superseded` and a new row becomes
+`active`. Deleting a fact marks it `deleted` so the history survives.
+
+### API
+
+- `GET /api/agents/profiles?limit=100`
+- `GET /api/agents/profiles/:userId`
+- `PUT /api/agents/profiles/:userId`
+- `GET /api/agents/profiles/:userId/facts`
+- `POST /api/agents/profiles/:userId/facts`
+- `PUT /api/agents/profiles/:userId/facts/:factId`
+- `DELETE /api/agents/profiles/:userId/facts/:factId`
+- `POST /api/agents/profiles/:userId/extract`
+- `GET /api/agents/profiles/:userId/context`
+- `GET|PUT /api/agents/profiles/:userId/summary`
+- `POST /api/agents/profiles/:userId/summarize`
+- `GET|POST /api/agents/profiles/:userId/segments`
+- `DELETE /api/agents/profiles/:userId/segments/:segmentId`
+
+`GET /context` returns the block the agent should receive:
+
+```text
+<user_profile>
+Identity: Ama Mensah; 233500009999.
+Tags: vip, repeat buyer.
+Preferences: language: English; channel: WhatsApp voice notes.
+Important: plan: Gold; renewal: 2026-12-01.
+Communication: tone=concise.
+Goal: renewal=renew before December.
+Segments: lifecycle=active.
+Notes: Prefers short replies and voice notes over long texts.
+</user_profile>
+```
+
+Only active facts with confidence `>= 0.7` are included. Facts marked
+`sensitive` are excluded unless `?includeSensitive=1` is passed.
+
+### Extraction
+
+`POST /api/agents/profiles/:userId/extract` takes a conversation and writes new
+facts:
+
+```json
+{
+  "messages": [
+    { "role": "user", "content": "Please keep replies short. I prefer voice notes." },
+    { "role": "assistant", "content": "Got it." }
+  ]
+}
+```
+
+It uses the configured chat model (OpenAI-compatible, Anthropic, or Google),
+falls back to the configured fallback model, and returns the saved facts. The
+prompt caps the result at eight facts, requires evidence, and forbids inferring
+sensitive traits.
+
+### Dashboard
+
+The **User profiles** page lists profiles, searches by name/phone/id/tag, and
+opens a detail dialog with four tabs:
+
+- **Overview** — identity, tags, preferences, important details, summary editor.
+- **Facts** — paste a conversation to extract facts, or add one manually; each
+  fact shows confidence, sensitivity, evidence, and source.
+- **Segments** — add or remove lifecycle/value/engagement labels.
+- **Prompt context** — the exact `<user_profile>` block, with copy.
+
+## Building an agent
 
 `GET /api/agents/builder/questions` returns the question list.
 `POST /api/agents/builder/next` takes the answers so far and returns the next

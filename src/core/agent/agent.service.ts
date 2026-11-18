@@ -10,19 +10,28 @@ import type {
   CreateExternalMcpServerInput,
   CreateKnowledgeInput,
   CreateSkillInput,
+  CreateUserProfileFactInput,
   ExternalMcpServer,
   ExternalMcpTool,
   KnowledgeSource,
+  ProfileContext,
   RecordEventInput,
   UpdateAgentInput,
   UpdateExternalMcpServerInput,
+  UpdateUserProfileFactInput,
   UpsertExternalMcpToolInput,
+  UpsertUserProfileSummaryInput,
+  UpsertUserSegmentInput,
   UpsertUserProfileInput,
   UserProfile,
+  UserProfileFact,
+  UserProfileSummary,
+  UserSegment,
 } from './agent.types';
 import { composePrompt, BUILDER_QUESTIONS, nextQuestion, type BuilderAnswers, type BuilderQuestion } from './agent.builder';
 import { cache } from '../cache/redis-cache';
 import { probeModelSettings } from './model-probe';
+import { extractProfileFacts, type ProfileMessage } from './profile-extractor';
 import { listExternalServerTools } from '../../mcp/external-mcp.client';
 import type { ModelProbeResult, ModelRole, ModelRoleSettings, ModelSettings, UpdateModelRoleSettingsInput, UpdateModelSettingsInput } from './agent.types';
 
@@ -37,6 +46,18 @@ async function getStore(): Promise<AgentStore> {
 export function setAgentStoreForTests(store: AgentStore | null): void {
   if (store) storePromise = Promise.resolve(store);
   else storePromise = null;
+}
+
+function compactProfileValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.map((item) => compactProfileValue(item)).filter(Boolean).join(', ');
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }
 
 export class AgentService {
@@ -182,6 +203,96 @@ export class AgentService {
 
   async upsertUserProfile(input: UpsertUserProfileInput): Promise<UserProfile> {
     return (await getStore()).upsertUserProfile(input);
+  }
+
+  async listUserProfiles(limit = 100): Promise<UserProfile[]> {
+    return (await getStore()).listUserProfiles(limit);
+  }
+
+  /** Extract and persist durable profile facts from a conversation. */
+  async extractUserProfileFacts(userId: string, messages: ProfileMessage[]): Promise<UserProfileFact[]> {
+    const settings = await (await getStore()).getModelSettingsSecrets();
+    const existing = await this.listUserProfileFacts(userId);
+    const extracted = await extractProfileFacts(settings, existing, messages);
+    const saved: UserProfileFact[] = [];
+    for (const fact of extracted) {
+      saved.push(
+        await this.createUserProfileFact({
+          userId,
+          kind: fact.kind,
+          key: fact.key,
+          value: fact.value,
+          confidence: fact.confidence,
+          source: 'extraction',
+          evidence: fact.evidence,
+          sensitivity: fact.sensitivity,
+        }),
+      );
+    }
+    return saved;
+  }
+
+  async listUserProfileFacts(userId: string, includeInactive = false): Promise<UserProfileFact[]> {
+    return (await getStore()).listUserProfileFacts(userId, includeInactive);
+  }
+
+  async createUserProfileFact(input: CreateUserProfileFactInput): Promise<UserProfileFact> {
+    return (await getStore()).createUserProfileFact(input);
+  }
+
+  async updateUserProfileFact(id: string, input: UpdateUserProfileFactInput): Promise<UserProfileFact | null> {
+    return (await getStore()).updateUserProfileFact(id, input);
+  }
+
+  async deleteUserProfileFact(id: string): Promise<boolean> {
+    return (await getStore()).deleteUserProfileFact(id);
+  }
+
+  async getUserProfileSummary(userId: string): Promise<UserProfileSummary | null> {
+    return (await getStore()).getUserProfileSummary(userId);
+  }
+
+  async upsertUserProfileSummary(input: UpsertUserProfileSummaryInput): Promise<UserProfileSummary> {
+    return (await getStore()).upsertUserProfileSummary(input);
+  }
+
+  async listUserSegments(userId: string): Promise<UserSegment[]> {
+    return (await getStore()).listUserSegments(userId);
+  }
+
+  async upsertUserSegment(input: UpsertUserSegmentInput): Promise<UserSegment> {
+    return (await getStore()).upsertUserSegment(input);
+  }
+
+  async deleteUserSegment(id: string): Promise<boolean> {
+    return (await getStore()).deleteUserSegment(id);
+  }
+
+  async buildProfileContext(userId: string, options: { includeSensitive?: boolean } = {}): Promise<ProfileContext | null> {
+    return (await getStore()).buildProfileContext(userId, options);
+  }
+
+  /** Build a compact, inspectable summary from the active profile facts. */
+  async summarizeUserProfile(userId: string): Promise<UserProfileSummary | null> {
+    const context = await this.buildProfileContext(userId);
+    if (!context) return null;
+    const parts: string[] = [];
+    if (context.profile.displayName) parts.push(`Name: ${context.profile.displayName}`);
+    if (context.profile.tags.length) parts.push(`Tags: ${context.profile.tags.join(', ')}`);
+    for (const fact of context.facts) {
+      const value = compactProfileValue(fact.value);
+      if (value) parts.push(`${fact.kind}: ${fact.key}=${value}`);
+    }
+    for (const segment of context.segments) {
+      parts.push(`${segment.segmentType}: ${segment.segmentValue}`);
+    }
+    const summary = parts.join('; ');
+    return this.upsertUserProfileSummary({
+      userId,
+      summary,
+      sourceFactIds: context.facts.map((fact) => fact.id),
+      model: 'profile-context',
+    });
   }
 
   async createConversation(input: CreateConversationInput): Promise<Conversation> {

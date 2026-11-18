@@ -276,6 +276,15 @@ export function createAgentsRouter(): Hono {
   );
 
   router.get(
+    '/profiles',
+    policiesMiddleware(CanServer(Action.Retrieve)),
+    async (c) => {
+      const limit = Number(c.req.query('limit') || 100);
+      return c.json({ profiles: await agentService.listUserProfiles(Number.isFinite(limit) ? limit : 100) });
+    },
+  );
+
+  router.get(
     '/:id/analytics',
     policiesMiddleware(CanServer(Action.Retrieve)),
     async (c) => c.json(await agentService.analytics(c.req.param('id'))),
@@ -396,6 +405,168 @@ export function createAgentsRouter(): Hono {
         lastSeenAt: body.lastSeenAt,
       });
       return c.json({ profile });
+    },
+  );
+
+  router.get(
+    '/profiles/:userId/facts',
+    policiesMiddleware(CanServer(Action.Retrieve)),
+    async (c) => {
+      const includeInactive = c.req.query('includeInactive') === '1' || c.req.query('includeInactive') === 'true';
+      return c.json({ facts: await agentService.listUserProfileFacts(c.req.param('userId'), includeInactive) });
+    },
+  );
+
+  router.post(
+    '/profiles/:userId/facts',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      const body = await c.req.json().catch(() => ({}));
+      if (!body?.key || typeof body.key !== 'string') return badRequest(c, 'key is required');
+      const fact = await agentService.createUserProfileFact({
+        userId: c.req.param('userId'),
+        kind: typeof body.kind === 'string' ? body.kind : 'other',
+        key: body.key,
+        value: body.value ?? null,
+        confidence: typeof body.confidence === 'number' ? body.confidence : undefined,
+        source: typeof body.source === 'string' ? body.source : 'manual',
+        sourceRef: typeof body.sourceRef === 'string' ? body.sourceRef : null,
+        evidence: typeof body.evidence === 'string' ? body.evidence : null,
+        expiresAt: typeof body.expiresAt === 'string' ? body.expiresAt : null,
+        sensitivity: typeof body.sensitivity === 'string' ? body.sensitivity : 'normal',
+      });
+      return c.json({ fact }, 201);
+    },
+  );
+
+  router.put(
+    '/profiles/:userId/facts/:factId',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      const body = await c.req.json().catch(() => ({}));
+      const fact = await agentService.updateUserProfileFact(c.req.param('factId'), {
+        kind: typeof body.kind === 'string' ? body.kind : undefined,
+        key: typeof body.key === 'string' ? body.key : undefined,
+        value: body.value,
+        confidence: typeof body.confidence === 'number' ? body.confidence : undefined,
+        source: typeof body.source === 'string' ? body.source : undefined,
+        sourceRef: typeof body.sourceRef === 'string' ? body.sourceRef : undefined,
+        evidence: typeof body.evidence === 'string' ? body.evidence : undefined,
+        expiresAt: typeof body.expiresAt === 'string' ? body.expiresAt : undefined,
+        sensitivity: typeof body.sensitivity === 'string' ? body.sensitivity : undefined,
+        status: typeof body.status === 'string' ? body.status : undefined,
+      });
+      if (!fact) return notFound(c, 'Fact not found');
+      return c.json({ fact });
+    },
+  );
+
+  router.delete(
+    '/profiles/:userId/facts/:factId',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      const removed = await agentService.deleteUserProfileFact(c.req.param('factId'));
+      if (!removed) return notFound(c, 'Fact not found');
+      return c.json({ ok: true });
+    },
+  );
+
+  router.post(
+    '/profiles/:userId/extract',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      const body = await c.req.json().catch(() => ({}));
+      if (!Array.isArray(body?.messages) || body.messages.length === 0) {
+        return badRequest(c, 'messages must be a non-empty array of { role, content }');
+      }
+      const messages = body.messages
+        .filter((message: unknown): message is { role?: unknown; content?: unknown } => Boolean(message) && typeof message === 'object')
+        .map((message: { role?: unknown; content?: unknown }) => ({
+          role: typeof message.role === 'string' ? message.role : 'user',
+          content: typeof message.content === 'string' ? message.content : '',
+        }))
+        .filter((message: { content: string }) => message.content.trim().length > 0);
+      if (messages.length === 0) return badRequest(c, 'messages must contain at least one non-empty content');
+      const facts = await agentService.extractUserProfileFacts(c.req.param('userId'), messages);
+      return c.json({ facts });
+    },
+  );
+
+  router.get(
+    '/profiles/:userId/context',
+    policiesMiddleware(CanServer(Action.Retrieve)),
+    async (c) => {
+      const includeSensitive = c.req.query('includeSensitive') === '1' || c.req.query('includeSensitive') === 'true';
+      const context = await agentService.buildProfileContext(c.req.param('userId'), { includeSensitive });
+      if (!context) return notFound(c, 'Profile not found');
+      return c.json({ context });
+    },
+  );
+
+  router.get(
+    '/profiles/:userId/summary',
+    policiesMiddleware(CanServer(Action.Retrieve)),
+    async (c) => c.json({ summary: await agentService.getUserProfileSummary(c.req.param('userId')) }),
+  );
+
+  router.put(
+    '/profiles/:userId/summary',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      const body = await c.req.json().catch(() => ({}));
+      if (typeof body.summary !== 'string') return badRequest(c, 'summary is required');
+      const summary = await agentService.upsertUserProfileSummary({
+        userId: c.req.param('userId'),
+        summary: body.summary,
+        model: typeof body.model === 'string' ? body.model : 'manual',
+        sourceFactIds: Array.isArray(body.sourceFactIds) ? body.sourceFactIds.map(String) : undefined,
+      });
+      return c.json({ summary });
+    },
+  );
+
+  router.post(
+    '/profiles/:userId/summarize',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      const summary = await agentService.summarizeUserProfile(c.req.param('userId'));
+      if (!summary) return notFound(c, 'Profile not found');
+      return c.json({ summary });
+    },
+  );
+
+  router.get(
+    '/profiles/:userId/segments',
+    policiesMiddleware(CanServer(Action.Retrieve)),
+    async (c) => c.json({ segments: await agentService.listUserSegments(c.req.param('userId')) }),
+  );
+
+  router.post(
+    '/profiles/:userId/segments',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      const body = await c.req.json().catch(() => ({}));
+      if (!body?.segmentType || typeof body.segmentType !== 'string') return badRequest(c, 'segmentType is required');
+      if (!body?.segmentValue || typeof body.segmentValue !== 'string') return badRequest(c, 'segmentValue is required');
+      const segment = await agentService.upsertUserSegment({
+        userId: c.req.param('userId'),
+        segmentType: body.segmentType,
+        segmentValue: body.segmentValue,
+        score: typeof body.score === 'number' ? body.score : null,
+        reason: typeof body.reason === 'string' ? body.reason : '',
+        expiresAt: typeof body.expiresAt === 'string' ? body.expiresAt : null,
+      });
+      return c.json({ segment }, 201);
+    },
+  );
+
+  router.delete(
+    '/profiles/:userId/segments/:segmentId',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      const removed = await agentService.deleteUserSegment(c.req.param('segmentId'));
+      if (!removed) return notFound(c, 'Segment not found');
+      return c.json({ ok: true });
     },
   );
 

@@ -7,6 +7,7 @@ import type {
   CreateConversationInput,
   CreateKnowledgeInput,
   CreateSkillInput,
+  CreateUserProfileFactInput,
   ExternalMcpServer,
   ExternalMcpTool,
   CreateExternalMcpServerInput,
@@ -17,7 +18,14 @@ import type {
   ModelSettings,
   ModelSettingsSecrets,
   ModelRoleSettings,
+  ProfileContext,
   UpdateModelRoleSettingsInput,
+  UpdateUserProfileFactInput,
+  UpsertUserProfileSummaryInput,
+  UpsertUserSegmentInput,
+  UserProfileFact,
+  UserProfileSummary,
+  UserSegment,
   RecordEventInput,
   UpdateAgentInput,
   UpdateModelSettingsInput,
@@ -63,6 +71,21 @@ export interface AgentStore {
 
   getUserProfile(userId: string): Promise<UserProfile | null>;
   upsertUserProfile(input: UpsertUserProfileInput): Promise<UserProfile>;
+  listUserProfiles(limit?: number): Promise<UserProfile[]>;
+
+  listUserProfileFacts(userId: string, includeInactive?: boolean): Promise<UserProfileFact[]>;
+  createUserProfileFact(input: CreateUserProfileFactInput): Promise<UserProfileFact>;
+  updateUserProfileFact(id: string, input: UpdateUserProfileFactInput): Promise<UserProfileFact | null>;
+  deleteUserProfileFact(id: string): Promise<boolean>;
+
+  getUserProfileSummary(userId: string): Promise<UserProfileSummary | null>;
+  upsertUserProfileSummary(input: UpsertUserProfileSummaryInput): Promise<UserProfileSummary>;
+
+  listUserSegments(userId: string): Promise<UserSegment[]>;
+  upsertUserSegment(input: UpsertUserSegmentInput): Promise<UserSegment>;
+  deleteUserSegment(id: string): Promise<boolean>;
+
+  buildProfileContext(userId: string, options?: { includeSensitive?: boolean }): Promise<ProfileContext | null>;
 
   createConversation(input: CreateConversationInput): Promise<Conversation>;
   getConversation(id: string): Promise<Conversation | null>;

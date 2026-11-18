@@ -210,6 +210,106 @@ export interface UpsertUserProfileInput {
   lastSeenAt?: string | null;
 }
 
+/* ---------------------------------------------------------------------- */
+/* User profile facts, summaries, and segments                            */
+/* ---------------------------------------------------------------------- */
+
+export type ProfileFactKind = 'identity' | 'preference' | 'constraint' | 'goal' | 'relationship' | 'communication' | 'other';
+export type ProfileFactSensitivity = 'normal' | 'personal' | 'sensitive';
+export type ProfileFactStatus = 'active' | 'superseded' | 'deleted';
+
+export interface UserProfileFact {
+  id: string;
+  userId: string;
+  kind: ProfileFactKind;
+  key: string;
+  value: unknown;
+  confidence: number;
+  source: string;
+  sourceRef: string | null;
+  evidence: string | null;
+  firstSeenAt: string;
+  lastConfirmedAt: string;
+  expiresAt: string | null;
+  sensitivity: ProfileFactSensitivity;
+  status: ProfileFactStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateUserProfileFactInput {
+  userId: string;
+  kind: ProfileFactKind;
+  key: string;
+  value: unknown;
+  confidence?: number;
+  source?: string;
+  sourceRef?: string | null;
+  evidence?: string | null;
+  expiresAt?: string | null;
+  sensitivity?: ProfileFactSensitivity;
+}
+
+export interface UpdateUserProfileFactInput {
+  kind?: ProfileFactKind;
+  key?: string;
+  value?: unknown;
+  confidence?: number;
+  source?: string;
+  sourceRef?: string | null;
+  evidence?: string | null;
+  expiresAt?: string | null;
+  sensitivity?: ProfileFactSensitivity;
+  status?: ProfileFactStatus;
+}
+
+export interface UserProfileSummary {
+  userId: string;
+  summary: string;
+  version: number;
+  tokenCount: number;
+  model: string;
+  sourceFactIds: string[];
+  generatedAt: string;
+}
+
+export interface UpsertUserProfileSummaryInput {
+  userId: string;
+  summary: string;
+  tokenCount?: number;
+  model?: string;
+  sourceFactIds?: string[];
+}
+
+export interface UserSegment {
+  id: string;
+  userId: string;
+  segmentType: string;
+  segmentValue: string;
+  score: number | null;
+  reason: string;
+  computedAt: string;
+  expiresAt: string | null;
+}
+
+export interface UpsertUserSegmentInput {
+  userId: string;
+  segmentType: string;
+  segmentValue: string;
+  score?: number | null;
+  reason?: string;
+  expiresAt?: string | null;
+}
+
+export interface ProfileContext {
+  userId: string;
+  text: string;
+  profile: UserProfile;
+  facts: UserProfileFact[];
+  segments: UserSegment[];
+  summary: UserProfileSummary | null;
+}
+
 export interface CreateConversationInput {
   agentId: string;
   userId?: string | null;
