@@ -40,6 +40,7 @@ const env = {
   pulseLib: Bun.env.PULSE_LD_LIBRARY_PATH
     || '/opt/data/pulse/usr/lib/x86_64-linux-gnu:/opt/data/pulse/usr/lib/x86_64-linux-gnu/pulseaudio:/opt/data/pulse/usr/lib/pulse-17.0+dfsg1/modules:/opt/data/pulse/lib/x86_64-linux-gnu',
   debug: Bun.env.FISH_BRIDGE_DEBUG === '1',
+  latency: Bun.env.FISH_BRIDGE_LATENCY === '1',
 };
 
 /** Stateful 16k -> 48k linear upsampler. */
@@ -134,6 +135,10 @@ export class FishBridge {
   private agentFrames = 0;
   private outboundQueue: Buffer[] = [];
   private callerProc: ReturnType<typeof Bun.spawn> | null = null;
+  private callerSpeechAt = 0;
+  private callerSpeechEndAt = 0;
+  private callerActive = false;
+  private latencyReported = false;
 
   async start(): Promise<void> {
     const response = await fetch('https://api.fish.audio/v1/agent/sessions', {
@@ -211,6 +216,28 @@ export class FishBridge {
     console.log('published caller microphone track');
   }
 
+  private trackCaller(pcm: Buffer): void {
+    if (!env.latency) return;
+    const samples = Math.floor(pcm.length / 2);
+    if (!samples) return;
+    let sum = 0;
+    for (let i = 0; i < samples; i++) {
+      const value = pcm.readInt16LE(i * 2);
+      sum += value * value;
+    }
+    const rms = Math.sqrt(sum / samples);
+    if (rms > 300) {
+      if (!this.callerActive) {
+        this.latencyReported = false;
+        this.callerActive = true;
+      }
+      this.callerSpeechAt = Date.now();
+    } else if (this.callerActive && Date.now() - this.callerSpeechAt > 300) {
+      this.callerSpeechEndAt = this.callerSpeechAt;
+      this.callerActive = false;
+    }
+  }
+
   private async pumpAgentAudio(track: any): Promise<void> {
     const stream = new AudioStream(track, CALL_RATE, 1);
     for await (const frame of stream) {
@@ -224,6 +251,11 @@ export class FishBridge {
       for (let i = 0; i < frame.data.length; i++) sum += frame.data[i] * frame.data[i];
       const rms = Math.sqrt(sum / Math.max(1, frame.data.length));
       if (env.debug && rms > 300) console.log('agent speech frame', this.agentFrames, 'rms', Math.round(rms));
+      if (env.latency && rms > 300 && !this.callerActive && this.callerSpeechEndAt && !this.latencyReported) {
+        const latency = Date.now() - this.callerSpeechEndAt;
+        console.log('fish latency ms', latency);
+        this.latencyReported = true;
+      }
       await this.sink.write(pcm);
     }
   }
@@ -260,6 +292,7 @@ export class FishBridge {
           while (pending.length >= chunkBytes) {
             const pcm16 = pending.subarray(0, chunkBytes);
             pending = pending.subarray(chunkBytes);
+            this.trackCaller(pcm16);
             this.callerChunks += 1;
             this.callerBytes += pcm16.length;
             if (this.callerChunks === 1 || this.callerChunks % 100 === 0) {
@@ -313,6 +346,7 @@ export class FishBridge {
             try { chunk = JSON.parse(line.slice(5).trim()); } catch { continue; }
             if (!chunk?.data) continue;
             const pcm16 = Buffer.from(chunk.data, 'base64');
+            this.trackCaller(pcm16);
             this.callerChunks += 1;
             this.callerBytes += pcm16.length;
             if (this.callerChunks === 1 || this.callerChunks % 100 === 0) {

@@ -139,6 +139,30 @@ Fish answers inbound calls directly). That path needs no bridge and no Bun
 code, but requires a Meta app, a Cloud API number and Business Verification.
 The bridge above is for the existing BunWa linked-device session.
 
+### Measured live latency (2026-11-18)
+
+Speech-to-speech, measured from the end of the caller's question to the first
+agent audio frame. Same question audio for both paths.
+
+- **Google Live** (`gemini-3.8-live`, direct WebSocket, n=5):
+  median **1046 ms**, average **1032 ms**, range **940–1147 ms**, setup **227 ms**.
+- **Fish Agents** (hosted agent via LiveKit bridge, n=6):
+  median **741 ms**, average **858 ms**, range **309–1699 ms**.
+
+Fish is faster at the median in this sample, but its turn-taking is less
+consistent. The Fish figure includes the LiveKit bridge and the BunWa audio
+path, so the hosted agent itself is at or below that number. Google is tighter
+and more predictable. Re-measure before quoting these as production SLAs.
+
+Run the Google side with:
+
+```bash
+bun run call:live-latency /path/to/question.pcm 5
+```
+
+Run the Fish side with `FISH_BRIDGE_LATENCY=1` on `bun run call:fish`; it logs
+`fish latency ms` for each measured turn.
+
 ## Live conversation loop
 
 BunWa stays a media gateway; the intelligence can live in Hermes, n8n or any

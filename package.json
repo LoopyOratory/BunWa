@@ -18,6 +18,7 @@
     "call:inbound-live": "bun run scripts/call-inbound-live.ts",
     "call:fish": "bun run scripts/fish-bridge.ts",
     "call:latency": "bun run scripts/call-latency.ts",
+    "call:live-latency": "bun run scripts/live-latency.ts",
     "call:audio-device": "bash scripts/pulseaudio-call-device.sh",
     "test:postgres": "bun run scripts/test-postgres.ts",
     "postgres:dev": "bun run scripts/pglite-dev.ts",
