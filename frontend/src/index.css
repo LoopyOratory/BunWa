@@ -76,62 +76,62 @@ body { -webkit-font-smoothing: antialiased; }
    Scrolling cards use translucent gradients only, which is cheap.
    ═══════════════════════════════════════════════════════════════════ */
 :root {
-    /* Chatbot-SaaS palette: warm cream, amber accent, ink foreground. */
-    --background: #fff8ee;
-    --foreground: #1c140c;
+    /* BunWa green: calm mint background, forest ink, fresh green accent. */
+    --background: #f0fdf4;
+    --foreground: #052e16;
     --card: #ffffff;
-    --card-foreground: #1c140c;
+    --card-foreground: #052e16;
     --popover: #ffffff;
     /* Opaque surface for anything that floats over content (toasts, menus,
        popovers, selects, dialogs, tooltips). Never translucent: text over a
        busy backdrop must stay readable. */
     --surface-overlay: #ffffff;
-    --surface-overlay-border: #efdcc0;
-    --popover-foreground: #1c140c;
-    --primary: #e39334;
-    --primary-foreground: #1c140c;
-    --primary-soft: color-mix(in oklab, var(--primary) 15%, var(--background));
-    --primary-strong: #a85d17;
-    --secondary: #fbefd9;
-    --secondary-foreground: #1c140c;
-    --muted: #fbf3e4;
-    --muted-foreground: #6b5640;
-    --accent: #fde7cc;
-    --accent-foreground: #1c140c;
-    --destructive: #b42f46;
-    --border: #efdcc0;
-    --input: #efdcc0;
-    --ring: #a85d17;
-    --chart-1: #c97416;
+    --surface-overlay-border: #d1fae5;
+    --popover-foreground: #052e16;
+    --primary: #16a34a;
+    --primary-foreground: #ffffff;
+    --primary-soft: color-mix(in oklab, var(--primary) 14%, var(--background));
+    --primary-strong: #15803d;
+    --secondary: #dcfce7;
+    --secondary-foreground: #14532d;
+    --muted: #f0fdf4;
+    --muted-foreground: #166534;
+    --accent: #bbf7d0;
+    --accent-foreground: #052e16;
+    --destructive: #dc2626;
+    --border: #d1fae5;
+    --input: #d1fae5;
+    --ring: #16a34a;
+    --chart-1: #16a34a;
     --chart-2: #2f7fbf;
     --chart-3: #b84a7c;
-    --chart-4: #d0669a;
-    --chart-5: #6b45c9;
+    --chart-4: #6b45c9;
+    --chart-5: #0ea5e9;
     /* Analytics series (sent / refused / failed), validated as a set for
        colour-vision separation and lightness on the light surface. */
-    --series-sent: #1f7a45;
-    --series-refused: #c97416;
-    --series-failed: #b42f46;
+    --series-sent: #16a34a;
+    --series-refused: #ca8a04;
+    --series-failed: #dc2626;
     /* Second line series beside --series-sent (webhooks), validated as a pair. */
     --series-webhook: #2f7fbf;
     --radius: 1.25rem;
     --sidebar: #ffffff;
-    --sidebar-foreground: #1c140c;
-    --sidebar-primary: #e39334;
-    --sidebar-primary-foreground: #1c140c;
-    --sidebar-accent: #fbf3e4;
-    --sidebar-accent-foreground: #1c140c;
-    --sidebar-border: #efdcc0;
-    --sidebar-ring: #a85d17;
-    --sidebar-active-bg: color-mix(in oklab, var(--primary) 20%, transparent);
-    --sidebar-active-fg: #a85d17;
-    --sidebar-active-border: color-mix(in oklab, var(--primary) 30%, transparent);
+    --sidebar-foreground: #052e16;
+    --sidebar-primary: #16a34a;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #dcfce7;
+    --sidebar-accent-foreground: #14532d;
+    --sidebar-border: #d1fae5;
+    --sidebar-ring: #16a34a;
+    --sidebar-active-bg: color-mix(in oklab, var(--primary) 18%, transparent);
+    --sidebar-active-fg: #15803d;
+    --sidebar-active-border: color-mix(in oklab, var(--primary) 28%, transparent);
 
     /* Aurora ribbon colors — richer than v1 so the sky is visible. */
-    --aur-1: #fde7cc;
-    --aur-2: #fbefd9;
-    --aur-3: #f6e3c6;
-    --aur-4: #fff8ee;
+    --aur-1: #dcfce7;
+    --aur-2: #bbf7d0;
+    --aur-3: #86efac;
+    --aur-4: #f0fdf4;
 
     /* Glass system — one recipe, two materials (card fill + hairline). */
     --glass-a: rgb(255 255 255 / 0.80);
@@ -139,9 +139,9 @@ body { -webkit-font-smoothing: antialiased; }
     --glass-hl: rgb(255 255 255 / 0.9);
     --glass-line-a: rgb(255 255 255 / 0.95);
     --glass-line-b: color-mix(in oklab, var(--primary) 30%, transparent);
-    --glass-line-c: color-mix(in oklab, oklch(0.72 0.13 295) 28%, transparent);
-    --glass-shadow: 0 20px 45px -24px oklch(0.55 0.12 340 / 0.38), 0 6px 18px -12px oklch(0.55 0.12 340 / 0.22);
-    --glass-shadow-strong: 0 30px 65px -28px oklch(0.55 0.12 340 / 0.5), 0 10px 26px -14px oklch(0.55 0.12 340 / 0.3);
+    --glass-line-c: color-mix(in oklab, oklch(0.72 0.13 150) 28%, transparent);
+    --glass-shadow: 0 20px 45px -24px oklch(0.55 0.12 150 / 0.38), 0 6px 18px -12px oklch(0.55 0.12 150 / 0.22);
+    --glass-shadow-strong: 0 30px 65px -28px oklch(0.55 0.12 150 / 0.5), 0 10px 26px -14px oklch(0.55 0.12 150 / 0.3);
     /* Popover/dialog glass is denser so text stays effortless to read. */
     --pop-a: rgb(255 255 255 / 0.92);
     --pop-b: rgb(255 255 255 / 0.84);
@@ -153,24 +153,24 @@ body { -webkit-font-smoothing: antialiased; }
     --shadow-lg: 0 14px 30px -10px oklch(0.35 0.06 30 / 0.16), 0 5px 12px -5px oklch(0.35 0.06 30 / 0.10);
     --shadow-xl: 0 24px 50px -16px oklch(0.35 0.06 30 / 0.20), 0 10px 20px -10px oklch(0.35 0.06 30 / 0.12);
     --shadow-2xl: 0 32px 70px -20px oklch(0.30 0.08 20 / 0.30);
-    --shadow-primary: 0 6px 18px -6px oklch(0.70 0.20 353 / 0.45);
-    --shadow-primary-lg: 0 12px 30px -8px oklch(0.70 0.20 353 / 0.55);
+    --shadow-primary: 0 6px 18px -6px oklch(0.70 0.20 150 / 0.45);
+    --shadow-primary-lg: 0 12px 30px -8px oklch(0.70 0.20 150 / 0.55);
 
     /* Success/warning/error card variants */
-    --success-bg: #d7f5df;
-    --success-border: #9fe0b6;
-    --success-foreground: #1f7a45;
-    --warning-bg: #fde3c3;
-    --warning-border: #f2c185;
-    --warning-foreground: #a65b0c;
-    --error-bg: #fde1e4;
-    --error-border: #f0b3bb;
-    --error-foreground: #b42f46;
-    --success: #1f7a45;
-    --warning: #c97416;
-    --error: #b42f46;
-    --info: #1d66c2;
-    --overlay: color-mix(in oklab, oklch(0.32 0.07 340) 55%, transparent);
+    --success-bg: #dcfce7;
+    --success-border: #86efac;
+    --success-foreground: #14532d;
+    --warning-bg: #fef3c7;
+    --warning-border: #fcd34d;
+    --warning-foreground: #92400e;
+    --error-bg: #fee2e2;
+    --error-border: #fca5a5;
+    --error-foreground: #991b1b;
+    --success: #16a34a;
+    --warning: #ca8a04;
+    --error: #dc2626;
+    --info: #0284c7;
+    --overlay: color-mix(in oklab, oklch(0.32 0.07 150) 55%, transparent);
 
     /* Motion */
     --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -195,74 +195,74 @@ body { -webkit-font-smoothing: antialiased; }
        by lightness only: page 0.16 < sidebar 0.18 < card 0.205 < raised 0.23
      - solid surfaces: nothing moves behind content, so text and charts
        sit on clean ground
-     - one accent (BunWa pink), used for state and action only
+     - one accent (BunWa green), used for state and action only
      - status and chart colours tuned for these surfaces (series validated
        for colour-vision separation against --card)
    ═══════════════════════════════════════════════════════════════════ */
 .dark {
-    /* Chatbot-SaaS night palette: dark graphite with a warm amber accent. */
-    --background: #0e1014;
-    --foreground: #f3efe8;
-    --card: #161920;
-    --card-foreground: #f3efe8;
-    --popover: #1b1e26;
-    --surface-overlay: #1b1e26;
-    --surface-overlay-border: #262a33;
-    --popover-foreground: #f3efe8;
-    --primary: #f2a541;
-    --primary-foreground: #1c140c;
+    /* BunWa night: deep forest with a soft green glow. */
+    --background: #052e16;
+    --foreground: #ecfdf5;
+    --card: #14532d;
+    --card-foreground: #ecfdf5;
+    --popover: #14532d;
+    --surface-overlay: #14532d;
+    --surface-overlay-border: #166534;
+    --popover-foreground: #ecfdf5;
+    --primary: #4ade80;
+    --primary-foreground: #052e16;
     --primary-soft: color-mix(in oklab, var(--primary) 14%, var(--card));
-    --primary-strong: #f6b866;
-    --secondary: #1d2028;
-    --secondary-foreground: #f3efe8;
-    --muted: #1d2028;
-    --muted-foreground: #9ba1ad;
-    --accent: #2a2218;
-    --accent-foreground: #f3efe8;
-    --destructive: #ff8a9b;
-    --border: #262a33;
-    --input: #2c313b;
-    --ring: #f6b866;
-    --chart-1: #d27d22;
-    --chart-2: #4a97d9;
-    --chart-3: #d0669a;
+    --primary-strong: #86efac;
+    --secondary: #166534;
+    --secondary-foreground: #ecfdf5;
+    --muted: #14532d;
+    --muted-foreground: #a7f3d0;
+    --accent: #166534;
+    --accent-foreground: #ecfdf5;
+    --destructive: #fca5a5;
+    --border: #166534;
+    --input: #166534;
+    --ring: #4ade80;
+    --chart-1: #4ade80;
+    --chart-2: #93c5fd;
+    --chart-3: #f9a8d4;
     --chart-4: #c4b5fd;
-    --chart-5: #6ee7a0;
+    --chart-5: #fcd34d;
     /* Validated against --card: all checks pass, worst CVD pair ΔE 8.4. */
-    --series-sent: #6ee7a0;
-    --series-refused: #d27d22;
-    --series-failed: #ff9aaa;
-    --series-webhook: #4a97d9;
-    --sidebar: #0b0d10;
-    --sidebar-foreground: #eceae5;
-    --sidebar-primary: #f2a541;
-    --sidebar-primary-foreground: #1c140c;
-    --sidebar-accent: #171a20;
-    --sidebar-accent-foreground: #f3efe8;
-    --sidebar-border: #20242c;
-    --sidebar-ring: #f6b866;
-    --sidebar-active-bg: color-mix(in oklab, var(--primary) 14%, transparent);
-    --sidebar-active-fg: #f6b866;
-    --sidebar-active-border: color-mix(in oklab, var(--primary) 24%, transparent);
+    --series-sent: #4ade80;
+    --series-refused: #fcd34d;
+    --series-failed: #fca5a5;
+    --series-webhook: #93c5fd;
+    --sidebar: #0b3d22;
+    --sidebar-foreground: #ecfdf5;
+    --sidebar-primary: #4ade80;
+    --sidebar-primary-foreground: #052e16;
+    --sidebar-accent: #14532d;
+    --sidebar-accent-foreground: #ecfdf5;
+    --sidebar-border: #166534;
+    --sidebar-ring: #4ade80;
+    --sidebar-active-bg: color-mix(in oklab, var(--primary) 16%, transparent);
+    --sidebar-active-fg: #86efac;
+    --sidebar-active-border: color-mix(in oklab, var(--primary) 26%, transparent);
 
     /* The sky is retired at night; these only tint a few hairlines. */
-    --aur-1: #f6b866;
-    --aur-2: #f6b866;
-    --aur-3: #1d2028;
-    --aur-4: #1d2028;
+    --aur-1: #4ade80;
+    --aur-2: #86efac;
+    --aur-3: #14532d;
+    --aur-4: #14532d;
 
     /* Surfaces are solid: a 3% top-light gradient, a neutral hairline that
        is a little brighter at the top edge, and a soft shadow. */
-    --glass-a: oklch(0.215 0.009 260);
-    --glass-b: oklch(0.2 0.009 260);
-    --glass-hl: rgb(255 255 255 / 0.045);
-    --glass-line-a: rgb(255 255 255 / 0.11);
-    --glass-line-b: rgb(255 255 255 / 0.06);
-    --glass-line-c: rgb(255 255 255 / 0.05);
+    --glass-a: oklch(0.205 0.03 150);
+    --glass-b: oklch(0.19 0.03 150);
+    --glass-hl: rgb(255 255 255 / 0.05);
+    --glass-line-a: rgb(255 255 255 / 0.12);
+    --glass-line-b: rgb(255 255 255 / 0.07);
+    --glass-line-c: rgb(255 255 255 / 0.06);
     --glass-shadow: 0 1px 2px oklch(0 0 0 / 0.35), 0 14px 32px -18px oklch(0 0 0 / 0.65);
     --glass-shadow-strong: 0 2px 6px oklch(0 0 0 / 0.35), 0 26px 60px -24px oklch(0 0 0 / 0.8);
-    --pop-a: oklch(0.23 0.01 260);
-    --pop-b: oklch(0.23 0.01 260);
+    --pop-a: oklch(0.23 0.03 150);
+    --pop-b: oklch(0.23 0.03 150);
 
     --shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 0.4);
     --shadow-sm: 0 2px 4px -1px oklch(0 0 0 / 0.4), 0 1px 2px -1px oklch(0 0 0 / 0.4);
@@ -270,23 +270,23 @@ body { -webkit-font-smoothing: antialiased; }
     --shadow-lg: 0 14px 30px -10px oklch(0 0 0 / 0.55), 0 5px 12px -5px oklch(0 0 0 / 0.45);
     --shadow-xl: 0 24px 50px -16px oklch(0 0 0 / 0.6), 0 10px 20px -10px oklch(0 0 0 / 0.5);
     --shadow-2xl: 0 32px 70px -20px oklch(0 0 0 / 0.75);
-    --shadow-primary: 0 6px 18px -8px oklch(0.75 0.14 352 / 0.35);
-    --shadow-primary-lg: 0 12px 28px -10px oklch(0.75 0.14 352 / 0.45);
+    --shadow-primary: 0 6px 18px -8px oklch(0.75 0.14 150 / 0.35);
+    --shadow-primary-lg: 0 12px 28px -10px oklch(0.75 0.14 150 / 0.45);
 
-    --success-bg: oklch(0.25 0.035 165);
-    --success-border: oklch(0.35 0.06 165);
-    --success-foreground: oklch(0.84 0.1 165);
+    --success-bg: oklch(0.25 0.035 150);
+    --success-border: oklch(0.35 0.06 150);
+    --success-foreground: oklch(0.84 0.1 150);
     --warning-bg: oklch(0.26 0.035 85);
     --warning-border: oklch(0.37 0.06 85);
     --warning-foreground: oklch(0.86 0.1 85);
     --error-bg: oklch(0.25 0.04 20);
     --error-border: oklch(0.36 0.07 20);
     --error-foreground: oklch(0.84 0.09 20);
-    --success: #6ee7a0;
-    --warning: #f6b866;
-    --error: #ff9aaa;
-    --info: #8ec5ff;
-    --overlay: color-mix(in oklab, oklch(0.08 0.006 260) 72%, transparent);
+    --success: #4ade80;
+    --warning: #fcd34d;
+    --error: #fca5a5;
+    --info: #93c5fd;
+    --overlay: color-mix(in oklab, oklch(0.08 0.006 150) 72%, transparent);
 }
 
 @theme inline {
@@ -548,7 +548,7 @@ body { -webkit-font-smoothing: antialiased; }
         radial-gradient(85% 60% at 88% 6%, color-mix(in oklab, var(--aur-3) 40%, transparent), transparent 58%),
         radial-gradient(95% 70% at 6% 102%, color-mix(in oklab, var(--aur-2) 44%, transparent), transparent 60%),
         radial-gradient(70% 50% at 96% 96%, color-mix(in oklab, var(--aur-4) 30%, transparent), transparent 60%),
-        linear-gradient(172deg, oklch(0.985 0.014 84), oklch(0.974 0.026 340) 52%, oklch(0.966 0.03 288));
+        linear-gradient(172deg, oklch(0.985 0.014 150), oklch(0.974 0.026 160) 52%, oklch(0.966 0.03 165));
 }
 .dark .aurora-sky {
     background:
@@ -802,7 +802,7 @@ body { -webkit-font-smoothing: antialiased; }
     background:
         linear-gradient(180deg, rgb(255 255 255 / 0.72), rgb(255 255 255 / 0.5)) padding-box,
         linear-gradient(180deg, rgb(255 255 255 / 0.9), color-mix(in oklab, var(--primary) 18%, transparent)) border-box;
-    box-shadow: inset 0 1.5px 3px oklch(0.35 0.08 340 / 0.06);
+    box-shadow: inset 0 1.5px 3px oklch(0.35 0.08 150 / 0.06);
 }
 .glass-field:hover {
     background:
@@ -816,7 +816,7 @@ body { -webkit-font-smoothing: antialiased; }
     background:
         linear-gradient(180deg, rgb(255 255 255 / 0.9), rgb(255 255 255 / 0.72)) padding-box,
         linear-gradient(180deg, color-mix(in oklab, var(--primary) 55%, transparent), color-mix(in oklab, var(--primary) 25%, transparent)) border-box;
-    box-shadow: inset 0 1.5px 3px oklch(0.35 0.08 340 / 0.05), 0 0 0 4px color-mix(in oklab, var(--primary) 16%, transparent);
+    box-shadow: inset 0 1.5px 3px oklch(0.35 0.08 150 / 0.05), 0 0 0 4px color-mix(in oklab, var(--primary) 16%, transparent);
 }
 .dark .glass-field {
     background:
@@ -965,19 +965,19 @@ body { -webkit-font-smoothing: antialiased; }
   .status-dot-working, .status-dot-starting, .status-dot-qr { animation: none; }
 }
 
-/* ── Buttons: bun-pink with a travelling sheen ── */
+/* ── Buttons: bun-green with a travelling sheen ── */
 .btn-dream {
   background-image: linear-gradient(
     160deg,
     color-mix(in oklab, white 34%, var(--primary)),
     var(--primary) 55%,
-    color-mix(in oklab, var(--primary), #a85d17 45%)
+    color-mix(in oklab, var(--primary), #15803d 45%)
   );
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 45%), inset 0 -8px 14px -10px rgb(120 80 20 / 0.35), var(--shadow-primary);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 45%), inset 0 -8px 14px -10px rgb(21 128 61 / 0.35), var(--shadow-primary);
   overflow: hidden;
 }
 .btn-dream:hover {
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 55%), inset 0 -8px 14px -10px rgb(120 80 20 / 0.3), var(--shadow-primary-lg);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 55%), inset 0 -8px 14px -10px rgb(21 128 61 / 0.3), var(--shadow-primary-lg);
 }
 .btn-dream::after {
   content: "";
@@ -1000,13 +1000,13 @@ body { -webkit-font-smoothing: antialiased; }
   background:
     linear-gradient(180deg, rgb(255 255 255 / 0.75), rgb(255 255 255 / 0.5)) padding-box,
     linear-gradient(180deg, rgb(255 255 255 / 0.95), color-mix(in oklab, var(--primary) 26%, transparent)) border-box;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.85), 0 6px 16px -10px oklch(0.55 0.12 340 / 0.3);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.85), 0 6px 16px -10px oklch(0.55 0.12 150 / 0.3);
 }
 .btn-glass:hover {
   background:
     linear-gradient(180deg, rgb(255 255 255 / 0.88), rgb(255 255 255 / 0.64)) padding-box,
     linear-gradient(180deg, rgb(255 255 255 / 1), color-mix(in oklab, var(--primary) 42%, transparent)) border-box;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95), 0 10px 22px -12px oklch(0.55 0.12 340 / 0.4);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95), 0 10px 22px -12px oklch(0.55 0.12 150 / 0.4);
 }
 .dark .btn-glass {
   background:
@@ -1019,7 +1019,7 @@ body { -webkit-font-smoothing: antialiased; }
     linear-gradient(oklch(1 0 0 / 9%), oklch(1 0 0 / 9%)) padding-box,
     linear-gradient(180deg, oklch(1 0 0 / 24%), oklch(1 0 0 / 14%)) border-box;
 }
-/* The primary button: flat pink with a soft lift, no sheen at night. */
+/* The primary button: flat green with a soft lift, no sheen at night. */
 .dark .btn-dream {
   background-image: linear-gradient(180deg, color-mix(in oklab, white 8%, var(--primary)), var(--primary));
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 25%), var(--shadow-primary);
