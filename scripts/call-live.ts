@@ -149,7 +149,7 @@ export class SinkWriter {
     private readonly latencyMs = 250,
   ) {}
 
-  private ensure(): ReturnType<typeof spawn> {
+  private ensure(): ReturnType<typeof spawn> | null {
     if (this.proc) return this.proc;
     const pacat = process.env.PACAT_PATH || '/opt/data/pulse/usr/bin/pacat';
     const pulseServer = process.env.PULSE_SERVER || 'unix:/tmp/pulse-native';
@@ -157,22 +157,33 @@ export class SinkWriter {
       process.env.PULSE_LD_LIBRARY_PATH ||
       '/opt/data/pulse/usr/lib/x86_64-linux-gnu:/opt/data/pulse/usr/lib/x86_64-linux-gnu/pulseaudio:/opt/data/pulse/usr/lib/pulse-17.0+dfsg1/modules:/opt/data/pulse/lib/x86_64-linux-gnu';
 
-    const proc = spawn(
-      [pacat, '--playback', `--device=${this.sink}`, '--format=s16le', `--rate=${this.rate}`, '--channels=1', `--latency-msec=${this.latencyMs}`],
-      {
-        env: { ...process.env, PULSE_SERVER: pulseServer, LD_LIBRARY_PATH: libraryPath },
-        stdin: 'pipe',
-        stdout: 'ignore',
-        stderr: 'pipe',
-      },
-    );
+    let proc: ReturnType<typeof spawn>;
+    try {
+      proc = spawn(
+        [pacat, '--playback', `--device=${this.sink}`, '--format=s16le', `--rate=${this.rate}`, '--channels=1', `--latency-msec=${this.latencyMs}`],
+        {
+          env: { ...process.env, PULSE_SERVER: pulseServer, LD_LIBRARY_PATH: libraryPath },
+          stdin: 'pipe',
+          stdout: 'ignore',
+          stderr: 'pipe',
+        },
+      );
+    } catch {
+      // pacat is not installed on CI or on a machine without PulseAudio.
+      // A call must keep running without a local sink; writes become no-ops.
+      return null;
+    }
     this.proc = proc;
     this.startedAt = performance.now();
     this.writtenBytes = 0;
-    proc.exited.then((code) => {
-      if (!this.closed && code !== 0) console.error(`pacat exited ${code}`);
-      this.proc = null;
-    });
+    proc.exited
+      .then((code) => {
+        if (!this.closed && code !== 0) console.error(`pacat exited ${code}`);
+        this.proc = null;
+      })
+      .catch(() => {
+        this.proc = null;
+      });
     return proc;
   }
 
@@ -194,19 +205,25 @@ export class SinkWriter {
   write(pcm: Buffer): Promise<void> {
     if (this.closed || !pcm.length) return Promise.resolve();
     this.writeChain = this.writeChain.then(async () => {
-      const proc = this.ensure();
-      const stdin = proc.stdin as any;
-      if (!stdin?.write) return;
-      this.writtenBytes += pcm.length;
-      await this.pace();
-      // Bun's FileSink.write() is synchronous and does NOT take a callback;
-      // passing one silently never resolves, which delayed every 20 ms chunk
-      // by the 1 s fallback timer and made the output choppy. Flush instead.
-      stdin.write(pcm);
-      await Promise.race([
-        typeof stdin.flush === 'function' ? stdin.flush() : Promise.resolve(),
-        new Promise<void>((resolve) => setTimeout(resolve, 1000)),
-      ]);
+      try {
+        const proc = this.ensure();
+        if (!proc) return;
+        const stdin = proc.stdin as any;
+        if (!stdin?.write) return;
+        this.writtenBytes += pcm.length;
+        await this.pace();
+        // Bun's FileSink.write() is synchronous and does NOT take a callback;
+        // passing one silently never resolves, which delayed every 20 ms chunk
+        // by the 1 s fallback timer and made the output choppy. Flush instead.
+        stdin.write(pcm);
+        const flush = typeof stdin.flush === 'function' ? stdin.flush() : Promise.resolve();
+        await Promise.race([
+          Promise.resolve(flush).catch(() => undefined),
+          new Promise<void>((resolve) => setTimeout(resolve, 1000)),
+        ]);
+      } catch {
+        // A dead sink must never break the call audio path.
+      }
     });
     return this.writeChain;
   }
