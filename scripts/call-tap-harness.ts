@@ -63,7 +63,8 @@ try {
     return track.kind;
   });
 
-  console.log(JSON.stringify({ trackKind, chunks, bytes, pass: chunks > 0 && bytes > 0 }));
+  const stats = await page.evaluate(() => (globalThis as any).__bunwaTapStats);
+  console.log(JSON.stringify({ trackKind, chunks, bytes, stats, pass: chunks > 0 && bytes > 0 }));
   if (!chunks) process.exitCode = 1;
 } finally {
   await browser.close();

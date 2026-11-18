@@ -15,6 +15,7 @@
     "verify:call-tap": "bun run scripts/call-tap-harness.ts",
     "call:agent": "bun run scripts/call-agent.ts",
     "call:live": "bun run scripts/call-live.ts",
+    "call:inbound-live": "bun run scripts/call-inbound-live.ts",
     "call:fish": "bun run scripts/fish-bridge.ts",
     "call:latency": "bun run scripts/call-latency.ts",
     "call:audio-device": "bash scripts/pulseaudio-call-device.sh",

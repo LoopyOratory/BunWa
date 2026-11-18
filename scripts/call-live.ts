@@ -39,6 +39,7 @@ const env = {
   apiKey: process.env.BUNWA_API_KEY || '',
   geminiKey: process.env.GEMINI_API_KEY || '',
   model: process.env.GEMINI_LIVE_MODEL || 'gemini-3.8-live',
+  voice: process.env.GEMINI_LIVE_VOICE || 'Puck',
   sink: process.env.BUNWA_CALL_AUDIO_SINK || '',
   language: process.env.BUNWA_LANGUAGE || 'English',
   pacing: Number(process.env.BUNWA_AUDIO_PACING || '0'),
@@ -303,7 +304,16 @@ async function main(): Promise<void> {
       socket.send(JSON.stringify({
         setup: {
           model: `models/${env.model}`,
-          generationConfig: { responseModalities: ['AUDIO'] },
+          generationConfig: {
+            responseModalities: ['AUDIO'],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: {
+                  voiceName: env.voice,
+                },
+              },
+            },
+          },
           systemInstruction: { parts: [{ text: `${env.systemPrompt} Always respond in ${env.language}, even if the caller speaks another language or the audio is noisy.` }] },
           inputAudioTranscription: {},
           outputAudioTranscription: {},
