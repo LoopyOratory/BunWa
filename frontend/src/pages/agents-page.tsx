@@ -1,0 +1,1006 @@
+import { useEffect, useMemo, useState } from "react"
+import {
+  Bot,
+  Check,
+  ChevronRight,
+  MessageSquare,
+  Plus,
+  RefreshCw,
+  Sparkles,
+  Trash2,
+} from "lucide-react"
+import { toast } from "sonner"
+import { PageLayout } from "@/components/page-layout"
+import { EmptyState, ErrorState, SectionHeading } from "@/components/primitives"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
+import { Switch } from "@/components/ui/switch"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  agentApi,
+  type Agent,
+  type AgentAnalytics,
+  type AgentEvent,
+  type AgentSkill,
+  type BuilderQuestion,
+  type KnowledgeSource,
+} from "@/lib/agents-api"
+
+type DraftSkill = { name: string; description: string; instructions: string; enabled: boolean }
+type DraftKnowledge = { name: string; kind: "text" | "url" | "file"; content: string }
+
+const STEPS = ["Basics", "Prompt", "Skills", "Knowledge", "Review"] as const
+type Step = (typeof STEPS)[number]
+
+function stepIndex(step: Step) {
+  return STEPS.indexOf(step)
+}
+
+function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <Card className="border-border/70 bg-card/70">
+      <CardContent className="p-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className="mt-1 font-heading text-2xl font-semibold">{value}</p>
+        {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+      </CardContent>
+    </Card>
+  )
+}
+
+function StatusBadge({ status }: { status: Agent["status"] }) {
+  const variant = status === "active" ? "default" : status === "paused" ? "secondary" : "outline"
+  return <Badge variant={variant}>{status}</Badge>
+}
+
+function AgentCard({ agent, onOpen }: { agent: Agent; onOpen: (agent: Agent) => void }) {
+  return (
+    <Card className="group cursor-pointer border-border/70 bg-card/70 transition hover:border-primary/40 hover:shadow-lg" onClick={() => onOpen(agent)}>
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary">
+              <Bot className="size-5" strokeWidth={1.8} />
+            </div>
+            <div className="min-w-0">
+              <CardTitle className="truncate text-base">{agent.name}</CardTitle>
+              <CardDescription className="truncate">
+                {agent.model || "No model set"} {agent.voice ? `· ${agent.voice}` : ""}
+              </CardDescription>
+            </div>
+          </div>
+          <StatusBadge status={agent.status} />
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-0">
+        <p className="line-clamp-3 min-h-[3.75rem] text-sm text-muted-foreground">
+          {agent.prompt || "No prompt yet. Open the agent to build one."}
+        </p>
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{new Date(agent.updatedAt).toLocaleDateString()}</span>
+          <span className="inline-flex items-center gap-1 text-primary opacity-0 transition group-hover:opacity-100">
+            Open <ChevronRight className="size-3.5" />
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function BuilderChat({
+  messages,
+  question,
+  answer,
+  onAnswerChange,
+  onSend,
+  onUsePrompt,
+  prompt,
+  busy,
+}: {
+  messages: Array<{ role: "assistant" | "user"; text: string }>
+  question: BuilderQuestion | null
+  answer: string
+  onAnswerChange: (value: string) => void
+  onSend: () => void
+  onUsePrompt: () => void
+  prompt: string
+  busy: boolean
+}) {
+  return (
+    <div className="flex min-h-[28rem] flex-col rounded-2xl border border-border/70 bg-muted/20">
+      <ScrollArea className="flex-1 p-4">
+        <div className="space-y-3">
+          {messages.map((message, index) => (
+            <div
+              key={`${message.role}-${index}`}
+              className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
+                message.role === "assistant"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "ml-auto bg-primary text-primary-foreground"
+              }`}
+            >
+              {message.text}
+            </div>
+          ))}
+          {prompt && (
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
+                <Sparkles className="size-3.5" /> Live prompt preview
+              </div>
+              <pre className="max-h-48 overflow-auto whitespace-pre-wrap font-sans text-xs leading-relaxed text-foreground/90">
+                {prompt}
+              </pre>
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+      <Separator />
+      <div className="p-3">
+        {question ? (
+          <div className="space-y-2">
+            <p className="px-1 text-xs font-medium text-muted-foreground">{question.question}</p>
+            {question.hint && <p className="px-1 text-xs text-muted-foreground/70">{question.hint}</p>}
+            <div className="flex gap-2">
+              <Input
+                value={answer}
+                onChange={(event) => onAnswerChange(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault()
+                    onSend()
+                  }
+                }}
+                placeholder="Type your answer…"
+                autoFocus
+              />
+              <Button onClick={onSend} disabled={!answer.trim() || busy}>
+                Send
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+            <p className="text-sm text-muted-foreground">The prompt is ready. You can edit it before saving.</p>
+            <Button onClick={onUsePrompt} disabled={!prompt}>
+              <Check className="size-4" /> Use this prompt
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function CreateAgentDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onCreated: () => void
+}) {
+  const [step, setStep] = useState<Step>("Basics")
+  const [name, setName] = useState("")
+  const [model, setModel] = useState("")
+  const [voice, setVoice] = useState("")
+  const [prompt, setPrompt] = useState("")
+  const [promptMode, setPromptMode] = useState<"builder" | "paste">("builder")
+  const [questions, setQuestions] = useState<BuilderQuestion[]>([])
+  const [questionIndex, setQuestionIndex] = useState(0)
+  const [answers, setAnswers] = useState<Record<string, string>>({})
+  const [answer, setAnswer] = useState("")
+  const [messages, setMessages] = useState<Array<{ role: "assistant" | "user"; text: string }>>([])
+  const [skills, setSkills] = useState<DraftSkill[]>([])
+  const [knowledge, setKnowledge] = useState<DraftKnowledge[]>([])
+  const [skillName, setSkillName] = useState("")
+  const [skillInstructions, setSkillInstructions] = useState("")
+  const [knowledgeName, setKnowledgeName] = useState("")
+  const [knowledgeKind, setKnowledgeKind] = useState<"text" | "url">("text")
+  const [knowledgeContent, setKnowledgeContent] = useState("")
+  const [reviewEnabled, setReviewEnabled] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const currentQuestion = questions[questionIndex] ?? null
+
+  useEffect(() => {
+    if (!open) return
+    setStep("Basics")
+    setName("")
+    setModel("")
+    setVoice("")
+    setPrompt("")
+    setPromptMode("builder")
+    setQuestions([])
+    setQuestionIndex(0)
+    setAnswers({})
+    setAnswer("")
+    setMessages([])
+    setSkills([])
+    setKnowledge([])
+    setSkillName("")
+    setSkillInstructions("")
+    setKnowledgeName("")
+    setKnowledgeKind("text")
+    setKnowledgeContent("")
+    setReviewEnabled(true)
+    setBusy(false)
+    setSaving(false)
+    void agentApi
+      .builderQuestions()
+      .then((list) => {
+        setQuestions(list)
+        const first = list[0]
+        if (first) {
+          setMessages([
+            { role: "assistant", text: "I’ll help you build the agent prompt. Answer a few short questions." },
+            { role: "assistant", text: first.question },
+          ])
+        }
+      })
+      .catch(() => toast.error("Could not load the prompt builder"))
+  }, [open])
+
+  const goNext = () => {
+    const index = stepIndex(step)
+    if (index < STEPS.length - 1) setStep(STEPS[index + 1])
+  }
+
+  const goBack = () => {
+    const index = stepIndex(step)
+    if (index > 0) setStep(STEPS[index - 1])
+  }
+
+  const sendAnswer = async () => {
+    if (!currentQuestion || !answer.trim()) return
+    const nextAnswers = { ...answers, [currentQuestion.id]: answer.trim() }
+    setAnswers(nextAnswers)
+    setMessages((current) => [...current, { role: "user", text: answer.trim() }])
+    setAnswer("")
+    setBusy(true)
+    try {
+      const result = await agentApi.builderNext(nextAnswers)
+      setPrompt(result.prompt)
+      if (result.next) {
+        const nextIndex = questions.findIndex((question) => question.id === result.next?.id)
+        setQuestionIndex(nextIndex >= 0 ? nextIndex : questionIndex + 1)
+        setMessages((current) => [...current, { role: "assistant", text: result.next!.question }])
+      } else {
+        setQuestionIndex(questions.length)
+        setMessages((current) => [
+          ...current,
+          { role: "assistant", text: "That’s everything I need. I’ve drafted the prompt below — you can edit it." },
+        ])
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not build the prompt")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const addSkill = () => {
+    if (!skillName.trim() || !skillInstructions.trim()) {
+      toast.error("Give the skill a name and instructions")
+      return
+    }
+    setSkills((current) => [
+      ...current,
+      { name: skillName.trim(), description: "", instructions: skillInstructions.trim(), enabled: true },
+    ])
+    setSkillName("")
+    setSkillInstructions("")
+  }
+
+  const addKnowledge = () => {
+    if (!knowledgeName.trim() || !knowledgeContent.trim()) {
+      toast.error("Give the source a name and content")
+      return
+    }
+    setKnowledge((current) => [
+      ...current,
+      { name: knowledgeName.trim(), kind: knowledgeKind, content: knowledgeContent.trim() },
+    ])
+    setKnowledgeName("")
+    setKnowledgeContent("")
+  }
+
+  const create = async () => {
+    if (!name.trim()) {
+      toast.error("The agent needs a name")
+      setStep("Basics")
+      return
+    }
+    setSaving(true)
+    try {
+      await agentApi.create({
+        name: name.trim(),
+        prompt: prompt.trim(),
+        model: model.trim() || null,
+        voice: voice.trim() || null,
+        settings: { reviewEnabled },
+        skills: skills.map((skill) => ({
+          name: skill.name,
+          description: skill.description,
+          instructions: skill.instructions,
+          enabled: skill.enabled,
+        })),
+        knowledge: knowledge.map((source) => ({
+          name: source.name,
+          kind: source.kind,
+          content: source.content,
+        })),
+      })
+      toast.success("Agent created")
+      onOpenChange(false)
+      onCreated()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not create the agent")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[92dvh] max-w-5xl overflow-hidden p-0">
+        <div className="flex max-h-[92dvh] flex-col">
+          <DialogHeader className="border-b border-border/70 px-6 py-4">
+            <DialogTitle>Create an agent</DialogTitle>
+            <DialogDescription>
+              Build the prompt, add skills, and attach knowledge before the agent goes live.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex items-center gap-1 overflow-x-auto border-b border-border/70 px-6 py-3">
+            {STEPS.map((label, index) => {
+              const active = step === label
+              const complete = stepIndex(step) > index
+              return (
+                <div key={label} className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setStep(label)}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : complete
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <span className="grid size-4 place-items-center rounded-full border border-current text-[10px]">
+                      {complete ? <Check className="size-2.5" /> : index + 1}
+                    </span>
+                    {label}
+                  </button>
+                  {index < STEPS.length - 1 && <ChevronRight className="size-3.5 text-muted-foreground/50" />}
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-6 py-5">
+            {step === "Basics" && (
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="agent-name">Agent name</Label>
+                  <Input id="agent-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Vei’s Support" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="agent-model">Model</Label>
+                  <Input id="agent-model" value={model} onChange={(event) => setModel(event.target.value)} placeholder="gemini-3.8-flash" />
+                  <p className="text-xs text-muted-foreground">Leave blank to use the platform default.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="agent-voice">Voice</Label>
+                  <Input id="agent-voice" value={voice} onChange={(event) => setVoice(event.target.value)} placeholder="Aoede" />
+                  <p className="text-xs text-muted-foreground">Used for live calls when the call agent is enabled.</p>
+                </div>
+                <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-muted/20 p-4 md:col-span-2">
+                  <div>
+                    <p className="text-sm font-medium">Ask for a review before the conversation closes</p>
+                    <p className="text-xs text-muted-foreground">Sends a short rating prompt 10 seconds before the session ends. Can be toggled per conversation.</p>
+                  </div>
+                  <Switch checked={reviewEnabled} onCheckedChange={setReviewEnabled} />
+                </div>
+              </div>
+            )}
+
+            {step === "Prompt" && (
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  <Button variant={promptMode === "builder" ? "default" : "outline"} size="sm" onClick={() => setPromptMode("builder")}>
+                    <Sparkles className="size-4" /> Build with questions
+                  </Button>
+                  <Button variant={promptMode === "paste" ? "default" : "outline"} size="sm" onClick={() => setPromptMode("paste")}>
+                    <MessageSquare className="size-4" /> Paste a prompt
+                  </Button>
+                </div>
+                {promptMode === "builder" ? (
+                  <BuilderChat
+                    messages={messages}
+                    question={currentQuestion}
+                    answer={answer}
+                    onAnswerChange={setAnswer}
+                    onSend={sendAnswer}
+                    onUsePrompt={() => setPromptMode("paste")}
+                    prompt={prompt}
+                    busy={busy}
+                  />
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="agent-prompt">System prompt</Label>
+                    <Textarea
+                      id="agent-prompt"
+                      value={prompt}
+                      onChange={(event) => setPrompt(event.target.value)}
+                      className="min-h-[24rem] font-mono text-xs leading-relaxed"
+                      placeholder="You are…"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      This is the base prompt. Enabled skills are appended automatically when the agent runs.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {step === "Skills" && (
+              <div className="grid gap-5 lg:grid-cols-[1fr_1.1fr]">
+                <div className="space-y-3">
+                  <SectionHeading title="Add a skill" description="A skill is a focused instruction the agent can use when the task calls for it." />
+                  <div className="space-y-2">
+                    <Label htmlFor="skill-name">Name</Label>
+                    <Input id="skill-name" value={skillName} onChange={(event) => setSkillName(event.target.value)} placeholder="Order lookup" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="skill-instructions">Instructions</Label>
+                    <Textarea
+                      id="skill-instructions"
+                      value={skillInstructions}
+                      onChange={(event) => setSkillInstructions(event.target.value)}
+                      className="min-h-32"
+                      placeholder="Ask for the order number, then check the order table…"
+                    />
+                  </div>
+                  <Button onClick={addSkill} className="w-full">
+                    <Plus className="size-4" /> Add skill
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <SectionHeading title={`Skills (${skills.length})`} description="These will be appended to the agent prompt." />
+                  {skills.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-border/70 p-6 text-center text-sm text-muted-foreground">
+                      No skills yet.
+                    </div>
+                  ) : (
+                    skills.map((skill, index) => (
+                      <div key={`${skill.name}-${index}`} className="rounded-2xl border border-border/70 bg-card/70 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-medium">{skill.name}</p>
+                            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{skill.instructions}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setSkills((current) => current.filter((_, i) => i !== index))}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {step === "Knowledge" && (
+              <div className="grid gap-5 lg:grid-cols-[1fr_1.1fr]">
+                <div className="space-y-3">
+                  <SectionHeading title="Add knowledge" description="Paste text or point at a URL. The knowledge base is used for retrieval." />
+                  <div className="space-y-2">
+                    <Label htmlFor="knowledge-name">Name</Label>
+                    <Input id="knowledge-name" value={knowledgeName} onChange={(event) => setKnowledgeName(event.target.value)} placeholder="Refund policy" />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant={knowledgeKind === "text" ? "default" : "outline"} size="sm" onClick={() => setKnowledgeKind("text")}>
+                      Text
+                    </Button>
+                    <Button variant={knowledgeKind === "url" ? "default" : "outline"} size="sm" onClick={() => setKnowledgeKind("url")}>
+                      URL
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="knowledge-content">{knowledgeKind === "url" ? "URL" : "Content"}</Label>
+                    <Textarea
+                      id="knowledge-content"
+                      value={knowledgeContent}
+                      onChange={(event) => setKnowledgeContent(event.target.value)}
+                      className="min-h-32"
+                      placeholder={knowledgeKind === "url" ? "https://example.com/policy" : "Paste the source text…"}
+                    />
+                  </div>
+                  <Button onClick={addKnowledge} className="w-full">
+                    <Plus className="size-4" /> Add knowledge
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <SectionHeading title={`Knowledge (${knowledge.length})`} description="Sources attached to this agent." />
+                  {knowledge.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-border/70 p-6 text-center text-sm text-muted-foreground">
+                      No knowledge sources yet.
+                    </div>
+                  ) : (
+                    knowledge.map((source, index) => (
+                      <div key={`${source.name}-${index}`} className="rounded-2xl border border-border/70 bg-card/70 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="truncate text-sm font-medium">{source.name}</p>
+                              <Badge variant="outline">{source.kind}</Badge>
+                            </div>
+                            <p className="mt-1 line-clamp-2 break-all text-xs text-muted-foreground">{source.content}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setKnowledge((current) => current.filter((_, i) => i !== index))}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {step === "Review" && (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-heading text-lg font-semibold">{name || "Untitled agent"}</h3>
+                    <Badge variant="outline">draft</Badge>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {model || "Default model"} {voice ? `· ${voice}` : ""}
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <StatCard label="Skills" value={String(skills.length)} />
+                  <StatCard label="Knowledge" value={String(knowledge.length)} />
+                  <StatCard label="Reviews" value={reviewEnabled ? "On" : "Off"} hint="10s before close" />
+                </div>
+                <div className="rounded-2xl border border-border/70 p-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prompt preview</p>
+                  <pre className="max-h-64 overflow-auto whitespace-pre-wrap font-sans text-sm leading-relaxed">
+                    {prompt || "No prompt yet. Go back to the Prompt step."}
+                  </pre>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="border-t border-border/70 px-6 py-4">
+            <div className="flex w-full items-center justify-between gap-2">
+              <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <div className="flex gap-2">
+                {step !== "Basics" && <Button variant="outline" onClick={goBack}>Back</Button>}
+                {step !== "Review" ? (
+                  <Button onClick={goNext}>Next <ChevronRight className="size-4" /></Button>
+                ) : (
+                  <Button onClick={create} disabled={saving}>
+                    {saving ? "Creating…" : "Create agent"}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function AgentDetailDialog({
+  agent,
+  onOpenChange,
+  onChanged,
+}: {
+  agent: Agent | null
+  onOpenChange: (open: boolean) => void
+  onChanged: () => void
+}) {
+  const [skills, setSkills] = useState<AgentSkill[]>([])
+  const [knowledge, setKnowledge] = useState<KnowledgeSource[]>([])
+  const [analytics, setAnalytics] = useState<AgentAnalytics | null>(null)
+  const [events, setEvents] = useState<AgentEvent[]>([])
+  const [prompt, setPrompt] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [skillName, setSkillName] = useState("")
+  const [skillInstructions, setSkillInstructions] = useState("")
+  const [knowledgeName, setKnowledgeName] = useState("")
+  const [knowledgeKind, setKnowledgeKind] = useState<"text" | "url">("text")
+  const [knowledgeContent, setKnowledgeContent] = useState("")
+
+  useEffect(() => {
+    if (!agent) return
+    setPrompt(agent.prompt)
+    setLoading(true)
+    Promise.all([
+      agentApi.listSkills(agent.id),
+      agentApi.listKnowledge(agent.id),
+      agentApi.analytics(agent.id),
+      agentApi.events({ agentId: agent.id, limit: 20 }),
+    ])
+      .then(([skillList, knowledgeList, stats, eventList]) => {
+        setSkills(skillList)
+        setKnowledge(knowledgeList)
+        setAnalytics(stats)
+        setEvents(eventList)
+      })
+      .catch(() => toast.error("Could not load agent details"))
+      .finally(() => setLoading(false))
+  }, [agent])
+
+  const savePrompt = async () => {
+    if (!agent) return
+    setSaving(true)
+    try {
+      await agentApi.update(agent.id, { prompt })
+      toast.success("Prompt saved")
+      onChanged()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save the prompt")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const addSkill = async () => {
+    if (!agent || !skillName.trim() || !skillInstructions.trim()) return
+    try {
+      const skill = await agentApi.addSkill(agent.id, {
+        name: skillName.trim(),
+        instructions: skillInstructions.trim(),
+      })
+      setSkills((current) => [...current, skill])
+      setSkillName("")
+      setSkillInstructions("")
+      toast.success("Skill added")
+      onChanged()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not add the skill")
+    }
+  }
+
+  const removeSkill = async (skillId: string) => {
+    if (!agent) return
+    try {
+      await agentApi.removeSkill(agent.id, skillId)
+      setSkills((current) => current.filter((skill) => skill.id !== skillId))
+      toast.success("Skill removed")
+      onChanged()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not remove the skill")
+    }
+  }
+
+  const addKnowledge = async () => {
+    if (!agent || !knowledgeName.trim() || !knowledgeContent.trim()) return
+    try {
+      const source = await agentApi.addKnowledge(agent.id, {
+        name: knowledgeName.trim(),
+        kind: knowledgeKind,
+        content: knowledgeContent.trim(),
+      })
+      setKnowledge((current) => [...current, source])
+      setKnowledgeName("")
+      setKnowledgeContent("")
+      toast.success("Knowledge source added")
+      onChanged()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not add the knowledge source")
+    }
+  }
+
+  const removeKnowledge = async (sourceId: string) => {
+    if (!agent) return
+    try {
+      await agentApi.removeKnowledge(agent.id, sourceId)
+      setKnowledge((current) => current.filter((source) => source.id !== sourceId))
+      toast.success("Knowledge source removed")
+      onChanged()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not remove the knowledge source")
+    }
+  }
+
+  return (
+    <Dialog open={Boolean(agent)} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[92dvh] max-w-5xl overflow-hidden p-0">
+        <div className="flex max-h-[92dvh] flex-col">
+          <DialogHeader className="border-b border-border/70 px-6 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <DialogTitle className="flex items-center gap-2">
+                  {agent?.name}
+                  {agent && <StatusBadge status={agent.status} />}
+                </DialogTitle>
+                <DialogDescription>
+                  {agent?.model || "Default model"} {agent?.voice ? `· ${agent.voice}` : ""}
+                </DialogDescription>
+              </div>
+              {agent && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      await agentApi.update(agent.id, { status: agent.status === "active" ? "paused" : "active" })
+                      toast.success(agent.status === "active" ? "Agent paused" : "Agent activated")
+                      onChanged()
+                      onOpenChange(false)
+                    } catch (error) {
+                      toast.error(error instanceof Error ? error.message : "Could not change status")
+                    }
+                  }}
+                >
+                  {agent.status === "active" ? "Pause" : "Activate"}
+                </Button>
+              )}
+            </div>
+          </DialogHeader>
+
+          <Tabs defaultValue="prompt" className="flex min-h-0 flex-1 flex-col">
+            <div className="border-b border-border/70 px-6 py-3">
+              <TabsList>
+                <TabsTrigger value="prompt">Prompt</TabsTrigger>
+                <TabsTrigger value="skills">Skills</TabsTrigger>
+                <TabsTrigger value="knowledge">Knowledge</TabsTrigger>
+                <TabsTrigger value="analytics">Analytics</TabsTrigger>
+              </TabsList>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-5">
+              <TabsContent value="prompt" className="mt-0 space-y-3">
+                <Textarea
+                  value={prompt}
+                  onChange={(event) => setPrompt(event.target.value)}
+                  className="min-h-[24rem] font-mono text-xs leading-relaxed"
+                />
+                <div className="flex justify-end">
+                  <Button onClick={savePrompt} disabled={saving}>{saving ? "Saving…" : "Save prompt"}</Button>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="skills" className="mt-0 grid gap-5 lg:grid-cols-[1fr_1.1fr]">
+                <div className="space-y-3">
+                  <SectionHeading title="Add a skill" description="Focused instructions appended to the prompt." />
+                  <Input value={skillName} onChange={(event) => setSkillName(event.target.value)} placeholder="Skill name" />
+                  <Textarea value={skillInstructions} onChange={(event) => setSkillInstructions(event.target.value)} placeholder="Instructions…" className="min-h-28" />
+                  <Button onClick={addSkill} className="w-full"><Plus className="size-4" /> Add skill</Button>
+                </div>
+                <div className="space-y-2">
+                  <SectionHeading title={`Skills (${skills.length})`} />
+                  {loading ? <p className="text-sm text-muted-foreground">Loading…</p> : skills.length === 0 ? (
+                    <p className="rounded-2xl border border-dashed border-border/70 p-6 text-center text-sm text-muted-foreground">No skills yet.</p>
+                  ) : skills.map((skill) => (
+                    <div key={skill.id} className="rounded-2xl border border-border/70 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium">{skill.name}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">{skill.instructions}</p>
+                        </div>
+                        <Button variant="ghost" size="icon" onClick={() => removeSkill(skill.id)}><Trash2 className="size-4" /></Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="knowledge" className="mt-0 grid gap-5 lg:grid-cols-[1fr_1.1fr]">
+                <div className="space-y-3">
+                  <SectionHeading title="Add knowledge" description="Text or URL sources for retrieval." />
+                  <Input value={knowledgeName} onChange={(event) => setKnowledgeName(event.target.value)} placeholder="Source name" />
+                  <div className="flex gap-2">
+                    <Button variant={knowledgeKind === "text" ? "default" : "outline"} size="sm" onClick={() => setKnowledgeKind("text")}>Text</Button>
+                    <Button variant={knowledgeKind === "url" ? "default" : "outline"} size="sm" onClick={() => setKnowledgeKind("url")}>URL</Button>
+                  </div>
+                  <Textarea value={knowledgeContent} onChange={(event) => setKnowledgeContent(event.target.value)} placeholder={knowledgeKind === "url" ? "https://…" : "Paste text…"} className="min-h-28" />
+                  <Button onClick={addKnowledge} className="w-full"><Plus className="size-4" /> Add knowledge</Button>
+                </div>
+                <div className="space-y-2">
+                  <SectionHeading title={`Knowledge (${knowledge.length})`} />
+                  {loading ? <p className="text-sm text-muted-foreground">Loading…</p> : knowledge.length === 0 ? (
+                    <p className="rounded-2xl border border-dashed border-border/70 p-6 text-center text-sm text-muted-foreground">No knowledge yet.</p>
+                  ) : knowledge.map((source) => (
+                    <div key={source.id} className="rounded-2xl border border-border/70 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-medium">{source.name}</p>
+                            <Badge variant="outline">{source.kind}</Badge>
+                          </div>
+                          <p className="mt-1 line-clamp-2 break-all text-xs text-muted-foreground">{source.content}</p>
+                        </div>
+                        <Button variant="ghost" size="icon" onClick={() => removeKnowledge(source.id)}><Trash2 className="size-4" /></Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="analytics" className="mt-0 space-y-4">
+                <div className="grid gap-3 sm:grid-cols-5">
+                  <StatCard label="Conversations" value={String(analytics?.conversations ?? 0)} />
+                  <StatCard label="Closed" value={String(analytics?.closedConversations ?? 0)} />
+                  <StatCard label="Conversions" value={String(analytics?.conversions ?? 0)} />
+                  <StatCard label="Reviews" value={String(analytics?.reviews ?? 0)} />
+                  <StatCard
+                    label="Avg rating"
+                    value={analytics?.averageRating ? analytics.averageRating.toFixed(1) : "—"}
+                    hint="1–5"
+                  />
+                </div>
+                <div className="rounded-2xl border border-border/70 p-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Events</p>
+                  {(analytics?.events.length ?? 0) === 0 ? (
+                    <p className="text-sm text-muted-foreground">No events recorded yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {analytics?.events.map((event) => (
+                        <div key={event.type} className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">{event.type}</span>
+                          <span className="font-medium">{event.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="rounded-2xl border border-border/70 p-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recent history</p>
+                  {events.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No conversation history yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {events.map((event) => (
+                        <div key={event.id} className="flex items-center justify-between gap-3 rounded-xl bg-muted/30 px-3 py-2 text-sm">
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{event.type}</p>
+                            {event.conversationId && (
+                              <p className="truncate text-xs text-muted-foreground">{event.conversationId}</p>
+                            )}
+                          </div>
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            {new Date(event.createdAt).toLocaleString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+            </div>
+          </Tabs>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export function AgentsPage() {
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [analytics, setAnalytics] = useState<AgentAnalytics | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [selected, setSelected] = useState<Agent | null>(null)
+
+  const load = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [list, stats] = await Promise.all([agentApi.list(), agentApi.analytics()])
+      setAgents(list)
+      setAnalytics(stats)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load agents")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void load()
+  }, [])
+
+  const activeCount = useMemo(() => agents.filter((agent) => agent.status === "active").length, [agents])
+
+  return (
+    <PageLayout
+      title="Agents"
+      description="Build the chatbot and call agent, attach skills and knowledge, and track how conversations perform."
+      actions={
+        <Button onClick={() => setCreateOpen(true)}>
+          <Plus className="size-4" /> New agent
+        </Button>
+      }
+    >
+      <div className="space-y-6">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <StatCard label="Agents" value={String(agents.length)} hint={`${activeCount} active`} />
+          <StatCard label="Conversations" value={String(analytics?.conversations ?? 0)} />
+          <StatCard label="Conversions" value={String(analytics?.conversions ?? 0)} hint={analytics?.conversionRate != null ? `${Math.round(analytics.conversionRate * 100)}% rate` : undefined} />
+          <StatCard label="Reviews" value={String(analytics?.reviews ?? 0)} />
+          <StatCard
+            label="Satisfaction"
+            value={analytics?.averageRating ? `${analytics.averageRating.toFixed(1)} / 5` : "—"}
+            hint="Average review"
+          />
+        </div>
+
+        <SectionHeading
+          title="Your agents"
+          description="Each agent shares its profile, prompt, skills, and knowledge across chat and voice."
+          action={
+            <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
+              <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} /> Refresh
+            </Button>
+          }
+        />
+
+        {error ? (
+          <ErrorState title="Could not load agents" description={error} onRetry={() => void load()} />
+        ) : loading ? (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {[0, 1, 2].map((item) => (
+              <Card key={item} className="h-48 animate-pulse border-border/70 bg-card/50" />
+            ))}
+          </div>
+        ) : agents.length === 0 ? (
+          <EmptyState
+            icon={<Bot className="size-7" />}
+            title="No agents yet"
+            description="Create your first agent, then attach skills and knowledge before it starts answering."
+            action={<Button onClick={() => setCreateOpen(true)}><Plus className="size-4" /> Create an agent</Button>}
+          />
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {agents.map((agent) => (
+              <AgentCard key={agent.id} agent={agent} onOpen={setSelected} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <CreateAgentDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={() => void load()} />
+      <AgentDetailDialog agent={selected} onOpenChange={(open) => !open && setSelected(null)} onChanged={() => void load()} />
+    </PageLayout>
+  )
+}

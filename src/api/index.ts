@@ -28,6 +28,7 @@ import { createTemplatesRouter } from './templates.routes';
 import { createSendingPolicyRouter } from './sending-policy.routes';
 import { createAuditRouter } from './audit.routes';
 import { createInfraRouter } from './infra.routes';
+import { createAgentsRouter } from './agents.routes';
 import { createMcpConfigRouter } from './mcp-config.routes';
 import { createApiKeysRouter } from './api-keys.routes';
 import { createFilesRouter } from './files.routes';
@@ -67,6 +68,7 @@ export function createApiRouter(): Hono {
   router.route('/api/sessions', createSendingPolicyRouter());
   router.route('/api', createAuditRouter());
   router.route('/api', createInfraRouter());
+  router.route('/api/agents', createAgentsRouter());
   router.route('/api', createMcpConfigRouter());
   router.route('/api', createApiKeysRouter());
   router.route('/api/files', createFilesRouter());
