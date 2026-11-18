@@ -44,24 +44,30 @@ reported as `trackLive: false, silent: true`, so the callee hears nothing even
 though the graph has signal. The reliable path is a virtual input device:
 
 ```
-TTS (Node) ──base64──► /calls/speak ──► ffmpeg ──► pacat ──► wa_out (null sink)
+TTS (Node) ──base64──► /calls/speak ──► ffmpeg ──► pacat ──► wa_tts (TTS sink)
                                                                   │
-                                                        wa_out.monitor
+                                                        wa_tts.monitor
                                                                   │
                                                         wa_mic (remap source)
                                                                   │
                                               Chrome / WhatsApp capture (16 kHz)
                                                                   │
                                                             WhatsApp Opus/RTP
+
+Chrome call playback ──────────────────────────────────────► wa_out (separate sink)
 ```
 
-`scripts/pulseaudio-call-device.sh` starts the server, creates the sink and
+The two sinks are deliberately separate. If Chrome's call playback and the TTS
+share one sink, `wa_mic` captures the caller's voice and the agent's own output,
+which makes the model hear itself, interrupts its turn, and sounds choppy.
+
+`scripts/pulseaudio-call-device.sh` starts the server, creates both sinks and the
 source, and prints the environment BunWa needs. Run it once per host:
 
 ```bash
 bun run call:audio-device
 PULSE_SERVER=unix:/tmp/pulse-native \
-BUNWA_CALL_AUDIO_SINK=wa_out \
+BUNWA_CALL_AUDIO_SINK=wa_tts \
 PACAT_PATH=/opt/data/pulse/usr/bin/pacat \
 bun run start
 ```
@@ -72,6 +78,31 @@ device, WhatsApp sees a real microphone, so `injectAudio` is forced off.
 
 The remote tap is unchanged: it observes `AudioNode.connect(destination)` and
 tees the branch into a `ScriptProcessor` that emits PCM16 over SSE.
+
+## Low-latency live agent (Gemini Live)
+
+The turn-based loop below costs ~4.2 s to first audio on this host: STT 1.5 s,
+LLM 0.7 s, Fish TTS 0.5 s to first byte plus playback. `scripts/call-live.ts`
+removes the pipeline:
+
+```bash
+BUNWA_URL=http://127.0.0.1:3001 BUNWA_SESSION=calltest \
+BUNWA_API_KEY=... GEMINI_API_KEY=... \
+BUNWA_CALL_AUDIO_SINK=wa_tts \
+bun run call:live
+```
+
+- Caller PCM16 goes continuously into `gemini-3.8-live` over a WebSocket.
+- Model audio (24 kHz) is resampled to the call's 16 kHz with a **stateful**
+  resampler; stateless per-chunk resampling resets phase and sounds choppy.
+- `pacat` runs with a 250 ms buffer and no custom pacing, so the sink does not
+  underrun between model chunks.
+- `interrupted` from the model flushes queued audio (barge-in).
+- The SSE reader reconnects after a call ends or the gateway restarts instead
+  of crashing with `ECONNRESET`.
+
+Measured on this host: setup 0.23 s, first audio 0.82 s for a text turn. Input
+and output transcripts stream in the console.
 
 ## Live conversation loop
 

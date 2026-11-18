@@ -13,6 +13,8 @@
     "test": "bun test --parallel src/",
     "verify:calls": "bun run scripts/call-shim-harness.ts",
     "call:agent": "bun run scripts/call-agent.ts",
+    "call:live": "bun run scripts/call-live.ts",
+    "call:latency": "bun run scripts/call-latency.ts",
     "call:audio-device": "bash scripts/pulseaudio-call-device.sh",
     "test:postgres": "bun run scripts/test-postgres.ts",
     "postgres:dev": "bun run scripts/pglite-dev.ts",

@@ -17,6 +17,7 @@ PULSE_ROOT="${PULSE_ROOT:-/opt/data/pulse}"
 PULSE_SOCKET="${PULSE_SOCKET:-/tmp/pulse-native}"
 PULSE_RUNTIME_PATH="${PULSE_RUNTIME_PATH:-/opt/data/pulse/runtime}"
 PULSE_SINK="${PULSE_SINK:-wa_out}"
+PULSE_TTS_SINK="${PULSE_TTS_SINK:-wa_tts}"
 PULSE_SOURCE="${PULSE_SOURCE:-wa_mic}"
 LOG_FILE="${PULSE_LOG:-/opt/data/pulse/pulseaudio.log}"
 
@@ -40,8 +41,9 @@ else
   rm -f "$PULSE_SOCKET"
   "$PULSEAUDIO" -n --daemonize=no --exit-idle-time=-1 --disallow-exit \
     -L "$MODULES/module-native-protocol-unix.so socket=$PULSE_SOCKET auth-anonymous=1" \
-    -L "$MODULES/module-null-sink.so sink_name=$PULSE_SINK sink_properties=device.description=BunWaCallSink" \
-    -L "$MODULES/module-remap-source.so master=$PULSE_SINK.monitor source_name=$PULSE_SOURCE source_properties=device.description=BunWaCallMic" \
+    -L "$MODULES/module-null-sink.so sink_name=$PULSE_SINK sink_properties=device.description=BunWaPlayback" \
+    -L "$MODULES/module-null-sink.so sink_name=$PULSE_TTS_SINK sink_properties=device.description=BunWaTTS" \
+    -L "$MODULES/module-remap-source.so master=$PULSE_TTS_SINK.monitor source_name=$PULSE_SOURCE source_properties=device.description=BunWaCallMic" \
     -L "$MODULES/module-always-sink.so" \
     >"$LOG_FILE" 2>&1 &
 
@@ -57,7 +59,7 @@ PULSE_SERVER="unix:$PULSE_SOCKET" "$PACTL" set-default-source "$PULSE_SOURCE" >/
 cat <<EOF
 PulseAudio call device ready.
   PULSE_SERVER=unix:$PULSE_SOCKET
-  BUNWA_CALL_AUDIO_SINK=$PULSE_SINK
+  BUNWA_CALL_AUDIO_SINK=$PULSE_TTS_SINK
   PACAT_PATH=$PULSE_ROOT/usr/bin/pacat
   PULSE_LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 EOF
