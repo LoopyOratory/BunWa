@@ -474,6 +474,7 @@ function CreateAgentDialog({
                   <div className="space-y-2">
                     <Label htmlFor="skill-name">Name</Label>
                     <Input id="skill-name" value={skillName} onChange={(event) => setSkillName(event.target.value)} placeholder="Order lookup" />
+                    <p className="text-xs text-muted-foreground">A short label the agent will see.</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="skill-instructions">Instructions</Label>
@@ -484,6 +485,7 @@ function CreateAgentDialog({
                       className="min-h-32"
                       placeholder="Ask for the order number, then check the order table…"
                     />
+                    <p className="text-xs text-muted-foreground">Be specific. This text is appended to the prompt when the skill is enabled.</p>
                   </div>
                   <Button onClick={addSkill} className="w-full">
                     <Plus className="size-4" /> Add skill
@@ -525,6 +527,7 @@ function CreateAgentDialog({
                   <div className="space-y-2">
                     <Label htmlFor="knowledge-name">Name</Label>
                     <Input id="knowledge-name" value={knowledgeName} onChange={(event) => setKnowledgeName(event.target.value)} placeholder="Refund policy" />
+                    <p className="text-xs text-muted-foreground">A label for this source.</p>
                   </div>
                   <div className="flex gap-2">
                     <Button variant={knowledgeKind === "text" ? "default" : "outline"} size="sm" onClick={() => setKnowledgeKind("text")}>
@@ -543,6 +546,9 @@ function CreateAgentDialog({
                       className="min-h-32"
                       placeholder={knowledgeKind === "url" ? "https://example.com/policy" : "Paste the source text…"}
                     />
+                    <p className="text-xs text-muted-foreground">
+                      {knowledgeKind === "url" ? "The page is fetched and indexed." : "Paste the text the agent should know."}
+                    </p>
                   </div>
                   <Button onClick={addKnowledge} className="w-full">
                     <Plus className="size-4" /> Add knowledge
