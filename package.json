@@ -12,8 +12,10 @@
     "build:frontend": "bash scripts/build-frontend.sh",
     "test": "bun test --parallel src/",
     "verify:calls": "bun run scripts/call-shim-harness.ts",
+    "verify:call-tap": "bun run scripts/call-tap-harness.ts",
     "call:agent": "bun run scripts/call-agent.ts",
     "call:live": "bun run scripts/call-live.ts",
+    "call:fish": "bun run scripts/fish-bridge.ts",
     "call:latency": "bun run scripts/call-latency.ts",
     "call:audio-device": "bash scripts/pulseaudio-call-device.sh",
     "test:postgres": "bun run scripts/test-postgres.ts",
@@ -26,6 +28,7 @@
   "dependencies": {
     "@adiwajshing/keyed-db": "^0.2.4",
     "@hapi/boom": "^9.1.4",
+    "@livekit/rtc-node": "^1.2.2",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@scalar/hono-api-reference": "^0.11.3",
     "@whiskeysockets/baileys": "7.0.0-rc14",

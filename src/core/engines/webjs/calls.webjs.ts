@@ -702,6 +702,8 @@ export function installCallShims(): void {
         { entryTrust: 'user_gesture' },
       );
 
+    g.__bunwaRetapMedia?.();
+
     // Only adopt an injected stream when WebAudio injection is active. In
     // PulseAudio mode the call must capture the real virtual microphone; an
     // unconditional adopt re-activates the synthetic track and silences it.
@@ -727,6 +729,7 @@ export function installCallShims(): void {
         if (collection.isInConnectedCall && current && current.id === call.id) break;
         await new Promise((resolve) => setTimeout(resolve, 200));
       }
+      g.__bunwaRetapMedia?.();
     }
 
     return call
@@ -837,6 +840,88 @@ export function installAudioTap(): void {
 
   // Some WhatsApp builds play remote audio through an <audio> element.
   const proto = g.HTMLMediaElement && g.HTMLMediaElement.prototype;
+  const attachStream = (stream: any) => {
+    try {
+      if (!stream || stream.__bunwaTapped) return;
+      stream.__bunwaTapped = true;
+      const context = g.__bunwaTapContext || (g.__bunwaTapContext = new AudioContextClass());
+      void context.resume?.().catch?.(() => {});
+      const source = context.createMediaStreamSource(stream);
+      source.connect(ensureTap(context).processor);
+    } catch {
+      /* ignore */
+    }
+  };
+  const attachMedia = (element: any) => {
+    try {
+      if (!element || !element.srcObject) return;
+      attachStream(element.srcObject);
+    } catch {
+      /* ignore */
+    }
+  };
+  // WhatsApp's WebRTC receiver is the authoritative remote audio source.
+  // Tapping the peer connection's audio track works even when headless Chrome
+  // does not route playback to a PulseAudio sink.
+  const OriginalPC = g.RTCPeerConnection;
+  if (OriginalPC && !OriginalPC.__bunwaPatched) {
+    const pcProto = OriginalPC.prototype;
+    const attachEvent = (event: any) => {
+      try {
+        const stream = event?.streams?.[0] || (event?.track ? new g.MediaStream([event.track]) : null);
+        if (stream) attachStream(stream);
+      } catch {
+        /* ignore */
+      }
+    };
+    // Existing peer connections created before this tap set ontrack or call
+    // addEventListener('track') when the call starts, so wrap both paths.
+    const trackDescriptor = pcProto && Object.getOwnPropertyDescriptor(pcProto, 'ontrack');
+    if (trackDescriptor && trackDescriptor.set) {
+      Object.defineProperty(pcProto, 'ontrack', {
+        configurable: trackDescriptor.configurable,
+        enumerable: trackDescriptor.enumerable,
+        get: trackDescriptor.get,
+        set(handler: any) {
+          if (typeof handler !== 'function' || handler.__bunwaTapWrapped) {
+            return trackDescriptor.set!.call(this, handler);
+          }
+          const wrapped = (event: any) => {
+            attachEvent(event);
+            return handler.call(this, event);
+          };
+          wrapped.__bunwaTapWrapped = true;
+          return trackDescriptor.set!.call(this, wrapped);
+        },
+      });
+    }
+    const originalAddEventListener = pcProto?.addEventListener;
+    if (typeof originalAddEventListener === 'function') {
+      pcProto.addEventListener = function (type: string, listener: any, ...rest: any[]) {
+        if (type === 'track' && typeof listener === 'function' && !listener.__bunwaTapWrapped) {
+          const wrapped = (event: any) => {
+            attachEvent(event);
+            return listener.call(this, event);
+          };
+          wrapped.__bunwaTapWrapped = true;
+          return originalAddEventListener.call(this, type, wrapped, ...rest);
+        }
+        return originalAddEventListener.call(this, type, listener, ...rest);
+      };
+    }
+    (OriginalPC as any).__bunwaPatched = true;
+  }
+  // WhatsApp often creates the call's <audio> element and assigns srcObject
+  // before this tap is installed, so the srcObject setter never fires for the
+  // live call. Scan existing elements and catch play() as a second chance.
+  g.__bunwaRetapMedia = () => {
+    try {
+      for (const element of g.document.querySelectorAll('audio,video')) attachMedia(element);
+    } catch {
+      /* ignore */
+    }
+  };
+  g.__bunwaRetapMedia();
   const descriptor = proto && Object.getOwnPropertyDescriptor(proto, 'srcObject');
   if (descriptor && descriptor.set) {
     Object.defineProperty(proto, 'srcObject', {
@@ -845,16 +930,19 @@ export function installAudioTap(): void {
       get: descriptor.get,
       set(value: any) {
         try {
-          if (value) {
-            const context = g.__bunwaTapContext || (g.__bunwaTapContext = new AudioContextClass());
-            const source = context.createMediaStreamSource(value);
-            source.connect(ensureTap(context).processor);
-          }
+          if (value) attachStream(value);
         } catch {
           /* ignore */
         }
         return descriptor.set!.call(this, value);
       },
     });
+  }
+  if (proto && typeof proto.play === 'function') {
+    const originalPlay = proto.play;
+    proto.play = function (...args: any[]) {
+      attachMedia(this);
+      return originalPlay.apply(this, args);
+    };
   }
 }

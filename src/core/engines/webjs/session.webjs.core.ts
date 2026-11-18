@@ -266,6 +266,9 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       puppeteer: {
         headless: true,
         args: puppeteerArgs,
+        // Puppeteer's headless defaults include --mute-audio, which silences
+        // WhatsApp's remote call audio before it reaches wa_out.
+        ignoreDefaultArgs: ['--mute-audio'],
         executablePath: getBrowserExecutablePath(),
       },
       ...(this.authTimeout ? { authTimeoutMs: this.authTimeout } : {}),

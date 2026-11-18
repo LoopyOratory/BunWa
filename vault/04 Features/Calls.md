@@ -104,6 +104,41 @@ bun run call:live
 Measured on this host: setup 0.23 s, first audio 0.82 s for a text turn. Input
 and output transcripts stream in the console.
 
+## Fish Agents bridge (Bun)
+
+Fish Agents speaks LiveKit/WebRTC, not raw PCM. `scripts/fish-bridge.ts` bridges
+a BunWa call to a Fish agent:
+
+```
+BunWa /calls/audio (PCM16 16 kHz)
+        │  upsample 48 kHz
+        ▼
+LiveKit mic track ──► Fish agent
+LiveKit agent track ──► 16 kHz PCM16 ──► pacat ──► wa_tts
+```
+
+Run it with Bun only:
+
+```bash
+BUNWA_URL=http://127.0.0.1:3001 BUNWA_SESSION=calltest \
+BUNWA_API_KEY=... FISH_API_KEY=... FISH_AGENT_ID=... \
+BUNWA_CALL_AUDIO_SINK=wa_tts \
+bun run call:fish
+```
+
+The only third-party dependency is `@livekit/rtc-node`; HTTP, SSE, process
+spawning, files and env loading are Bun built-ins (`Bun.serve`, `Bun.spawn`,
+`Bun.file`, `Bun.env`, `Bun.sleep`).
+
+The bridge reconnects its BunWa SSE reader when a call ends or the gateway
+restarts. It ends the Fish session on `SIGINT`/`SIGTERM`. The agent must be
+published; the session token is single-use and expires quickly.
+
+Fish also offers **native WhatsApp Business Calling** (Meta app + WABA number →
+Fish answers inbound calls directly). That path needs no bridge and no Bun
+code, but requires a Meta app, a Cloud API number and Business Verification.
+The bridge above is for the existing BunWa linked-device session.
+
 ## Live conversation loop
 
 BunWa stays a media gateway; the intelligence can live in Hermes, n8n or any
@@ -144,16 +179,18 @@ whole clips.
   a module is missing; messaging keeps working.
 - **Unofficial client.** WhatsApp's Terms prohibit unofficial clients. Calls
   increase the detection surface. Use a number you can afford to lose.
-- **Audio tap is best-effort.** It captures WebAudio output; if a future build
-  plays remote audio through a path that never connects to
-  `AudioContext.destination`, the tap goes silent while the call still works.
+- **Audio tap.** The tap attaches to the WebRTC receiver's remote `ontrack`
+  stream, not to `AudioContext.destination`. Headless Chromium does not route
+  call playback to a PulseAudio sink, so `wa_out.monitor` is silent even while
+  the call is connected; `ontrack` is the authoritative source. The destination
+  tap remains as a fallback for builds that use WebAudio playback.
 - **No live validation in this workspace.** The code typechecks and the
   controller has unit tests with a mocked page; a real call needs a linked
   WEBJS session and a consenting callee.
-- **Headless audio.** `--mute-audio` was removed and
-  `--autoplay-policy=no-user-gesture-required` / `--use-fake-ui-for-media-stream`
-  were added. The WebAudio graph runs headless; if a build insists on a physical
-  output device, run Chromium under Xvfb or a PulseAudio null sink.
+- **Headless audio.** Puppeteer adds `--mute-audio` to its default headless
+  arguments; it is excluded with `ignoreDefaultArgs: ['--mute-audio']` and the
+  app's own flag list no longer adds it. `--autoplay-policy=no-user-gesture-required`
+  and `--use-fake-ui-for-media-stream` stay.
 
 ## Alternatives
 
@@ -172,6 +209,11 @@ whole clips.
 `bun run verify:calls` loads the injected functions in Chromium with mocked
 `WAWeb*` modules, places a fake call, injects a 0.2 s WAV, ends the call and
 checks that the audio tap produces PCM16 chunks. It does not contact WhatsApp.
+
+`bun run verify:call-tap` loads `installAudioTap()` in Chromium, creates a
+synthetic WebRTC audio call between two `RTCPeerConnection`s, and checks that
+the remote `ontrack` stream produces PCM16 chunks. Last run: **13 chunks /
+106,509 bytes** — the receiver tap works without a WhatsApp call.
 
 Last run: `PASS: call shims and audio tap work in Chromium` — start, active,
 playAudio (0.2 s), connected, end and 7 PCM chunks.

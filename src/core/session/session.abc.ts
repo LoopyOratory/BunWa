@@ -403,7 +403,9 @@ export abstract class WhatsappSession {
       // https://github.com/devlikeapro/waha/issues/725
       // '--in-process-gpu', // COMMENTED to test WEBJS stability
       '--metrics-recording-only',
-      '--mute-audio',
+      // Calls need Chrome to render the remote party into wa_out so the caller
+      // audio can be captured from its monitor; --mute-audio silences that.
+      // '--mute-audio',
       '--no-default-browser-check',
       '--no-first-run',
       '--no-pings',
