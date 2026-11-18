@@ -44,7 +44,7 @@ const env = {
 };
 
 /** Stateful 16k -> 48k linear upsampler. */
-class Upsampler {
+export class Upsampler {
   private previous: number | null = null;
   private position = 0;
 
@@ -64,7 +64,7 @@ class Upsampler {
       input.set(samples, 1);
     }
 
-    const ratio = LIVE_RATE / CALL_RATE;
+    const ratio = CALL_RATE / LIVE_RATE;
     const out: number[] = [];
     while (this.position < input.length - 1) {
       const index = Math.floor(this.position);
