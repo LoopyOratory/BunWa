@@ -197,22 +197,14 @@ export class SinkWriter {
       if (!stdin?.write) return;
       this.writtenBytes += pcm.length;
       await this.pace();
-      await new Promise<void>((resolve) => {
-        let settled = false;
-        const finish = () => {
-          if (settled) return;
-          settled = true;
-          resolve();
-        };
-        const timer = setTimeout(finish, 1000);
-        // A sink process that dies mid-write never calls back; the timer is
-        // what keeps flush() and close() from hanging in that case.
-        stdin.write(pcm, () => {
-          clearTimeout(timer);
-          finish();
-        });
-        if (stdin.writableNeedDrain) stdin.once('drain', finish);
-      });
+      // Bun's FileSink.write() is synchronous and does NOT take a callback;
+      // passing one silently never resolves, which delayed every 20 ms chunk
+      // by the 1 s fallback timer and made the output choppy. Flush instead.
+      stdin.write(pcm);
+      await Promise.race([
+        typeof stdin.flush === 'function' ? stdin.flush() : Promise.resolve(),
+        new Promise<void>((resolve) => setTimeout(resolve, 1000)),
+      ]);
     });
     return this.writeChain;
   }
