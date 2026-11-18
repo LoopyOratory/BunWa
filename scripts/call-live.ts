@@ -40,6 +40,7 @@ const env = {
   geminiKey: process.env.GEMINI_API_KEY || '',
   model: process.env.GEMINI_LIVE_MODEL || 'gemini-3.8-live',
   sink: process.env.BUNWA_CALL_AUDIO_SINK || '',
+  language: process.env.BUNWA_LANGUAGE || 'English',
   pacing: Number(process.env.BUNWA_AUDIO_PACING || '0'),
   systemPrompt:
     process.env.BUNWA_SYSTEM_PROMPT ||
@@ -303,7 +304,7 @@ async function main(): Promise<void> {
         setup: {
           model: `models/${env.model}`,
           generationConfig: { responseModalities: ['AUDIO'] },
-          systemInstruction: { parts: [{ text: env.systemPrompt }] },
+          systemInstruction: { parts: [{ text: `${env.systemPrompt} Always respond in ${env.language}, even if the caller speaks another language or the audio is noisy.` }] },
           inputAudioTranscription: {},
           outputAudioTranscription: {},
           realtimeInputConfig: {
