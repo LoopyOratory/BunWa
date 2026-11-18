@@ -17,6 +17,7 @@ import {
   WAState,
 } from 'whatsapp-web.js';
 import * as wwebjsRuntime from 'whatsapp-web.js';
+import { WebJSCallController, CallInfo, StartCallOptions, CallAudioChunk } from './calls.webjs';
 import NodeCache from 'node-cache';
 import { Subject } from 'rxjs';
 import {
@@ -179,6 +180,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   private readyReconcileTimer: ReturnType<typeof setTimeout> | null = null;
   private readyReconcileStartedAt = 0;
   private authTimeout?: number;
+  private calls: WebJSCallController | null = null;
 
   // RxJS Subjects for bridging whatsapp-web.js events → WAHA event observables
   private eventSubjects: Map<WAHAEvents, Subject<any>> = new Map();
@@ -229,9 +231,22 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       '--disable-gpu',
       '--disable-extensions',
       '--disable-sync',
-      '--mute-audio',
+      // Calls need a running audio graph and a microphone permission that does
+      // not depend on a user gesture. The mic itself is injected through
+      // WAGetUserMedia by calls.webjs.ts, so no fake capture device is used.
+      '--autoplay-policy=no-user-gesture-required',
+      '--use-fake-ui-for-media-stream',
       '--window-size=1280,720',
     ];
+
+    // Diagnostic escape hatch: let Chromium provide a known-good microphone
+    // from a WAV file instead of the injected WebAudio track. If the callee
+    // hears this, the call media path is healthy and the synthetic track is
+    // the problem.
+    if (process.env.WEBJS_FAKE_AUDIO_FILE) {
+      puppeteerArgs.push('--use-fake-device-for-media-stream');
+      puppeteerArgs.push(`--use-file-for-fake-audio-capture=${process.env.WEBJS_FAKE_AUDIO_FILE}`);
+    }
 
     // Add proxy if configured
     if (this.proxyConfig?.server) {
@@ -302,6 +317,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     this.client.on('ready', async () => {
       this.logger.info('Client ready — session is WORKING');
       await this.installChatModelShim();
+      await this.installCalls();
       this.markReady();
     });
 
@@ -310,6 +326,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     this.client.on('change_state', (state: string) => {
       if (state === 'CONNECTED' && this.status === WAHASessionStatus.WORKING) {
         void this.installChatModelShim();
+        void this.installCalls();
       }
     });
 
@@ -317,6 +334,23 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       this.logger.warn(`Disconnected: ${reason}`);
       if (this.status === WAHASessionStatus.WORKING) {
         this.status = WAHASessionStatus.FAILED;
+      }
+    });
+
+    // Incoming calls (WEBJS exposes these as `call` events). Outgoing calls are
+    // tracked by the call controller and the REST/MCP surface.
+    this.client.on('call', (call: any) => {
+      try {
+        this.getEventSubject(WAHAEvents.CALL_RECEIVED).next({
+          id: call?.id,
+          from: call?.from,
+          isVideo: !!call?.isVideo,
+          isGroup: !!call?.isGroup,
+          timestamp: call?.timestamp,
+          fromMe: !!call?.fromMe,
+        });
+      } catch (err) {
+        this.logger.warn({ err }, 'Failed to emit call.received');
       }
     });
 
@@ -1050,6 +1084,71 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     } catch {
       // Presence is best-effort
     }
+  }
+
+  // ------------------------------------------------------------------
+  // Calls (WEBJS only)
+  // ------------------------------------------------------------------
+
+  private webjsPage(): any {
+    return (this.client as any)?.pupPage ?? (this.client as any)?.puppeteer?.page ?? null;
+  }
+
+  private async installCalls(): Promise<void> {
+    const page = this.webjsPage();
+    if (!page) return;
+    try {
+      if (this.calls) {
+        await this.calls.reinstall();
+      } else {
+        this.calls = new WebJSCallController(() => this.webjsPage(), this.logger);
+        await this.calls.install();
+      }
+    } catch (err) {
+      // Calls are experimental and depend on private WhatsApp Web modules.
+      // A session without them must still work for messaging.
+      this.logger.warn({ err }, 'WhatsApp Web call controls are unavailable');
+    }
+  }
+
+  async startCall(chatId: string, options: StartCallOptions = {}): Promise<CallInfo | null> {
+    if (!this.calls) throw new Error('WhatsApp Web calls are not available for this session');
+    return this.calls.start(chatId, options);
+  }
+
+  async endCall(callId?: string): Promise<boolean> {
+    if (!this.calls) throw new Error('WhatsApp Web calls are not available for this session');
+    return this.calls.end(callId);
+  }
+
+  async getActiveCall(): Promise<CallInfo | null> {
+    if (!this.calls) return null;
+    return this.calls.active();
+  }
+
+  async callDiagnostics(): Promise<Record<string, any>> {
+    if (!this.calls) throw new Error('WhatsApp Web calls are not available for this session');
+    return this.calls.diagnostics();
+  }
+
+  async acceptCall(callId: string, video = false, injectAudio = true): Promise<boolean> {
+    if (!this.calls) throw new Error('WhatsApp Web calls are not available for this session');
+    return this.calls.accept(callId, video, injectAudio);
+  }
+
+  async playCallAudio(base64: string): Promise<number> {
+    if (!this.calls) throw new Error('WhatsApp Web calls are not available for this session');
+    return this.calls.speak(base64);
+  }
+
+  onCallAudio(listener: (chunk: CallAudioChunk) => void): () => void {
+    if (!this.calls) return () => undefined;
+    return this.calls.onAudio(listener);
+  }
+
+  async rejectCall(_from: string, id: string): Promise<void> {
+    if (!this.calls) throw new Error('WhatsApp Web calls are not available for this session');
+    await this.calls.reject();
   }
 
   // ------------------------------------------------------------------

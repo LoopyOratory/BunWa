@@ -15,6 +15,7 @@ import { groupTools } from './group.tools';
 import { channelTools } from './channel.tools';
 import { mediaTools } from './media.tools';
 import { uploadTools } from './upload.tools';
+import { callsTools } from './calls.tools';
 
 export { sessionTools } from './session.tools';
 export { messageTools } from './message.tools';
@@ -28,6 +29,7 @@ export { groupTools } from './group.tools';
 export { channelTools } from './channel.tools';
 export { mediaTools } from './media.tools';
 export { uploadTools } from './upload.tools';
+export { callsTools } from './calls.tools';
 
 /**
  * The one place that knows every tool family.
@@ -51,5 +53,6 @@ export function buildAllTools(manager: SessionManager): ToolDescriptor[] {
     ...channelTools(manager),
     ...mediaTools(manager),
     ...uploadTools(manager),
+    ...callsTools(manager),
   ];
 }
