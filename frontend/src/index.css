@@ -7,6 +7,36 @@
 @import "@fontsource-variable/noto-sans";
 @import "@fontsource-variable/jetbrains-mono";
 
+/* ── Chatbot-SaaS type system (Satoshi + Plus Jakarta Sans) ── */
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/satoshi-500.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/satoshi-700.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/satoshi-900.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("/fonts/plus-jakarta-sans-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /* ── Core Typography ── */
@@ -46,61 +76,62 @@ body { -webkit-font-smoothing: antialiased; }
    Scrolling cards use translucent gradients only, which is cheap.
    ═══════════════════════════════════════════════════════════════════ */
 :root {
-    --background: oklch(0.975 0.022 83);
-    --foreground: oklch(0.265 0.045 55);
-    --card: oklch(0.995 0.008 85);
-    --card-foreground: oklch(0.265 0.045 55);
-    --popover: oklch(0.998 0.006 85);
+    /* Chatbot-SaaS palette: warm cream, amber accent, ink foreground. */
+    --background: #fff8ee;
+    --foreground: #1c140c;
+    --card: #ffffff;
+    --card-foreground: #1c140c;
+    --popover: #ffffff;
     /* Opaque surface for anything that floats over content (toasts, menus,
        popovers, selects, dialogs, tooltips). Never translucent: text over a
        busy backdrop must stay readable. */
-    --surface-overlay: oklch(0.995 0.008 85);
-    --surface-overlay-border: oklch(0.88 0.03 350);
-    --popover-foreground: oklch(0.265 0.045 55);
-    --primary: oklch(0.70 0.20 353);
-    --primary-foreground: oklch(0.245 0.06 350);
+    --surface-overlay: #ffffff;
+    --surface-overlay-border: #efdcc0;
+    --popover-foreground: #1c140c;
+    --primary: #e39334;
+    --primary-foreground: #1c140c;
     --primary-soft: color-mix(in oklab, var(--primary) 15%, var(--background));
-    --primary-strong: oklch(0.45 0.15 350);
-    --secondary: oklch(0.945 0.045 55);
-    --secondary-foreground: oklch(0.34 0.07 55);
-    --muted: oklch(0.945 0.02 80);
-    --muted-foreground: oklch(0.46 0.04 60);
-    --accent: oklch(0.935 0.04 340);
-    --accent-foreground: oklch(0.32 0.06 345);
-    --destructive: oklch(0.585 0.21 25);
-    --border: oklch(0.90 0.03 78);
-    --input: oklch(0.90 0.026 75);
-    --ring: oklch(0.70 0.16 352);
-    --chart-1: oklch(0.72 0.18 350);
-    --chart-2: oklch(0.78 0.13 55);
-    --chart-3: oklch(0.70 0.14 295);
-    --chart-4: oklch(0.78 0.12 165);
-    --chart-5: oklch(0.72 0.11 235);
+    --primary-strong: #a85d17;
+    --secondary: #fbefd9;
+    --secondary-foreground: #1c140c;
+    --muted: #fbf3e4;
+    --muted-foreground: #6b5640;
+    --accent: #fde7cc;
+    --accent-foreground: #1c140c;
+    --destructive: #b42f46;
+    --border: #efdcc0;
+    --input: #efdcc0;
+    --ring: #a85d17;
+    --chart-1: #c97416;
+    --chart-2: #2f7fbf;
+    --chart-3: #b84a7c;
+    --chart-4: #d0669a;
+    --chart-5: #6b45c9;
     /* Analytics series (sent / refused / failed), validated as a set for
        colour-vision separation and lightness on the light surface. */
-    --series-sent: oklch(0.52 0.14 160);
-    --series-refused: oklch(0.70 0.15 80);
-    --series-failed: oklch(0.52 0.20 25);
+    --series-sent: #1f7a45;
+    --series-refused: #c97416;
+    --series-failed: #b42f46;
     /* Second line series beside --series-sent (webhooks), validated as a pair. */
-    --series-webhook: oklch(0.55 0.15 265);
-    --radius: 1rem;
-    --sidebar: oklch(0.958 0.028 82);
-    --sidebar-foreground: oklch(0.265 0.045 55);
-    --sidebar-primary: oklch(0.70 0.20 353);
-    --sidebar-primary-foreground: oklch(0.245 0.06 350);
-    --sidebar-accent: oklch(0.93 0.045 342);
-    --sidebar-accent-foreground: oklch(0.30 0.06 345);
-    --sidebar-border: oklch(0.91 0.028 75);
-    --sidebar-ring: oklch(0.70 0.16 352);
+    --series-webhook: #2f7fbf;
+    --radius: 1.25rem;
+    --sidebar: #ffffff;
+    --sidebar-foreground: #1c140c;
+    --sidebar-primary: #e39334;
+    --sidebar-primary-foreground: #1c140c;
+    --sidebar-accent: #fbf3e4;
+    --sidebar-accent-foreground: #1c140c;
+    --sidebar-border: #efdcc0;
+    --sidebar-ring: #a85d17;
     --sidebar-active-bg: color-mix(in oklab, var(--primary) 20%, transparent);
-    --sidebar-active-fg: oklch(0.40 0.14 350);
+    --sidebar-active-fg: #a85d17;
     --sidebar-active-border: color-mix(in oklab, var(--primary) 30%, transparent);
 
     /* Aurora ribbon colors — richer than v1 so the sky is visible. */
-    --aur-1: oklch(0.83 0.13 350);
-    --aur-2: oklch(0.86 0.11 60);
-    --aur-3: oklch(0.78 0.13 297);
-    --aur-4: oklch(0.82 0.09 235);
+    --aur-1: #fde7cc;
+    --aur-2: #fbefd9;
+    --aur-3: #f6e3c6;
+    --aur-4: #fff8ee;
 
     /* Glass system — one recipe, two materials (card fill + hairline). */
     --glass-a: rgb(255 255 255 / 0.80);
@@ -126,19 +157,19 @@ body { -webkit-font-smoothing: antialiased; }
     --shadow-primary-lg: 0 12px 30px -8px oklch(0.70 0.20 353 / 0.55);
 
     /* Success/warning/error card variants */
-    --success-bg: oklch(0.955 0.05 160);
-    --success-border: oklch(0.885 0.09 160);
-    --success-foreground: oklch(0.40 0.12 160);
-    --warning-bg: oklch(0.955 0.05 78);
-    --warning-border: oklch(0.88 0.10 78);
-    --warning-foreground: oklch(0.43 0.12 65);
-    --error-bg: oklch(0.95 0.045 27);
-    --error-border: oklch(0.875 0.09 27);
-    --error-foreground: oklch(0.44 0.15 27);
-    --success: oklch(0.70 0.17 158);
-    --warning: oklch(0.78 0.15 75);
-    --error: oklch(0.62 0.20 27);
-    --info: oklch(0.64 0.14 245);
+    --success-bg: #d7f5df;
+    --success-border: #9fe0b6;
+    --success-foreground: #1f7a45;
+    --warning-bg: #fde3c3;
+    --warning-border: #f2c185;
+    --warning-foreground: #a65b0c;
+    --error-bg: #fde1e4;
+    --error-border: #f0b3bb;
+    --error-foreground: #b42f46;
+    --success: #1f7a45;
+    --warning: #c97416;
+    --error: #b42f46;
+    --info: #1d66c2;
     --overlay: color-mix(in oklab, oklch(0.32 0.07 340) 55%, transparent);
 
     /* Motion */
@@ -169,55 +200,56 @@ body { -webkit-font-smoothing: antialiased; }
        for colour-vision separation against --card)
    ═══════════════════════════════════════════════════════════════════ */
 .dark {
-    --background: oklch(0.16 0.008 260);
-    --foreground: oklch(0.95 0.004 260);
-    --card: oklch(0.205 0.009 260);
-    --card-foreground: oklch(0.95 0.004 260);
-    --popover: oklch(0.23 0.01 260);
-    --surface-overlay: oklch(0.23 0.01 260);
-    --surface-overlay-border: oklch(0.32 0.012 260);
-    --popover-foreground: oklch(0.95 0.004 260);
-    --primary: oklch(0.75 0.14 352);
-    --primary-foreground: oklch(0.2 0.035 352);
+    /* Chatbot-SaaS night palette: dark graphite with a warm amber accent. */
+    --background: #0e1014;
+    --foreground: #f3efe8;
+    --card: #161920;
+    --card-foreground: #f3efe8;
+    --popover: #1b1e26;
+    --surface-overlay: #1b1e26;
+    --surface-overlay-border: #262a33;
+    --popover-foreground: #f3efe8;
+    --primary: #f2a541;
+    --primary-foreground: #1c140c;
     --primary-soft: color-mix(in oklab, var(--primary) 14%, var(--card));
-    --primary-strong: oklch(0.83 0.10 352);
-    --secondary: oklch(0.255 0.01 260);
-    --secondary-foreground: oklch(0.93 0.005 260);
-    --muted: oklch(0.25 0.01 260);
-    --muted-foreground: oklch(0.71 0.012 260);
-    --accent: oklch(0.265 0.012 260);
-    --accent-foreground: oklch(0.96 0.004 260);
-    --destructive: oklch(0.66 0.17 22);
-    --border: oklch(1 0 0 / 8%);
-    --input: oklch(1 0 0 / 12%);
-    --ring: oklch(0.75 0.12 352);
-    --chart-1: oklch(0.72 0.13 352);
-    --chart-2: oklch(0.76 0.11 70);
-    --chart-3: oklch(0.70 0.11 295);
-    --chart-4: oklch(0.72 0.11 165);
-    --chart-5: oklch(0.70 0.10 240);
+    --primary-strong: #f6b866;
+    --secondary: #1d2028;
+    --secondary-foreground: #f3efe8;
+    --muted: #1d2028;
+    --muted-foreground: #9ba1ad;
+    --accent: #2a2218;
+    --accent-foreground: #f3efe8;
+    --destructive: #ff8a9b;
+    --border: #262a33;
+    --input: #2c313b;
+    --ring: #f6b866;
+    --chart-1: #d27d22;
+    --chart-2: #4a97d9;
+    --chart-3: #d0669a;
+    --chart-4: #c4b5fd;
+    --chart-5: #6ee7a0;
     /* Validated against --card: all checks pass, worst CVD pair ΔE 8.4. */
-    --series-sent: oklch(0.60 0.13 165);
-    --series-refused: oklch(0.665 0.13 90);
-    --series-failed: oklch(0.53 0.18 15);
-    --series-webhook: oklch(0.62 0.13 260);
-    --sidebar: oklch(0.18 0.008 260);
-    --sidebar-foreground: oklch(0.92 0.005 260);
-    --sidebar-primary: oklch(0.75 0.14 352);
-    --sidebar-primary-foreground: oklch(0.2 0.035 352);
-    --sidebar-accent: oklch(0.24 0.01 260);
-    --sidebar-accent-foreground: oklch(0.96 0.004 260);
-    --sidebar-border: oklch(1 0 0 / 7%);
-    --sidebar-ring: oklch(0.75 0.12 352);
+    --series-sent: #6ee7a0;
+    --series-refused: #d27d22;
+    --series-failed: #ff9aaa;
+    --series-webhook: #4a97d9;
+    --sidebar: #0b0d10;
+    --sidebar-foreground: #eceae5;
+    --sidebar-primary: #f2a541;
+    --sidebar-primary-foreground: #1c140c;
+    --sidebar-accent: #171a20;
+    --sidebar-accent-foreground: #f3efe8;
+    --sidebar-border: #20242c;
+    --sidebar-ring: #f6b866;
     --sidebar-active-bg: color-mix(in oklab, var(--primary) 14%, transparent);
-    --sidebar-active-fg: oklch(0.86 0.09 352);
+    --sidebar-active-fg: #f6b866;
     --sidebar-active-border: color-mix(in oklab, var(--primary) 24%, transparent);
 
     /* The sky is retired at night; these only tint a few hairlines. */
-    --aur-1: oklch(0.75 0.14 352);
-    --aur-2: oklch(0.75 0.14 352);
-    --aur-3: oklch(0.40 0.02 260);
-    --aur-4: oklch(0.40 0.02 260);
+    --aur-1: #f6b866;
+    --aur-2: #f6b866;
+    --aur-3: #1d2028;
+    --aur-4: #1d2028;
 
     /* Surfaces are solid: a 3% top-light gradient, a neutral hairline that
        is a little brighter at the top edge, and a soft shadow. */
@@ -250,16 +282,16 @@ body { -webkit-font-smoothing: antialiased; }
     --error-bg: oklch(0.25 0.04 20);
     --error-border: oklch(0.36 0.07 20);
     --error-foreground: oklch(0.84 0.09 20);
-    --success: oklch(0.72 0.14 165);
-    --warning: oklch(0.80 0.13 82);
-    --error: oklch(0.66 0.17 22);
-    --info: oklch(0.72 0.11 245);
+    --success: #6ee7a0;
+    --warning: #f6b866;
+    --error: #ff9aaa;
+    --info: #8ec5ff;
     --overlay: color-mix(in oklab, oklch(0.08 0.006 260) 72%, transparent);
 }
 
 @theme inline {
-    --font-sans: 'Nunito Variable', 'Noto Sans Variable', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    --font-heading: 'Fredoka Variable', 'Nunito Variable', system-ui, sans-serif;
+    --font-sans: 'Plus Jakarta Sans', 'Nunito Variable', 'Noto Sans Variable', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-heading: 'Satoshi', 'Fredoka Variable', 'Nunito Variable', system-ui, sans-serif;
     --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
@@ -939,13 +971,13 @@ body { -webkit-font-smoothing: antialiased; }
     160deg,
     color-mix(in oklab, white 34%, var(--primary)),
     var(--primary) 55%,
-    color-mix(in oklab, var(--primary), oklch(0.58 0.21 330) 45%)
+    color-mix(in oklab, var(--primary), #a85d17 45%)
   );
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 45%), inset 0 -8px 14px -10px rgb(120 20 80 / 0.35), var(--shadow-primary);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 45%), inset 0 -8px 14px -10px rgb(120 80 20 / 0.35), var(--shadow-primary);
   overflow: hidden;
 }
 .btn-dream:hover {
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 55%), inset 0 -8px 14px -10px rgb(120 20 80 / 0.3), var(--shadow-primary-lg);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 55%), inset 0 -8px 14px -10px rgb(120 80 20 / 0.3), var(--shadow-primary-lg);
 }
 .btn-dream::after {
   content: "";
