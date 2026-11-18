@@ -16,6 +16,9 @@ import type {
   KnowledgeSource,
   ModelSettings,
   ModelSettingsSecrets,
+  ModelRole,
+  ModelRoleSettings,
+  UpdateModelRoleSettingsInput,
   RecordEventInput,
   UpdateAgentInput,
   UpdateModelSettingsInput,
@@ -126,6 +129,21 @@ function rowToModelSettings(row: any): ModelSettings {
   };
 }
 
+function rowToModelRoleSettings(row: any): ModelRoleSettings {
+  return {
+    role: row.role,
+    provider: row.provider ?? 'openai-compatible',
+    baseUrl: row.base_url ?? '',
+    hasApiKey: typeof row.api_key === 'string' && row.api_key.length > 0,
+    model: row.model ?? '',
+    fallbackProvider: row.fallback_provider ?? 'openai-compatible',
+    fallbackBaseUrl: row.fallback_base_url ?? '',
+    hasFallbackApiKey: typeof row.fallback_api_key === 'string' && row.fallback_api_key.length > 0,
+    fallbackModel: row.fallback_model ?? '',
+    updatedAt: row.updated_at,
+  };
+}
+
 function rowToSkill(row: any): AgentSkill {
   return {
     id: row.id,
@@ -221,6 +239,18 @@ const SCHEMA: string[] = [
   `CREATE INDEX IF NOT EXISTS bunwa_agents_status_idx ON bunwa_agents (status)`,
   `CREATE TABLE IF NOT EXISTS bunwa_model_settings (
     id TEXT PRIMARY KEY,
+    provider TEXT NOT NULL DEFAULT 'openai-compatible',
+    base_url TEXT NOT NULL DEFAULT '',
+    api_key TEXT,
+    model TEXT NOT NULL DEFAULT '',
+    fallback_provider TEXT NOT NULL DEFAULT 'openai-compatible',
+    fallback_base_url TEXT NOT NULL DEFAULT '',
+    fallback_api_key TEXT,
+    fallback_model TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS bunwa_model_role_settings (
+    role TEXT PRIMARY KEY,
     provider TEXT NOT NULL DEFAULT 'openai-compatible',
     base_url TEXT NOT NULL DEFAULT '',
     api_key TEXT,
@@ -475,6 +505,77 @@ export class SqlAgentStore implements AgentStore {
         settings.fallbackModel,
         settings.updatedAt,
         settings.id,
+      ],
+    );
+    return settings;
+  }
+
+  async listModelRoleSettings(): Promise<ModelRoleSettings[]> {
+    const rows = await this.client.query(`SELECT * FROM bunwa_model_role_settings ORDER BY role ASC`);
+    return rows.map(rowToModelRoleSettings);
+  }
+
+  async getModelRoleSettings(role: ModelRole): Promise<ModelRoleSettings> {
+    const rows = await this.client.query(`SELECT * FROM bunwa_model_role_settings WHERE role = ? LIMIT 1`, [role]);
+    if (rows[0]) return rowToModelRoleSettings(rows[0]);
+
+    const at = now();
+    const settings: ModelRoleSettings = {
+      role,
+      provider: 'openai-compatible',
+      baseUrl: '',
+      hasApiKey: false,
+      model: '',
+      fallbackProvider: 'openai-compatible',
+      fallbackBaseUrl: '',
+      hasFallbackApiKey: false,
+      fallbackModel: '',
+      updatedAt: at,
+    };
+    await this.client.execute(
+      `INSERT INTO bunwa_model_role_settings (role, provider, base_url, api_key, model, fallback_provider, fallback_base_url, fallback_api_key, fallback_model, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [role, settings.provider, settings.baseUrl, null, settings.model, settings.fallbackProvider, settings.fallbackBaseUrl, null, settings.fallbackModel, at],
+    );
+    return settings;
+  }
+
+  async updateModelRoleSettings(role: ModelRole, input: UpdateModelRoleSettingsInput): Promise<ModelRoleSettings> {
+    const current = await this.getModelRoleSettings(role);
+    const rows = await this.client.query(`SELECT * FROM bunwa_model_role_settings WHERE role = ? LIMIT 1`, [role]);
+    const raw = rows[0] ?? {};
+    const existingApiKey = asNullableString(raw.api_key);
+    const existingFallbackApiKey = asNullableString(raw.fallback_api_key);
+
+    const apiKey = input.apiKey === undefined ? existingApiKey : asNullableString(input.apiKey);
+    const fallbackApiKey = input.fallbackApiKey === undefined ? existingFallbackApiKey : asNullableString(input.fallbackApiKey);
+
+    const settings: ModelRoleSettings = {
+      role,
+      provider: input.provider ?? current.provider,
+      baseUrl: input.baseUrl ?? current.baseUrl,
+      hasApiKey: apiKey !== null,
+      model: input.model ?? current.model,
+      fallbackProvider: input.fallbackProvider ?? current.fallbackProvider,
+      fallbackBaseUrl: input.fallbackBaseUrl ?? current.fallbackBaseUrl,
+      hasFallbackApiKey: fallbackApiKey !== null,
+      fallbackModel: input.fallbackModel ?? current.fallbackModel,
+      updatedAt: now(),
+    };
+
+    await this.client.execute(
+      `UPDATE bunwa_model_role_settings SET provider = ?, base_url = ?, api_key = ?, model = ?, fallback_provider = ?, fallback_base_url = ?, fallback_api_key = ?, fallback_model = ?, updated_at = ? WHERE role = ?`,
+      [
+        settings.provider,
+        settings.baseUrl,
+        apiKey,
+        settings.model,
+        settings.fallbackProvider,
+        settings.fallbackBaseUrl,
+        fallbackApiKey,
+        settings.fallbackModel,
+        settings.updatedAt,
+        role,
       ],
     );
     return settings;

@@ -8,8 +8,11 @@ import type {
   CreateKnowledgeInput,
   CreateSkillInput,
   KnowledgeSource,
+  ModelRole,
   ModelSettings,
   ModelSettingsSecrets,
+  ModelRoleSettings,
+  UpdateModelRoleSettingsInput,
   RecordEventInput,
   UpdateAgentInput,
   UpdateModelSettingsInput,
@@ -30,6 +33,10 @@ export interface AgentStore {
   getModelSettings(): Promise<ModelSettings>;
   getModelSettingsSecrets(): Promise<ModelSettingsSecrets>;
   updateModelSettings(input: UpdateModelSettingsInput): Promise<ModelSettings>;
+
+  listModelRoleSettings(): Promise<ModelRoleSettings[]>;
+  getModelRoleSettings(role: ModelRole): Promise<ModelRoleSettings>;
+  updateModelRoleSettings(role: ModelRole, input: UpdateModelRoleSettingsInput): Promise<ModelRoleSettings>;
 
   addSkill(agentId: string, input: CreateSkillInput): Promise<AgentSkill>;
   listSkills(agentId: string): Promise<AgentSkill[]>;

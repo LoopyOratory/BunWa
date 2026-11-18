@@ -58,6 +58,26 @@ Supported provider types today:
 Agents also carry their own `model` and `fallbackModel` fields, so each bot can
 choose different models on the same provider connection.
 
+### Voice and call models
+
+Voice and call have their own provider settings, separate from chat:
+
+- `GET /api/agents/models/roles` lists every configured role.
+- `GET /api/agents/models/roles/voice`
+- `PUT /api/agents/models/roles/voice`
+- `GET /api/agents/models/roles/call`
+- `PUT /api/agents/models/roles/call`
+
+Supported providers for voice and call:
+
+- Fish Audio
+- ElevenLabs
+- Google
+- GPT / OpenAI-compatible
+
+Each role stores its own base URL, API key, model, fallback provider, fallback
+base URL, fallback API key, and fallback model.
+
 ## MCP skills
 
 BunWa's MCP server exposes WhatsApp capabilities as tools. The Agents dashboard

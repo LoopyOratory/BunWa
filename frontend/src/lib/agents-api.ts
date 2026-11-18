@@ -55,7 +55,25 @@ export interface AgentAnalytics {
   events: Array<{ type: string; count: number }>
 }
 
-export type ModelProviderType = "openai-compatible" | "anthropic"
+export type ModelProviderType = "openai-compatible" | "anthropic" | "google" | "fish" | "elevenlabs"
+
+export type ModelRole = "chat" | "voice" | "call"
+
+export interface ModelRoleConfig {
+  provider: ModelProviderType
+  baseUrl: string
+  hasApiKey: boolean
+  model: string
+  fallbackProvider: ModelProviderType
+  fallbackBaseUrl: string
+  hasFallbackApiKey: boolean
+  fallbackModel: string
+}
+
+export interface ModelRoleSettings extends ModelRoleConfig {
+  role: ModelRole
+  updatedAt: string
+}
 
 export interface McpToolInfo {
   name: string
@@ -247,6 +265,18 @@ export const agentApi = {
 
   testModelSettings: () =>
     request<{ results: ModelProbeResult[] }>("/api/agents/models/settings/test", { method: "POST" }).then((r) => r.results),
+
+  modelRoles: () =>
+    request<{ roles: ModelRoleSettings[] }>("/api/agents/models/roles").then((r) => r.roles),
+
+  modelRole: (role: ModelRole) =>
+    request<{ settings: ModelRoleSettings }>(`/api/agents/models/roles/${role}`).then((r) => r.settings),
+
+  updateModelRole: (role: ModelRole, input: Partial<ModelRoleConfig> & { apiKey?: string | null; fallbackApiKey?: string | null }) =>
+    request<{ settings: ModelRoleSettings }>(`/api/agents/models/roles/${role}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }).then((r) => r.settings),
 
   mcpTools: () =>
     request<{ tools: McpToolInfo[]; byCategory: Record<string, McpToolInfo[]> }>("/api/mcp/tools"),

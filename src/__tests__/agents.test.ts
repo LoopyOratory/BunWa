@@ -193,6 +193,45 @@ describe('agent store', () => {
     expect(results[1].ok).toBe(false);
   });
 
+  test('stores voice and call model settings separately', async () => {
+    const store = makeStore();
+    await store.init();
+
+    const voice = await store.updateModelRoleSettings('voice', {
+      provider: 'fish',
+      baseUrl: 'https://api.fish.audio/v1',
+      apiKey: 'fish-key',
+      model: 's2.1-pro',
+      fallbackProvider: 'elevenlabs',
+      fallbackBaseUrl: 'https://api.elevenlabs.io/v1',
+      fallbackApiKey: 'eleven-key',
+      fallbackModel: 'flash',
+    });
+    expect(voice.role).toBe('voice');
+    expect(voice.provider).toBe('fish');
+    expect(voice.hasApiKey).toBe(true);
+    expect(voice.fallbackProvider).toBe('elevenlabs');
+    expect(voice.hasFallbackApiKey).toBe(true);
+
+    const call = await store.updateModelRoleSettings('call', {
+      provider: 'google',
+      baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+      apiKey: 'google-key',
+      model: 'gemini-3.8-flash',
+      fallbackProvider: 'openai-compatible',
+      fallbackBaseUrl: 'https://api.openai.com/v1',
+      fallbackApiKey: 'openai-key',
+      fallbackModel: 'gpt-4o-mini',
+    });
+    expect(call.role).toBe('call');
+    expect(call.provider).toBe('google');
+    expect(call.fallbackProvider).toBe('openai-compatible');
+
+    const roles = await store.listModelRoleSettings();
+    expect(roles.map((role) => role.role).sort()).toEqual(['call', 'voice']);
+    await store.close();
+  });
+
   test('upserts a user profile with important details', async () => {
     const store = makeStore();
     await store.init();

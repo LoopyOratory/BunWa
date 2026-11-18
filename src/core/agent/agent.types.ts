@@ -110,9 +110,23 @@ export interface UpdateAgentInput {
   settings?: Record<string, unknown>;
 }
 
-export type ModelProviderType = 'openai-compatible' | 'anthropic';
+export type ModelProviderType = 'openai-compatible' | 'anthropic' | 'google' | 'fish' | 'elevenlabs';
 
-export interface ModelSettings {
+export type ModelRole = 'chat' | 'voice' | 'call';
+
+export interface ModelRoleConfig {
+  provider: ModelProviderType;
+  baseUrl: string;
+  /** The key is never returned to the browser; this says whether one is stored. */
+  hasApiKey: boolean;
+  model: string;
+  fallbackProvider: ModelProviderType;
+  fallbackBaseUrl: string;
+  hasFallbackApiKey: boolean;
+  fallbackModel: string;
+}
+
+export interface ModelSettings extends ModelRoleConfig {
   id: string;
   provider: ModelProviderType;
   baseUrl: string;
@@ -129,6 +143,22 @@ export interface ModelSettings {
 export interface ModelSettingsSecrets extends ModelSettings {
   apiKey: string | null;
   fallbackApiKey: string | null;
+}
+
+export interface ModelRoleSettings extends ModelRoleConfig {
+  role: ModelRole;
+  updatedAt: string;
+}
+
+export interface UpdateModelRoleSettingsInput {
+  provider?: ModelProviderType;
+  baseUrl?: string;
+  apiKey?: string | null;
+  model?: string;
+  fallbackProvider?: ModelProviderType;
+  fallbackBaseUrl?: string;
+  fallbackApiKey?: string | null;
+  fallbackModel?: string;
 }
 
 export interface UpdateModelSettingsInput {

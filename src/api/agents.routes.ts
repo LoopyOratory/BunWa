@@ -107,6 +107,54 @@ export function createAgentsRouter(): Hono {
     async (c) => c.json({ results: await agentService.testModelSettings() }),
   );
 
+  /* ---------------------------------------------------------------------- */
+  /* Model role settings                                                    */
+  /* ---------------------------------------------------------------------- */
+
+  const modelRole = (value: string) => (['chat', 'voice', 'call'].includes(value) ? (value as 'chat' | 'voice' | 'call') : undefined);
+
+  router.get(
+    '/models/roles',
+    policiesMiddleware(CanServer(Action.Retrieve)),
+    async (c) => c.json({ roles: await agentService.listModelRoleSettings() }),
+  );
+
+  router.get(
+    '/models/roles/:role',
+    policiesMiddleware(CanServer(Action.Retrieve)),
+    async (c) => {
+      const role = modelRole(c.req.param('role'));
+      if (!role) return badRequest(c, 'role must be chat, voice, or call');
+      return c.json({ settings: await agentService.getModelRoleSettings(role) });
+    },
+  );
+
+  router.put(
+    '/models/roles/:role',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      const role = modelRole(c.req.param('role'));
+      if (!role) return badRequest(c, 'role must be chat, voice, or call');
+      const body = await c.req.json().catch(() => ({}));
+      const settings = await agentService.updateModelRoleSettings(role, {
+        provider: body.provider,
+        baseUrl: typeof body.baseUrl === 'string' ? body.baseUrl : undefined,
+        apiKey: body.apiKey === null ? null : typeof body.apiKey === 'string' && body.apiKey.trim() ? body.apiKey.trim() : undefined,
+        model: typeof body.model === 'string' ? body.model : undefined,
+        fallbackProvider: body.fallbackProvider,
+        fallbackBaseUrl: typeof body.fallbackBaseUrl === 'string' ? body.fallbackBaseUrl : undefined,
+        fallbackApiKey:
+          body.fallbackApiKey === null
+            ? null
+            : typeof body.fallbackApiKey === 'string' && body.fallbackApiKey.trim()
+              ? body.fallbackApiKey.trim()
+              : undefined,
+        fallbackModel: typeof body.fallbackModel === 'string' ? body.fallbackModel : undefined,
+      });
+      return c.json({ settings });
+    },
+  );
+
   router.get(
     '/',
     policiesMiddleware(CanServer(Action.Retrieve)),

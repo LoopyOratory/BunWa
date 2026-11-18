@@ -18,7 +18,7 @@ import type {
 import { composePrompt, BUILDER_QUESTIONS, nextQuestion, type BuilderAnswers, type BuilderQuestion } from './agent.builder';
 import { cache } from '../cache/redis-cache';
 import { probeModelSettings } from './model-probe';
-import type { ModelProbeResult, ModelSettings, UpdateModelSettingsInput } from './agent.types';
+import type { ModelProbeResult, ModelRole, ModelRoleSettings, ModelSettings, UpdateModelRoleSettingsInput, UpdateModelSettingsInput } from './agent.types';
 
 let storePromise: Promise<AgentStore> | null = null;
 
@@ -96,6 +96,18 @@ export class AgentService {
   async testModelSettings(): Promise<ModelProbeResult[]> {
     const settings = await (await getStore()).getModelSettingsSecrets();
     return probeModelSettings(settings);
+  }
+
+  async listModelRoleSettings(): Promise<ModelRoleSettings[]> {
+    return (await getStore()).listModelRoleSettings();
+  }
+
+  async getModelRoleSettings(role: ModelRole): Promise<ModelRoleSettings> {
+    return (await getStore()).getModelRoleSettings(role);
+  }
+
+  async updateModelRoleSettings(role: ModelRole, input: UpdateModelRoleSettingsInput): Promise<ModelRoleSettings> {
+    return (await getStore()).updateModelRoleSettings(role, input);
   }
 
   async addSkill(agentId: string, input: CreateSkillInput): Promise<AgentSkill> {
