@@ -84,6 +84,18 @@ export interface McpToolInfo {
   sessionScoped?: boolean
 }
 
+export interface ExternalMcpServerInfo {
+  id: string
+  name: string
+  description: string
+  url: string
+  headers: Record<string, string>
+  enabled: boolean
+  toolCount: number
+  createdAt: string
+  updatedAt: string
+}
+
 export interface AgentMcpConfig {
   enabled: boolean
   allowedTools: string[]
@@ -289,6 +301,42 @@ export const agentApi = {
       method: "PUT",
       body: JSON.stringify(input),
     }).then((r) => r.mcp),
+
+  externalMcpServers: () =>
+    request<{ servers: ExternalMcpServerInfo[] }>("/api/mcp/external/servers").then((r) => r.servers),
+
+  createExternalMcpServer: (input: {
+    name: string
+    description?: string
+    url: string
+    headers?: Record<string, string>
+    enabled?: boolean
+  }) =>
+    request<{ server: ExternalMcpServerInfo }>("/api/mcp/external/servers", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }).then((r) => r.server),
+
+  updateExternalMcpServer: (
+    id: string,
+    input: {
+      name?: string
+      description?: string
+      url?: string
+      headers?: Record<string, string>
+      enabled?: boolean
+    },
+  ) =>
+    request<{ server: ExternalMcpServerInfo }>(`/api/mcp/external/servers/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }).then((r) => r.server),
+
+  deleteExternalMcpServer: (id: string) =>
+    request<{ result: boolean }>(`/api/mcp/external/servers/${id}`, { method: "DELETE" }).then((r) => r.result),
+
+  refreshExternalMcpServer: (id: string) =>
+    request<{ tools: unknown[] }>(`/api/mcp/external/servers/${id}/refresh`, { method: "POST" }).then((r) => r.tools),
 
   events: (filter: { agentId?: string; conversationId?: string; type?: string; limit?: number } = {}) => {
     const params = new URLSearchParams()

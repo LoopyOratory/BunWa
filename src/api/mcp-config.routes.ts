@@ -12,6 +12,7 @@ import { randomBytes } from 'crypto';
 import { buildAllTools } from '../mcp/tools';
 import { ToolRegistryService } from '../mcp/tool-registry.service';
 import type { ToolCategory } from '../mcp/tool-descriptor';
+import { agentService } from '../core/agent/agent.service';
 
 export type McpToolInfo = {
   name: string;
@@ -36,7 +37,7 @@ export function createMcpConfigRouter(): Hono {
     const manager = container.resolve(SessionManager);
     const registry = new ToolRegistryService(buildAllTools(manager));
 
-    const tools: McpToolInfo[] = registry.list().map((t) => ({
+    const internalTools: McpToolInfo[] = registry.list().map((t) => ({
       name: t.name,
       description: t.description,
       tier: t.tier,
@@ -44,6 +45,18 @@ export function createMcpConfigRouter(): Hono {
       destructive: t.destructive,
       sessionScoped: t.sessionScoped,
     }));
+
+    const externalTools = await agentService.listExternalMcpTools();
+    const externalInfo: McpToolInfo[] = externalTools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      tier: tool.tier,
+      category: (tool.serverName || 'external') as ToolCategory,
+      destructive: tool.destructive,
+      sessionScoped: false,
+    }));
+
+    const tools: McpToolInfo[] = [...internalTools, ...externalInfo];
 
     // Group by category for UI convenience
     const byCategory: Record<string, McpToolInfo[]> = {};
@@ -54,6 +67,78 @@ export function createMcpConfigRouter(): Hono {
     }
 
     return c.json({ tools, byCategory });
+  });
+
+  /**
+   * External MCP servers
+   *
+   * Admin-managed list of third-party MCP servers. Tools are discovered via
+   * the MCP client and cached in the store; agents select them per-agent just
+   * like internal tools.
+   */
+  router.get('/mcp/external/servers', async (c) => {
+    const servers = await agentService.listExternalMcpServers();
+    const tools = await agentService.listExternalMcpTools();
+    return c.json({
+      servers: servers.map((server) => ({
+        ...server,
+        toolCount: tools.filter((tool) => tool.serverId === server.id).length,
+      })),
+    });
+  });
+
+  router.post('/mcp/external/servers', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    if (!body?.name || typeof body.name !== 'string') return c.json({ error: 'name is required' }, 400);
+    if (!body?.url || typeof body.url !== 'string') return c.json({ error: 'url is required' }, 400);
+    const server = await agentService.createExternalMcpServer({
+      name: String(body.name),
+      description: typeof body.description === 'string' ? body.description : '',
+      url: String(body.url),
+      headers:
+        body.headers && typeof body.headers === 'object' && !Array.isArray(body.headers)
+          ? (body.headers as Record<string, string>)
+          : {},
+      enabled: body.enabled !== false,
+    });
+    return c.json({ server }, 201);
+  });
+
+  router.put('/mcp/external/servers/:id', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const server = await agentService.updateExternalMcpServer(c.req.param('id'), {
+      name: typeof body.name === 'string' ? body.name : undefined,
+      description: typeof body.description === 'string' ? body.description : undefined,
+      url: typeof body.url === 'string' ? body.url : undefined,
+      headers:
+        body.headers && typeof body.headers === 'object' && !Array.isArray(body.headers)
+          ? (body.headers as Record<string, string>)
+          : undefined,
+      enabled: typeof body.enabled === 'boolean' ? body.enabled : undefined,
+    });
+    if (!server) return c.json({ error: 'Not found' }, 404);
+    return c.json({ server });
+  });
+
+  router.delete('/mcp/external/servers/:id', async (c) => {
+    const removed = await agentService.deleteExternalMcpServer(c.req.param('id'));
+    if (!removed) return c.json({ error: 'Not found' }, 404);
+    return c.json({ result: true });
+  });
+
+  router.post('/mcp/external/servers/:id/refresh', async (c) => {
+    const id = c.req.param('id');
+    const server = await agentService.getExternalMcpServer(id);
+    if (!server) return c.json({ error: 'Not found' }, 404);
+    try {
+      const tools = await agentService.refreshExternalMcpServerTools(id);
+      return c.json({ tools });
+    } catch (error) {
+      return c.json(
+        { error: error instanceof Error ? error.message : 'Could not reach the external MCP server' },
+        502,
+      );
+    }
   });
 
   /**

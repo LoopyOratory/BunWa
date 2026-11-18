@@ -19,6 +19,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   policy: "Policy",
   template: "Templates",
   calls: "Calls",
+  external: "External tools",
   other: "Other",
 }
 

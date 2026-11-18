@@ -7,6 +7,11 @@ import type {
   CreateConversationInput,
   CreateKnowledgeInput,
   CreateSkillInput,
+  ExternalMcpServer,
+  ExternalMcpTool,
+  CreateExternalMcpServerInput,
+  UpdateExternalMcpServerInput,
+  UpsertExternalMcpToolInput,
   KnowledgeSource,
   ModelRole,
   ModelSettings,
@@ -37,6 +42,16 @@ export interface AgentStore {
   listModelRoleSettings(): Promise<ModelRoleSettings[]>;
   getModelRoleSettings(role: ModelRole): Promise<ModelRoleSettings>;
   updateModelRoleSettings(role: ModelRole, input: UpdateModelRoleSettingsInput): Promise<ModelRoleSettings>;
+
+  createExternalMcpServer(input: CreateExternalMcpServerInput): Promise<ExternalMcpServer>;
+  listExternalMcpServers(): Promise<ExternalMcpServer[]>;
+  getExternalMcpServer(id: string): Promise<ExternalMcpServer | null>;
+  updateExternalMcpServer(id: string, input: UpdateExternalMcpServerInput): Promise<ExternalMcpServer | null>;
+  deleteExternalMcpServer(id: string): Promise<boolean>;
+
+  listExternalMcpTools(): Promise<ExternalMcpTool[]>;
+  upsertExternalMcpTools(serverId: string, tools: UpsertExternalMcpToolInput[]): Promise<ExternalMcpTool[]>;
+  deleteExternalMcpTools(serverId: string): Promise<boolean>;
 
   addSkill(agentId: string, input: CreateSkillInput): Promise<AgentSkill>;
   listSkills(agentId: string): Promise<AgentSkill[]>;

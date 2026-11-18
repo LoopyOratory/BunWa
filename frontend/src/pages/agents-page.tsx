@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { McpSkillPicker } from "@/components/mcp-skill-picker"
+import { ExternalMcpServersDialog } from "@/components/external-mcp-servers-dialog"
 import { VoiceCallModelDialog } from "@/components/voice-call-model-dialog"
 import { PageLayout } from "@/components/page-layout"
 import { EmptyState, ErrorState, SectionHeading } from "@/components/primitives"
@@ -1313,6 +1314,7 @@ export function AgentsPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [modelSettingsOpen, setModelSettingsOpen] = useState(false)
   const [voiceCallOpen, setVoiceCallOpen] = useState(false)
+  const [externalMcpOpen, setExternalMcpOpen] = useState(false)
   const [selected, setSelected] = useState<Agent | null>(null)
 
   const load = async () => {
@@ -1346,6 +1348,9 @@ export function AgentsPage() {
           </Button>
           <Button variant="outline" onClick={() => setVoiceCallOpen(true)}>
             Voice &amp; call models
+          </Button>
+          <Button variant="outline" onClick={() => setExternalMcpOpen(true)}>
+            External MCP servers
           </Button>
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="size-4" /> New agent
@@ -1403,6 +1408,11 @@ export function AgentsPage() {
       <CreateAgentDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={() => void load()} />
       <ModelSettingsDialog open={modelSettingsOpen} onOpenChange={setModelSettingsOpen} onSaved={() => void load()} />
       <VoiceCallModelDialog open={voiceCallOpen} onOpenChange={setVoiceCallOpen} />
+      <ExternalMcpServersDialog
+        open={externalMcpOpen}
+        onOpenChange={setExternalMcpOpen}
+        onServersChanged={() => void load()}
+      />
       <AgentDetailDialog agent={selected} onOpenChange={(open) => !open && setSelected(null)} onChanged={() => void load()} />
     </PageLayout>
   )

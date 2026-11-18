@@ -225,3 +225,65 @@ export interface RecordEventInput {
   userId?: string | null;
   data?: Record<string, unknown>;
 }
+
+/* ---------------------------------------------------------------------- */
+/* External MCP servers                                                   */
+/* ---------------------------------------------------------------------- */
+
+export interface ExternalMcpServer {
+  id: string;
+  name: string;
+  description: string;
+  url: string;
+  headers: Record<string, string>;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateExternalMcpServerInput {
+  name: string;
+  description?: string;
+  url: string;
+  headers?: Record<string, string>;
+  enabled?: boolean;
+}
+
+export interface UpdateExternalMcpServerInput {
+  name?: string;
+  description?: string | null;
+  url?: string;
+  headers?: Record<string, string> | null;
+  enabled?: boolean;
+}
+
+export interface ExternalMcpToolAnnotations {
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+}
+
+export interface ExternalMcpTool {
+  id: string;
+  serverId: string;
+  serverName: string;
+  name: string;
+  description: string;
+  /** Raw JSON Schema from the remote server. Kept verbatim for the agent UI. */
+  inputSchema: unknown;
+  annotations: ExternalMcpToolAnnotations | null;
+  tier: 'read' | 'write';
+  destructive: boolean;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertExternalMcpToolInput {
+  name: string;
+  description: string;
+  inputSchema: unknown;
+  annotations: ExternalMcpToolAnnotations | null;
+  tier: 'read' | 'write';
+  destructive: boolean;
+}

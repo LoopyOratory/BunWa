@@ -18,6 +18,8 @@ export interface ToolDescriptor<I = any> {
   tier: ToolTier;
   /** True for irreversible/dangerous ops. */
   destructive?: boolean;
+  /** True when the tool comes from an external MCP server. */
+  external?: boolean;
   /** Safe to repeat without additional effect. Defaults to (tier === 'read'). */
   idempotent?: boolean;
   /** If true, input MUST carry `sessionId`. */

@@ -7,17 +7,23 @@ import type {
   Conversation,
   CreateAgentInput,
   CreateConversationInput,
+  CreateExternalMcpServerInput,
   CreateKnowledgeInput,
   CreateSkillInput,
+  ExternalMcpServer,
+  ExternalMcpTool,
   KnowledgeSource,
   RecordEventInput,
   UpdateAgentInput,
+  UpdateExternalMcpServerInput,
+  UpsertExternalMcpToolInput,
   UpsertUserProfileInput,
   UserProfile,
 } from './agent.types';
 import { composePrompt, BUILDER_QUESTIONS, nextQuestion, type BuilderAnswers, type BuilderQuestion } from './agent.builder';
 import { cache } from '../cache/redis-cache';
 import { probeModelSettings } from './model-probe';
+import { listExternalServerTools } from '../../mcp/external-mcp.client';
 import type { ModelProbeResult, ModelRole, ModelRoleSettings, ModelSettings, UpdateModelRoleSettingsInput, UpdateModelSettingsInput } from './agent.types';
 
 let storePromise: Promise<AgentStore> | null = null;
@@ -108,6 +114,42 @@ export class AgentService {
 
   async updateModelRoleSettings(role: ModelRole, input: UpdateModelRoleSettingsInput): Promise<ModelRoleSettings> {
     return (await getStore()).updateModelRoleSettings(role, input);
+  }
+
+  async createExternalMcpServer(input: CreateExternalMcpServerInput): Promise<ExternalMcpServer> {
+    return (await getStore()).createExternalMcpServer(input);
+  }
+
+  async listExternalMcpServers(): Promise<ExternalMcpServer[]> {
+    return (await getStore()).listExternalMcpServers();
+  }
+
+  async getExternalMcpServer(id: string): Promise<ExternalMcpServer | null> {
+    return (await getStore()).getExternalMcpServer(id);
+  }
+
+  async updateExternalMcpServer(id: string, input: UpdateExternalMcpServerInput): Promise<ExternalMcpServer | null> {
+    return (await getStore()).updateExternalMcpServer(id, input);
+  }
+
+  async deleteExternalMcpServer(id: string): Promise<boolean> {
+    return (await getStore()).deleteExternalMcpServer(id);
+  }
+
+  async listExternalMcpTools(): Promise<ExternalMcpTool[]> {
+    return (await getStore()).listExternalMcpTools();
+  }
+
+  async upsertExternalMcpTools(serverId: string, tools: UpsertExternalMcpToolInput[]): Promise<ExternalMcpTool[]> {
+    return (await getStore()).upsertExternalMcpTools(serverId, tools);
+  }
+
+  /** Connect to a remote MCP server and cache its tool list in the store. */
+  async refreshExternalMcpServerTools(serverId: string): Promise<ExternalMcpTool[]> {
+    const server = await (await getStore()).getExternalMcpServer(serverId);
+    if (!server) return [];
+    const tools = await listExternalServerTools(server);
+    return (await getStore()).upsertExternalMcpTools(serverId, tools);
   }
 
   async addSkill(agentId: string, input: CreateSkillInput): Promise<AgentSkill> {

@@ -100,6 +100,29 @@ select exactly which ones an agent may call.
 `enabled: false` keeps the selections but stops the agent from calling MCP.
 An empty `allowedTools` list means the agent has no MCP access.
 
+## External MCP servers
+
+BunWa can also call tools hosted on third-party MCP servers:
+
+- `GET /api/mcp/external/servers`
+- `POST /api/mcp/external/servers`
+- `PUT /api/mcp/external/servers/:id`
+- `DELETE /api/mcp/external/servers/:id`
+- `POST /api/mcp/external/servers/:id/refresh`
+
+Each server stores:
+
+- `name`
+- `description`
+- `url` (the remote MCP endpoint)
+- `headers` (auth tokens and other JSON headers)
+- `enabled`
+
+Refreshing a server connects to it with the MCP client, imports its tool list,
+and caches the tools locally. Those tools then appear in the same
+`/api/mcp/tools` catalogue, grouped under the server's name, so agents select
+them exactly like internal tools.
+
 
 
 `GET /api/agents/builder/questions` returns the question list.

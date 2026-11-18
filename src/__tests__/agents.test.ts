@@ -232,6 +232,52 @@ describe('agent store', () => {
     await store.close();
   });
 
+  test('stores external MCP servers and their tools', async () => {
+    const store = makeStore();
+    await store.init();
+
+    const server = await store.createExternalMcpServer({
+      name: 'Notion',
+      description: 'Workspace notes',
+      url: 'https://mcp.notion.com/mcp',
+      headers: { Authorization: 'Bearer demo' },
+    });
+    expect(server.name).toBe('Notion');
+    expect(server.headers).toEqual({ Authorization: 'Bearer demo' });
+    expect(server.enabled).toBe(true);
+
+    const tools = await store.upsertExternalMcpTools(server.id, [
+      {
+        name: 'search_notes',
+        description: 'Search workspace notes',
+        inputSchema: { type: 'object', properties: { query: { type: 'string' } } },
+        annotations: { readOnlyHint: true, destructiveHint: false },
+        tier: 'read',
+        destructive: false,
+      },
+      {
+        name: 'create_note',
+        description: 'Create a note',
+        inputSchema: { type: 'object', properties: { title: { type: 'string' } } },
+        annotations: { readOnlyHint: false, destructiveHint: true },
+        tier: 'write',
+        destructive: true,
+      },
+    ]);
+    expect(tools).toHaveLength(2);
+    expect(tools[0].serverName).toBe('Notion');
+    expect(tools.find((tool) => tool.name === 'create_note')?.destructive).toBe(true);
+
+    const listed = await store.listExternalMcpTools();
+    expect(listed).toHaveLength(2);
+
+    const removed = await store.deleteExternalMcpServer(server.id);
+    expect(removed).toBe(true);
+    const after = await store.listExternalMcpTools();
+    expect(after).toHaveLength(0);
+    await store.close();
+  });
+
   test('upserts a user profile with important details', async () => {
     const store = makeStore();
     await store.init();

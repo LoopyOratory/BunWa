@@ -26,6 +26,8 @@ import { buildAllTools } from './tools';
 import { handleToolError, jsonToolResult, smartToolResult } from './tool-result';
 import { redactWireSecrets } from '../core/utils/redact';
 import { KeyRateLimiter, RateLimitError, readRateLimitConfig } from './mcp-rate-limit';
+import { agentService } from '../core/agent/agent.service';
+import type { ExternalMcpServer, ExternalMcpTool } from '../core/agent/agent.types';
 
 const logger = pino({ name: 'McpServer' });
 
@@ -130,7 +132,7 @@ export function isToolAllowed(
   }
 
   // Destructive operations gate
-  if (tool.destructive && mcpConfig?.destructiveOps !== true) {
+  if (tool.destructive && !tool.external && mcpConfig?.destructiveOps !== true) {
     return { allowed: false, reason: `Destructive operation '${tool.name}' is not allowed for this session` };
   }
 
@@ -151,14 +153,14 @@ export function isToolAllowed(
 /**
  * Build the MCP server and register all tools from the registry.
  */
-function buildServer(
+async function buildServer(
   registry: ToolRegistryService,
   sessionManager: SessionManager,
   configuredKey: string | undefined,
   rateLimiter: KeyRateLimiter,
   readOnly: boolean,
   serverInfo: { name: string; version: string },
-): McpServer {
+): Promise<McpServer> {
   const server = new McpServer(
     { name: serverInfo.name, version: serverInfo.version },
     { capabilities: { tools: {}, logging: {} } },
@@ -322,7 +324,23 @@ export function createMcpRouter(
 
   // Handle all HTTP methods — the transport decides what to do
   router.all(basePath, async (c) => {
-    const server = buildServer(registry, sessionManager, configuredKey, rateLimiter, readOnly, serverInfo);
+    // External MCP tools are loaded per request so admin changes appear
+    // without a restart. The lookup carries the connection details each
+    // external tool handler needs to reach its own server.
+    let externalTools: ExternalMcpTool[] = [];
+    let externalServerLookup = new Map<string, { url: string; headers: Record<string, string>; name: string }>();
+    try {
+      externalTools = await agentService.listExternalMcpTools();
+      const servers: ExternalMcpServer[] = await agentService.listExternalMcpServers();
+      externalServerLookup = new Map(servers.map((server) => [server.id, { url: server.url, headers: server.headers, name: server.name }]));
+    } catch (error) {
+      logger.warn({ err: error }, 'Could not load external MCP tools; serving internal tools only');
+    }
+
+    const requestTools: ToolDescriptor[] = buildAllTools(sessionManager, externalTools, externalServerLookup);
+    const requestRegistry = new ToolRegistryService(requestTools);
+
+    const server = await buildServer(requestRegistry, sessionManager, configuredKey, rateLimiter, readOnly, serverInfo);
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined, // Stateless mode
     });
