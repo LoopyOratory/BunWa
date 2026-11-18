@@ -205,7 +205,7 @@ export function createAgentsRouter(): Hono {
     '/:id/effective-prompt',
     policiesMiddleware(CanServer(Action.Retrieve)),
     async (c) => {
-      const prompt = await agentService.effectivePrompt(c.req.param('id'));
+      const prompt = await agentService.effectivePrompt(c.req.param('id'), c.req.query('userId') || undefined);
       if (prompt === null) return notFound(c, 'Agent not found');
       return c.json({ prompt });
     },

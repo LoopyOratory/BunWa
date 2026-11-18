@@ -3,6 +3,7 @@ import { Database } from 'bun:sqlite';
 import { BunSqliteClient, SqlAgentStore } from '../core/agent/agent.sql';
 import { composePrompt, nextQuestion, isComplete } from '../core/agent/agent.builder';
 import { probeModelSettings } from '../core/agent/model-probe';
+import { AgentService, setAgentStoreForTests } from '../core/agent/agent.service';
 
 function makeStore(): SqlAgentStore {
   return new SqlAgentStore(new BunSqliteClient(new Database(':memory:')));
@@ -299,6 +300,32 @@ describe('agent store', () => {
     expect(second.displayName).toBe('Ama');
     expect(second.notes).toBe('Prefers evening calls');
     expect(second.tags).toEqual(['vip']);
+    await store.close();
+  });
+
+  test('appends the user profile block to the effective prompt', async () => {
+    const store = makeStore();
+    await store.init();
+    setAgentStoreForTests(store);
+    const service = new AgentService();
+    const agent = await service.createAgent({ name: 'Support', prompt: 'You are Support.' });
+    await service.upsertUserProfile({ userId: '233500000000@c.us', displayName: 'Ama' });
+    await service.createUserProfileFact({
+      userId: '233500000000@c.us',
+      kind: 'communication',
+      key: 'tone',
+      value: 'concise',
+      confidence: 0.9,
+    });
+
+    const prompt = await service.effectivePrompt(agent.id, '233500000000@c.us');
+    expect(prompt).toContain('You are Support.');
+    expect(prompt).toContain('## User profile');
+    expect(prompt).toContain('<user_profile>');
+    expect(prompt).toContain('Communication: tone=concise.');
+    expect((await service.effectivePrompt(agent.id))?.includes('<user_profile>')).toBe(false);
+
+    setAgentStoreForTests(null);
     await store.close();
   });
 

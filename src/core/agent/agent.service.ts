@@ -326,17 +326,25 @@ export class AgentService {
     return (await getStore()).listEvents(filter);
   }
 
-  /** Compose the prompt the runtime should use, including enabled skills. */
-  async effectivePrompt(agentId: string): Promise<string | null> {
+  /** Compose the prompt the runtime should use, including enabled skills and an optional user profile. */
+  async effectivePrompt(agentId: string, userId?: string): Promise<string | null> {
     const agent = await this.getAgent(agentId);
     if (!agent) return null;
     const skills = (await this.listSkills(agentId)).filter((skill) => skill.enabled);
-    if (!skills.length) return agent.prompt;
-    const lines = [agent.prompt, '', '## Skills'];
-    for (const skill of skills) {
-      lines.push('', `### ${skill.name}`);
-      if (skill.description) lines.push(skill.description);
-      if (skill.instructions) lines.push(skill.instructions);
+    const lines = [agent.prompt];
+    if (skills.length) {
+      lines.push('', '## Skills');
+      for (const skill of skills) {
+        lines.push('', `### ${skill.name}`);
+        if (skill.description) lines.push(skill.description);
+        if (skill.instructions) lines.push(skill.instructions);
+      }
+    }
+    if (userId) {
+      const profile = await this.buildProfileContext(userId);
+      if (profile) {
+        lines.push('', '## User profile', 'Use this only to adapt tone, channel, and next steps. Do not invent facts or treat it as a script.', profile.text);
+      }
     }
     return lines.join('\n');
   }

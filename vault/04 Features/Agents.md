@@ -178,6 +178,10 @@ Notes: Prefers short replies and voice notes over long texts.
 Only active facts with confidence `>= 0.7` are included. Facts marked
 `sensitive` are excluded unless `?includeSensitive=1` is passed.
 
+The runtime should call `GET /api/agents/:id/effective-prompt?userId=...` so the
+agent prompt includes the `<user_profile>` block after its base prompt and
+skills.
+
 ### Extraction
 
 `POST /api/agents/profiles/:userId/extract` takes a conversation and writes new
