@@ -827,7 +827,9 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     filter?: { ids?: string[] },
   ): Promise<any[]> {
     this.ensureClientReady();
-    const chats = await this.getChats();
+    // The overview pages itself below; read the full live list first so
+    // offsets beyond the first page still resolve.
+    const chats = await this.getChats({ limit: Number.MAX_SAFE_INTEGER, offset: 0 });
     const wanted = filter?.ids?.length
       ? new Set(filter.ids.map((id) => String(id).split('@')[0]))
       : null;
