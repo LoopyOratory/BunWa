@@ -212,6 +212,32 @@ opens a detail dialog with four tabs:
 - **Segments** — add or remove lifecycle/value/engagement labels.
 - **Prompt context** — the exact `<user_profile>` block, with copy.
 
+## Tool compatibility
+
+The same tool definition drives Fish webhook tools and Google function
+declarations. The canonical shape lives in `src/core/tools/tool.types.ts`; the
+validators and adapters are in the same folder.
+
+- `POST /api/agents/tools/preview` validates a canonical tool and returns the
+  Fish payload, the Google declaration, the Google OpenAPI variant, and the MCP
+  descriptor.
+- `toFishWebhookTool` maps to Fish's workspace webhook-tool payload with
+  `parameter_mode: "strict"`, `execution_mode`, timeout, headers, body template
+  and pre-tool speech. It refuses localhost/private URLs because Fish's hosted
+  runtime cannot reach them.
+- `toGoogleFunctionDeclaration` uses `parametersJsonSchema` by default, sets
+  `behavior` to `BLOCKING` for blocking tools and `NON_BLOCKING` otherwise, and
+  attaches the shared `{ ok, speak, data, error }` response schema.
+- `toMcpToolDescriptor` exposes the same definition to ADK through
+  `McpToolset`.
+
+Parameter names must satisfy both providers: start with a letter or underscore,
+then letters, digits or underscores, max 64 characters. The tool name uses the
+same rule, max 64 characters.
+
+The **Tools** step in the agent wizard shows a short setup guide with tabs for
+the shared contract, Fish Audio and Google Live.
+
 ## Building an agent
 
 `GET /api/agents/builder/questions` returns the question list.

@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { McpSkillPicker } from "@/components/mcp-skill-picker"
+import { ToolSetupGuide } from "@/components/tool-setup-guide"
 import { ExternalMcpServersDialog } from "@/components/external-mcp-servers-dialog"
 import { VoiceCallModelDialog } from "@/components/voice-call-model-dialog"
 import { PageLayout } from "@/components/page-layout"
@@ -57,7 +58,7 @@ import {
 type DraftSkill = { name: string; description: string; instructions: string; enabled: boolean }
 type DraftKnowledge = { name: string; kind: "text" | "url" | "file"; content: string }
 
-const STEPS = ["Basics", "Prompt", "Skills", "Knowledge", "MCP", "Review"] as const
+const STEPS = ["Basics", "Prompt", "Skills", "Knowledge", "Tools", "Review"] as const
 type Step = (typeof STEPS)[number]
 
 function stepIndex(step: Step) {
@@ -843,11 +844,12 @@ function CreateAgentDialog({
               </div>
             )}
 
-            {step === "MCP" && (
+            {step === "Tools" && (
               <div className="space-y-4">
+                <ToolSetupGuide compact />
                 <SectionHeading
-                  title="MCP skills"
-                  description="Pick the tools the MCP server exposes. The agent can only call what you select here."
+                  title="Tool access"
+                  description="Pick the MCP tools this agent may call. The agent can only use what you select here."
                 />
                 <McpSkillPicker
                   tools={mcpTools}
@@ -879,7 +881,7 @@ function CreateAgentDialog({
                 <div className="grid gap-3 sm:grid-cols-4">
                   <StatCard label="Skills" value={String(skills.length)} />
                   <StatCard label="Knowledge" value={String(knowledge.length)} />
-                  <StatCard label="MCP skills" value={String(selectedMcpTools.length)} />
+                  <StatCard label="Tools" value={String(selectedMcpTools.length)} />
                   <StatCard label="Reviews" value={reviewEnabled ? "On" : "Off"} hint="10s before close" />
                 </div>
                 <div className="rounded-2xl border border-border/70 p-4">
@@ -1121,7 +1123,7 @@ function AgentDetailDialog({
                 <TabsTrigger value="model">Model</TabsTrigger>
                 <TabsTrigger value="skills">Skills</TabsTrigger>
                 <TabsTrigger value="knowledge">Knowledge</TabsTrigger>
-                <TabsTrigger value="mcp">MCP</TabsTrigger>
+                <TabsTrigger value="mcp">Tools</TabsTrigger>
                 <TabsTrigger value="analytics">Analytics</TabsTrigger>
               </TabsList>
             </div>
@@ -1218,6 +1220,7 @@ function AgentDetailDialog({
               </TabsContent>
 
               <TabsContent value="mcp" className="mt-0 space-y-4">
+                <ToolSetupGuide compact />
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-muted/30 px-4 py-3">
                   <div>
                     <p className="text-sm font-semibold">MCP access</p>

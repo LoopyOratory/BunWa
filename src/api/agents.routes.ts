@@ -4,6 +4,9 @@ import { Action, CanServer, policiesMiddleware } from '../middleware/policies';
 import { agentService } from '../core/agent/agent.service';
 import { conversationLifecycle } from '../core/agent/conversation-lifecycle';
 import type { BuilderAnswers } from '../core/agent/agent.builder';
+import { validateToolDefinition } from '../core/tools/tool-schema';
+import { toFishWebhookTool } from '../core/tools/fish-tool.adapter';
+import { toGoogleFunctionDeclaration, toMcpToolDescriptor } from '../core/tools/google-tool.adapter';
 
 function badRequest(c: any, message: string) {
   return c.json({ error: message }, 400);
@@ -53,6 +56,35 @@ export function createAgentsRouter(): Hono {
   /* ---------------------------------------------------------------------- */
   /* Agents                                                                  */
   /* ---------------------------------------------------------------------- */
+
+  /* ---------------------------------------------------------------------- */
+  /* Tool compatibility                                                      */
+  /* ---------------------------------------------------------------------- */
+
+  router.post(
+    '/tools/preview',
+    policiesMiddleware(CanServer(Action.Retrieve)),
+    async (c) => {
+      const body = await c.req.json().catch(() => ({}));
+      const result = validateToolDefinition((body as any)?.tool ?? body);
+      if (!result.ok) return c.json({ errors: result.errors }, 400);
+
+      let fish: { ok: true; tool: ReturnType<typeof toFishWebhookTool> } | { ok: false; error: string };
+      try {
+        fish = { ok: true, tool: toFishWebhookTool(result.tool) };
+      } catch (error) {
+        fish = { ok: false, error: error instanceof Error ? error.message : 'Fish adapter failed' };
+      }
+
+      return c.json({
+        canonical: result.tool,
+        fish,
+        google: toGoogleFunctionDeclaration(result.tool),
+        googleOpenApi: toGoogleFunctionDeclaration(result.tool, { schema: 'openapi' }),
+        mcp: toMcpToolDescriptor(result.tool),
+      });
+    },
+  );
 
   router.get(
     '/analytics',
