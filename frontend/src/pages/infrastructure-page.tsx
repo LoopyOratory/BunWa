@@ -92,6 +92,7 @@ export function InfrastructurePage() {
   }
 
   async function restart() {
+    if (!window.confirm("Restart BunWa? Active sessions will reconnect.")) return
     try {
       await api.restartServer()
       toast.success("Server restarting. The console will reconnect shortly.")

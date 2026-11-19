@@ -1183,6 +1183,27 @@ function AgentDetailDialog({
                   {agent.status === "active" ? "Pause" : "Activate"}
                 </Button>
               )}
+              {agent && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={async () => {
+                    if (!window.confirm(`Delete ${agent.name}? This removes its skills, knowledge, and conversations.`)) return
+                    try {
+                      await agentApi.remove(agent.id)
+                      toast.success("Agent deleted")
+                      onOpenChange(false)
+                      onChanged()
+                    } catch (error) {
+                      toast.error(error instanceof Error ? error.message : "Could not delete the agent")
+                    }
+                  }}
+                >
+                  <Trash2 className="size-4" />
+                  Delete
+                </Button>
+              )}
             </div>
           </DialogHeader>
 

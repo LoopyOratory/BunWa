@@ -26,7 +26,11 @@ export function toIntlDigits(iso: string, raw: string): string {
   if (!digits) return ""
   if (t.startsWith("+")) return digits
   if (t.startsWith("00")) return digits.replace(/^00/, "")
-  return `${countryByIso(iso).dial}${digits.replace(/^0+/, "")}`
+  // A bare international number that already starts with the selected dial
+  // code (common when pasting from WhatsApp) must not get the code twice.
+  const dial = countryByIso(iso).dial
+  if (digits.startsWith(dial) && digits.length > dial.length + 6) return digits
+  return `${dial}${digits.replace(/^0+/, "")}`
 }
 
 /** Full WhatsApp chat id ("<intl>@c.us"). Inputs that already carry an id

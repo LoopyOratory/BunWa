@@ -50,16 +50,30 @@ function makeSession(): WhatsappSessionWebJs {
 
 describe('WEBJS status codes', () => {
   describe('engine errors', () => {
-    it('names WEBJS in a gated error instead of the process default engine', () => {
+    it('names WEBJS in a gated error instead of the process default engine', async () => {
       const session = makeSession();
+      (session as any).client = {
+        getChatById: async () => ({
+          isGroup: true,
+          getInviteCode: async () => {
+            throw new Error('fetchMexGroupInviteCode');
+          },
+        }),
+      };
       try {
-        (session as any).getPresences();
-        throw new Error('getPresences should have refused');
+        await (session as any).getInviteCode('123@g.us');
+        throw new Error('getInviteCode should have refused');
       } catch (error: any) {
         expect(error).toBeInstanceOf(NotImplementedByEngineError);
         expect(error.message).toContain("'WEBJS' engine");
         expect(error.message).not.toContain("'NOWEB' engine");
       }
+    });
+
+    it('reports presence from the events it has seen', async () => {
+      const session = makeSession();
+      expect(await (session as any).getPresences()).toEqual([]);
+      expect(await (session as any).getPresence('123@c.us')).toMatchObject({ id: '123@c.us', presences: [] });
     });
 
     it('treats gated engine errors as client facing so routes do not flatten them to 500', () => {

@@ -432,6 +432,7 @@ export function ChatConversations({
                   <button
                     key={chat.id}
                     onClick={() => onSelectChat(chat.id)}
+                    aria-label={name}
                     aria-current={active ? "true" : undefined}
                     className={cn(
                       "absolute inset-x-1.5 flex items-center gap-3 rounded-xl px-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",

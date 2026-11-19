@@ -266,6 +266,41 @@ export function createAgentsRouter(): Hono {
     },
   );
 
+  /* ---------------------------------------------------------------------- */
+  /* Analytics events — keep static routes above /:id so "events" is not    */
+  /* captured as an agent id.                                               */
+  /* ---------------------------------------------------------------------- */
+
+  router.get(
+    '/events',
+    policiesMiddleware(CanServer(Action.Retrieve)),
+    async (c) => c.json({
+      events: await agentService.listEvents({
+        agentId: c.req.query('agentId') || undefined,
+        conversationId: c.req.query('conversationId') || undefined,
+        type: c.req.query('type') || undefined,
+        limit: c.req.query('limit') ? Number(c.req.query('limit')) : undefined,
+      }),
+    }),
+  );
+
+  router.post(
+    '/events',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      const body = await c.req.json().catch(() => ({}));
+      if (!body?.type) return badRequest(c, 'type is required');
+      const event = await agentService.recordEvent({
+        type: String(body.type),
+        agentId: typeof body.agentId === 'string' ? body.agentId : null,
+        conversationId: typeof body.conversationId === 'string' ? body.conversationId : null,
+        userId: typeof body.userId === 'string' ? body.userId : null,
+        data: body.data && typeof body.data === 'object' ? body.data : {},
+      });
+      return c.json({ event }, 201);
+    },
+  );
+
   router.get(
     '/:id/effective-prompt',
     policiesMiddleware(CanServer(Action.Retrieve)),
@@ -842,40 +877,6 @@ export function createAgentsRouter(): Hono {
         data: { rating, text: body.text ?? null },
       });
       return c.json({ conversation });
-    },
-  );
-
-  /* ---------------------------------------------------------------------- */
-  /* Analytics events                                                        */
-  /* ---------------------------------------------------------------------- */
-
-  router.get(
-    '/events',
-    policiesMiddleware(CanServer(Action.Retrieve)),
-    async (c) => c.json({
-      events: await agentService.listEvents({
-        agentId: c.req.query('agentId') || undefined,
-        conversationId: c.req.query('conversationId') || undefined,
-        type: c.req.query('type') || undefined,
-        limit: c.req.query('limit') ? Number(c.req.query('limit')) : undefined,
-      }),
-    }),
-  );
-
-  router.post(
-    '/events',
-    policiesMiddleware(CanServer(Action.Manage)),
-    async (c) => {
-      const body = await c.req.json().catch(() => ({}));
-      if (!body?.type) return badRequest(c, 'type is required');
-      const event = await agentService.recordEvent({
-        type: String(body.type),
-        agentId: typeof body.agentId === 'string' ? body.agentId : null,
-        conversationId: typeof body.conversationId === 'string' ? body.conversationId : null,
-        userId: typeof body.userId === 'string' ? body.userId : null,
-        data: body.data && typeof body.data === 'object' ? body.data : {},
-      });
-      return c.json({ event }, 201);
     },
   );
 

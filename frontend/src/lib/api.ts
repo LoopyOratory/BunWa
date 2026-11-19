@@ -503,6 +503,9 @@ export const api = {
     request<any>(`/api/${session}/chats/${encodeURIComponent(chatId)}/read`, { method: "POST" }),
   getContactPicture: (session: string, contactId: string) =>
     request<{ profilePictureURL?: string }>(`/api/contacts/profile-picture?session=${encodeURIComponent(session)}&contactId=${encodeURIComponent(contactId)}`, { method: "GET" }),
+  /** Same-origin proxy: WhatsApp CDN URLs do not send CORS headers. */
+  getContactPictureImageUrl: (session: string, contactId: string) =>
+    `${API_BASE}/api/contacts/profile-picture/image?session=${encodeURIComponent(session)}&contactId=${encodeURIComponent(contactId)}`,
   editMessage: (session: string, chatId: string, messageId: string, text: string) =>
     request<any>(`/api/${session}/chats/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(messageId)}`, {
       method: "PUT",

@@ -96,6 +96,47 @@ export function createContactsRouter(): Hono<{ Variables: { session: any; body: 
     }
   );
 
+  /**
+   * Same-origin image proxy for profile pictures. WhatsApp serves these from
+   * pps.whatsapp.net / fbcdn.net, which do not send CORS headers; the browser
+   * cannot read them directly. Only WhatsApp CDN hosts are allowed.
+   */
+  router.get('/contacts/profile-picture/image',
+    policiesMiddleware(CanSession(Action.Read, FromQuery('session'))),
+    workingSessionQueryResolver(),
+    async (c) => {
+      const session = c.get('session');
+      const contactId = c.req.query('contactId');
+      if (!contactId) return c.body(null, 400);
+      const url = await (session as any).fetchContactProfilePicture(contactId);
+      if (!url) return c.body(null, 204);
+      let target: URL;
+      try {
+        target = new URL(url);
+      } catch {
+        return c.body(null, 204);
+      }
+      const host = target.hostname.toLowerCase();
+      const allowed = host === 'pps.whatsapp.net'
+        || host.endsWith('.whatsapp.net')
+        || host.endsWith('.fbcdn.net')
+        || host.endsWith('.cdninstagram.com');
+      if (target.protocol !== 'https:' || !allowed) return c.body(null, 204);
+      try {
+        const response = await fetch(target.toString(), { signal: AbortSignal.timeout(10_000) });
+        if (!response.ok || !response.body) return c.body(null, 204);
+        return new Response(response.body, {
+          headers: {
+            'Content-Type': response.headers.get('content-type') || 'image/jpeg',
+            'Cache-Control': 'private, max-age=3600',
+          },
+        });
+      } catch {
+        return c.body(null, 204);
+      }
+    }
+  );
+
   router.post('/contacts/block',
     policiesMiddleware(CanSession(Action.Send, FromQuery('session'))),
     getSessionFromBody(),

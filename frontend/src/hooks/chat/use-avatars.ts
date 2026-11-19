@@ -66,8 +66,7 @@ export function useAvatars(session: string) {
       void (async () => {
         let entry: Entry
         try {
-          const res = await api.getContactPicture(owner, id)
-          const blob = res.profilePictureURL ? await fetchImageBlobUrl(res.profilePictureURL) : null
+          const blob = await fetchImageBlobUrl(api.getContactPictureImageUrl(owner, id))
           entry = blob ? { kind: "url", url: blob } : { kind: "none", at: Date.now() }
         } catch {
           const previous = cacheRef.current.get(id)

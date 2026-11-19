@@ -43,9 +43,9 @@ const fakeApi = {
     calls.overview.push({ session, limit, offset, reply })
     return reply.promise
   },
-  getContactPicture: async (_session: string, id: string) => {
+  getContactPictureImageUrl: (_session: string, id: string) => {
     calls.pictures.push(id)
-    return { profilePictureURL: null }
+    return `http://test.invalid/${id}`
   },
   getMessages: (_session: string, chatId: string, _limit = 50, offset = 0) => {
     const reply = deferred<unknown[]>()
@@ -62,13 +62,14 @@ const fakeApi = {
 
 // mock.module is process-wide in bun test, so keep every real export (other
 // test files use getApiAuthHeaders) and replace only what these hooks call.
+let fetchImageBlobUrlImpl: (url: string) => Promise<string | null> = async () => null
 const realApi = await import("../src/lib/api")
 mock.module("../src/lib/api", () => ({
   ...realApi,
   // fakeApi itself (tests swap its methods); anything else falls back to the real client.
   api: Object.setPrototypeOf(fakeApi, realApi.api),
   ApiError: FakeApiError,
-  fetchImageBlobUrl: async () => null,
+  fetchImageBlobUrl: (url: string) => fetchImageBlobUrlImpl(url),
 }))
 
 const { useChatList } = await import("../src/hooks/chat/use-chat-list")
@@ -83,6 +84,7 @@ beforeEach(() => {
   calls.pictures = []
   calls.messages = []
   calls.sendText = []
+  fetchImageBlobUrlImpl = async () => null
   container = document.createElement("div")
   document.body.appendChild(container)
   root = createRoot(container)
@@ -220,13 +222,12 @@ describe("useAvatars", () => {
     let inFlight = 0
     let peak = 0
     const gates: Array<() => void> = []
-    fakeApi.getContactPicture = async (_s: string, id: string) => {
-      calls.pictures.push(id)
+    fetchImageBlobUrlImpl = async () => {
       inFlight++
       peak = Math.max(peak, inFlight)
       await new Promise<void>((r) => gates.push(r))
       inFlight--
-      return { profilePictureURL: null }
+      return null
     }
     const { result } = renderHook(() => useAvatars("alpha"), undefined)
     act(() => result.current.request(Array.from({ length: 10 }, (_, i) => `c${i}@c.us`)))

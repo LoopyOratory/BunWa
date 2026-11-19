@@ -174,6 +174,8 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   engine = WAHAEngine.WEBJS;
 
   private client: Client | null = null;
+  /** Last presence state seen per chat id (WEBJS has no presence store). */
+  private presences = new Map<string, string>();
   private qr: QR = new QR();
   private meInfo: MeInfo | null = null;
   private profilePicture: NodeCache = new NodeCache({ stdTTL: 24 * 60 * 60 });
@@ -424,9 +426,12 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
     // Presence updates
     this.client.on('presence_changed', (presence: any) => {
+      const id = presence.id?._serialized || presence.id || '';
+      const state = presence.state || 'unavailable';
+      if (id) this.presences.set(id, state);
       presence$.next({
-        id: presence.id?._serialized || presence.id || '',
-        presence: presence.state || 'unavailable',
+        id,
+        presence: state,
         timestamp: Date.now(),
       });
     });
@@ -788,7 +793,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   async getChats(pagination?: PaginationParams) {
     this.ensureClientReady();
     const chats = await this.client!.getChats();
-    return chats
+    const rows = chats
       .filter((c) => c.id?._serialized)
       .map((c) => ({
         id: c.id._serialized,
@@ -807,6 +812,37 @@ export class WhatsappSessionWebJs extends WhatsappSession {
             }
           : undefined,
       }));
+    const offset = pagination?.offset ?? 0;
+    const limit = pagination?.limit ?? 50;
+    return rows.slice(offset, offset + limit);
+  }
+
+  /**
+   * Chat list shape used by the dashboard. WEBJS has no message store, so the
+   * overview is projected from the live chat list; filtering and paging happen
+   * here rather than in a database.
+   */
+  async getChatsOverview(
+    pagination?: PaginationParams & { merge?: boolean },
+    filter?: { ids?: string[] },
+  ): Promise<any[]> {
+    this.ensureClientReady();
+    const chats = await this.getChats();
+    const wanted = filter?.ids?.length
+      ? new Set(filter.ids.map((id) => String(id).split('@')[0]))
+      : null;
+    const rows = chats
+      .filter((chat: any) => !wanted || wanted.has(String(chat.id).split('@')[0]))
+      .map((chat: any) => ({
+        id: chat.id,
+        name: chat.name,
+        picture: undefined,
+        unreadCount: chat.unreadCount,
+        lastMessage: chat.lastMessage,
+      }));
+    const offset = pagination?.offset ?? 0;
+    const limit = pagination?.limit ?? 50;
+    return rows.slice(offset, offset + limit);
   }
 
   async getChatMessages(
@@ -1087,6 +1123,33 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     } catch {
       // Presence is best-effort
     }
+  }
+
+  /**
+   * WEBJS only receives presence events, it does not keep a presence store.
+   * Return the last state observed for each chat so the dashboard can seed
+   * its online/typing dots.
+   */
+  async getPresences(): Promise<any[]> {
+    return [...this.presences.entries()].map(([id, state]) => ({
+      id,
+      presences: [{ participant: id, lastKnownPresence: state, lastSeen: null }],
+    }));
+  }
+
+  async getPresence(chatId: string): Promise<any> {
+    const id = this.ensureSuffix(chatId);
+    const state = this.presences.get(id);
+    return {
+      id,
+      presences: state
+        ? [{ participant: id, lastKnownPresence: state, lastSeen: null }]
+        : [],
+    };
+  }
+
+  async subscribePresence(_chatId: string): Promise<void> {
+    // whatsapp-web.js has no presence-subscribe API; events arrive globally.
   }
 
   // ------------------------------------------------------------------
