@@ -139,6 +139,29 @@ Fish answers inbound calls directly). That path needs no bridge and no Bun
 code, but requires a Meta app, a Cloud API number and Business Verification.
 The bridge above is for the existing BunWa linked-device session.
 
+### Inbound auto-answer
+
+`scripts/call-inbound-live.ts` watches `/calls/active`, accepts an incoming
+call, then starts the configured agent. **Fish Audio is the default.** Gemini
+Live is opt-in:
+
+```bash
+# Fish (default)
+BUNWA_CALL_PROVIDER=fish bun run call:inbound-live
+
+# Gemini Live
+BUNWA_CALL_PROVIDER=gemini bun run call:inbound-live
+```
+
+If the Fish bridge exits non-zero while the call is still active, the script
+falls back to Gemini Live. Set `BUNWA_CALL_FALLBACK=0` to disable that.
+
+Required environment:
+
+- `BUNWA_API_KEY` (or `WAHA_API_KEY`)
+- `FISH_API_KEY` and `FISH_AGENT_ID` for the default Fish path
+- `GEMINI_API_KEY` for the Gemini path or fallback
+
 ### Measured live latency (2026-11-18)
 
 Speech-to-speech, measured from the end of the caller's question to the first
