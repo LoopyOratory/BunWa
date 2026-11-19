@@ -60,6 +60,7 @@ dropped — clients rejected them); `maxBytes` keeps a download within `MCP_MAX_
 | Tool | Tier | Notes |
 |---|---|---|
 | `MediaDownloadMessage` | read | mirrors `GET /chats/{chatId}/messages/{messageId}/media`; `includeData: false` for metadata only, `maxBytes` caps the payload (default 8 MiB) |
+| `MessageReadAttachment` | read | downloads a message attachment and returns extracted document text or a vision-model description; images include visible text and key fields; session-scoped |
 | `MediaGetFile` | read | mirrors `GET /api/files/{session}/{filename}`; the same path-traversal guards as the route |
 | `MediaConvertVoice` | write | mirrors `POST /media/convert/voice`; needs ffmpeg, an Ogg/Opus input is returned unchanged |
 

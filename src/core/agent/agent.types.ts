@@ -149,7 +149,7 @@ export interface UpdateAgentInput {
 
 export type ModelProviderType = 'openai-compatible' | 'anthropic' | 'google' | 'fish' | 'elevenlabs';
 
-export type ModelRole = 'chat' | 'voice' | 'call';
+export type ModelRole = 'chat' | 'voice' | 'call' | 'vision';
 
 export interface ModelRoleConfig {
   provider: ModelProviderType;
@@ -185,6 +185,23 @@ export interface ModelSettingsSecrets extends ModelSettings {
 export interface ModelRoleSettings extends ModelRoleConfig {
   role: ModelRole;
   updatedAt: string;
+}
+
+export interface ModelRoleSettingsSecrets extends ModelRoleSettings {
+  apiKey: string | null;
+  fallbackApiKey: string | null;
+}
+
+/** The subset the attachment reader needs to call a vision model. */
+export interface VisionSettings {
+  provider: ModelProviderType;
+  baseUrl: string;
+  apiKey: string | null;
+  model: string;
+  fallbackProvider: ModelProviderType;
+  fallbackBaseUrl: string;
+  fallbackApiKey: string | null;
+  fallbackModel: string;
 }
 
 export interface UpdateModelRoleSettingsInput {

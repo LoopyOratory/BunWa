@@ -260,14 +260,18 @@ async function buildServer(
               );
             }
             if (tool.sessionScoped) {
-              return jsonToolResult(
-                {
-                  success: false,
-                  name: 'PermissionDenied',
-                  message: `Tool '${tool.name}' is session-scoped; use a session MCP key for it`,
-                },
-                true,
-              );
+              const bound = agentScope.mcp?.session?.trim();
+              if (!bound) {
+                return jsonToolResult(
+                  {
+                    success: false,
+                    name: 'PermissionDenied',
+                    message: `Tool '${tool.name}' is session-scoped. Bind a WhatsApp session to this agent in its Tools tab.`,
+                  },
+                  true,
+                );
+              }
+              input.sessionId = bound;
             }
             const { allowed, reason } = isToolAllowed(tool, agentScope.mcp);
             if (!allowed) {
@@ -411,12 +415,13 @@ export function createMcpRouter(
       const agentScope = await resolveAgentScopeForKey(requestKey).catch(() => undefined);
       if (agentScope) {
         const allowed = new Set(agentScope.mcp?.allowedTools ?? []);
+        const canUseSessionTools = Boolean(agentScope.mcp?.session?.trim());
         visibleTools =
           agentScope.mcp?.enabled === false || allowed.size === 0
             ? []
             : requestTools.filter(
                 (tool) =>
-                  !tool.sessionScoped &&
+                  (!tool.sessionScoped || canUseSessionTools) &&
                   (allowed.has(tool.name) ||
                     (tool.remoteName ? allowed.has(tool.remoteName) : false) ||
                     (tool.category ? allowed.has(tool.category) : false)),

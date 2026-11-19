@@ -5,6 +5,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { mediaTools } from '../mcp/tools/media.tools';
 import { messageTools } from '../mcp/tools/message.tools';
+import { agentService } from '../core/agent/agent.service';
 import { UnprocessableEntityException } from '../core/exceptions';
 import type { SessionManager } from '../core/manager.core';
 import type { ToolDescriptor } from '../mcp/tool-descriptor';
@@ -22,11 +23,24 @@ const mediaRoot = mkdtempSync(join(tmpdir(), 'bunwa-media-'));
 mkdirSync(join(mediaRoot, 'vivita'), { recursive: true });
 writeFileSync(join(mediaRoot, 'vivita', 'file-ok.bin'), Buffer.from('hello media'));
 writeFileSync(join(mediaRoot, 'vivita', 'file-big.bin'), Buffer.alloc(2048));
+writeFileSync(join(mediaRoot, 'vivita', 'note.txt'), Buffer.from('Pickup is on Saturday.'));
 process.env.WAHA_STORAGE_LOCAL_PATH = mediaRoot;
 
 const session = {
   getChatMessage: async (_chatId: string, messageId: string) => {
     if (messageId === 'no-media') return { id: messageId, media: null };
+    if (messageId === 'doc') {
+      return {
+        id: messageId,
+        type: 'document',
+        body: 'my note',
+        media: {
+          url: `http://localhost:3000/api/files/vivita/note.txt`,
+          mimetype: 'text/plain',
+          filename: 'My note.txt',
+        },
+      };
+    }
     return {
       id: messageId,
       type: 'image',
@@ -66,6 +80,7 @@ describe('media MCP tools', () => {
       'MediaConvertVoice',
       'MediaDownloadMessage',
       'MediaGetFile',
+      'MessageReadAttachment',
     ]);
     expect(tools.every((t) => t.category === 'media')).toBe(true);
     expect(tools.every((t) => t.sessionScoped === true)).toBe(true);
@@ -84,6 +99,33 @@ describe('media MCP tools', () => {
     // the URL is returned for reference, but it needs the API key, which is why
     // the bytes come back too
     expect(result.url).toContain('/api/files/vivita/');
+  });
+
+  it('reads a document attached to a message and returns its text', async () => {
+    const original = agentService.readAttachment;
+    (agentService as any).readAttachment = async (input: any) => ({
+      kind: 'document',
+      filename: input.filename,
+      mimetype: input.mimetype,
+      sizeBytes: input.bytes.length,
+      text: 'Pickup is on Saturday.',
+      truncated: false,
+      metadata: {},
+    });
+    try {
+      const result = await call('MessageReadAttachment', {
+        sessionId: 'vivita',
+        chatId: '15551234567@c.us',
+        messageId: 'doc',
+      });
+      expect(result.kind).toBe('document');
+      expect(result.text).toContain('Saturday');
+      expect(result.caption).toBe('my note');
+      expect(result.type).toBe('document');
+      expect(result.filename).toBe('My note.txt');
+    } finally {
+      (agentService as any).readAttachment = original;
+    }
   });
 
   it('answers 422 when the message carries no media', async () => {

@@ -20,6 +20,7 @@ import { McpSkillPicker } from "@/components/mcp-skill-picker"
 import { ToolSetupGuide } from "@/components/tool-setup-guide"
 import { ExternalMcpServersDialog } from "@/components/external-mcp-servers-dialog"
 import { KnowledgeChunksDialog } from "@/components/knowledge-chunks-dialog"
+import { AttachmentReaderCard } from "@/components/attachment-reader-card"
 import { VoiceCallModelDialog } from "@/components/voice-call-model-dialog"
 import { PageLayout } from "@/components/page-layout"
 import { EmptyState, ErrorState, SectionHeading } from "@/components/primitives"
@@ -1022,6 +1023,7 @@ function AgentDetailDialog({
   const [mcpTools, setMcpTools] = useState<McpToolInfo[]>([])
   const [selectedMcpTools, setSelectedMcpTools] = useState<string[]>([])
   const [mcpEnabled, setMcpEnabled] = useState(false)
+  const [mcpSession, setMcpSession] = useState("")
   const [agentKey, setAgentKey] = useState<string | null>(null)
   const [agentKeyMeta, setAgentKeyMeta] = useState<{
     hasApiKey: boolean
@@ -1053,6 +1055,7 @@ function AgentDetailDialog({
         setMcpTools(toolCatalog.tools)
         setSelectedMcpTools(normalizeMcpSelection(mcpConfig.allowedTools, toolCatalog.tools))
         setMcpEnabled(mcpConfig.enabled)
+        setMcpSession(mcpConfig.session ?? "")
         setAgentKey(null)
         setAgentKeyMeta({
           hasApiKey: mcpConfig.hasApiKey === true,
@@ -1105,6 +1108,7 @@ function AgentDetailDialog({
         allowedTools: selectedMcpTools,
         deniedTools: [],
         destructiveOps: false,
+        session: mcpSession.trim() || null,
       })
       toast.success("MCP skills saved")
       onChanged()
@@ -1487,6 +1491,7 @@ function AgentDetailDialog({
 
               <TabsContent value="mcp" className="mt-0 space-y-4">
                 <ToolSetupGuide compact />
+                {agent && <AttachmentReaderCard agentId={agent.id} />}
                 <div className="rounded-2xl border border-border/70 bg-card/70 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -1556,6 +1561,18 @@ function AgentDetailDialog({
                     <p className="text-xs text-muted-foreground">
                       The agent can only call the MCP tools selected below.
                     </p>
+                    <div className="mt-3 max-w-xs space-y-1">
+                      <Label htmlFor="agent-mcp-session">WhatsApp session</Label>
+                      <Input
+                        id="agent-mcp-session"
+                        value={mcpSession}
+                        onChange={(event) => setMcpSession(event.target.value)}
+                        placeholder="e.g. calltest"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Needed for chat tools such as MessageReadAttachment.
+                      </p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium text-muted-foreground">Enabled</span>
@@ -1679,7 +1696,7 @@ export function AgentsPage() {
             <KeyRound className="size-4" /> Model provider
           </Button>
           <Button variant="outline" onClick={() => setVoiceCallOpen(true)}>
-            Voice &amp; call models
+            Model roles
           </Button>
           <Button variant="outline" onClick={() => setExternalMcpOpen(true)}>
             External MCP servers

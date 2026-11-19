@@ -37,7 +37,8 @@ import { extractProfileFacts, type ProfileMessage } from './profile-extractor';
 import { listExternalServerTools } from '../../mcp/external-mcp.client';
 import { chunkText } from '../knowledge/chunk';
 import { getEmbeddingProvider } from '../knowledge/embeddings';
-import type { ModelProbeResult, ModelRole, ModelRoleSettings, ModelSettings, UpdateModelRoleSettingsInput, UpdateModelSettingsInput } from './agent.types';
+import { readAttachment as readAttachmentWithSettings, type AttachmentInput, type AttachmentResult } from './attachment-reader';
+import type { ModelProbeResult, ModelRole, ModelRoleSettings, ModelSettings, UpdateModelRoleSettingsInput, UpdateModelSettingsInput, VisionSettings } from './agent.types';
 
 let storePromise: Promise<AgentStore> | null = null;
 
@@ -139,6 +140,45 @@ export class AgentService {
 
   async updateModelRoleSettings(role: ModelRole, input: UpdateModelRoleSettingsInput): Promise<ModelRoleSettings> {
     return (await getStore()).updateModelRoleSettings(role, input);
+  }
+
+  /**
+   * The model used to read images. A dedicated `vision` role wins when it has a
+   * model and key; otherwise the chat model is used, which is right for
+   * Gemini/GPT-4o/Claude setups and keeps a single-model install working.
+   */
+  async getVisionSettings(): Promise<VisionSettings> {
+    const store = await getStore();
+    const chat = await store.getModelSettingsSecrets();
+    const role = await store.getModelRoleSettingsSecrets('vision').catch(() => null);
+    if (role?.model.trim() && role.apiKey) {
+      return {
+        provider: role.provider,
+        baseUrl: role.baseUrl,
+        apiKey: role.apiKey,
+        model: role.model,
+        fallbackProvider: role.fallbackProvider,
+        fallbackBaseUrl: role.fallbackBaseUrl,
+        fallbackApiKey: role.fallbackApiKey,
+        fallbackModel: role.fallbackModel,
+      };
+    }
+    return {
+      provider: chat.provider,
+      baseUrl: chat.baseUrl,
+      apiKey: chat.apiKey,
+      model: chat.model,
+      fallbackProvider: chat.fallbackProvider,
+      fallbackBaseUrl: chat.fallbackBaseUrl,
+      fallbackApiKey: chat.fallbackApiKey,
+      fallbackModel: chat.fallbackModel,
+    };
+  }
+
+  /** Read a document or image with the configured vision/chat model. */
+  async readAttachment(input: AttachmentInput): Promise<AttachmentResult> {
+    const settings = await this.getVisionSettings();
+    return readAttachmentWithSettings(input, { settings });
   }
 
   async createExternalMcpServer(input: CreateExternalMcpServerInput): Promise<ExternalMcpServer> {

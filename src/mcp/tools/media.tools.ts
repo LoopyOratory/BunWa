@@ -16,6 +16,8 @@ import type { SessionManager } from '../../core/manager.core';
 import { getLocalMediaFolder } from '../../core/media/MediaStorageFactory';
 import { isOggOpus, materializeAudioBytes } from '../../core/media/audio';
 import { UnprocessableEntityException } from '../../core/exceptions';
+import { agentService } from '../../core/agent/agent.service';
+import { MAX_ATTACHMENT_BYTES } from '../../core/agent/attachment-reader';
 import type { ToolDescriptor } from '../tool-descriptor';
 
 const sessionId = z
@@ -91,6 +93,54 @@ export function mediaTools(manager: SessionManager): ToolDescriptor[] {
   const getSession = (name: string) => manager.getWorkingSession(name);
 
   return [
+    {
+      name: 'MessageReadAttachment',
+      description:
+        'Read the document or image attached to one WhatsApp message and return text the agent can use. Documents (PDF, DOCX, TXT, Markdown, CSV, JSON) are extracted locally; images are described by the configured vision model, including visible text, amounts, dates, and IDs. Use ChatGetMessages to find the message id. Answers a 422 when the message has no media or the media was not downloaded.',
+      tier: 'read',
+      category: 'media',
+      sessionScoped: true,
+      inputSchema: z.object({
+        sessionId,
+        chatId,
+        messageId: z.string().min(1).describe('Message id, as returned by ChatGetMessages'),
+        caption: z
+          .string()
+          .optional()
+          .describe('Optional caption to pass to the vision model; defaults to the WhatsApp message caption'),
+      }),
+      handler: async (input) => {
+        const session = await getSession(input.sessionId);
+        const message: any = await (session as any).getChatMessage(input.chatId, input.messageId, {
+          downloadMedia: true,
+        });
+        const media = message?.media;
+        if (!media) {
+          throw new UnprocessableEntityException(
+            'The message carries no media, or the media was not downloaded. Enable media download for this session and try again.',
+          );
+        }
+        const storedName = media.url ? decodeURIComponent(String(media.url).split('/').pop() ?? '') : '';
+        const readName = storedName || media.filename || '';
+        if (!readName) {
+          throw new UnprocessableEntityException('The message media has no stored filename.');
+        }
+        const { bytes } = await readMediaFile(input.sessionId, readName, MAX_ATTACHMENT_BYTES);
+        const attachment = await agentService.readAttachment({
+          bytes: new Uint8Array(bytes),
+          mimetype: media.mimetype ?? mimetypeFor(readName),
+          filename: media.filename || readName,
+          caption: input.caption ?? message.body ?? '',
+        });
+        return {
+          chatId: input.chatId,
+          messageId: input.messageId,
+          type: message.type ?? null,
+          caption: message.body ?? null,
+          ...attachment,
+        };
+      },
+    },
     {
       name: 'MediaDownloadMessage',
       description:

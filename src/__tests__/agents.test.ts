@@ -236,6 +236,47 @@ describe('agent store', () => {
     await store.close();
   });
 
+  test('uses the vision role when configured and falls back to the chat model', async () => {
+    const store = makeStore();
+    await store.init();
+    const service = new AgentService();
+    setAgentStoreForTests(store);
+
+    await store.updateModelSettings({
+      provider: 'openai-compatible',
+      baseUrl: 'https://chat.example/v1',
+      apiKey: 'chat-key',
+      model: 'chat-model',
+      fallbackProvider: 'openai-compatible',
+      fallbackBaseUrl: 'https://fallback.example/v1',
+      fallbackApiKey: 'fallback-key',
+      fallbackModel: 'fallback-model',
+    });
+
+    const fromChat = await service.getVisionSettings();
+    expect(fromChat.model).toBe('chat-model');
+    expect(fromChat.apiKey).toBe('chat-key');
+
+    await store.updateModelRoleSettings('vision', {
+      provider: 'google',
+      baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+      apiKey: 'vision-key',
+      model: 'gemini-3.8-flash',
+      fallbackProvider: 'openai-compatible',
+      fallbackBaseUrl: 'https://vision-fallback.example/v1',
+      fallbackApiKey: 'vision-fallback-key',
+      fallbackModel: 'vision-fallback',
+    });
+
+    const fromVision = await service.getVisionSettings();
+    expect(fromVision.provider).toBe('google');
+    expect(fromVision.model).toBe('gemini-3.8-flash');
+    expect(fromVision.apiKey).toBe('vision-key');
+
+    setAgentStoreForTests(null);
+    await store.close();
+  });
+
   test('stores external MCP servers and their tools', async () => {
     const store = makeStore();
     await store.init();

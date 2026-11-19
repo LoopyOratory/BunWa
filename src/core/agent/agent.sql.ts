@@ -27,6 +27,7 @@ import type {
   ModelSettingsSecrets,
   ModelRole,
   ModelRoleSettings,
+  ModelRoleSettingsSecrets,
   ProfileContext,
   UpdateExternalMcpServerInput,
   UpdateModelRoleSettingsInput,
@@ -900,6 +901,17 @@ export class SqlAgentStore implements AgentStore {
       [role, settings.provider, settings.baseUrl, null, settings.model, settings.fallbackProvider, settings.fallbackBaseUrl, null, settings.fallbackModel, at],
     );
     return settings;
+  }
+
+  async getModelRoleSettingsSecrets(role: ModelRole): Promise<ModelRoleSettingsSecrets> {
+    const settings = await this.getModelRoleSettings(role);
+    const rows = await this.client.query(`SELECT * FROM bunwa_model_role_settings WHERE role = ? LIMIT 1`, [role]);
+    const raw = rows[0] ?? {};
+    return {
+      ...settings,
+      apiKey: asNullableString(raw.api_key),
+      fallbackApiKey: asNullableString(raw.fallback_api_key),
+    };
   }
 
   async updateModelRoleSettings(role: ModelRole, input: UpdateModelRoleSettingsInput): Promise<ModelRoleSettings> {

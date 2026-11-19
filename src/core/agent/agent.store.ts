@@ -21,6 +21,7 @@ import type {
   ModelSettings,
   ModelSettingsSecrets,
   ModelRoleSettings,
+  ModelRoleSettingsSecrets,
   ProfileContext,
   UpdateModelRoleSettingsInput,
   UpdateUserProfileFactInput,
@@ -52,6 +53,7 @@ export interface AgentStore {
 
   listModelRoleSettings(): Promise<ModelRoleSettings[]>;
   getModelRoleSettings(role: ModelRole): Promise<ModelRoleSettings>;
+  getModelRoleSettingsSecrets(role: ModelRole): Promise<ModelRoleSettingsSecrets>;
   updateModelRoleSettings(role: ModelRole, input: UpdateModelRoleSettingsInput): Promise<ModelRoleSettings>;
 
   createExternalMcpServer(input: CreateExternalMcpServerInput): Promise<ExternalMcpServer>;

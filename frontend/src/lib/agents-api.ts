@@ -52,6 +52,22 @@ export interface KnowledgeChunk {
   createdAt: string
 }
 
+export interface AttachmentResult {
+  kind: "document" | "image"
+  filename: string
+  mimetype: string
+  sizeBytes: number
+  text: string
+  truncated: boolean
+  image?: {
+    width: number | null
+    height: number | null
+    format: string | null
+    model: string
+  }
+  metadata: Record<string, unknown>
+}
+
 export interface BuilderQuestion {
   id: string
   question: string
@@ -72,7 +88,7 @@ export interface AgentAnalytics {
 
 export type ModelProviderType = "openai-compatible" | "anthropic" | "google" | "fish" | "elevenlabs"
 
-export type ModelRole = "chat" | "voice" | "call"
+export type ModelRole = "chat" | "voice" | "call" | "vision"
 
 export interface ModelRoleConfig {
   provider: ModelProviderType
@@ -136,6 +152,8 @@ export interface AgentMcpConfig {
   allowedTools: string[]
   deniedTools: string[]
   destructiveOps: boolean
+  /** WhatsApp session bound to this agent's session-scoped tools. */
+  session?: string | null
   hasApiKey?: boolean
   canRevealKey?: boolean
   apiKeyPrefix?: string | null
@@ -362,6 +380,15 @@ export const agentApi = {
     form.append("file", file)
     if (name?.trim()) form.append("name", name.trim())
     return requestForm<{ source: KnowledgeSource }>(`/api/agents/${agentId}/knowledge/upload`, form).then((r) => r.source)
+  },
+
+  readAttachment: (agentId: string, file: File, caption?: string) => {
+    const form = new FormData()
+    form.append("file", file)
+    if (caption?.trim()) form.append("caption", caption.trim())
+    return requestForm<{ attachment: AttachmentResult }>(`/api/agents/${agentId}/attachments`, form).then(
+      (r) => r.attachment,
+    )
   },
 
   listKnowledgeChunks: (agentId: string, sourceId: string) =>

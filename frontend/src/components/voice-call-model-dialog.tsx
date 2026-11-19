@@ -33,9 +33,16 @@ const PROVIDERS: Array<{ value: ModelProviderType; label: string }> = [
   { value: "openai-compatible", label: "GPT / OpenAI-compatible" },
 ]
 
+const VISION_PROVIDERS: Array<{ value: ModelProviderType; label: string }> = [
+  { value: "openai-compatible", label: "GPT / OpenAI-compatible" },
+  { value: "anthropic", label: "Anthropic" },
+  { value: "google", label: "Google" },
+]
+
 const ROLES: Array<{ value: ModelRole; label: string }> = [
   { value: "voice", label: "Voice model" },
   { value: "call", label: "Call model" },
+  { value: "vision", label: "Vision model" },
 ]
 
 export function VoiceCallModelDialog({
@@ -64,6 +71,18 @@ export function VoiceCallModelDialog({
       .finally(() => setLoading(false))
   }, [open, role])
 
+  useEffect(() => {
+    if (role !== "vision" || !settings) return
+    const allowed = new Set(VISION_PROVIDERS.map((provider) => provider.value))
+    if (!allowed.has(settings.provider) || !allowed.has(settings.fallbackProvider)) {
+      setSettings({
+        ...settings,
+        provider: allowed.has(settings.provider) ? settings.provider : "openai-compatible",
+        fallbackProvider: allowed.has(settings.fallbackProvider) ? settings.fallbackProvider : "openai-compatible",
+      })
+    }
+  }, [role, settings])
+
   const save = async () => {
     if (!settings) return
     setSaving(true)
@@ -89,13 +108,15 @@ export function VoiceCallModelDialog({
     }
   }
 
+  const availableProviders = role === "vision" ? VISION_PROVIDERS : PROVIDERS
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92dvh] max-w-3xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Voice &amp; call models</DialogTitle>
+          <DialogTitle>Model roles</DialogTitle>
           <DialogDescription>
-            Choose which role to configure, then pick the provider, model, and fallback model BunWa should use.
+            Configure voice, call, and vision models, plus the fallback BunWa should use when the primary fails.
           </DialogDescription>
         </DialogHeader>
 
@@ -121,6 +142,12 @@ export function VoiceCallModelDialog({
                   ))}
                 </SelectContent>
               </Select>
+              {role === "vision" && (
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Used to read images customers send. Pick a vision-capable model (Gemini, GPT-4o, or Claude 3.5
+                  Sonnet or newer). Leave it blank to use the chat model.
+                </p>
+              )}
             </div>
 
             <section className="space-y-3">
@@ -135,7 +162,7 @@ export function VoiceCallModelDialog({
                     <SelectValue placeholder="Pick a provider" />
                   </SelectTrigger>
                   <SelectContent>
-                    {PROVIDERS.map((provider) => (
+                    {availableProviders.map((provider) => (
                       <SelectItem key={provider.value} value={provider.value}>
                         {provider.label}
                       </SelectItem>
@@ -150,7 +177,7 @@ export function VoiceCallModelDialog({
                     id="voice-base-url"
                     value={settings.baseUrl}
                     onChange={(event) => setSettings({ ...settings, baseUrl: event.target.value })}
-                    placeholder="https://api.fish.audio/v1"
+                    placeholder={role === "vision" ? "https://generativelanguage.googleapis.com/v1beta" : "https://api.fish.audio/v1"}
                   />
                 </div>
                 <div className="space-y-2">
@@ -169,7 +196,7 @@ export function VoiceCallModelDialog({
                     id="voice-model"
                     value={settings.model}
                     onChange={(event) => setSettings({ ...settings, model: event.target.value })}
-                    placeholder="s2.1-pro"
+                    placeholder={role === "vision" ? "gemini-3.8-flash" : "s2.1-pro"}
                   />
                 </div>
               </div>
@@ -189,7 +216,7 @@ export function VoiceCallModelDialog({
                     <SelectValue placeholder="Pick a fallback provider" />
                   </SelectTrigger>
                   <SelectContent>
-                    {PROVIDERS.map((provider) => (
+                    {availableProviders.map((provider) => (
                       <SelectItem key={provider.value} value={provider.value}>
                         {provider.label}
                       </SelectItem>
@@ -204,7 +231,7 @@ export function VoiceCallModelDialog({
                     id="voice-fallback-base-url"
                     value={settings.fallbackBaseUrl}
                     onChange={(event) => setSettings({ ...settings, fallbackBaseUrl: event.target.value })}
-                    placeholder="https://api.elevenlabs.io/v1"
+                    placeholder={role === "vision" ? "https://api.openai.com/v1" : "https://api.elevenlabs.io/v1"}
                   />
                 </div>
                 <div className="space-y-2">
@@ -223,7 +250,7 @@ export function VoiceCallModelDialog({
                     id="voice-fallback-model"
                     value={settings.fallbackModel}
                     onChange={(event) => setSettings({ ...settings, fallbackModel: event.target.value })}
-                    placeholder="flash"
+                    placeholder={role === "vision" ? "gemini-3.8-flash" : "flash"}
                   />
                 </div>
               </div>

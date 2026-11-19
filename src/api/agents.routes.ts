@@ -177,7 +177,7 @@ export function createAgentsRouter(): Hono {
   /* Model role settings                                                    */
   /* ---------------------------------------------------------------------- */
 
-  const modelRole = (value: string) => (['chat', 'voice', 'call'].includes(value) ? (value as 'chat' | 'voice' | 'call') : undefined);
+  const modelRole = (value: string) => (['chat', 'voice', 'call', 'vision'].includes(value) ? (value as 'chat' | 'voice' | 'call' | 'vision') : undefined);
 
   router.get(
     '/models/roles',
@@ -190,7 +190,7 @@ export function createAgentsRouter(): Hono {
     policiesMiddleware(CanServer(Action.Retrieve)),
     async (c) => {
       const role = modelRole(c.req.param('role'));
-      if (!role) return badRequest(c, 'role must be chat, voice, or call');
+      if (!role) return badRequest(c, 'role must be chat, voice, call, or vision');
       return c.json({ settings: await agentService.getModelRoleSettings(role) });
     },
   );
@@ -200,7 +200,7 @@ export function createAgentsRouter(): Hono {
     policiesMiddleware(CanServer(Action.Manage)),
     async (c) => {
       const role = modelRole(c.req.param('role'));
-      if (!role) return badRequest(c, 'role must be chat, voice, or call');
+      if (!role) return badRequest(c, 'role must be chat, voice, call, or vision');
       const body = await c.req.json().catch(() => ({}));
       const settings = await agentService.updateModelRoleSettings(role, {
         provider: body.provider,
@@ -399,6 +399,35 @@ export function createAgentsRouter(): Hono {
     },
   );
 
+  router.post(
+    '/:id/attachments',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      const agent = await agentService.getAgent(c.req.param('id'));
+      if (!agent) return notFound(c, 'Agent not found');
+      let body: Record<string, unknown>;
+      try {
+        body = (await c.req.parseBody()) as Record<string, unknown>;
+      } catch {
+        return badRequest(c, 'Send the attachment as multipart/form-data.');
+      }
+      const file = body.file;
+      if (!(file instanceof File)) return badRequest(c, 'A document or image file is required.');
+      const caption = typeof body.caption === 'string' ? body.caption : '';
+      try {
+        const attachment = await agentService.readAttachment({
+          bytes: new Uint8Array(await file.arrayBuffer()),
+          mimetype: file.type,
+          filename: file.name,
+          caption,
+        });
+        return c.json({ attachment });
+      } catch (error) {
+        return badRequest(c, error instanceof Error ? error.message : 'Could not read the attachment.');
+      }
+    },
+  );
+
   router.get(
     '/:id/knowledge/search',
     policiesMiddleware(CanServer(Action.Retrieve)),
@@ -493,6 +522,8 @@ export function createAgentsRouter(): Hono {
       if (Array.isArray(body.allowedTools)) next.allowedTools = body.allowedTools.map(String);
       if (Array.isArray(body.deniedTools)) next.deniedTools = body.deniedTools.map(String);
       if (body.destructiveOps !== undefined) next.destructiveOps = body.destructiveOps === true;
+      if (body.session === null || body.session === '') delete next.session;
+      else if (typeof body.session === 'string') next.session = body.session.trim();
       const updated = await agentService.updateAgent(c.req.param('id'), {
         settings: { ...agent.settings, mcp: next },
       });

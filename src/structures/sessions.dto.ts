@@ -66,6 +66,8 @@ export class McpConfig {
   allowedTools?: string[];
   deniedTools?: string[];
   destructiveOps?: boolean;
+  /** Agent-only: WhatsApp session bound to this agent's scoped tools. */
+  session?: string;
   apiKeyHash?: string;  // SHA-256 of per-session MCP key (sk_mcp_...)
   /** AES-GCM sealed copy for the admin "view key" action. */
   apiKeyCiphertext?: string;

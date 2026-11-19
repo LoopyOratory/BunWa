@@ -173,6 +173,35 @@ model name, any failure reason, and a **View chunks** dialog. The agent wizard
 accepts pasted text immediately; uploaded files are indexed after the agent is
 created. Scanned PDFs need OCR and are rejected with a clear message.
 
+## Documents and images sent by customers
+
+Agents can read WhatsApp attachments, not just text. Two surfaces share one
+reader (`src/core/agent/attachment-reader.ts`):
+
+- `POST /api/agents/:id/attachments` accepts a multipart `file` and optional
+  `caption` and returns `{ attachment: { kind, filename, mimetype, sizeBytes,
+  text, truncated, image?, metadata } }`. The dashboard exposes this as
+  **Read a document or image** on the agent's Tools tab.
+- MCP tool `MessageReadAttachment` takes `chatId` and `messageId`, downloads the
+  message media, and returns the same result. It is session-scoped. An
+  `sk_agent_` key may call it when the agent's MCP settings include a `session`
+  binding (Tools tab → **WhatsApp session**); without a binding the tool is
+  neither listed nor callable for that key.
+
+Documents are extracted locally with unpdf (PDF) and mammoth (DOCX); TXT,
+Markdown, CSV, and JSON are decoded as text. Images are rotated, resized to at
+most 1800 px on the long edge, converted to JPEG, and sent to a vision model.
+The prompt asks for a short description, exact visible text (amounts, dates,
+IDs), and key fields for receipts, invoices, orders, and labels. Scanned PDFs
+are still rejected until OCR is added.
+
+The vision model is the **Vision model** role in **Model roles**. If that role
+is blank, the chat model is used, so a single Gemini/GPT-4o/Claude setup works
+without a second configuration. The role has its own provider, model, and
+fallback; providers are limited to OpenAI-compatible, Anthropic, and Google.
+Limits are 16 MB per attachment and 24,000 characters of returned text
+(documents are also capped at 10 MB by the extractor).
+
 ## User profiles
 
 A profile is a small set of decision-relevant facts about one person, shared by
