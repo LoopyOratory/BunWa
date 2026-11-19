@@ -11,7 +11,10 @@ declare global {
   interface Response {
     readonly ok: boolean;
     readonly status: number;
+    readonly body: any;
+    readonly headers: { get(name: string): string | null };
     text(): Promise<string>;
     json(): Promise<unknown>;
+    arrayBuffer(): Promise<ArrayBuffer>;
   }
 }
