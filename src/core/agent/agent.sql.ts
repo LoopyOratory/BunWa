@@ -1812,7 +1812,7 @@ export class SqlAgentStore implements AgentStore {
       params.push(filter.from);
     }
     if (filter.to) {
-      where.push('started_at < ?');
+      where.push('started_at <= ?');
       params.push(filter.to);
     }
     const limit = Math.max(1, Math.min(filter.limit ?? 10_000, 50_000));
@@ -1911,7 +1911,7 @@ export class SqlAgentStore implements AgentStore {
       params.push(filter.from);
     }
     if (filter.to) {
-      where.push('created_at < ?');
+      where.push('created_at <= ?');
       params.push(filter.to);
     }
     const limit = Math.max(1, Math.min(filter.limit ?? 50_000, 50_000));
