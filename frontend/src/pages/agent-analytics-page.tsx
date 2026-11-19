@@ -146,7 +146,8 @@ export function AgentAnalyticsPage() {
   )
 
   useEffect(() => {
-    setLoading(true)
+    // Fetching is an external-system sync; the state update happens after the request settles.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load()
     const interval = setInterval(() => void load(true), POLL_MS)
     return () => clearInterval(interval)

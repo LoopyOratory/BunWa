@@ -6,7 +6,6 @@ import type { AgentAnalyticsDashboard, AnalyticsFunnel, AnalyticsKpi, AnalyticsS
 import {
   deltaLabel,
   deltaTone,
-  formatMoney,
   formatNumber,
   formatPercent,
   formatRating,
@@ -300,8 +299,4 @@ export function CsatCard({ dashboard }: { dashboard: AgentAnalyticsDashboard }) 
       )}
     </Card>
   )
-}
-
-export function formatCost(cents: number | null | undefined, currency: string): string {
-  return formatMoney(cents, currency)
 }
