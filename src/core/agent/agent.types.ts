@@ -372,6 +372,60 @@ export interface CreateConversationInput {
   metadata?: Record<string, unknown>;
 }
 
+export type ConversationMessageRole = 'customer' | 'agent' | 'system' | 'tool';
+
+/** One persisted turn in an agent conversation. */
+export interface ConversationMessage {
+  id: string;
+  conversationId: string;
+  agentId: string;
+  userId: string | null;
+  role: ConversationMessageRole;
+  channel: string;
+  text: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface CreateConversationMessageInput {
+  conversationId: string;
+  agentId: string;
+  userId?: string | null;
+  role: ConversationMessageRole;
+  channel?: string;
+  text: string;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+}
+
+/** Conversation plus the fields the chat-history table needs in one row. */
+export interface ConversationSummary extends Conversation {
+  messageCount: number;
+  lastMessage: string | null;
+  lastMessageRole: ConversationMessageRole | null;
+  lastMessageAt: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
+}
+
+export interface ConversationListFilter {
+  agentId?: string;
+  channel?: string;
+  status?: string;
+  from?: string;
+  to?: string;
+  q?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ConversationPage {
+  conversations: ConversationSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface RecordEventInput {
   type: string;
   agentId?: string | null;

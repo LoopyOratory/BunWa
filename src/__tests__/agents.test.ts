@@ -307,6 +307,52 @@ describe('agent store', () => {
     await store.close();
   });
 
+  test('stores transcript messages and summarizes conversations', async () => {
+    const store = makeStore();
+    await store.init();
+    const agent = await store.createAgent({ name: 'Chat agent', status: 'active' });
+    const conversation = await store.createConversation({
+      agentId: agent.id,
+      userId: '233500000000@c.us',
+      metadata: { contactName: 'Ama Mensah', phone: '+233 50 000 0000' },
+    });
+    await store.addConversationMessage({
+      conversationId: conversation.id,
+      agentId: agent.id,
+      userId: conversation.userId,
+      role: 'customer',
+      text: 'Do you deliver to Kumasi?',
+      createdAt: '2026-11-19T10:00:00.000Z',
+    });
+    await store.addConversationMessage({
+      conversationId: conversation.id,
+      agentId: agent.id,
+      userId: conversation.userId,
+      role: 'agent',
+      text: 'Yes, delivery to Kumasi is GH₵40.',
+      createdAt: '2026-11-19T10:00:08.000Z',
+    });
+
+    const page = await store.listConversationSummaries({ agentId: agent.id, q: 'Kumasi' });
+    expect(page.total).toBe(1);
+    expect(page.conversations[0].messageCount).toBe(2);
+    expect(page.conversations[0].lastMessage).toContain('GH₵40');
+    expect(page.conversations[0].lastMessageRole).toBe('agent');
+    expect(page.conversations[0].contactName).toBe('Ama Mensah');
+    expect(page.conversations[0].messageCount).toBe(2);
+
+    const messages = await store.listConversationMessages(conversation.id);
+    expect(messages.map((message) => message.role)).toEqual(['customer', 'agent']);
+
+    const after = await store.listConversationMessages(conversation.id, { after: '2026-11-19T10:00:05.000Z' });
+    expect(after).toHaveLength(1);
+    expect(after[0].role).toBe('agent');
+
+    const empty = await store.listConversationSummaries({ agentId: agent.id, q: 'not in this transcript' });
+    expect(empty.total).toBe(0);
+    await store.close();
+  });
+
   test('stores external MCP servers and their tools', async () => {
     const store = makeStore();
     await store.init();

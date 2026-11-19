@@ -186,6 +186,16 @@ export function isAnalyticsChannel(value: string | undefined): value is Analytic
   return value === 'all' || value === 'whatsapp' || value === 'voice';
 }
 
+/** Date-only inputs from a date picker are whole days, not midnight boundaries. */
+function parseWindowBoundary(value: string | null | undefined, boundary: 'start' | 'end'): Date | null {
+  if (!value) return null;
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const candidate = dateOnly
+    ? new Date(`${value}T${boundary === 'end' ? '23:59:59.999' : '00:00:00.000'}Z`)
+    : new Date(value);
+  return Number.isNaN(candidate.getTime()) ? null : candidate;
+}
+
 /** Resolve a range key (or an explicit from/to pair) into the current and previous windows. */
 export function resolveAnalyticsWindow(
   range: AnalyticsRangeKey,
@@ -193,10 +203,10 @@ export function resolveAnalyticsWindow(
   to?: string | null,
   now = new Date(),
 ): AnalyticsWindow {
-  const explicitFrom = from ? new Date(from) : null;
-  const explicitTo = to ? new Date(to) : null;
-  const validFrom = explicitFrom && !Number.isNaN(explicitFrom.getTime()) ? explicitFrom : null;
-  const validTo = explicitTo && !Number.isNaN(explicitTo.getTime()) ? explicitTo : null;
+  const explicitFrom = parseWindowBoundary(from, 'start');
+  const explicitTo = parseWindowBoundary(to, 'end');
+  const validFrom = explicitFrom;
+  const validTo = explicitTo;
 
   if (validFrom && validTo && validTo.getTime() > validFrom.getTime()) {
     const span = validTo.getTime() - validFrom.getTime();

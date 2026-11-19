@@ -11,7 +11,7 @@ import { toFishWebhookTool } from '../core/tools/fish-tool.adapter';
 import { toGoogleFunctionDeclaration, toMcpToolDescriptor } from '../core/tools/google-tool.adapter';
 import { hashSecret, openSecret, sealSecret, secretPrefix } from '../core/security/secret-box';
 import { extractDocumentText } from '../core/knowledge/extract';
-import { isAnalyticsChannel, isAnalyticsRange } from '../core/agent/agent.analytics';
+import { isAnalyticsChannel, isAnalyticsRange, resolveAnalyticsWindow } from '../core/agent/agent.analytics';
 
 function badRequest(c: any, message: string) {
   return c.json({ error: message }, 400);
@@ -321,6 +321,88 @@ export function createAgentsRouter(): Hono {
         data: body.data && typeof body.data === 'object' ? body.data : {},
       });
       return c.json({ event }, 201);
+    },
+  );
+
+  /* ---------------------------------------------------------------------- */
+  /* Chat history + transcripts                                             */
+  /* ---------------------------------------------------------------------- */
+
+  router.get(
+    '/conversations',
+    policiesMiddleware(CanServer(Action.Retrieve)),
+    async (c) => {
+      const from = c.req.query('from') || null;
+      const to = c.req.query('to') || null;
+      const requestedRange = c.req.query('range');
+      const range = isAnalyticsRange(requestedRange) ? requestedRange : '7d';
+      const window = resolveAnalyticsWindow(range, from, to);
+      const requestedStatus = c.req.query('status');
+      if (requestedStatus && !['open', 'closing', 'closed'].includes(requestedStatus)) {
+        return badRequest(c, 'status must be open, closing or closed');
+      }
+      const page = Number(c.req.query('page') ?? 1);
+      const pageSize = Number(c.req.query('pageSize') ?? 20);
+      return c.json(
+        await agentService.listConversationSummaries({
+          agentId: c.req.query('agentId') || undefined,
+          channel: c.req.query('channel') || undefined,
+          status: requestedStatus || undefined,
+          from: window?.from,
+          to: window?.to,
+          q: c.req.query('q') || undefined,
+          page: Number.isFinite(page) ? page : 1,
+          pageSize: Number.isFinite(pageSize) ? pageSize : 20,
+        }),
+      );
+    },
+  );
+
+  router.get(
+    '/conversations/:id/messages',
+    policiesMiddleware(CanServer(Action.Retrieve)),
+    async (c) => {
+      const conversation = await agentService.getConversation(c.req.param('id'));
+      if (!conversation) return notFound(c, 'Conversation not found');
+      const limit = Number(c.req.query('limit') ?? 200);
+      return c.json({
+        conversation,
+        messages: await agentService.listConversationMessages(conversation.id, {
+          after: c.req.query('after') || undefined,
+          before: c.req.query('before') || undefined,
+          limit: Number.isFinite(limit) ? limit : 200,
+        }),
+      });
+    },
+  );
+
+  router.post(
+    '/conversations/:id/messages',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      const conversation = await agentService.getConversation(c.req.param('id'));
+      if (!conversation) return notFound(c, 'Conversation not found');
+      const body = await c.req.json().catch(() => ({}));
+      const role = typeof body.role === 'string' ? body.role : '';
+      if (!['customer', 'agent', 'system', 'tool'].includes(role)) {
+        return badRequest(c, 'role must be customer, agent, system or tool');
+      }
+      if (typeof body.text !== 'string' || !body.text.trim()) return badRequest(c, 'text is required');
+      const createdAt = typeof body.createdAt === 'string' ? new Date(body.createdAt) : null;
+      if (body.createdAt && (!createdAt || Number.isNaN(createdAt.getTime()))) {
+        return badRequest(c, 'createdAt must be a valid date');
+      }
+      const message = await agentService.addConversationMessage({
+        conversationId: conversation.id,
+        agentId: conversation.agentId,
+        userId: typeof body.userId === 'string' ? body.userId : conversation.userId,
+        role: role as 'customer' | 'agent' | 'system' | 'tool',
+        channel: typeof body.channel === 'string' ? body.channel : conversation.channel,
+        text: body.text,
+        metadata: body.metadata && typeof body.metadata === 'object' ? body.metadata : {},
+        createdAt: createdAt?.toISOString(),
+      });
+      return c.json({ message }, 201);
     },
   );
 

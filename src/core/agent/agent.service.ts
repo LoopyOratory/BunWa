@@ -5,8 +5,12 @@ import type {
   AgentSkill,
   AnalyticsEvent,
   Conversation,
+  ConversationListFilter,
+  ConversationMessage,
+  ConversationPage,
   CreateAgentInput,
   CreateConversationInput,
+  CreateConversationMessageInput,
   CreateExternalMcpServerInput,
   CreateKnowledgeInput,
   CreateSkillInput,
@@ -483,6 +487,34 @@ export class AgentService {
 
   async getConversation(id: string): Promise<Conversation | null> {
     return (await getStore()).getConversation(id);
+  }
+
+  async listConversations(filter: {
+    agentId?: string;
+    channel?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+  } = {}): Promise<Conversation[]> {
+    return (await getStore()).listConversations(filter);
+  }
+
+  async listConversationSummaries(filter: ConversationListFilter = {}): Promise<ConversationPage> {
+    return (await getStore()).listConversationSummaries(filter);
+  }
+
+  async addConversationMessage(input: CreateConversationMessageInput): Promise<ConversationMessage> {
+    if (!input.text.trim()) throw new Error('Message text is required');
+    if (!['customer', 'agent', 'system', 'tool'].includes(input.role)) throw new Error('Invalid message role');
+    return (await getStore()).addConversationMessage({ ...input, text: input.text.slice(0, 20_000) });
+  }
+
+  async listConversationMessages(
+    conversationId: string,
+    filter: { limit?: number; before?: string; after?: string } = {},
+  ): Promise<ConversationMessage[]> {
+    return (await getStore()).listConversationMessages(conversationId, filter);
   }
 
   async closeConversation(id: string): Promise<Conversation | null> {

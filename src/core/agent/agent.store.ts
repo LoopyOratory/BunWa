@@ -4,8 +4,12 @@ import type {
   AddKnowledgeChunkInput,
   AnalyticsEvent,
   Conversation,
+  ConversationListFilter,
+  ConversationMessage,
+  ConversationPage,
   CreateAgentInput,
   CreateConversationInput,
+  CreateConversationMessageInput,
   CreateKnowledgeInput,
   CreateSkillInput,
   CreateUserProfileFactInput,
@@ -111,6 +115,9 @@ export interface AgentStore {
     to?: string;
     limit?: number;
   }): Promise<Conversation[]>;
+  listConversationSummaries(filter?: ConversationListFilter): Promise<ConversationPage>;
+  addConversationMessage(input: CreateConversationMessageInput): Promise<ConversationMessage>;
+  listConversationMessages(conversationId: string, filter?: { limit?: number; before?: string; after?: string }): Promise<ConversationMessage[]>;
   closeConversation(id: string, endedAt?: string): Promise<Conversation | null>;
   setReviewRequested(id: string, at: string): Promise<Conversation | null>;
   submitReview(id: string, rating: number, text?: string): Promise<Conversation | null>;

@@ -33,6 +33,7 @@ import {
   FunnelCard,
   VolumeOutcomeChart,
 } from "@/components/agent-analytics/agent-analytics-charts"
+import { DateRangePicker } from "@/components/agent-analytics/date-range-picker"
 import {
   AttentionPanel,
   KnowledgeGapsPanel,
@@ -41,6 +42,7 @@ import {
   ToolHealthPanel,
   TopicsPanel,
 } from "@/components/agent-analytics/agent-analytics-panels"
+import { ConversationHistoryTable } from "@/components/agent-analytics/conversation-history-table"
 
 const RANGES: AnalyticsRangeKey[] = ["24h", "7d", "30d", "90d"]
 const CHANNELS: Array<{ value: AnalyticsChannel; label: string; icon: typeof MessageCircle }> = [
@@ -57,6 +59,19 @@ function isRange(value: string | null): value is AnalyticsRangeKey {
 
 function isChannel(value: string | null): value is AnalyticsChannel {
   return value === "all" || value === "whatsapp" || value === "voice"
+}
+
+function isDateInput(value: string | null): value is string {
+  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value))
+}
+
+function formatDateRange(from: string | null, to: string | null): string {
+  if (!from || !to) return "custom range"
+  const start = new Date(`${from}T00:00:00`)
+  const end = new Date(`${to}T00:00:00`)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "custom range"
+  const format = (date: Date) => date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+  return `${format(start)} – ${format(end)}`
 }
 
 function rangeLabel(range: AnalyticsRangeKey): string {
@@ -104,6 +119,10 @@ export function AgentAnalyticsPage() {
   const range = isRange(params.get("range")) ? (params.get("range") as AnalyticsRangeKey) : "7d"
   const channel = isChannel(params.get("channel")) ? (params.get("channel") as AnalyticsChannel) : "all"
   const agentId = params.get("agentId") || null
+  const fromDate = isDateInput(params.get("from")) ? params.get("from") : null
+  const toDate = isDateInput(params.get("to")) ? params.get("to") : null
+  const customRange = Boolean(fromDate && toDate)
+  const activeRangeLabel = customRange ? formatDateRange(fromDate, toDate) : rangeLabel(range)
 
   const [agents, setAgents] = useState<Agent[]>([])
   const [data, setData] = useState<AgentAnalyticsDashboard | null>(null)
@@ -111,24 +130,40 @@ export function AgentAnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
-  const requestKey = `${range}|${channel}|${agentId ?? ""}`
+  const requestKey = `${range}|${channel}|${agentId ?? ""}|${fromDate ?? ""}|${toDate ?? ""}`
   const [settledKey, setSettledKey] = useState<string | null>(null)
   const isLoading = loading || settledKey !== requestKey
 
   const setFilter = (key: "range" | "channel" | "agentId", value: string | undefined) => {
     const next = new URLSearchParams(params)
+    if (key === "range") {
+      next.delete("from")
+      next.delete("to")
+    }
     if (value) next.set(key, value)
     else next.delete(key)
     setParams(next, { replace: true })
   }
 
+  const setDateRange = (from: string | null, to: string | null) => {
+    const next = new URLSearchParams(params)
+    if (from && to) {
+      next.set("from", from)
+      next.set("to", to)
+    } else {
+      next.delete("from")
+      next.delete("to")
+    }
+    setParams(next, { replace: true })
+  }
+
   const load = useCallback(
     async (quiet = false) => {
-      const key = `${range}|${channel}|${agentId ?? ""}`
+      const key = `${range}|${channel}|${agentId ?? ""}|${fromDate ?? ""}|${toDate ?? ""}`
       if (quiet) setRefreshing(true)
       try {
         const [next, agentList] = await Promise.all([
-          agentApi.analyticsDashboard({ range, channel, agentId }),
+          agentApi.analyticsDashboard({ range, channel, agentId, from: fromDate, to: toDate }),
           agentApi.list(),
         ])
         setData(next)
@@ -142,7 +177,7 @@ export function AgentAnalyticsPage() {
         setRefreshing(false)
       }
     },
-    [agentId, channel, range],
+    [agentId, channel, fromDate, range, toDate],
   )
 
   useEffect(() => {
@@ -222,16 +257,23 @@ export function AgentAnalyticsPage() {
             })}
           </div>
 
+          <DateRangePicker
+            from={fromDate}
+            to={toDate}
+            onApply={(from, to) => setDateRange(from, to)}
+            onClear={() => setDateRange(null, null)}
+          />
+
           <div className="ms-auto flex rounded-full border border-border/70 bg-card/60 p-0.5" role="group" aria-label="Time range">
             {RANGES.map((key) => (
               <button
                 key={key}
                 type="button"
-                aria-pressed={range === key}
+                aria-pressed={!customRange && range === key}
                 onClick={() => setFilter("range", key === "7d" ? undefined : key)}
                 className={cn(
                   "rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
-                  range === key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                  !customRange && range === key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 {key}
@@ -261,7 +303,7 @@ export function AgentAnalyticsPage() {
             {data.totals.conversations === 0 && (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-border/70 bg-card/50 px-4 py-3">
                 <p className="text-sm text-muted-foreground">
-                  No conversations in the {rangeLabel(data.range)}. New chats and calls will appear here.
+                  No conversations in the {activeRangeLabel}. New chats and calls will appear here.
                 </p>
                 <Link to="/agents" className="text-xs font-semibold text-primary underline-offset-4 hover:underline">
                   Open agents
@@ -335,6 +377,16 @@ export function AgentAnalyticsPage() {
 
             <LeaderboardPanel rows={data.leaderboard} currency={data.currency} onSelectAgent={selectAgent} />
 
+            <ConversationHistoryTable
+              agents={agents}
+              agentId={agentId}
+              channel={channel}
+              range={range}
+              from={fromDate}
+              to={toDate}
+              onSelectAgent={selectAgent}
+            />
+
             <div className="grid gap-4 lg:grid-cols-2">
               <TopicsPanel rows={data.topics} />
               <KnowledgeGapsPanel gaps={data.knowledgeGaps} onSelectAgent={selectAgent} />
@@ -347,7 +399,7 @@ export function AgentAnalyticsPage() {
 
             <p className="pb-2 text-right text-[11px] text-muted-foreground">
               {selectedAgent ? `${selectedAgent.name} · ` : "All agents · "}
-              {rangeLabel(data.range)} · compared with previous period · updated {new Date(data.generatedAt).toLocaleTimeString()}
+              {activeRangeLabel} · compared with previous period · updated {new Date(data.generatedAt).toLocaleTimeString()}
             </p>
           </>
         ) : null}

@@ -227,6 +227,28 @@ zero; the UI shows “—”. The current implementation reads rows in the selec
 window and computes in `src/core/agent/agent.analytics.ts`; daily rollups are the
 next step for very large histories.
 
+## Chat history and live transcripts
+
+The analytics page includes a TanStack table over every conversation in the
+selected range. Rows show contact, agent, channel, status, last message,
+message count, outcome, rating, and start time; clicking a row (or its arrow)
+opens a transcript sheet that refreshes every few seconds while **Live
+refresh** is on.
+
+- `GET /api/agents/conversations?range=7d&agentId=…&channel=…&status=…&from=…&to=…&q=…&page=1&pageSize=10`
+  returns `{ conversations, total, page, pageSize }`. `q` searches the
+  conversation id, user id, metadata, and transcript text.
+- `GET /api/agents/conversations/:id/messages?limit=200&before=…&after=…`
+  returns the persisted transcript in chronological order.
+- `POST /api/agents/conversations/:id/messages` appends one turn:
+  `{ role: "customer" | "agent" | "system" | "tool", text, createdAt?, metadata? }`.
+
+Messages live in `bunwa_conversation_messages` (one row per turn, indexed by
+conversation and time), not in the analytics-event table. The runtime writes
+each customer and agent turn with the conversation id; the admin UI is read-only.
+Text is capped at 20,000 characters per message. There is no automatic retention
+policy yet, so add one before high-volume production traffic.
+
 ## User profiles
 
 A profile is a small set of decision-relevant facts about one person, shared by

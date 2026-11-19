@@ -349,6 +349,36 @@ export interface Conversation {
   endedAt: string | null
 }
 
+export type ConversationMessageRole = "customer" | "agent" | "system" | "tool"
+
+export interface ConversationMessage {
+  id: string
+  conversationId: string
+  agentId: string
+  userId: string | null
+  role: ConversationMessageRole
+  channel: string
+  text: string
+  metadata: Record<string, unknown>
+  createdAt: string
+}
+
+export interface ConversationSummary extends Conversation {
+  messageCount: number
+  lastMessage: string | null
+  lastMessageRole: ConversationMessageRole | null
+  lastMessageAt: string | null
+  contactName: string | null
+  contactPhone: string | null
+}
+
+export interface ConversationPage {
+  conversations: ConversationSummary[]
+  total: number
+  page: number
+  pageSize: number
+}
+
 export interface UserProfile {
   id: string
   userId: string
@@ -676,6 +706,46 @@ export const agentApi = {
       method: "POST",
       body: JSON.stringify(input),
     }).then((r) => r.conversation),
+
+  conversations: (input: {
+    agentId?: string | null
+    channel?: AnalyticsChannel
+    range?: AnalyticsRangeKey
+    status?: "open" | "closing" | "closed" | null
+    from?: string | null
+    to?: string | null
+    q?: string
+    page?: number
+    pageSize?: number
+  } = {}) => {
+    const params = new URLSearchParams()
+    if (input.agentId) params.set("agentId", input.agentId)
+    if (input.channel && input.channel !== "all") params.set("channel", input.channel)
+    if (input.range) params.set("range", input.range)
+    if (input.status) params.set("status", input.status)
+    if (input.from) params.set("from", input.from)
+    if (input.to) params.set("to", input.to)
+    if (input.q?.trim()) params.set("q", input.q.trim())
+    params.set("page", String(input.page ?? 1))
+    params.set("pageSize", String(input.pageSize ?? 20))
+    return request<ConversationPage>(`/api/agents/conversations?${params.toString()}`)
+  },
+
+  conversationMessages: (id: string, input: { limit?: number; before?: string; after?: string } = {}) => {
+    const params = new URLSearchParams()
+    if (input.limit) params.set("limit", String(input.limit))
+    if (input.before) params.set("before", input.before)
+    if (input.after) params.set("after", input.after)
+    return request<{ conversation: Conversation; messages: ConversationMessage[] }>(
+      `/api/agents/conversations/${id}/messages?${params.toString()}`,
+    )
+  },
+
+  addConversationMessage: (id: string, input: { role: ConversationMessageRole; text: string; userId?: string; metadata?: Record<string, unknown> }) =>
+    request<{ message: ConversationMessage }>(`/api/agents/conversations/${id}/messages`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }).then((r) => r.message),
 
   getConversation: (id: string) =>
     request<{ conversation: Conversation }>(`/api/agents/conversations/${id}`).then((r) => r.conversation),

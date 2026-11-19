@@ -12,8 +12,13 @@ import type {
   AddKnowledgeChunkInput,
   AnalyticsEvent,
   Conversation,
+  ConversationListFilter,
+  ConversationMessage,
+  ConversationPage,
+  ConversationSummary,
   CreateAgentInput,
   CreateConversationInput,
+  CreateConversationMessageInput,
   CreateKnowledgeInput,
   CreateSkillInput,
   CreateExternalMcpServerInput,
@@ -355,6 +360,48 @@ function rowToConversation(row: any): Conversation {
   };
 }
 
+function rowToConversationMessage(row: any): ConversationMessage {
+  return {
+    id: row.id,
+    conversationId: row.conversation_id,
+    agentId: row.agent_id,
+    userId: asNullableString(row.user_id),
+    role: row.role,
+    channel: row.channel ?? 'whatsapp',
+    text: row.text ?? '',
+    metadata: json(row.metadata, {}),
+    createdAt: row.created_at,
+  };
+}
+
+function contactFromMetadata(metadata: Record<string, unknown>, userId: string | null): {
+  contactName: string | null;
+  contactPhone: string | null;
+} {
+  const name = asNullableString(metadata.contactName)
+    ?? asNullableString(metadata.pushName)
+    ?? asNullableString(metadata.name);
+  const phone = asNullableString(metadata.phone)
+    ?? asNullableString(metadata.contactPhone)
+    ?? asNullableString(metadata.msisdn)
+    ?? userId;
+  return { contactName: name, contactPhone: phone };
+}
+
+function rowToConversationSummary(row: any): ConversationSummary {
+  const conversation = rowToConversation(row);
+  const { contactName, contactPhone } = contactFromMetadata(conversation.metadata, conversation.userId);
+  return {
+    ...conversation,
+    messageCount: Number(row.message_count ?? 0),
+    lastMessage: asNullableString(row.last_message),
+    lastMessageRole: asNullableString(row.last_message_role) as ConversationMessage['role'] | null,
+    lastMessageAt: asNullableString(row.last_message_at),
+    contactName,
+    contactPhone,
+  };
+}
+
 function rowToEvent(row: any): AnalyticsEvent {
   return {
     id: row.id,
@@ -537,6 +584,19 @@ const SCHEMA: string[] = [
   `CREATE INDEX IF NOT EXISTS bunwa_conversations_agent_idx ON bunwa_conversations (agent_id)`,
   `CREATE INDEX IF NOT EXISTS bunwa_conversations_user_idx ON bunwa_conversations (user_id)`,
   `CREATE INDEX IF NOT EXISTS bunwa_conversations_started_idx ON bunwa_conversations (started_at)`,
+  `CREATE TABLE IF NOT EXISTS bunwa_conversation_messages (
+    id TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL,
+    agent_id TEXT NOT NULL,
+    user_id TEXT,
+    role TEXT NOT NULL,
+    channel TEXT NOT NULL DEFAULT 'whatsapp',
+    text TEXT NOT NULL DEFAULT '',
+    metadata TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS bunwa_conversation_messages_conversation_idx ON bunwa_conversation_messages (conversation_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS bunwa_conversation_messages_agent_idx ON bunwa_conversation_messages (agent_id, created_at)`,
   `CREATE TABLE IF NOT EXISTS bunwa_analytics_events (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,
@@ -788,6 +848,9 @@ export class SqlAgentStore implements AgentStore {
     }
     await this.client.execute(`DELETE FROM bunwa_knowledge_chunks WHERE agent_id = ?`, [id]);
     await this.client.execute(`DELETE FROM bunwa_knowledge_sources WHERE agent_id = ?`, [id]);
+    await this.client.execute(`DELETE FROM bunwa_conversation_messages WHERE agent_id = ?`, [id]);
+    await this.client.execute(`DELETE FROM bunwa_conversations WHERE agent_id = ?`, [id]);
+    await this.client.execute(`DELETE FROM bunwa_analytics_events WHERE agent_id = ?`, [id]);
     await this.client.execute(`DELETE FROM bunwa_agents WHERE id = ?`, [id]);
     return true;
   }
@@ -1819,6 +1882,133 @@ export class SqlAgentStore implements AgentStore {
     const sql = `SELECT * FROM bunwa_conversations${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY started_at DESC LIMIT ${limit}`;
     const rows = await this.client.query(sql, params);
     return rows.map(rowToConversation);
+  }
+
+  async listConversationSummaries(filter: ConversationListFilter = {}): Promise<ConversationPage> {
+    const where: string[] = [];
+    const params: any[] = [];
+    if (filter.agentId) {
+      where.push('c.agent_id = ?');
+      params.push(filter.agentId);
+    }
+    if (filter.channel) {
+      where.push('c.channel = ?');
+      params.push(filter.channel);
+    }
+    if (filter.status) {
+      where.push('c.status = ?');
+      params.push(filter.status);
+    }
+    if (filter.from) {
+      where.push('c.started_at >= ?');
+      params.push(filter.from);
+    }
+    if (filter.to) {
+      where.push('c.started_at <= ?');
+      params.push(filter.to);
+    }
+    const q = filter.q?.trim().slice(0, 200);
+    if (q) {
+      where.push(`(
+        c.id LIKE ? OR c.user_id LIKE ? OR c.metadata LIKE ?
+        OR EXISTS (
+          SELECT 1 FROM bunwa_conversation_messages sm
+          WHERE sm.conversation_id = c.id AND sm.text LIKE ?
+        )
+      )`);
+      const like = `%${q}%`;
+      params.push(like, like, like, like);
+    }
+
+    const page = Math.max(1, Math.floor(filter.page ?? 1));
+    const pageSize = Math.max(1, Math.min(Math.floor(filter.pageSize ?? 20), 100));
+    const offset = (page - 1) * pageSize;
+    const whereSql = where.length ? ` WHERE ${where.join(' AND ')}` : '';
+    const lastMessageAt = `(
+      SELECT MAX(m.created_at) FROM bunwa_conversation_messages m
+      WHERE m.conversation_id = c.id
+    )`;
+
+    const rows = await this.client.query(
+      `SELECT c.*,
+        (SELECT COUNT(*) FROM bunwa_conversation_messages m WHERE m.conversation_id = c.id) AS message_count,
+        (SELECT m.text FROM bunwa_conversation_messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message,
+        (SELECT m.role FROM bunwa_conversation_messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message_role,
+        ${lastMessageAt} AS last_message_at
+       FROM bunwa_conversations c${whereSql}
+       ORDER BY COALESCE(${lastMessageAt}, c.started_at) DESC
+       LIMIT ${pageSize} OFFSET ${offset}`,
+      params,
+    );
+    const totalRows = await this.client.query(
+      `SELECT COUNT(*) AS total FROM bunwa_conversations c${whereSql}`,
+      params,
+    );
+    const total = Number(totalRows[0]?.total ?? 0);
+    return {
+      conversations: rows.map(rowToConversationSummary),
+      total,
+      page,
+      pageSize,
+    };
+  }
+
+  async addConversationMessage(input: CreateConversationMessageInput): Promise<ConversationMessage> {
+    const message: ConversationMessage = {
+      id: Bun.randomUUIDv7(),
+      conversationId: input.conversationId,
+      agentId: input.agentId,
+      userId: input.userId ?? null,
+      role: input.role,
+      channel: input.channel ?? 'whatsapp',
+      text: input.text,
+      metadata: input.metadata ?? {},
+      createdAt: input.createdAt ?? now(),
+    };
+    await this.client.execute(
+      `INSERT INTO bunwa_conversation_messages
+        (id, conversation_id, agent_id, user_id, role, channel, text, metadata, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        message.id,
+        message.conversationId,
+        message.agentId,
+        message.userId,
+        message.role,
+        message.channel,
+        message.text,
+        JSON.stringify(message.metadata),
+        message.createdAt,
+      ],
+    );
+    return message;
+  }
+
+  async listConversationMessages(
+    conversationId: string,
+    filter: { limit?: number; before?: string; after?: string } = {},
+  ): Promise<ConversationMessage[]> {
+    const limit = Math.max(1, Math.min(filter.limit ?? 200, 500));
+    const where = ['conversation_id = ?'];
+    const params: any[] = [conversationId];
+    if (filter.after) {
+      where.push('created_at > ?');
+      params.push(filter.after);
+    }
+    if (filter.before) {
+      where.push('created_at < ?');
+      params.push(filter.before);
+    }
+    const ascending = Boolean(filter.after);
+    const rows = await this.client.query(
+      `SELECT * FROM bunwa_conversation_messages
+       WHERE ${where.join(' AND ')}
+       ORDER BY created_at ${ascending ? 'ASC' : 'DESC'}
+       LIMIT ${limit}`,
+      params,
+    );
+    const messages = rows.map(rowToConversationMessage);
+    return ascending ? messages : messages.reverse();
   }
 
   async closeConversation(id: string, endedAt = now()): Promise<Conversation | null> {

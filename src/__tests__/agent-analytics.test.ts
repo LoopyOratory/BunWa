@@ -60,6 +60,13 @@ describe('agent analytics', () => {
     expect(new Date(window.previousTo).getTime()).toBe(new Date(window.from).getTime());
   });
 
+  test('treats date-only boundaries as whole days', () => {
+    const window = resolveAnalyticsWindow('7d', '2026-11-01', '2026-11-03', now);
+    expect(window.from).toBe('2026-11-01T00:00:00.000Z');
+    expect(window.to).toBe('2026-11-03T23:59:59.999Z');
+    expect(window.previousTo).toBe('2026-11-01T00:00:00.000Z');
+  });
+
   test('computes KPIs, funnel, topics, tool health and knowledge gaps', () => {
     const window = resolveAnalyticsWindow('7d', null, null, now);
     const agents = [agent('a1', 'Vei Support'), agent('a2', 'Kofi Sales', 'paused')];
