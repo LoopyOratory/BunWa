@@ -233,7 +233,7 @@ The analytics page includes a TanStack table over every conversation in the
 selected range. Rows show contact, agent, channel, status, last message,
 message count, outcome, rating, and start time; clicking a row (or its arrow)
 opens a transcript sheet that refreshes every few seconds while **Live
-refresh** is on.
+refresh** is on. The table defaults to 25 rows and supports 25/50/100 per page.
 
 - `GET /api/agents/conversations?range=7d&agentId=…&channel=…&status=…&from=…&to=…&q=…&page=1&pageSize=10`
   returns `{ conversations, total, page, pageSize }`. `q` searches the

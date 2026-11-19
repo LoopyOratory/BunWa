@@ -5,7 +5,10 @@ import {
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   MessageCircle,
+  MessagesSquare,
   Phone,
   Radio,
   Search,
@@ -35,7 +38,6 @@ import {
 } from "@/components/ui/sheet"
 import { Switch } from "@/components/ui/switch"
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
@@ -54,7 +56,7 @@ import {
   type ConversationSummary,
 } from "@/lib/agents-api"
 
-const PAGE_SIZE = 10
+const PAGE_SIZE = 25
 const LIST_POLL_MS = 5_000
 const TRANSCRIPT_POLL_MS = 4_000
 
@@ -85,15 +87,20 @@ function conversationOutcome(row: ConversationSummary): string {
 
 function StatusBadge({ status, channel }: { status: ConversationSummary["status"]; channel: string }) {
   const ChannelIcon = channel === "voice" ? Phone : MessageCircle
-  const tone = status === "open" ? "bg-success" : status === "closing" ? "bg-warning" : "bg-muted-foreground/50"
+  const tone =
+    status === "open"
+      ? "border-success-border/70 bg-success-bg/70 text-success-foreground"
+      : status === "closing"
+        ? "border-warning-border/70 bg-warning-bg/70 text-warning-foreground"
+        : "border-border/70 bg-muted/45 text-muted-foreground"
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-medium capitalize text-muted-foreground">
-      <span title={channel === "voice" ? "Voice" : "Chat"} className="inline-flex">
+    <Badge variant="outline" className={cn("gap-1.5 border px-2 py-0.5 font-medium capitalize", tone)}>
+      <span className="inline-flex" title={channel === "voice" ? "Voice" : "Chat"}>
         <ChannelIcon className="size-3.5" aria-hidden />
       </span>
-      <span className={cn("size-1.5 rounded-full", tone)} />
+      <span className={cn("size-1.5 rounded-full", status === "open" ? "bg-success" : status === "closing" ? "bg-warning" : "bg-muted-foreground/45")} />
       {status}
-    </span>
+    </Badge>
   )
 }
 
@@ -298,6 +305,7 @@ export function ConversationHistoryTable({
   agentId,
   channel,
   range,
+  rangeLabel,
   from,
   to,
   onSelectAgent,
@@ -306,6 +314,7 @@ export function ConversationHistoryTable({
   agentId: string | null
   channel: AnalyticsChannel
   range: AnalyticsRangeKey
+  rangeLabel: string
   from: string | null
   to: string | null
   onSelectAgent?: (agentId: string) => void
@@ -416,7 +425,7 @@ export function ConversationHistoryTable({
         id: "lastMessage",
         header: "Last message",
         cell: ({ row }) => (
-          <p className="max-w-56 truncate text-sm text-muted-foreground">
+          <p className="max-w-[13rem] truncate text-sm text-muted-foreground">
             {row.original.lastMessage ? (
               <>
                 <span className="font-medium text-foreground/75">
@@ -521,32 +530,40 @@ export function ConversationHistoryTable({
 
   return (
     <>
-      <Card className="glass-card gap-0 overflow-hidden rounded-lg p-0">
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 px-5 py-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-heading text-sm font-semibold tracking-tight">Chat history &amp; transcripts</h3>
-              {live && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-success-bg px-2 py-0.5 text-[10px] font-semibold text-success-foreground">
-                  <Radio className="size-3 animate-pulse" />
-                  Live
-                </span>
-              )}
+      <Card className="glass-card gap-0 overflow-hidden rounded-xl border border-border/70 p-0 shadow-sm">
+        <div className="border-b border-border/60 bg-gradient-to-br from-primary-soft/55 via-card/45 to-card/20 px-5 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-card/80 text-primary-strong shadow-xs">
+                <MessagesSquare className="size-5" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-heading text-base font-semibold tracking-tight">Chat history &amp; transcripts</h3>
+                  <Badge variant="outline" className="tabular-nums">{formatNumber(total)}</Badge>
+                  {live && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-success-border/60 bg-success-bg/80 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-success-foreground">
+                      <Radio className="size-3 animate-pulse" />
+                      Live
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {rangeLabel} · open a row to read the full transcript.
+                </p>
+              </div>
             </div>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Every agent conversation in the selected range. Open a row to read the transcript.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Label htmlFor="live-transcripts" className="cursor-pointer text-xs font-medium text-muted-foreground">
-              Live refresh
-            </Label>
-            <Switch id="live-transcripts" checked={live} onCheckedChange={setLive} aria-label="Live refresh chat history" />
+            <div className="flex items-center gap-2 rounded-full border border-border/70 bg-card/70 px-3 py-1.5 shadow-xs">
+              <Label htmlFor="live-transcripts" className="cursor-pointer text-xs font-medium text-muted-foreground">
+                Live refresh
+              </Label>
+              <Switch id="live-transcripts" checked={live} onCheckedChange={setLive} aria-label="Live refresh chat history" />
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-muted/20 px-5 py-3">
-          <div className="relative min-w-52 flex-1 sm:max-w-xs">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-card/35 px-5 py-3">
+          <div className="relative min-w-56 flex-1 sm:max-w-sm">
             <Search className="pointer-events-none absolute start-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
@@ -555,7 +572,7 @@ export function ConversationHistoryTable({
                 resetPage()
               }}
               placeholder="Search name, number or transcript"
-              className="h-8 ps-8 text-xs"
+              className="h-9 ps-8 text-xs"
               aria-label="Search chat history"
             />
           </div>
@@ -566,7 +583,7 @@ export function ConversationHistoryTable({
               resetPage()
             }}
           >
-            <SelectTrigger className="h-8 w-32 text-xs" aria-label="Filter by status">
+            <SelectTrigger className="h-9 w-36 text-xs" aria-label="Filter by status">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -576,22 +593,9 @@ export function ConversationHistoryTable({
               <SelectItem value="closed">Closed</SelectItem>
             </SelectContent>
           </Select>
-          <Select
-            value={String(pagination.pageSize)}
-            onValueChange={(value) => {
-              setPagination({ pageIndex: 0, pageSize: Number(value) })
-            }}
-          >
-            <SelectTrigger className="h-8 w-24 text-xs" aria-label="Rows per page">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="10">10 rows</SelectItem>
-              <SelectItem value="20">20 rows</SelectItem>
-              <SelectItem value="50">50 rows</SelectItem>
-            </SelectContent>
-          </Select>
-          <span className="ms-auto text-[11px] text-muted-foreground">{formatNumber(total)} conversations</span>
+          <span className="ms-auto text-[11px] font-medium text-muted-foreground">
+            {formatNumber(total)} conversation{total === 1 ? "" : "s"}
+          </span>
         </div>
 
         {error && !result ? (
@@ -614,66 +618,98 @@ export function ConversationHistoryTable({
           </div>
         ) : (
           <>
-            <Table>
-              <TableHeader>
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <TableHead key={header.id} className="px-1.5 py-2.5">
-                        {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableHeader>
-              <TableBody>
-                {table.getRowModel().rows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={columns.length} className="py-14 text-center">
-                      <div className="mx-auto flex max-w-sm flex-col items-center gap-2">
-                        <MessageCircle className="size-7 text-muted-foreground" />
-                        <p className="text-sm font-medium">No conversations in this range</p>
-                        <p className="text-xs text-muted-foreground">
-                          Try a wider date range, or clear the status and search filters.
-                        </p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  table.getRowModel().rows.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      className="cursor-pointer"
-                      tabIndex={0}
-                      onClick={() => {
-                        setSelected(row.original)
-                        setTranscriptOpen(true)
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.target !== event.currentTarget) return
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault()
-                          setSelected(row.original)
-                          setTranscriptOpen(true)
-                        }
-                      }}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id} className="px-1.5 py-3">
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
+            <div className="max-h-[560px] overflow-auto">
+              <table className="w-full caption-bottom text-sm">
+                <TableHeader className="sticky top-0 z-10 bg-card/95 shadow-[0_1px_0_0_var(--border)] backdrop-blur-sm">
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <TableRow key={headerGroup.id} className="hover:bg-transparent">
+                      {headerGroup.headers.map((header) => (
+                        <TableHead key={header.id} className="h-10 px-1.5 py-2.5">
+                          {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                        </TableHead>
                       ))}
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  ))}
+                </TableHeader>
+                <TableBody>
+                  {table.getRowModel().rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={columns.length} className="py-14 text-center">
+                        <div className="mx-auto flex max-w-sm flex-col items-center gap-2">
+                          <MessageCircle className="size-7 text-muted-foreground" />
+                          <p className="text-sm font-medium">No conversations in this range</p>
+                          <p className="text-xs text-muted-foreground">
+                            Try a wider date range, or clear the status and search filters.
+                          </p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    table.getRowModel().rows.map((row) => (
+                      <TableRow
+                        key={row.id}
+                        className={cn(
+                          "group cursor-pointer",
+                          row.original.status === "open" && "border-s-2 border-s-success/55",
+                        )}
+                        tabIndex={0}
+                        onClick={() => {
+                          setSelected(row.original)
+                          setTranscriptOpen(true)
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.target !== event.currentTarget) return
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault()
+                            setSelected(row.original)
+                            setTranscriptOpen(true)
+                          }
+                        }}
+                      >
+                        {row.getVisibleCells().map((cell) => (
+                          <TableCell key={cell.id} className="px-1.5 py-3">
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </table>
+            </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 px-5 py-3">
-              <p className="text-xs text-muted-foreground">
-                {total === 0 ? "No conversations" : `${formatNumber(start)}–${formatNumber(end)} of ${formatNumber(total)}`}
-              </p>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-medium text-muted-foreground">Rows per page</span>
+                <Select
+                  value={String(pagination.pageSize)}
+                  onValueChange={(value) => {
+                    setPagination({ pageIndex: 0, pageSize: Number(value) })
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-24 text-xs" aria-label="Rows per page">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="ms-1 text-xs tabular-nums text-muted-foreground">
+                  {total === 0 ? "No conversations" : `${formatNumber(start)}–${formatNumber(end)} of ${formatNumber(total)}`}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label="First page"
+                  onClick={() => table.firstPage()}
+                  disabled={!table.getCanPreviousPage()}
+                >
+                  <ChevronsLeft className="size-3.5" />
+                </Button>
                 <Button
                   variant="outline"
                   size="icon-sm"
@@ -683,8 +719,8 @@ export function ConversationHistoryTable({
                 >
                   <ChevronLeft className="size-3.5" />
                 </Button>
-                <span className="min-w-16 text-center text-xs tabular-nums text-muted-foreground">
-                  {pagination.pageIndex + 1} / {pageCount}
+                <span className="min-w-20 px-1 text-center text-xs tabular-nums text-muted-foreground">
+                  Page {pagination.pageIndex + 1} of {pageCount}
                 </span>
                 <Button
                   variant="outline"
@@ -694,6 +730,15 @@ export function ConversationHistoryTable({
                   disabled={!table.getCanNextPage()}
                 >
                   <ChevronRight className="size-3.5" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label="Last page"
+                  onClick={() => table.lastPage()}
+                  disabled={!table.getCanNextPage()}
+                >
+                  <ChevronsRight className="size-3.5" />
                 </Button>
               </div>
             </div>

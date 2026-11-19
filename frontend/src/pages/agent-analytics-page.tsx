@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
 import {
   Bot,
+  CalendarRange,
   CheckCircle2,
   Download,
   Handshake,
@@ -16,6 +17,7 @@ import {
 import { toast } from "sonner"
 import { PageLayout } from "@/components/page-layout"
 import { EmptyState, ErrorState, Skeleton } from "@/components/primitives"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -206,7 +208,29 @@ export function AgentAnalyticsPage() {
   return (
     <PageLayout
       title="Agent analytics"
-      description="How your chat and voice agents perform, where they need help, and what they cost."
+      eyebrow="Overview · Agent performance"
+      status={
+        <span
+          className="inline-flex items-center gap-1.5 rounded-full border border-success-border/60 bg-success-bg px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-success-foreground"
+          title={data ? `Updated ${new Date(data.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Waiting for data"}
+        >
+          <span className="size-1.5 animate-pulse rounded-full bg-success" />
+          Live
+        </span>
+      }
+      meta={
+        <>
+          <Badge variant="outline" className="gap-1.5 font-medium">
+            <Bot className="size-3.5 text-primary-strong" />
+            {selectedAgent?.name ?? "All agents"}
+          </Badge>
+          <Badge variant="outline" className="gap-1.5 font-medium">
+            <CalendarRange className="size-3.5 text-primary-strong" />
+            {activeRangeLabel}
+          </Badge>
+        </>
+      }
+      description="How chat and voice agents perform, where they need help, and what they cost."
       actions={
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => void load(true)} disabled={refreshing || isLoading}>
@@ -382,6 +406,7 @@ export function AgentAnalyticsPage() {
               agentId={agentId}
               channel={channel}
               range={range}
+              rangeLabel={activeRangeLabel}
               from={fromDate}
               to={toDate}
               onSelectAgent={selectAgent}
@@ -397,10 +422,6 @@ export function AgentAnalyticsPage() {
               <RecentConversationsPanel rows={data.recentConversations} onSelectAgent={selectAgent} />
             </div>
 
-            <p className="pb-2 text-right text-[11px] text-muted-foreground">
-              {selectedAgent ? `${selectedAgent.name} · ` : "All agents · "}
-              {activeRangeLabel} · compared with previous period · updated {new Date(data.generatedAt).toLocaleTimeString()}
-            </p>
           </>
         ) : null}
       </div>

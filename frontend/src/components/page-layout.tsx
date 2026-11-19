@@ -4,6 +4,9 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 
 interface PageLayoutProps {
   title: string
+  eyebrow?: string
+  status?: ReactNode
+  meta?: ReactNode
   description?: ReactNode
   actions?: ReactNode
   children: ReactNode
@@ -17,7 +20,7 @@ interface PageLayoutProps {
  * The theme control lives in the sidebar footer only. It used to be duplicated
  * here, which meant two controls for one setting.
  */
-export function PageLayout({ title, description, actions, children }: PageLayoutProps) {
+export function PageLayout({ title, eyebrow, status, meta, description, actions, children }: PageLayoutProps) {
   useEffect(() => {
     document.title = `${title} · BunWa`
   }, [title])
@@ -34,15 +37,24 @@ export function PageLayout({ title, description, actions, children }: PageLayout
         initial={reduce ? false : { opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className="page-header z-20 flex shrink-0 flex-wrap items-center gap-3 px-4 py-3 sm:px-6"
+        className="page-header z-20 flex shrink-0 flex-wrap items-start gap-3 px-4 py-3.5 sm:px-6"
       >
-        <SidebarTrigger className="md:hidden" />
+        <SidebarTrigger className="mt-1 md:hidden" />
         <div className="min-w-0 flex-1">
-          <h1 className="truncate font-heading text-3xl font-semibold tracking-tight">{title}</h1>
-          {description && <div className="mt-0.5 max-w-2xl text-sm text-muted-foreground">{description}</div>}
+          {eyebrow && (
+            <p className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.22em] text-primary-strong/75">{eyebrow}</p>
+          )}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <h1 className="truncate font-heading text-2xl font-semibold leading-tight tracking-tight sm:text-[1.9rem]">{title}</h1>
+            {status}
+          </div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            {description && <div className="max-w-2xl text-sm/relaxed text-muted-foreground">{description}</div>}
+            {meta && <div className="flex flex-wrap items-center gap-2">{meta}</div>}
+          </div>
         </div>
         {actions && (
-          <div className="flex w-full items-center justify-end gap-2 sm:w-auto">{actions}</div>
+          <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto sm:self-center">{actions}</div>
         )}
       </motion.header>
 
