@@ -43,10 +43,12 @@ const env = {
   latency: Bun.env.FISH_BRIDGE_LATENCY === '1',
 };
 
-/** Stateful 16k -> 48k linear upsampler. */
+/** Stateful PCM16 resampler. Defaults to the WhatsApp 16 kHz caller rate. */
 export class Upsampler {
   private previous: number | null = null;
   private position = 0;
+
+  constructor(private readonly inputRate = CALL_RATE) {}
 
   push(chunk: Buffer): Buffer {
     const count = Math.floor(chunk.length / 2);
@@ -64,7 +66,7 @@ export class Upsampler {
       input.set(samples, 1);
     }
 
-    const ratio = CALL_RATE / LIVE_RATE;
+    const ratio = this.inputRate / LIVE_RATE;
     const out: number[] = [];
     while (this.position < input.length - 1) {
       const index = Math.floor(this.position);
@@ -78,6 +80,42 @@ export class Upsampler {
     const output = Buffer.alloc(out.length * 2);
     for (let i = 0; i < out.length; i++) output.writeInt16LE(out[i], i * 2);
     return output;
+  }
+}
+
+/**
+ * Turns arbitrary PCM48 byte chunks into exact 20 ms LiveKit frames.
+ *
+ * ScriptProcessor delivers 4096-sample bursts, which upsample to 12288
+ * samples: 12 full frames plus a 768-sample remainder. Dropping that remainder
+ * every burst punches a 16 ms hole into the caller's audio, which the agent
+ * hears as choppiness. Carry it into the next push instead.
+ */
+export class Pcm48Framer {
+  private pending = Buffer.alloc(0);
+
+  constructor(private readonly frameSamples = FRAME_SAMPLES) {}
+
+  push(pcm: Buffer): Buffer[] {
+    if (!pcm.length) return [];
+    const bytesPerFrame = this.frameSamples * 2;
+    this.pending = this.pending.length ? Buffer.concat([this.pending, pcm]) : pcm;
+
+    const frames: Buffer[] = [];
+    let offset = 0;
+    while (offset + bytesPerFrame <= this.pending.length) {
+      frames.push(this.pending.subarray(offset, offset + bytesPerFrame));
+      offset += bytesPerFrame;
+    }
+    if (offset > 0) {
+      // Copy the remainder so a large burst buffer is not retained.
+      this.pending = Buffer.from(this.pending.subarray(offset));
+    }
+    return frames;
+  }
+
+  get bufferedBytes(): number {
+    return this.pending.length;
   }
 }
 
@@ -134,6 +172,7 @@ export class FishBridge {
   private callerFrames = 0;
   private agentFrames = 0;
   private outboundQueue: Buffer[] = [];
+  private framer = new Pcm48Framer();
   private callerProc: ReturnType<typeof Bun.spawn> | null = null;
   private callerSpeechAt = 0;
   private callerSpeechEndAt = 0;
@@ -313,7 +352,8 @@ export class FishBridge {
   }
 
   private async pumpCallerAudio(): Promise<void> {
-    const upsampler = new Upsampler();
+    let upsampler: Upsampler | null = null;
+    let inputRate = 0;
     while (!this.stopping) {
       try {
         // Bun's fetch reader stalled after the first SSE chunk against Hono's
@@ -346,11 +386,28 @@ export class FishBridge {
             try { chunk = JSON.parse(line.slice(5).trim()); } catch { continue; }
             if (!chunk?.data) continue;
             const pcm16 = Buffer.from(chunk.data, 'base64');
+            const rate = Number(/rate=(\d+)/i.exec(String(chunk.mimeType || ''))?.[1]) || CALL_RATE;
+            if (!upsampler || rate !== inputRate) {
+              inputRate = rate;
+              upsampler = new Upsampler(inputRate);
+              console.log('caller audio rate', inputRate, 'mimeType', chunk.mimeType || 'unknown');
+            }
             this.trackCaller(pcm16);
             this.callerChunks += 1;
             this.callerBytes += pcm16.length;
             if (this.callerChunks === 1 || this.callerChunks % 100 === 0) {
-              console.log('caller chunks', this.callerChunks, 'bytes', this.callerBytes);
+              console.log(
+                'caller chunks',
+                this.callerChunks,
+                'bytes',
+                this.callerBytes,
+                'chunk bytes',
+                pcm16.length,
+                'samples',
+                pcm16.length / 2,
+                'rate',
+                inputRate,
+              );
             }
             const pcm48 = upsampler.push(pcm16);
             this.enqueuePcm48(pcm48);
@@ -369,13 +426,13 @@ export class FishBridge {
 
   private enqueuePcm48(pcm: Buffer): void {
     if (!pcm.length) return;
-    for (let offset = 0; offset + FRAME_SAMPLES * 2 <= pcm.length; offset += FRAME_SAMPLES * 2) {
-      this.outboundQueue.push(pcm.subarray(offset, offset + FRAME_SAMPLES * 2));
-    }
+    for (const frame of this.framer.push(pcm)) this.outboundQueue.push(frame);
     // Keep at most ~2 s of caller audio; a slow/blocked agent must not grow
     // memory without bound or stall the SSE reader.
     if (this.outboundQueue.length > 100) {
-      this.outboundQueue.splice(0, this.outboundQueue.length - 100);
+      const dropped = this.outboundQueue.length - 100;
+      this.outboundQueue.splice(0, dropped);
+      console.log('caller queue overflow, dropped frames', dropped, 'buffered bytes', this.framer.bufferedBytes);
     }
   }
 
@@ -396,7 +453,11 @@ export class FishBridge {
       await this.source.captureFrame(new AudioFrame(samples, LIVE_RATE, 1, FRAME_SAMPLES));
       const elapsed = performance.now() - started;
       if (elapsed > 100) console.log('captureFrame blocked', Math.round(elapsed), 'ms');
-      await Bun.sleep(20);
+      // Keep a 20 ms cadence even when captureFrame itself blocks. Sleeping a
+      // fixed 20 ms on top of capture time makes the producer fall behind and
+      // the 2 s queue then drops the oldest frames.
+      const wait = 20 - elapsed;
+      if (wait > 0) await Bun.sleep(wait);
     }
   }
 
