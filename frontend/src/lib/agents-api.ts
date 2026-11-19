@@ -82,6 +82,23 @@ export interface McpToolInfo {
   category?: string
   destructive?: boolean
   sessionScoped?: boolean
+  serverId?: string
+  serverName?: string
+  remoteName?: string
+}
+
+export interface ExternalMcpToolInfo {
+  id: string
+  serverId: string
+  serverName: string
+  name: string
+  qualifiedName: string
+  description: string
+  inputSchema: unknown
+  annotations: { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean } | null
+  tier: "read" | "write"
+  destructive: boolean
+  enabled: boolean
 }
 
 export interface ExternalMcpServerInfo {
@@ -89,9 +106,12 @@ export interface ExternalMcpServerInfo {
   name: string
   description: string
   url: string
-  headers: Record<string, string>
+  headerNames: string[]
   enabled: boolean
+  lastRefreshedAt: string | null
+  lastError: string | null
   toolCount: number
+  tools: ExternalMcpToolInfo[]
   createdAt: string
   updatedAt: string
 }
@@ -101,6 +121,11 @@ export interface AgentMcpConfig {
   allowedTools: string[]
   deniedTools: string[]
   destructiveOps: boolean
+  hasApiKey?: boolean
+  canRevealKey?: boolean
+  apiKeyPrefix?: string | null
+  apiKeyCreatedAt?: string | null
+  apiKeyLastUsedAt?: string | null
 }
 
 export interface ModelSettings {
@@ -355,6 +380,17 @@ export const agentApi = {
       body: JSON.stringify(input),
     }).then((r) => r.mcp),
 
+  generateAgentMcpKey: (id: string) =>
+    request<{ key: string; prefix: string; createdAt: string }>(`/api/agents/${id}/mcp/key`, {
+      method: "POST",
+    }),
+
+  revealAgentMcpKey: (id: string) =>
+    request<{ key: string; prefix: string | null }>(`/api/agents/${id}/mcp/key`),
+
+  deleteAgentMcpKey: (id: string) =>
+    request<{ result: boolean }>(`/api/agents/${id}/mcp/key`, { method: "DELETE" }).then((r) => r.result),
+
   externalMcpServers: () =>
     request<{ servers: ExternalMcpServerInfo[] }>("/api/mcp/external/servers").then((r) => r.servers),
 
@@ -389,7 +425,10 @@ export const agentApi = {
     request<{ result: boolean }>(`/api/mcp/external/servers/${id}`, { method: "DELETE" }).then((r) => r.result),
 
   refreshExternalMcpServer: (id: string) =>
-    request<{ tools: unknown[] }>(`/api/mcp/external/servers/${id}/refresh`, { method: "POST" }).then((r) => r.tools),
+    request<{ tools: ExternalMcpToolInfo[]; server?: ExternalMcpServerInfo }>(`/api/mcp/external/servers/${id}/refresh`, { method: "POST" }).then((r) => r.tools),
+
+  revealExternalMcpServerHeaders: (id: string) =>
+    request<{ headers: Record<string, string> }>(`/api/mcp/external/servers/${id}/headers`).then((r) => r.headers),
 
   events: (filter: { agentId?: string; conversationId?: string; type?: string; limit?: number } = {}) => {
     const params = new URLSearchParams()

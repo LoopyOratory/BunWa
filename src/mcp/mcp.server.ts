@@ -77,9 +77,10 @@ export function validateApiKey(rawKey: string | undefined, configuredKey: string
 export function auditToolCall(
   tool: ToolDescriptor,
   input: Record<string, unknown>,
-  credential: 'global-key' | 'session-key',
+  credential: 'global-key' | 'session-key' | 'agent-key',
   outcome: 'ok' | 'failed',
   error?: unknown,
+  agentId?: string,
 ): void {
   if (tool.tier !== 'write') return;
   try {
@@ -92,6 +93,7 @@ export function auditToolCall(
         category: tool.category,
         destructive: tool.destructive ?? false,
         credential,
+        ...(agentId ? { agentId } : {}),
         source: 'mcp',
         ...(outcome === 'failed' ? sendFailureMetadata(error) : {}),
       },
@@ -109,6 +111,26 @@ export function auditToolCall(
 }
 
 /**
+ * Resolve a raw `sk_agent_...` key to the agent's MCP policy. Used both for
+ * tool-call authorization and for filtering `tools/list`, so an agent never
+ * even discovers tools it cannot call.
+ */
+async function resolveAgentScopeForKey(rawKey: string | undefined): Promise<{ id: string; mcp: SessionConfig['mcp'] } | undefined> {
+  if (!rawKey) return undefined;
+  const providedHash = new CryptoHasher('sha256').update(rawKey).digest('hex');
+  const agents = await agentService.listAgents();
+  const agent = agents.find((candidate) => {
+    const mcp = candidate.settings?.mcp as Record<string, unknown> | undefined;
+    return typeof mcp?.apiKeyHash === 'string' && safeCompare(mcp.apiKeyHash, providedHash);
+  });
+  if (!agent) return undefined;
+  return {
+    id: agent.id,
+    mcp: (agent.settings?.mcp as SessionConfig['mcp'] | undefined) ?? undefined,
+  };
+}
+
+/**
  * Check whether a tool is allowed for the given session configuration.
  * Global disabled tools are checked separately before calling this.
  */
@@ -123,7 +145,8 @@ export function isToolAllowed(
 
   // Deny list (explicit deny wins everything)
   if (mcpConfig?.deniedTools) {
-    if (mcpConfig.deniedTools.includes(tool.name)) {
+    const names = tool.remoteName ? [tool.name, tool.remoteName] : [tool.name];
+    if (names.some((name) => mcpConfig.deniedTools!.includes(name))) {
       return { allowed: false, reason: `Tool '${tool.name}' is denied for this session` };
     }
     if (tool.category && mcpConfig.deniedTools.includes(tool.category)) {
@@ -138,7 +161,8 @@ export function isToolAllowed(
 
   // Allow list mode — if set, tool must be explicitly allowed
   if (mcpConfig?.allowedTools && mcpConfig.allowedTools.length > 0) {
-    if (mcpConfig.allowedTools.includes(tool.name)) {
+    const names = tool.remoteName ? [tool.name, tool.remoteName] : [tool.name];
+    if (names.some((name) => mcpConfig.allowedTools!.includes(name))) {
       return { allowed: true };
     }
     if (tool.category && mcpConfig.allowedTools.includes(tool.category)) {
@@ -186,27 +210,33 @@ async function buildServer(
       async (input: Record<string, unknown>, extra: ToolExtra) => {
         const rawKey = extractApiKey(extra);
         try {
-          // Auth: global key first, then per-session hashed keys
+          // Auth: global key first, then agent keys, then per-session keys.
           const globalOk = validateApiKey(rawKey, configuredKey);
           let scopedSession: string | undefined;
+          let agentScope: { id: string; mcp: SessionConfig['mcp'] } | undefined;
 
           if (!globalOk && rawKey) {
-            const providedHash = new CryptoHasher('sha256').update(rawKey).digest('hex');
-            const allSessions = await sessionManager.getSessions();
-            for (const s of allSessions) {
-              try {
-                const cfg = sessionManager.getSessionConfig(s.name);
-                if (cfg?.mcp?.apiKeyHash && safeCompare(cfg.mcp.apiKeyHash, providedHash)) {
-                  scopedSession = s.name;
-                  break;
+            if (rawKey.startsWith('sk_agent_')) {
+              agentScope = await resolveAgentScopeForKey(rawKey);
+            }
+            if (!agentScope) {
+              const allSessions = await sessionManager.getSessions();
+              const providedHash = new CryptoHasher('sha256').update(rawKey).digest('hex');
+              for (const s of allSessions) {
+                try {
+                  const cfg = sessionManager.getSessionConfig(s.name);
+                  if (cfg?.mcp?.apiKeyHash && safeCompare(cfg.mcp.apiKeyHash, providedHash)) {
+                    scopedSession = s.name;
+                    break;
+                  }
+                } catch {
+                  // Session config not available — skip
                 }
-              } catch {
-                // Session config not available — skip
               }
             }
           }
 
-          if (!globalOk && !scopedSession) {
+          if (!globalOk && !scopedSession && !agentScope) {
             return jsonToolResult(
               { success: false, name: 'Unauthorized', message: 'Invalid or missing API key' },
               true,
@@ -214,6 +244,39 @@ async function buildServer(
           }
 
           rateLimiter.check(rawKey || 'anonymous');
+
+          // An agent key is an explicit allowlist, never a blanket grant.
+          if (agentScope) {
+            if (agentScope.mcp?.enabled === false) {
+              return jsonToolResult(
+                { success: false, name: 'PermissionDenied', message: 'Tools are disabled for this agent' },
+                true,
+              );
+            }
+            if (!agentScope.mcp?.allowedTools?.length) {
+              return jsonToolResult(
+                { success: false, name: 'PermissionDenied', message: 'No tools are selected for this agent' },
+                true,
+              );
+            }
+            if (tool.sessionScoped) {
+              return jsonToolResult(
+                {
+                  success: false,
+                  name: 'PermissionDenied',
+                  message: `Tool '${tool.name}' is session-scoped; use a session MCP key for it`,
+                },
+                true,
+              );
+            }
+            const { allowed, reason } = isToolAllowed(tool, agentScope.mcp);
+            if (!allowed) {
+              return jsonToolResult(
+                { success: false, name: 'PermissionDenied', message: reason || 'Tool not allowed' },
+                true,
+              );
+            }
+          }
 
           // Auto-scoping: per-session key forces sessionId
           if (scopedSession && tool.sessionScoped) {
@@ -257,18 +320,18 @@ async function buildServer(
             }
           }
 
-          const credential = scopedSession ? 'session-key' : 'global-key';
+          const credential = agentScope ? 'agent-key' : scopedSession ? 'session-key' : 'global-key';
           try {
             // Strip media keys, file hashes, thumbnails and other wire
             // secrets: send results and raw message data carried them into
             // agent transcripts and logs.
             const result = redactWireSecrets(await tool.handler(input as never));
-            auditToolCall(tool, input, credential, 'ok');
+            auditToolCall(tool, input, credential, 'ok', undefined, agentScope?.id);
             return tool.resultDisposition === 'json'
               ? jsonToolResult(result as object)
               : smartToolResult(result as object);
           } catch (error) {
-            auditToolCall(tool, input, credential, 'failed', error);
+            auditToolCall(tool, input, credential, 'failed', error, agentScope?.id);
             return handleToolError(error);
           }
         } catch (error) {
@@ -338,7 +401,37 @@ export function createMcpRouter(
     }
 
     const requestTools: ToolDescriptor[] = buildAllTools(sessionManager, externalTools, externalServerLookup);
-    const requestRegistry = new ToolRegistryService(requestTools);
+    const requestKey =
+      c.req.header('x-api-key') ||
+      (c.req.header('authorization')?.toLowerCase().startsWith('bearer ')
+        ? c.req.header('authorization')!.slice(7).trim()
+        : undefined);
+    let visibleTools = requestTools;
+    if (requestKey && requestKey !== configuredKey && requestKey.startsWith('sk_agent_')) {
+      const agentScope = await resolveAgentScopeForKey(requestKey).catch(() => undefined);
+      if (agentScope) {
+        const allowed = new Set(agentScope.mcp?.allowedTools ?? []);
+        visibleTools =
+          agentScope.mcp?.enabled === false || allowed.size === 0
+            ? []
+            : requestTools.filter(
+                (tool) =>
+                  !tool.sessionScoped &&
+                  (allowed.has(tool.name) ||
+                    (tool.remoteName ? allowed.has(tool.remoteName) : false) ||
+                    (tool.category ? allowed.has(tool.category) : false)),
+              );
+      }
+    } else if (requestKey && requestKey !== configuredKey && requestKey.startsWith('sk_mcp_')) {
+      const providedHash = new CryptoHasher('sha256').update(requestKey).digest('hex');
+      const sessions = await sessionManager.getSessions();
+      const session = sessions.find((candidate) => {
+        const cfg = sessionManager.getSessionConfig(candidate.name);
+        return cfg?.mcp?.apiKeyHash && safeCompare(cfg.mcp.apiKeyHash, providedHash);
+      });
+      if (session) visibleTools = requestTools.filter((tool) => tool.sessionScoped);
+    }
+    const requestRegistry = new ToolRegistryService(visibleTools);
 
     const server = await buildServer(requestRegistry, sessionManager, configuredKey, rateLimiter, readOnly, serverInfo);
     const transport = new WebStandardStreamableHTTPServerTransport({

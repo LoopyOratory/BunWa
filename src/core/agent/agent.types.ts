@@ -337,6 +337,8 @@ export interface ExternalMcpServer {
   url: string;
   headers: Record<string, string>;
   enabled: boolean;
+  lastRefreshedAt: string | null;
+  lastError: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -367,7 +369,10 @@ export interface ExternalMcpTool {
   id: string;
   serverId: string;
   serverName: string;
+  /** Name on the remote MCP server. */
   name: string;
+  /** Stable, namespaced name BunWa advertises to agents. */
+  qualifiedName: string;
   description: string;
   /** Raw JSON Schema from the remote server. Kept verbatim for the agent UI. */
   inputSchema: unknown;

@@ -22,7 +22,7 @@ import {
 import { toast } from "sonner"
 import { api, type Session, type SendingPolicyOverrides, type SendingPolicyState } from "@/lib/api"
 import { EmptyState, ErrorState, Skeleton } from "@/components/primitives"
-import { Plus, Trash2, X, ChevronDown, ChevronRight, Check, MessageCircle, Search, Webhook, RefreshCw, KeyRound } from "lucide-react"
+import { Plus, Trash2, X, ChevronDown, ChevronRight, Check, MessageCircle, Search, Webhook, RefreshCw, KeyRound, Eye } from "lucide-react"
 
 const WEBHOOK_EVENTS = [
   { value: "*", label: "All events" },
@@ -289,14 +289,18 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
   const [mcpConnection, setMcpConnection] = useState<any>(null)
   const [mcpKeyRevealed, setMcpKeyRevealed] = useState(false)
   const [mcpKeyExists, setMcpKeyExists] = useState(false)
+  const [mcpKeyPrefix, setMcpKeyPrefix] = useState<string | null>(null)
+  const [mcpKeyRevealable, setMcpKeyRevealable] = useState(false)
+  const [mcpRevealing, setMcpRevealing] = useState(false)
 
   // REST API keys
-  const [restKeysData, setRestKeysData] = useState<{ session: string; keys: { id: string; name: string; prefix: string; actions: string[]; createdAt: string; lastUsedAt: string | null; revokedAt: string | null }[] } | null>(null)
+  const [restKeysData, setRestKeysData] = useState<{ session: string; keys: { id: string; name: string; prefix: string; actions: string[]; createdAt: string; lastUsedAt: string | null; revokedAt: string | null; canReveal?: boolean }[] } | null>(null)
   const [restKeysErrorSession, setRestKeysErrorSession] = useState<string | null>(null)
   const [restKeyReload, setRestKeyReload] = useState(0)
   const [restKeyName, setRestKeyName] = useState("")
   const [restKeyActions, setRestKeyActions] = useState<string[]>(["read", "send"])
   const [restKeyVisible, setRestKeyVisible] = useState<string | null>(null)
+  const [restRevealedKey, setRestRevealedKey] = useState<{ id: string; key: string } | null>(null)
   const [restKeyCreating, setRestKeyCreating] = useState(false)
 
   // Chatwoot integration state
@@ -403,9 +407,11 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
       setMcpDestructiveOps(config.destructiveOps)
       setMcpDeniedTools(config.deniedTools || [])
       mcpAllowedTools.current = config.allowedTools || []
-      // Check if a key already exists (hash present, plaintext gone)
-      const hasKey = !!(config as any).apiKeyHash
+      // Check if a key already exists (metadata only; plaintext is sealed)
+      const hasKey = config.hasApiKey === true
       setMcpKeyExists(hasKey)
+      setMcpKeyPrefix(config.apiKeyPrefix ?? null)
+      setMcpKeyRevealable(config.canRevealKey === true)
       setMcpKeyRevealed(false)
       setMcpKey(null)
       setMcpConnection(null)
@@ -558,6 +564,20 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
       toast.success("REST API key rotated")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to rotate REST API key")
+    }
+  }
+
+  const handleRevealRestKey = async (id: string) => {
+    if (!session) return
+    if (restRevealedKey?.id === id) {
+      setRestRevealedKey(null)
+      return
+    }
+    try {
+      const result = await api.revealRestApiKey(session.name, id)
+      setRestRevealedKey({ id, key: result.key })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to reveal REST API key")
     }
   }
 
@@ -1148,8 +1168,8 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
                     <h4 className="text-sm font-medium">REST API keys</h4>
                     <p className="text-xs text-muted-foreground">
                       Scoped keys for scripts and integrations. Each key can only use the actions
-                      you select, on this session. The key is shown <strong>once</strong>; only a
-                      SHA-256 hash is stored.
+                      you select, on this session. Authentication uses a SHA-256 hash; a separate
+                      encrypted copy lets an authenticated admin reveal it later.
                     </p>
                   </div>
 
@@ -1191,8 +1211,8 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
 
                   {restKeyVisible && (
                     <div className="space-y-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3">
-                      <p className="text-xs font-medium text-destructive">
-                        Copy this key now. It will not be shown again.
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Visible to an authenticated admin. Copy it or hide it again.
                       </p>
                       <div className="flex items-center gap-2">
                         <pre className="flex-1 rounded-lg bg-muted p-2.5 text-xs font-mono overflow-x-auto select-all">{restKeyVisible}</pre>
@@ -1205,6 +1225,9 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
                           }}
                         >
                           Copy
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setRestKeyVisible(null)}>
+                          Hide
                         </Button>
                       </div>
                       <p className="text-xs text-muted-foreground">
@@ -1241,6 +1264,11 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
                             </div>
                             {!key.revokedAt && (
                               <div className="flex items-center gap-1 shrink-0">
+                                {key.canReveal && (
+                                  <Button variant="ghost" size="sm" onClick={() => handleRevealRestKey(key.id)} className="h-7 px-2">
+                                    {restRevealedKey?.id === key.id ? "Hide" : "View"}
+                                  </Button>
+                                )}
                                 <Button variant="ghost" size="sm" onClick={() => handleRotateRestKey(key.id)} className="h-7 px-2">
                                   Rotate
                                 </Button>
@@ -1257,6 +1285,21 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
                               </Badge>
                             ))}
                           </div>
+                          {restRevealedKey?.id === key.id && (
+                            <div className="flex items-center gap-2 rounded-lg bg-muted/60 p-2">
+                              <pre className="flex-1 overflow-x-auto font-mono text-[11px] select-all">{restRevealedKey.key}</pre>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(restRevealedKey.key)
+                                  toast.success("Key copied")
+                                }}
+                              >
+                                Copy
+                              </Button>
+                            </div>
+                          )}
                           <p className="text-xs text-muted-foreground">
                             Created {new Date(key.createdAt).toLocaleString()}
                             {key.lastUsedAt ? ` · Last used ${new Date(key.lastUsedAt).toLocaleString()}` : " · Never used"}
@@ -1465,42 +1508,82 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
                 <div className="space-y-3">
                   <h4 className="text-sm font-medium">MCP connection key</h4>
                   <p className="text-xs text-muted-foreground">
-                    Generate a scoped API key for this session. The key is shown <strong>once</strong>.
-                    Copy it before closing this dialog. Only a SHA-256 hash is stored.
+                    Generate a scoped API key for this session. Authentication uses a SHA-256 hash;
+                    a separate encrypted copy lets an authenticated admin reveal it later.
                   </p>
 
                   {mcpKeyExists && !mcpKeyRevealed && (
                     <p className="text-xs text-muted-foreground">
-                      A key is configured for this session. Click <strong>Regenerate key</strong> to
-                      create a new one. The old key stops working.
+                      A key is configured for this session{mcpKeyPrefix ? ` (${mcpKeyPrefix}…)` : ""}.
+                      {mcpKeyRevealable
+                        ? " Click Reveal key to view it, or Regenerate key to replace it. The old key stops working."
+                        : " This key predates recoverable storage; regenerate it to enable reveal."}
                     </p>
                   )}
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={mcpLoading}
-                    onClick={async () => {
-                      try {
-                        const result = await api.generateMcpKey(session.name)
-                        setMcpKey(result.key)
-                        setMcpConnection(result.connection)
-                        setMcpKeyRevealed(true)
-                        setMcpKeyExists(true)
-                      } catch (e: any) {
-                        toast.error(e.message || "Failed to generate MCP key")
-                      }
-                    }}
-                  >
-                    {mcpKeyExists ? "Regenerate key" : "Generate MCP key"}
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={mcpLoading}
+                      onClick={async () => {
+                        try {
+                          const result = await api.generateMcpKey(session.name)
+                          setMcpKey(result.key)
+                          setMcpConnection(result.connection)
+                          setMcpKeyPrefix(result.prefix)
+                          setMcpKeyRevealable(true)
+                          setMcpKeyRevealed(true)
+                          setMcpKeyExists(true)
+                        } catch (e: any) {
+                          toast.error(e.message || "Failed to generate MCP key")
+                        }
+                      }}
+                    >
+                      {mcpKeyExists ? "Regenerate key" : "Generate MCP key"}
+                    </Button>
+                    {mcpKeyExists && mcpKeyRevealable && !mcpKeyRevealed && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={mcpRevealing}
+                        onClick={async () => {
+                          setMcpRevealing(true)
+                          try {
+                            const result = await api.revealMcpKey(session.name)
+                            setMcpKey(result.key)
+                            setMcpKeyPrefix(result.prefix)
+                            setMcpConnection({
+                              stdio: {
+                                command: "bun",
+                                args: ["run", "src/mcp/stdio.ts"],
+                                env: { BUNWA_SESSION: session.name, BUNWA_MCP_KEY: result.key },
+                              },
+                              http: {
+                                url: `${window.location.origin}/mcp`,
+                                headers: { "X-Api-Key": result.key },
+                              },
+                            })
+                            setMcpKeyRevealed(true)
+                          } catch (e: any) {
+                            toast.error(e.message || "Could not reveal the MCP key")
+                          } finally {
+                            setMcpRevealing(false)
+                          }
+                        }}
+                      >
+                        <Eye className="size-4" />
+                        {mcpRevealing ? "Revealing…" : "Reveal key"}
+                      </Button>
+                    )}
+                  </div>
 
                   {mcpKeyRevealed && mcpKey && mcpConnection && (
                     <div className="space-y-4 pt-2">
                       {/* Key display */}
                       <div>
-                        <p className="text-xs font-medium mb-1 text-destructive">
-                          Copy this key now. It will not be shown again.
+                        <p className="text-xs font-medium mb-1 text-muted-foreground">
+                          Visible to an authenticated admin. Copy it or hide it again.
                         </p>
                         <div className="flex items-center gap-2">
                           <pre className="flex-1 rounded-lg bg-muted p-2.5 text-xs font-mono overflow-x-auto select-all">{mcpKey}</pre>
@@ -1513,6 +1596,17 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
                             }}
                           >
                             Copy
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setMcpKeyRevealed(false)
+                              setMcpKey(null)
+                              setMcpConnection(null)
+                            }}
+                          >
+                            Hide
                           </Button>
                         </div>
                       </div>

@@ -545,24 +545,35 @@ export class SessionManager {
     this.validateSessionName(name);
     if (config) {
       const existing = this.sessionConfigs.get(name);
-      const existingHash = existing?.mcp?.apiKeyHash;
+      const existingMcp = existing?.mcp;
       const existingRestKeys = existing?.restApiKeys;
+      const managedMcpKeys = ['apiKeyHash', 'apiKeyCiphertext', 'apiKeyPrefix', 'apiKeyCreatedAt'] as const;
 
       if (options.allowManagedKeys) {
         // Key-management writes: keep server-managed fields the caller
         // omitted (the dashboard settings form rebuilds config from scratch
         // and never echoes them back) and accept the ones it supplied.
-        if (existingHash && !config.mcp?.apiKeyHash) {
-          config = { ...config, mcp: { ...(config.mcp || {}), apiKeyHash: existingHash } };
+        const preserved: Record<string, unknown> = {};
+        for (const key of managedMcpKeys) {
+          if (existingMcp?.[key] && !config.mcp?.[key]) preserved[key] = existingMcp[key];
+        }
+        if (Object.keys(preserved).length > 0) {
+          config = { ...config, mcp: { ...(config.mcp || {}), ...preserved } as typeof config.mcp };
         }
         if (existingRestKeys?.length && !config.restApiKeys) {
           config = { ...config, restApiKeys: existingRestKeys };
         }
       } else {
         const mcp = config.mcp ? { ...config.mcp } : undefined;
-        if (mcp) delete mcp.apiKeyHash;
-        if (existingHash) {
-          config = { ...config, mcp: { ...(mcp || {}), apiKeyHash: existingHash } };
+        if (mcp) {
+          for (const key of managedMcpKeys) delete mcp[key];
+        }
+        const preserved: Record<string, unknown> = {};
+        for (const key of managedMcpKeys) {
+          if (existingMcp?.[key]) preserved[key] = existingMcp[key];
+        }
+        if (Object.keys(preserved).length > 0) {
+          config = { ...config, mcp: { ...(mcp || {}), ...preserved } as typeof config.mcp };
         } else if (mcp && Object.keys(mcp).length > 0) {
           config = { ...config, mcp };
         } else if (config.mcp) {

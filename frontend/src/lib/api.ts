@@ -298,6 +298,7 @@ export interface RestApiKey {
   createdAt: string
   lastUsedAt: string | null
   revokedAt: string | null
+  canReveal?: boolean
 }
 
 const API_BASE = window.location.origin
@@ -825,31 +826,37 @@ export const api = {
     request<{ keys: RestApiKey[] }>(`/api/sessions/${name}/api-keys`),
   /** Create a per-session REST API key (plaintext is returned once) */
   createRestApiKey: (name: string, body: { name?: string; actions?: string[] }) =>
-    request<RestApiKey & { key: string; keyHash: string }>(`/api/sessions/${name}/api-keys`, {
+    request<RestApiKey & { key: string }>(`/api/sessions/${name}/api-keys`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  /** Reveal a sealed REST API key to an authenticated admin */
+  revealRestApiKey: (session: string, id: string) =>
+    request<RestApiKey & { key: string }>(`/api/sessions/${session}/api-keys/${id}/reveal`),
   /** Revoke a per-session REST API key */
   revokeRestApiKey: (session: string, id: string) =>
     request<RestApiKey>(`/api/sessions/${session}/api-keys/${id}`, { method: "DELETE" }),
   /** Rotate a per-session REST API key (plaintext is returned once) */
   rotateRestApiKey: (session: string, id: string) =>
-    request<RestApiKey & { key: string; keyHash: string }>(`/api/sessions/${session}/api-keys/${id}/rotate`, { method: "POST" }),
+    request<RestApiKey & { key: string }>(`/api/sessions/${session}/api-keys/${id}/rotate`, { method: "POST" }),
 
   // ==================== MCP ====================
   /** Get all registered MCP tools with categories */
   getMcpTools: () => request<{ tools: any[]; byCategory: Record<string, any[]> }>("/api/mcp/tools"),
   /** Get MCP config for a session */
   getSessionMcp: (name: string) =>
-    request<{ enabled: boolean; allowedTools: string[]; deniedTools: string[]; destructiveOps: boolean }>(`/api/sessions/${name}/mcp`),
+    request<{ enabled: boolean; allowedTools: string[]; deniedTools: string[]; destructiveOps: boolean; hasApiKey?: boolean; canRevealKey?: boolean; apiKeyPrefix?: string | null; apiKeyCreatedAt?: string | null }>(`/api/sessions/${name}/mcp`),
   /** Update MCP config for a session */
   updateSessionMcp: (name: string, config: { enabled?: boolean; allowedTools?: string[]; deniedTools?: string[]; destructiveOps?: boolean }) =>
     request<void>(`/api/sessions/${name}/mcp`, { method: "PUT", body: JSON.stringify(config) }),
 
   /** Generate a new per-session MCP key (returns plaintext once, stores hash) */
   generateMcpKey: (name: string) =>
-    request<{ key: string; keyHash: string; connection: { stdio: { command: string; args: string[]; env: Record<string, string> }; http: { url: string; headers: Record<string, string> } } }>(
+    request<{ key: string; prefix: string; createdAt: string; connection: { stdio: { command: string; args: string[]; env: Record<string, string> }; http: { url: string; headers: Record<string, string> } } }>(
       `/api/sessions/${name}/mcp/generate-key`,
       { method: "POST" }
     ),
+  /** Reveal the sealed MCP key to an authenticated admin */
+  revealMcpKey: (name: string) =>
+    request<{ key: string; prefix: string | null; createdAt: string | null }>(`/api/sessions/${name}/mcp/key`),
 }

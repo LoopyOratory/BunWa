@@ -42,6 +42,15 @@ export { callsTools } from './calls.tools';
  * silently missing from the other, which is how the group category ended up
  * advertised with no tools in it and the dashboard never showed the channels.
  */
+function externalInputSchema(schema: unknown): z.ZodTypeAny {
+  try {
+    return z.fromJSONSchema(schema as never);
+  } catch {
+    // A malformed remote schema must not take down the whole MCP endpoint.
+    return z.any();
+  }
+}
+
 export function buildAllTools(
   manager: SessionManager,
   externalTools: ExternalMcpTool[] = [],
@@ -65,24 +74,24 @@ export function buildAllTools(
 
   const external: ToolDescriptor[] = externalTools.map((tool) => {
     const server = externalServerLookup.get(tool.serverId);
-    const category = (tool.serverName || 'external') as never;
     return {
-      name: tool.name,
+      name: tool.qualifiedName,
+      remoteName: tool.name,
       description: `${server?.name ? `${server.name}: ` : ''}${tool.description}`,
-      inputSchema: z.any(),
+      inputSchema: externalInputSchema(tool.inputSchema),
       tier: tool.tier,
       destructive: tool.destructive,
       external: true,
       idempotent: tool.annotations?.idempotentHint ?? tool.tier === 'read',
       sessionScoped: false,
-      category,
+      category: 'external',
       resultDisposition: 'smart' as const,
       handler: async (input: Record<string, unknown>) => {
         if (!server) {
           throw new Error(`External MCP server for tool '${tool.name}' is no longer configured`);
         }
         return callExternalServerTool(
-          { id: tool.serverId, name: server.name, description: '', url: server.url, headers: server.headers, enabled: true, createdAt: '', updatedAt: '' },
+          { id: tool.serverId, name: server.name, description: '', url: server.url, headers: server.headers, enabled: true, lastRefreshedAt: null, lastError: null, createdAt: '', updatedAt: '' },
           tool.name,
           input,
         );

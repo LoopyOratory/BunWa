@@ -55,9 +55,11 @@ export interface AgentStore {
   listExternalMcpServers(): Promise<ExternalMcpServer[]>;
   getExternalMcpServer(id: string): Promise<ExternalMcpServer | null>;
   updateExternalMcpServer(id: string, input: UpdateExternalMcpServerInput): Promise<ExternalMcpServer | null>;
+  markExternalMcpServerRefresh(id: string, input: { refreshedAt?: string; error?: string | null }): Promise<ExternalMcpServer | null>;
   deleteExternalMcpServer(id: string): Promise<boolean>;
 
   listExternalMcpTools(): Promise<ExternalMcpTool[]>;
+  listExternalMcpToolsForServer(serverId: string): Promise<ExternalMcpTool[]>;
   upsertExternalMcpTools(serverId: string, tools: UpsertExternalMcpToolInput[]): Promise<ExternalMcpTool[]>;
   deleteExternalMcpTools(serverId: string): Promise<boolean>;
 

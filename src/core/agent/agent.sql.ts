@@ -4,6 +4,8 @@ import { dirname, resolve } from 'node:path';
 import type Knex from 'knex';
 import { makePostgresKnex } from '../db/knex-postgres';
 import type { AgentStore } from './agent.store';
+import { externalToolQualifiedName } from './external-mcp.names';
+import { sealSecret, tryOpenSecret, encryptionConfigured, isSealedSecret } from '../security/secret-box';
 import type {
   Agent,
   AgentSkill,
@@ -179,24 +181,33 @@ function rowToModelRoleSettings(row: any): ModelRoleSettings {
 }
 
 function rowToExternalMcpServer(row: any): ExternalMcpServer {
+  const storedHeaders = json<Record<string, string>>(row.headers, {});
+  const headers = Object.fromEntries(
+    Object.entries(storedHeaders).map(([key, value]) => [key, tryOpenSecret(value) ?? '']),
+  );
   return {
     id: row.id,
     name: row.name,
     description: row.description ?? '',
     url: row.url,
-    headers: json(row.headers, {}),
+    headers,
     enabled: bool(row.enabled),
+    lastRefreshedAt: asNullableString(row.last_refreshed_at),
+    lastError: asNullableString(row.last_error),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
 function rowToExternalMcpTool(row: any): ExternalMcpTool {
+  const serverId = row.server_id;
+  const name = row.name;
   return {
     id: row.id,
-    serverId: row.server_id,
+    serverId,
     serverName: row.server_name ?? '',
-    name: row.name,
+    name,
+    qualifiedName: externalToolQualifiedName(serverId, name),
     description: row.description ?? '',
     inputSchema: json(row.input_schema, {}),
     annotations: row.annotations ? json(row.annotations, null) : null,
@@ -378,6 +389,8 @@ const SCHEMA: string[] = [
     url TEXT NOT NULL,
     headers TEXT NOT NULL DEFAULT '{}',
     enabled INTEGER NOT NULL DEFAULT 1,
+    last_refreshed_at TEXT,
+    last_error TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   )`,
@@ -517,6 +530,38 @@ export class SqlAgentStore implements AgentStore {
     // Older databases were created before agents had a fallback model.
     if (!(await this.columnExists('bunwa_agents', 'fallback_model'))) {
       await this.client.execute('ALTER TABLE bunwa_agents ADD COLUMN fallback_model TEXT');
+    }
+    // Refresh metadata is additive; keep existing servers readable.
+    if (!(await this.columnExists('bunwa_external_mcp_servers', 'last_refreshed_at'))) {
+      await this.client.execute('ALTER TABLE bunwa_external_mcp_servers ADD COLUMN last_refreshed_at TEXT');
+    }
+    if (!(await this.columnExists('bunwa_external_mcp_servers', 'last_error'))) {
+      await this.client.execute('ALTER TABLE bunwa_external_mcp_servers ADD COLUMN last_error TEXT');
+    }
+    if (encryptionConfigured()) {
+      await this.sealLegacyExternalMcpHeaders();
+    }
+  }
+
+  /** Encrypt header values written before recoverable-secret storage existed. */
+  private async sealLegacyExternalMcpHeaders(): Promise<void> {
+    const rows = await this.client.query(`SELECT id, headers FROM bunwa_external_mcp_servers`);
+    for (const row of rows) {
+      const headers = json<Record<string, string>>(row.headers, {});
+      let changed = false;
+      const sealed = Object.fromEntries(
+        Object.entries(headers).map(([key, value]) => {
+          if (!value || isSealedSecret(value)) return [key, value];
+          changed = true;
+          return [key, sealSecret(value)];
+        }),
+      );
+      if (changed) {
+        await this.client.execute(`UPDATE bunwa_external_mcp_servers SET headers = ? WHERE id = ?`, [
+          JSON.stringify(sealed),
+          row.id,
+        ]);
+      }
     }
   }
 
@@ -770,19 +815,26 @@ export class SqlAgentStore implements AgentStore {
       url: input.url.trim(),
       headers: input.headers ?? {},
       enabled: input.enabled ?? true,
+      lastRefreshedAt: null,
+      lastError: null,
       createdAt: at,
       updatedAt: at,
     };
+    const sealedHeaders = Object.fromEntries(
+      Object.entries(server.headers).map(([key, value]) => [key, sealSecret(value)]),
+    );
     await this.client.execute(
-      `INSERT INTO bunwa_external_mcp_servers (id, name, description, url, headers, enabled, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO bunwa_external_mcp_servers (id, name, description, url, headers, enabled, last_refreshed_at, last_error, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         server.id,
         server.name,
         server.description,
         server.url,
-        JSON.stringify(server.headers),
+        JSON.stringify(sealedHeaders),
         server.enabled ? 1 : 0,
+        null,
+        null,
         server.createdAt,
         server.updatedAt,
       ],
@@ -814,19 +866,38 @@ export class SqlAgentStore implements AgentStore {
       updatedAt: now(),
     };
 
+    const sealedHeaders = Object.fromEntries(
+      Object.entries(server.headers).map(([key, value]) => [key, sealSecret(value)]),
+    );
     await this.client.execute(
       `UPDATE bunwa_external_mcp_servers SET name = ?, description = ?, url = ?, headers = ?, enabled = ?, updated_at = ? WHERE id = ?`,
       [
         server.name,
         server.description,
         server.url,
-        JSON.stringify(server.headers),
+        JSON.stringify(sealedHeaders),
         server.enabled ? 1 : 0,
         server.updatedAt,
         server.id,
       ],
     );
     return server;
+  }
+
+  async markExternalMcpServerRefresh(
+    id: string,
+    input: { refreshedAt?: string; error?: string | null },
+  ): Promise<ExternalMcpServer | null> {
+    const current = await this.getExternalMcpServer(id);
+    if (!current) return null;
+
+    const lastRefreshedAt = input.refreshedAt !== undefined ? input.refreshedAt : current.lastRefreshedAt;
+    const lastError = input.error !== undefined ? input.error : current.lastError;
+    await this.client.execute(
+      `UPDATE bunwa_external_mcp_servers SET last_refreshed_at = ?, last_error = ?, updated_at = ? WHERE id = ?`,
+      [lastRefreshedAt, lastError, now(), id],
+    );
+    return this.getExternalMcpServer(id);
   }
 
   async deleteExternalMcpServer(id: string): Promise<boolean> {
@@ -842,50 +913,84 @@ export class SqlAgentStore implements AgentStore {
       `SELECT t.*, s.name AS server_name
        FROM bunwa_external_mcp_tools t
        JOIN bunwa_external_mcp_servers s ON s.id = t.server_id
-       WHERE s.enabled = 1
+       WHERE s.enabled = 1 AND t.enabled = 1
        ORDER BY s.name ASC, t.name ASC`,
     );
     return rows.map(rowToExternalMcpTool);
   }
 
+  async listExternalMcpToolsForServer(serverId: string): Promise<ExternalMcpTool[]> {
+    const rows = await this.client.query(
+      `SELECT t.*, s.name AS server_name
+       FROM bunwa_external_mcp_tools t
+       JOIN bunwa_external_mcp_servers s ON s.id = t.server_id
+       WHERE t.server_id = ?
+       ORDER BY t.name ASC`,
+      [serverId],
+    );
+    return rows.map(rowToExternalMcpTool);
+  }
+
   async upsertExternalMcpTools(serverId: string, tools: UpsertExternalMcpToolInput[]): Promise<ExternalMcpTool[]> {
-    await this.deleteExternalMcpTools(serverId);
+    const existingRows = await this.client.query(`SELECT * FROM bunwa_external_mcp_tools WHERE server_id = ?`, [serverId]);
+    const existing = new Map<string, any>(existingRows.map((row) => [row.name, row]));
+    const incoming = new Set(tools.map((tool) => tool.name));
     const at = now();
-    const inserted: ExternalMcpTool[] = [];
+
+    // Diff instead of delete-all: a failure halfway through an insert must not
+    // leave the server with no cached tools.
     for (const tool of tools) {
-      const id = Bun.randomUUIDv7();
-      await this.client.execute(
-        `INSERT INTO bunwa_external_mcp_tools (id, server_id, name, description, input_schema, annotations, tier, destructive, enabled, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-        [
-          id,
-          serverId,
-          tool.name,
-          tool.description,
-          JSON.stringify(tool.inputSchema ?? {}),
-          tool.annotations ? JSON.stringify(tool.annotations) : null,
-          tool.tier,
-          tool.destructive ? 1 : 0,
-          at,
-          at,
-        ],
-      );
-      inserted.push({
-        id,
-        serverId,
-        serverName: '',
-        name: tool.name,
-        description: tool.description,
-        inputSchema: tool.inputSchema ?? {},
-        annotations: tool.annotations,
-        tier: tool.tier,
-        destructive: tool.destructive,
-        enabled: true,
-        createdAt: at,
-        updatedAt: at,
-      });
+      const current = existing.get(tool.name);
+      if (current) {
+        await this.client.execute(
+          `UPDATE bunwa_external_mcp_tools
+           SET description = ?, input_schema = ?, annotations = ?, tier = ?, destructive = ?, updated_at = ?
+           WHERE server_id = ? AND name = ?`,
+          [
+            tool.description,
+            JSON.stringify(tool.inputSchema ?? {}),
+            tool.annotations ? JSON.stringify(tool.annotations) : null,
+            tool.tier,
+            tool.destructive ? 1 : 0,
+            at,
+            serverId,
+            tool.name,
+          ],
+        );
+      } else {
+        await this.client.execute(
+          `INSERT INTO bunwa_external_mcp_tools (id, server_id, name, description, input_schema, annotations, tier, destructive, enabled, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+          [
+            Bun.randomUUIDv7(),
+            serverId,
+            tool.name,
+            tool.description,
+            JSON.stringify(tool.inputSchema ?? {}),
+            tool.annotations ? JSON.stringify(tool.annotations) : null,
+            tool.tier,
+            tool.destructive ? 1 : 0,
+            at,
+            at,
+          ],
+        );
+      }
     }
-    return this.listExternalMcpTools();
+
+    for (const name of existing.keys()) {
+      if (!incoming.has(name)) {
+        await this.client.execute(`DELETE FROM bunwa_external_mcp_tools WHERE server_id = ? AND name = ?`, [serverId, name]);
+      }
+    }
+
+    return (await this.client.query(
+      `SELECT t.*, s.name AS server_name
+       FROM bunwa_external_mcp_tools t
+       JOIN bunwa_external_mcp_servers s ON s.id = t.server_id
+       WHERE t.server_id = ?
+       ORDER BY t.name ASC`,
+      [serverId],
+    )).map(rowToExternalMcpTool);
   }
 
   async deleteExternalMcpTools(serverId: string): Promise<boolean> {

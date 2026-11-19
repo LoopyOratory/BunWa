@@ -153,8 +153,18 @@ export class AgentService {
     return (await getStore()).updateExternalMcpServer(id, input);
   }
 
+  async markExternalMcpServerRefresh(
+    id: string,
+    input: { refreshedAt?: string; error?: string | null },
+  ): Promise<ExternalMcpServer | null> {
+    return (await getStore()).markExternalMcpServerRefresh(id, input);
+  }
+
   async deleteExternalMcpServer(id: string): Promise<boolean> {
-    return (await getStore()).deleteExternalMcpServer(id);
+    const store = await getStore();
+    const tools = await store.listExternalMcpToolsForServer(id);
+    await this.pruneExternalToolRefs(new Set(tools.flatMap((tool) => [tool.qualifiedName, tool.name]))).catch(() => {});
+    return store.deleteExternalMcpServer(id);
   }
 
   async listExternalMcpTools(): Promise<ExternalMcpTool[]> {
@@ -167,10 +177,66 @@ export class AgentService {
 
   /** Connect to a remote MCP server and cache its tool list in the store. */
   async refreshExternalMcpServerTools(serverId: string): Promise<ExternalMcpTool[]> {
-    const server = await (await getStore()).getExternalMcpServer(serverId);
+    const store = await getStore();
+    const server = await store.getExternalMcpServer(serverId);
     if (!server) return [];
-    const tools = await listExternalServerTools(server);
-    return (await getStore()).upsertExternalMcpTools(serverId, tools);
+
+    const previous = await store.listExternalMcpToolsForServer(serverId);
+    try {
+      const tools = await listExternalServerTools(server);
+      // A transient empty response must not wipe a working catalogue.
+      if (tools.length === 0 && previous.length > 0) {
+        throw new Error('Server returned no tools; keeping the cached catalogue');
+      }
+      const saved = await store.upsertExternalMcpTools(serverId, tools);
+      await store.markExternalMcpServerRefresh(serverId, {
+        refreshedAt: new Date().toISOString(),
+        error: null,
+      });
+
+      // Drop allowlist entries for tools this server no longer exposes. Keep
+      // the remote name too: older agent settings stored the unqualified name.
+      const keep = new Set(saved.map((tool) => tool.qualifiedName));
+      const removed = new Set<string>();
+      for (const tool of previous) {
+        if (!keep.has(tool.qualifiedName)) {
+          removed.add(tool.qualifiedName);
+          removed.add(tool.name);
+        }
+      }
+      await this.pruneExternalToolRefs(removed).catch(() => {});
+      return saved;
+    } catch (error) {
+      await store.markExternalMcpServerRefresh(serverId, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Remove dead external tool names from every agent's MCP allowlist/denylist.
+   * Best effort: a stale name must never block a server refresh or delete.
+   */
+  private async pruneExternalToolRefs(removed: Set<string>): Promise<void> {
+    if (removed.size === 0) return;
+    const store = await getStore();
+    const agents = await store.listAgents();
+    for (const agent of agents) {
+      const mcp = agent.settings?.mcp as Record<string, unknown> | undefined;
+      if (!mcp) continue;
+      const allowed = Array.isArray(mcp.allowedTools) ? mcp.allowedTools.map(String) : [];
+      const denied = Array.isArray(mcp.deniedTools) ? mcp.deniedTools.map(String) : [];
+      const nextAllowed = allowed.filter((name) => !removed.has(name));
+      const nextDenied = denied.filter((name) => !removed.has(name));
+      if (nextAllowed.length === allowed.length && nextDenied.length === denied.length) continue;
+      await store.updateAgent(agent.id, {
+        settings: {
+          ...agent.settings,
+          mcp: { ...mcp, allowedTools: nextAllowed, deniedTools: nextDenied },
+        },
+      });
+    }
   }
 
   async addSkill(agentId: string, input: CreateSkillInput): Promise<AgentSkill> {

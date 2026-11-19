@@ -76,8 +76,8 @@ export async function callExternalServerTool(
     // Unwrap text results so the local server's `smartToolResult` does not
     // double-wrap them. Non-text content (images, audio) is passed through.
     const content = result?.content;
-    if (Array.isArray(content) && content.length > 0 && content[0]?.type === 'text' && typeof content[0].text === 'string') {
-      return content[0].text;
+    if (Array.isArray(content) && content.length > 0 && content.every((part) => part?.type === 'text' && typeof part.text === 'string')) {
+      return content.map((part) => part.text).join('\n');
     }
     return result as unknown;
   });

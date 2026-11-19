@@ -4,6 +4,8 @@ import { BunSqliteClient, KnexSqlClient, SqlAgentStore } from '../core/agent/age
 import { makePostgresKnex } from '../core/db/knex-postgres';
 import { startEmbeddedPostgres, type EmbeddedPostgres } from './conformance/embedded-postgres';
 
+process.env.BUNWA_KEY_ENCRYPTION_SECRET ??= 'test-secret';
+
 let embedded: EmbeddedPostgres | null = null;
 let postgresUrl = process.env.BUNWA_TEST_POSTGRES_URL;
 if (!postgresUrl) {

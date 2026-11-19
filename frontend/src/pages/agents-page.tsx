@@ -3,6 +3,8 @@ import {
   Bot,
   Check,
   ChevronRight,
+  Copy,
+  Eye,
   KeyRound,
   MessageSquare,
   Plus,
@@ -60,6 +62,15 @@ type DraftKnowledge = { name: string; kind: "text" | "url" | "file"; content: st
 
 const STEPS = ["Basics", "Prompt", "Skills", "Knowledge", "Tools", "Review"] as const
 type Step = (typeof STEPS)[number]
+
+/** Older agents stored the remote tool name; the catalogue now uses a namespaced name. */
+function normalizeMcpSelection(selected: string[], tools: McpToolInfo[]) {
+  const byRemote = new Map(
+    tools.filter((tool) => tool.remoteName).map((tool) => [tool.remoteName as string, tool.name]),
+  )
+  const normalized = selected.map((name) => byRemote.get(name) ?? name)
+  return [...new Set(normalized)]
+}
 
 function stepIndex(step: Step) {
   return STEPS.indexOf(step)
@@ -941,6 +952,14 @@ function AgentDetailDialog({
   const [mcpTools, setMcpTools] = useState<McpToolInfo[]>([])
   const [selectedMcpTools, setSelectedMcpTools] = useState<string[]>([])
   const [mcpEnabled, setMcpEnabled] = useState(false)
+  const [agentKey, setAgentKey] = useState<string | null>(null)
+  const [agentKeyMeta, setAgentKeyMeta] = useState<{
+    hasApiKey: boolean
+    canRevealKey: boolean
+    prefix: string | null
+    createdAt: string | null
+  }>({ hasApiKey: false, canRevealKey: false, prefix: null, createdAt: null })
+  const [agentKeyBusy, setAgentKeyBusy] = useState(false)
 
   useEffect(() => {
     if (!agent) return
@@ -962,8 +981,15 @@ function AgentDetailDialog({
         setAnalytics(stats)
         setEvents(eventList)
         setMcpTools(toolCatalog.tools)
-        setSelectedMcpTools(mcpConfig.allowedTools)
+        setSelectedMcpTools(normalizeMcpSelection(mcpConfig.allowedTools, toolCatalog.tools))
         setMcpEnabled(mcpConfig.enabled)
+        setAgentKey(null)
+        setAgentKeyMeta({
+          hasApiKey: mcpConfig.hasApiKey === true,
+          canRevealKey: mcpConfig.canRevealKey === true,
+          prefix: mcpConfig.apiKeyPrefix ?? null,
+          createdAt: mcpConfig.apiKeyCreatedAt ?? null,
+        })
       })
       .catch(() => toast.error("Could not load agent details"))
       .finally(() => setLoading(false))
@@ -1016,6 +1042,50 @@ function AgentDetailDialog({
       toast.error(error instanceof Error ? error.message : "Could not save the MCP skills")
     } finally {
       setSaving(false)
+    }
+  }
+
+  const generateAgentKey = async () => {
+    if (!agent) return
+    setAgentKeyBusy(true)
+    try {
+      const result = await agentApi.generateAgentMcpKey(agent.id)
+      setAgentKey(result.key)
+      setAgentKeyMeta({ hasApiKey: true, canRevealKey: true, prefix: result.prefix, createdAt: result.createdAt })
+      toast.success("Agent tool key generated")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not generate the agent key")
+    } finally {
+      setAgentKeyBusy(false)
+    }
+  }
+
+  const revealAgentKey = async () => {
+    if (!agent) return
+    setAgentKeyBusy(true)
+    try {
+      const result = await agentApi.revealAgentMcpKey(agent.id)
+      setAgentKey(result.key)
+      setAgentKeyMeta((current) => ({ ...current, hasApiKey: true, canRevealKey: true, prefix: result.prefix ?? current.prefix }))
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not reveal the agent key")
+    } finally {
+      setAgentKeyBusy(false)
+    }
+  }
+
+  const revokeAgentKey = async () => {
+    if (!agent) return
+    setAgentKeyBusy(true)
+    try {
+      await agentApi.deleteAgentMcpKey(agent.id)
+      setAgentKey(null)
+      setAgentKeyMeta({ hasApiKey: false, canRevealKey: false, prefix: null, createdAt: null })
+      toast.success("Agent tool key revoked")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not revoke the agent key")
+    } finally {
+      setAgentKeyBusy(false)
     }
   }
 
@@ -1221,6 +1291,69 @@ function AgentDetailDialog({
 
               <TabsContent value="mcp" className="mt-0 space-y-4">
                 <ToolSetupGuide compact />
+                <div className="rounded-2xl border border-border/70 bg-card/70 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold">Agent tool key</p>
+                        <Badge variant={agentKeyMeta.hasApiKey ? "secondary" : "outline"}>
+                          {agentKeyMeta.hasApiKey ? "issued" : "not issued"}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
+                        Live agents use this key to call the tools selected below. Authentication uses a
+                        SHA-256 hash; an encrypted copy is available only to an authenticated admin.
+                      </p>
+                      {agentKeyMeta.hasApiKey && (
+                        <p className="mt-1 text-[11px] text-muted-foreground/70">
+                          {agentKeyMeta.prefix ? `${agentKeyMeta.prefix}…` : "Key issued"}
+                          {agentKeyMeta.createdAt ? ` · ${new Date(agentKeyMeta.createdAt).toLocaleString()}` : ""}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => void generateAgentKey()} disabled={agentKeyBusy}>
+                        <KeyRound className="size-4" />
+                        {agentKeyMeta.hasApiKey ? "Regenerate key" : "Generate key"}
+                      </Button>
+                      {agentKeyMeta.hasApiKey && agentKeyMeta.canRevealKey && !agentKey && (
+                        <Button variant="outline" size="sm" onClick={() => void revealAgentKey()} disabled={agentKeyBusy}>
+                          <Eye className="size-4" />
+                          View key
+                        </Button>
+                      )}
+                      {agentKeyMeta.hasApiKey && !agentKeyMeta.canRevealKey && (
+                        <span className="text-[11px] text-muted-foreground">Regenerate to enable reveal</span>
+                      )}
+                      {agentKeyMeta.hasApiKey && (
+                        <Button variant="ghost" size="sm" onClick={() => void revokeAgentKey()} disabled={agentKeyBusy}>
+                          Revoke
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {agentKey && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <code className="min-w-0 flex-1 overflow-x-auto rounded-lg bg-muted px-2.5 py-2 font-mono text-xs">
+                        {agentKey}
+                      </code>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          navigator.clipboard.writeText(agentKey)
+                          toast.success("Agent key copied")
+                        }}
+                      >
+                        <Copy className="size-4" />
+                        Copy
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setAgentKey(null)}>
+                        Hide
+                      </Button>
+                    </div>
+                  )}
+                </div>
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-muted/30 px-4 py-3">
                   <div>
                     <p className="text-sm font-semibold">MCP access</p>

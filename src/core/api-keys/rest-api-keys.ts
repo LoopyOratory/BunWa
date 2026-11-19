@@ -10,6 +10,7 @@
 import { CryptoHasher } from 'bun';
 import { randomBytes, timingSafeEqual } from 'crypto';
 import { Action } from '../../middleware/policies';
+import { encryptionConfigured, sealSecret } from '../security/secret-box';
 import type { RestApiKeyRecord, SessionConfig } from '../../structures/sessions.dto';
 import type { SessionManager } from '../manager.core';
 
@@ -61,6 +62,9 @@ export function createRestApiKeyRecord(
     actions: [...new Set(actions)],
     createdAt: new Date().toISOString(),
   };
+  if (encryptionConfigured()) {
+    record.keyCiphertext = sealSecret(key);
+  }
   return { key, record };
 }
 
@@ -123,6 +127,7 @@ export interface RestApiKeyMetadata {
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
+  canReveal: boolean;
 }
 
 /** Public shape of a key record. Never includes the hash. */
@@ -136,6 +141,7 @@ export function toRestApiKeyMetadata(record: RestApiKeyRecord): RestApiKeyMetada
     createdAt: record.createdAt,
     lastUsedAt: record.lastUsedAt ?? null,
     revokedAt: record.revokedAt ?? null,
+    canReveal: Boolean(record.keyCiphertext),
   };
 }
 
@@ -148,9 +154,10 @@ export function redactSessionSecrets(config: SessionConfig | undefined | null): 
   if (!config) return {};
   const next: SessionConfig = { ...config };
   delete next.restApiKeys;
-  if (next.mcp?.apiKeyHash) {
+  if (next.mcp?.apiKeyHash || next.mcp?.apiKeyCiphertext) {
     next.mcp = { ...next.mcp };
     delete next.mcp.apiKeyHash;
+    delete next.mcp.apiKeyCiphertext;
   }
   return next;
 }

@@ -6,7 +6,7 @@ import type { z } from 'zod';
 
 export type ToolTier = 'read' | 'write';
 
-export type ToolCategory = 'session' | 'message' | 'chat' | 'contact' | 'group' | 'channel' | 'presence' | 'media' | 'status' | 'policy' | 'template' | 'calls';
+export type ToolCategory = 'session' | 'message' | 'chat' | 'contact' | 'group' | 'channel' | 'presence' | 'media' | 'status' | 'policy' | 'template' | 'calls' | 'external';
 
 export interface ToolDescriptor<I = any> {
   /** Explicit, stable public name, e.g. 'MessageSendText'. */
@@ -20,6 +20,8 @@ export interface ToolDescriptor<I = any> {
   destructive?: boolean;
   /** True when the tool comes from an external MCP server. */
   external?: boolean;
+  /** Remote tool name when this descriptor is a namespaced external tool. */
+  remoteName?: string;
   /** Safe to repeat without additional effect. Defaults to (tier === 'read'). */
   idempotent?: boolean;
   /** If true, input MUST carry `sessionId`. */

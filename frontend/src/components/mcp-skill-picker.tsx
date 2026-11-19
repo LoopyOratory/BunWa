@@ -44,7 +44,10 @@ export function McpSkillPicker({
   const grouped = useMemo(() => {
     const byCategory = new Map<string, McpToolInfo[]>()
     for (const tool of tools) {
-      const key = tool.category ?? "other"
+      const key =
+        tool.category === "external" && tool.serverName
+          ? `external:${tool.serverName}`
+          : tool.category ?? "other"
       const list = byCategory.get(key) ?? []
       list.push(tool)
       byCategory.set(key, list)
@@ -74,14 +77,19 @@ export function McpSkillPicker({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {grouped.map(([category, items]) => (
-          <Card key={category} className="border-border/70 bg-card/70">
+        {grouped.map(([key, items]) => {
+          const externalServer = key.startsWith("external:") ? key.slice("external:".length) : null
+          const label = externalServer ?? categoryLabel(key)
+          return (
+          <Card key={key} className="border-border/70 bg-card/70">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
-                {categoryLabel(category)}
+                {label}
                 <Badge variant="outline">{items.length}</Badge>
               </CardTitle>
-              <CardDescription>Tools the agent can call in this category</CardDescription>
+              <CardDescription>
+                {externalServer ? "Tools exposed by this external MCP server" : "Tools the agent can call in this category"}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-1 pt-0">
               {items.map((tool, index) => (
@@ -90,24 +98,28 @@ export function McpSkillPicker({
                   <div className="flex items-start justify-between gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-muted/40">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-sm font-medium">{tool.name}</p>
+                        <p className="truncate text-sm font-medium">{tool.remoteName ?? tool.name}</p>
                         <Badge variant={tool.tier === "read" ? "secondary" : "outline"}>{tool.tier}</Badge>
                         {tool.destructive && <Badge variant="destructive">destructive</Badge>}
                         {tool.sessionScoped && <Badge variant="outline">session scoped</Badge>}
                       </div>
+                      {tool.remoteName && tool.remoteName !== tool.name && (
+                        <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground/70">{tool.name}</p>
+                      )}
                       {!compact && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{tool.description}</p>}
                     </div>
                     <Switch
                       checked={selected.includes(tool.name)}
                       onCheckedChange={(checked) => onToggle(tool.name, checked)}
-                      aria-label={`Toggle ${tool.name}`}
+                      aria-label={`Toggle ${tool.remoteName ?? tool.name}`}
                     />
                   </div>
                 </div>
               ))}
             </CardContent>
           </Card>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

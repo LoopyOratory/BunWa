@@ -5,6 +5,8 @@ import { composePrompt, nextQuestion, isComplete } from '../core/agent/agent.bui
 import { probeModelSettings } from '../core/agent/model-probe';
 import { AgentService, setAgentStoreForTests } from '../core/agent/agent.service';
 
+process.env.BUNWA_KEY_ENCRYPTION_SECRET ??= 'test-secret';
+
 function makeStore(): SqlAgentStore {
   return new SqlAgentStore(new BunSqliteClient(new Database(':memory:')));
 }

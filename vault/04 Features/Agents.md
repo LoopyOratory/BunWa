@@ -118,13 +118,34 @@ Each server stores:
 - `name`
 - `description`
 - `url` (the remote MCP endpoint)
-- `headers` (auth tokens and other JSON headers)
+- `headers` (auth tokens and other JSON headers; encrypted at rest)
 - `enabled`
+- `lastRefreshedAt` / `lastError`
+
+Header values are sealed with AES-256-GCM before they are written. The list
+endpoint returns `headerNames` only; `GET /api/mcp/external/servers/:id/headers`
+is the admin-only reveal action. The same rule applies to every issued key:
+authentication uses a SHA-256 hash, and an encrypted copy exists only for the
+admin "view key" action.
 
 Refreshing a server connects to it with the MCP client, imports its tool list,
-and caches the tools locally. Those tools then appear in the same
-`/api/mcp/tools` catalogue, grouped under the server's name, so agents select
-them exactly like internal tools.
+and caches the tools locally. External tools are namespaced as
+`ext__<serverId>__<tool>` so two servers can expose the same remote name without
+colliding with each other or with BunWa's built-in tools. The original name is
+kept as `remoteName`, and older allowlists that stored the raw name still work.
+
+## Agent tool keys
+
+Live agents that call tools over MCP use a per-agent key:
+
+- `POST /api/agents/:id/mcp/key` issues `sk_agent_...` and returns it once.
+- `GET /api/agents/:id/mcp/key` reveals the sealed copy to an authenticated admin.
+- `DELETE /api/agents/:id/mcp/key` revokes it.
+
+An agent key is an explicit allowlist: it can only see and call the tools in
+`settings.mcp.allowedTools`, it cannot call session-scoped tools (use a session
+MCP key for those), and an empty allowlist means no access. Every issued key is
+stored as a hash; the sealed copy is only for the dashboard reveal action.
 
 ## User profiles
 

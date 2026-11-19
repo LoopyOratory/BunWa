@@ -1,12 +1,15 @@
 import { Hono } from 'hono';
+import { randomBytes } from 'crypto';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { Action, CanServer, policiesMiddleware } from '../middleware/policies';
 import { agentService } from '../core/agent/agent.service';
 import { conversationLifecycle } from '../core/agent/conversation-lifecycle';
 import type { BuilderAnswers } from '../core/agent/agent.builder';
+import type { Agent } from '../core/agent/agent.types';
 import { validateToolDefinition } from '../core/tools/tool-schema';
 import { toFishWebhookTool } from '../core/tools/fish-tool.adapter';
 import { toGoogleFunctionDeclaration, toMcpToolDescriptor } from '../core/tools/google-tool.adapter';
+import { hashSecret, openSecret, sealSecret, secretPrefix } from '../core/security/secret-box';
 
 function badRequest(c: any, message: string) {
   return c.json({ error: message }, 400);
@@ -14,6 +17,36 @@ function badRequest(c: any, message: string) {
 
 function notFound(c: any, message = 'Not found') {
   return c.json({ error: message }, 404);
+}
+
+/** Strip stored key material; the browser only needs metadata. */
+function publicAgentMcp(mcp: Record<string, unknown>) {
+  const { apiKeyHash: _hash, apiKeyCiphertext: _ciphertext, ...rest } = mcp;
+  return {
+    ...rest,
+    hasApiKey: Boolean(_hash),
+    canRevealKey: Boolean(_ciphertext),
+    apiKeyPrefix: typeof rest.apiKeyPrefix === 'string' ? rest.apiKeyPrefix : null,
+    apiKeyCreatedAt: typeof rest.apiKeyCreatedAt === 'string' ? rest.apiKeyCreatedAt : null,
+    apiKeyLastUsedAt: typeof rest.apiKeyLastUsedAt === 'string' ? rest.apiKeyLastUsedAt : null,
+  };
+}
+
+/** Strip key material from an agent before it leaves the API. */
+function publicAgent(agent: Agent): Agent {
+  const settings = { ...(agent.settings ?? {}) };
+  const rawMcp = settings.mcp;
+  if (rawMcp && typeof rawMcp === 'object' && !Array.isArray(rawMcp)) {
+    const mcp = { ...(rawMcp as Record<string, unknown>) };
+    const hasApiKey = Boolean(mcp.apiKeyHash);
+    const canRevealKey = Boolean(mcp.apiKeyCiphertext);
+    delete mcp.apiKeyHash;
+    delete mcp.apiKeyCiphertext;
+    mcp.hasApiKey = hasApiKey;
+    mcp.canRevealKey = canRevealKey;
+    settings.mcp = mcp;
+  }
+  return { ...agent, settings };
 }
 
 export function createAgentsRouter(): Hono {
@@ -190,7 +223,7 @@ export function createAgentsRouter(): Hono {
   router.get(
     '/',
     policiesMiddleware(CanServer(Action.Retrieve)),
-    async (c) => c.json({ agents: await agentService.listAgents() }),
+    async (c) => c.json({ agents: (await agentService.listAgents()).map(publicAgent) }),
   );
 
   router.post(
@@ -229,7 +262,7 @@ export function createAgentsRouter(): Hono {
           });
         }
       }
-      return c.json({ agent }, 201);
+      return c.json({ agent: publicAgent(agent) }, 201);
     },
   );
 
@@ -328,7 +361,7 @@ export function createAgentsRouter(): Hono {
     async (c) => {
       const agent = await agentService.getAgent(c.req.param('id'));
       if (!agent) return notFound(c, 'Agent not found');
-      return c.json({ agent });
+      return c.json({ agent: publicAgent(agent) });
     },
   );
 
@@ -344,7 +377,7 @@ export function createAgentsRouter(): Hono {
         deniedTools: [],
         destructiveOps: false,
       };
-      return c.json({ mcp });
+      return c.json({ mcp: publicAgentMcp(mcp) });
     },
   );
 
@@ -370,7 +403,88 @@ export function createAgentsRouter(): Hono {
         settings: { ...agent.settings, mcp: next },
       });
       if (!updated) return notFound(c, 'Agent not found');
-      return c.json({ mcp: updated.settings?.mcp ?? next });
+      return c.json({ mcp: publicAgentMcp((updated.settings?.mcp as Record<string, unknown> | undefined) ?? next) });
+    },
+  );
+
+  /** Issue a scoped tool key for a live agent. Only the hash is used for auth. */
+  router.post(
+    '/:id/mcp/key',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      const agent = await agentService.getAgent(c.req.param('id'));
+      if (!agent) return notFound(c, 'Agent not found');
+      const current = (agent.settings?.mcp as Record<string, unknown> | undefined) ?? {};
+      const key = `sk_agent_${randomBytes(24).toString('hex')}`;
+      const createdAt = new Date().toISOString();
+      let ciphertext: string;
+      try {
+        ciphertext = sealSecret(key);
+      } catch (error) {
+        return c.json(
+          { error: error instanceof Error ? error.message : 'Could not encrypt the agent key' },
+          500,
+        );
+      }
+      const next = {
+        ...current,
+        apiKeyHash: hashSecret(key),
+        apiKeyCiphertext: ciphertext,
+        apiKeyPrefix: secretPrefix(key, 14),
+        apiKeyCreatedAt: createdAt,
+        apiKeyLastUsedAt: null,
+      };
+      const updated = await agentService.updateAgent(agent.id, {
+        settings: { ...agent.settings, mcp: next },
+      });
+      if (!updated) return notFound(c, 'Agent not found');
+      return c.json({ key, prefix: next.apiKeyPrefix, createdAt });
+    },
+  );
+
+  /** Reveal the stored key to an authenticated admin. */
+  router.get(
+    '/:id/mcp/key',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      const agent = await agentService.getAgent(c.req.param('id'));
+      if (!agent) return notFound(c, 'Agent not found');
+      const mcp = (agent.settings?.mcp as Record<string, unknown> | undefined) ?? {};
+      const ciphertext = typeof mcp.apiKeyCiphertext === 'string' ? mcp.apiKeyCiphertext : '';
+      if (!ciphertext) {
+        return c.json(
+          { error: 'This agent key predates recoverable storage. Regenerate it to enable reveal.' },
+          409,
+        );
+      }
+      try {
+        return c.json({ key: openSecret(ciphertext), prefix: mcp.apiKeyPrefix ?? null });
+      } catch (error) {
+        return c.json(
+          { error: error instanceof Error ? error.message : 'Could not decrypt the agent key' },
+          500,
+        );
+      }
+    },
+  );
+
+  router.delete(
+    '/:id/mcp/key',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      const agent = await agentService.getAgent(c.req.param('id'));
+      if (!agent) return notFound(c, 'Agent not found');
+      const current = (agent.settings?.mcp as Record<string, unknown> | undefined) ?? {};
+      const next = { ...current };
+      delete next.apiKeyHash;
+      delete next.apiKeyCiphertext;
+      delete next.apiKeyPrefix;
+      delete next.apiKeyCreatedAt;
+      delete next.apiKeyLastUsedAt;
+      await agentService.updateAgent(agent.id, {
+        settings: { ...agent.settings, mcp: next },
+      });
+      return c.json({ result: true });
     },
   );
 
@@ -389,7 +503,7 @@ export function createAgentsRouter(): Hono {
         settings: body.settings && typeof body.settings === 'object' ? body.settings : undefined,
       });
       if (!agent) return notFound(c, 'Agent not found');
-      return c.json({ agent });
+      return c.json({ agent: publicAgent(agent) });
     },
   );
 

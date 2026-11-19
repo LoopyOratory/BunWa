@@ -16,6 +16,7 @@ import {
   normalizeRestApiKeyActions,
   toRestApiKeyMetadata,
 } from '../core/api-keys/rest-api-keys';
+import { openSecret } from '../core/security/secret-box';
 
 export function createApiKeysRouter(): Hono {
   const router = new Hono();
@@ -95,7 +96,6 @@ export function createApiKeysRouter(): Hono {
 
       return c.json({
         key,
-        keyHash: record.keyHash,
         ...toRestApiKeyMetadata(record),
       });
     },
@@ -161,6 +161,7 @@ export function createApiKeysRouter(): Hono {
       const { key, record: fresh } = createRestApiKeyRecord(session, record.name, record.actions as Action[]);
       record.keyHash = fresh.keyHash;
       record.prefix = fresh.prefix;
+      record.keyCiphertext = fresh.keyCiphertext;
       record.lastUsedAt = undefined;
       await manager.upsert(session, {
         ...config,
@@ -178,9 +179,38 @@ export function createApiKeysRouter(): Hono {
 
       return c.json({
         key,
-        keyHash: record.keyHash,
         ...toRestApiKeyMetadata(record),
       });
+    },
+  );
+
+  /**
+   * GET /api/sessions/:session/api-keys/:id/reveal
+   * Admin-only reveal of the sealed REST key.
+   */
+  router.get('/sessions/:session/api-keys/:id/reveal',
+    policiesMiddleware(CanServer(Action.Manage)),
+    (c) => {
+      const manager = container.resolve(SessionManager);
+      const session = c.req.param('session');
+      const config = sessionConfig(manager, session);
+      if (!config) return c.json(notFound(session), 404);
+      const record = config.restApiKeys?.find((candidate) => candidate.id === c.req.param('id'));
+      if (!record) return c.json({ statusCode: 404, message: 'Key not found' }, 404);
+      if (!record.keyCiphertext) {
+        return c.json(
+          { statusCode: 409, message: 'This key predates recoverable storage. Rotate it to enable reveal.' },
+          409,
+        );
+      }
+      try {
+        return c.json({ key: openSecret(record.keyCiphertext), ...toRestApiKeyMetadata(record) });
+      } catch (error) {
+        return c.json(
+          { statusCode: 500, message: error instanceof Error ? error.message : 'Could not decrypt the key' },
+          500,
+        );
+      }
     },
   );
 

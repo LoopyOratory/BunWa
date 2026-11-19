@@ -67,6 +67,10 @@ export class McpConfig {
   deniedTools?: string[];
   destructiveOps?: boolean;
   apiKeyHash?: string;  // SHA-256 of per-session MCP key (sk_mcp_...)
+  /** AES-GCM sealed copy for the admin "view key" action. */
+  apiKeyCiphertext?: string;
+  apiKeyPrefix?: string;
+  apiKeyCreatedAt?: string;
 }
 
 /**
@@ -79,6 +83,8 @@ export class RestApiKeyRecord {
   session!: string;
   name!: string;
   keyHash!: string;
+  /** AES-GCM sealed copy for the admin "view key" action. */
+  keyCiphertext?: string;
   prefix!: string;
   actions!: string[];
   createdAt!: string;
