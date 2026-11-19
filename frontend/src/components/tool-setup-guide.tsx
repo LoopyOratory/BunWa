@@ -116,7 +116,7 @@ function CodeBlock({ code, label }: { code: string; label: string }) {
         <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">{label}</span>
         <CopyButton text={code} label={`Copy ${label}`} />
       </div>
-      <pre className="max-h-56 overflow-auto p-3 text-[11px] leading-relaxed" aria-label={label}>
+      <pre className="max-h-96 overflow-auto p-3 text-[11px] leading-relaxed" aria-label={label}>
         <code>{code}</code>
       </pre>
     </div>
