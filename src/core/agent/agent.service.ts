@@ -13,6 +13,8 @@ import type {
   CreateUserProfileFactInput,
   ExternalMcpServer,
   ExternalMcpTool,
+  KnowledgeChunk,
+  KnowledgeSearchHit,
   KnowledgeSource,
   ProfileContext,
   RecordEventInput,
@@ -33,6 +35,8 @@ import { cache } from '../cache/redis-cache';
 import { probeModelSettings } from './model-probe';
 import { extractProfileFacts, type ProfileMessage } from './profile-extractor';
 import { listExternalServerTools } from '../../mcp/external-mcp.client';
+import { chunkText } from '../knowledge/chunk';
+import { getEmbeddingProvider } from '../knowledge/embeddings';
 import type { ModelProbeResult, ModelRole, ModelRoleSettings, ModelSettings, UpdateModelRoleSettingsInput, UpdateModelSettingsInput } from './agent.types';
 
 let storePromise: Promise<AgentStore> | null = null;
@@ -252,11 +256,76 @@ export class AgentService {
   }
 
   async addKnowledge(agentId: string, input: CreateKnowledgeInput): Promise<KnowledgeSource> {
-    return (await getStore()).addKnowledge(agentId, input);
+    const text = input.content.trim();
+    if (!text) throw new Error('Knowledge content cannot be empty.');
+    const provider = getEmbeddingProvider();
+    const store = await getStore();
+    const source = await store.addKnowledge(agentId, {
+      ...input,
+      content: text,
+      metadata: input.metadata ?? {},
+    });
+    await store.updateKnowledgeStatus(source.id, {
+      status: 'processing',
+      embeddingModel: provider.model,
+      chunkCount: 0,
+      error: null,
+    });
+
+    try {
+      const chunks = chunkText(text);
+      if (!chunks.length) throw new Error('The document did not produce any usable chunks.');
+      const vectors = await provider.embed(chunks.map((chunk) => chunk.text), 'document');
+      if (vectors.length !== chunks.length) {
+        throw new Error('The embedding model returned the wrong number of vectors.');
+      }
+      await store.addKnowledgeChunks(
+        chunks.map((chunk, index) => ({
+          sourceId: source.id,
+          agentId,
+          index: chunk.index,
+          text: chunk.text,
+          charCount: chunk.charCount,
+          tokenCount: chunk.tokenCount,
+          embedding: vectors[index],
+          embeddingModel: provider.model,
+        })),
+      );
+      return (
+        (await store.updateKnowledgeStatus(source.id, {
+          status: 'ready',
+          embeddingModel: provider.model,
+          chunkCount: chunks.length,
+          error: null,
+        })) ?? source
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await store.updateKnowledgeStatus(source.id, {
+        status: 'error',
+        embeddingModel: provider.model,
+        chunkCount: 0,
+        error: message.slice(0, 500),
+      });
+      throw error;
+    }
   }
 
   async listKnowledge(agentId: string): Promise<KnowledgeSource[]> {
     return (await getStore()).listKnowledge(agentId);
+  }
+
+  async listKnowledgeChunks(agentId: string, sourceId: string): Promise<KnowledgeChunk[]> {
+    return (await getStore()).listKnowledgeChunks(agentId, sourceId);
+  }
+
+  async searchKnowledge(agentId: string, query: string, limit = 4): Promise<KnowledgeSearchHit[]> {
+    const text = query.trim();
+    if (!text) return [];
+    const provider = getEmbeddingProvider();
+    const [vector] = await provider.embed([text], 'query');
+    if (!vector?.length) return [];
+    return (await getStore()).searchKnowledge(agentId, vector, provider.model, Math.max(1, Math.min(limit, 20)));
   }
 
   async deleteKnowledge(agentId: string, sourceId: string): Promise<boolean> {
@@ -393,7 +462,7 @@ export class AgentService {
   }
 
   /** Compose the prompt the runtime should use, including enabled skills and an optional user profile. */
-  async effectivePrompt(agentId: string, userId?: string): Promise<string | null> {
+  async effectivePrompt(agentId: string, userId?: string, query?: string): Promise<string | null> {
     const agent = await this.getAgent(agentId);
     if (!agent) return null;
     const skills = (await this.listSkills(agentId)).filter((skill) => skill.enabled);
@@ -404,6 +473,16 @@ export class AgentService {
         lines.push('', `### ${skill.name}`);
         if (skill.description) lines.push(skill.description);
         if (skill.instructions) lines.push(skill.instructions);
+      }
+    }
+    if (query?.trim()) {
+      const hits = await this.searchKnowledge(agentId, query, 4).catch(() => []);
+      if (hits.length) {
+        lines.push('', '## Knowledge', 'Use these passages when they answer the question. Do not invent details beyond them.');
+        for (const hit of hits) {
+          lines.push('', `### ${hit.sourceName} · chunk ${hit.index + 1}`);
+          lines.push(hit.text);
+        }
       }
     }
     if (userId) {

@@ -4,6 +4,7 @@ import { BunSqliteClient, SqlAgentStore } from '../core/agent/agent.sql';
 import { composePrompt, nextQuestion, isComplete } from '../core/agent/agent.builder';
 import { probeModelSettings } from '../core/agent/model-probe';
 import { AgentService, setAgentStoreForTests } from '../core/agent/agent.service';
+import { setEmbeddingProvider } from '../core/knowledge/embeddings';
 
 process.env.BUNWA_KEY_ENCRYPTION_SECRET ??= 'test-secret';
 
@@ -327,6 +328,47 @@ describe('agent store', () => {
     expect(prompt).toContain('Communication: tone=concise.');
     expect((await service.effectivePrompt(agent.id))?.includes('<user_profile>')).toBe(false);
 
+    setAgentStoreForTests(null);
+    await store.close();
+  });
+
+  test('indexes knowledge into chunks and retrieves the matching passage', async () => {
+    const store = makeStore();
+    await store.init();
+    setAgentStoreForTests(store);
+    const vector = Array.from({ length: 384 }, (_, index) => (index === 0 ? 1 : 0));
+    setEmbeddingProvider({
+      model: 'test-embed',
+      dimensions: 384,
+      embed: async (texts) => texts.map(() => vector),
+    });
+
+    const service = new AgentService();
+    const agent = await service.createAgent({ name: 'RAG', prompt: 'Answer from the knowledge base.' });
+    const source = await service.addKnowledge(agent.id, {
+      name: 'Refund policy',
+      kind: 'text',
+      content: 'Refunds take five working days. Send the order number with the request.',
+    });
+    expect(source.status).toBe('ready');
+    expect(source.chunkCount).toBeGreaterThan(0);
+
+    const chunks = await service.listKnowledgeChunks(agent.id, source.id);
+    expect(chunks).toHaveLength(source.chunkCount);
+    expect(chunks[0].text).toContain('Refunds take five working days');
+
+    const hits = await service.searchKnowledge(agent.id, 'refund', 2);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].text).toContain('Refunds take five working days');
+
+    const prompt = await service.effectivePrompt(agent.id, undefined, 'refund');
+    expect(prompt).toContain('## Knowledge');
+    expect(prompt).toContain('Refunds take five working days');
+
+    expect(await service.deleteKnowledge(agent.id, source.id)).toBe(true);
+    expect(await service.listKnowledgeChunks(agent.id, source.id)).toHaveLength(0);
+
+    setEmbeddingProvider(undefined);
     setAgentStoreForTests(null);
     await store.close();
   });

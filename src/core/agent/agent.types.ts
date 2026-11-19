@@ -32,7 +32,7 @@ export interface AgentSkill {
 }
 
 export type KnowledgeKind = 'text' | 'url' | 'file';
-export type KnowledgeStatus = 'pending' | 'ready' | 'error';
+export type KnowledgeStatus = 'pending' | 'processing' | 'ready' | 'error';
 
 export interface KnowledgeSource {
   id: string;
@@ -42,8 +42,45 @@ export interface KnowledgeSource {
   content: string;
   status: KnowledgeStatus;
   metadata: Record<string, unknown>;
+  /** Model that produced this source's vectors; null until indexed. */
+  embeddingModel: string | null;
+  chunkCount: number;
+  /** Plain-language failure reason when status is error. */
+  error: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface KnowledgeChunk {
+  id: string;
+  sourceId: string;
+  agentId: string;
+  index: number;
+  text: string;
+  charCount: number;
+  tokenCount: number;
+  embeddingModel: string | null;
+  createdAt: string;
+}
+
+export interface AddKnowledgeChunkInput {
+  sourceId: string;
+  agentId: string;
+  index: number;
+  text: string;
+  charCount: number;
+  tokenCount: number;
+  embedding: number[];
+  embeddingModel: string;
+}
+
+export interface KnowledgeSearchHit {
+  sourceId: string;
+  sourceName: string;
+  chunkId: string;
+  index: number;
+  text: string;
+  score: number;
 }
 
 export interface UserProfile {

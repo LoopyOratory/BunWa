@@ -21,6 +21,8 @@ RUN cd frontend && bun install --frozen-lockfile
 
 # Copy source and build the frontend
 COPY . .
+# Fetch the built-in embedding model once at image build time (pinned, checksummed).
+RUN bun run src/core/knowledge/bge/fetch.ts
 RUN bash scripts/build-frontend.sh
 
 # ──────────── stage 2: production ────────────
@@ -43,11 +45,17 @@ RUN groupadd --system --gid 1001 waha && \
 # throw at import time.
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/frontend-dist ./frontend-dist
+COPY --from=builder /app/.cache/models ./.cache/models
 COPY --from=builder /app/package.json /app/bun.lock /app/tsconfig.json ./
 
 # Production deps (skips typescript, oxlint, @types/*, and dev-only packages)
 ENV PUPPETEER_SKIP_DOWNLOAD=true
 RUN bun install --frozen-lockfile --production
+# Keep only this platform's onnxruntime binary (~35 MB instead of ~290 MB).
+RUN arch=$(uname -m | sed 's/x86_64/x64/; s/aarch64/arm64/') \
+ && cd node_modules/onnxruntime-node/bin/napi-v6 \
+ && rm -rf darwin win32 \
+ && find linux -mindepth 1 -maxdepth 1 ! -name "$arch" -exec rm -rf {} +
 
 # ── data dirs ────────────────────────────────────────────────────────────────
 # .sessions   — WhatsApp auth state, session index, SQLite databases

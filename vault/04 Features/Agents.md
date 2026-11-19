@@ -147,6 +147,32 @@ An agent key is an explicit allowlist: it can only see and call the tools in
 MCP key for those), and an empty allowlist means no access. Every issued key is
 stored as a hash; the sealed copy is only for the dashboard reveal action.
 
+## Knowledge base
+
+Agents can carry text pasted in the dashboard or documents uploaded as PDF,
+DOCX, TXT, Markdown, CSV, or JSON. The built-in embedding model is
+`bge-small-en-v1.5` (BAAI, MIT): 384 dimensions, 8-bit ONNX, pinned and
+SHA-256 checked, fetched at Docker build time into `.cache/models`. No hosted
+embedding service is required.
+
+On save the source is split into ~900-character chunks with 120 characters of
+overlap (paragraph and sentence boundaries first), embedded locally, and
+written to the vector index:
+
+- SQLite: `bunwa_knowledge_vec`, a `sqlite-vec` `vec0` table using cosine distance.
+- Postgres: `bunwa_knowledge_chunks.embedding vector(384)` via pgvector.
+
+`GET /api/agents/:id/knowledge` returns source status, `chunkCount`, and the
+embedding model. `GET /api/agents/:id/knowledge/:sourceId/chunks` returns the
+text the retriever sees. `GET /api/agents/:id/knowledge/search?q=…` runs a
+query. `GET /api/agents/:id/effective-prompt?query=…` appends the top four
+matching passages under `## Knowledge`.
+
+The dashboard Knowledge tab shows an indexing spinner, the chunk count, the
+model name, any failure reason, and a **View chunks** dialog. The agent wizard
+accepts pasted text immediately; uploaded files are indexed after the agent is
+created. Scanned PDFs need OCR and are rejected with a clear message.
+
 ## User profiles
 
 A profile is a small set of decision-relevant facts about one person, shared by

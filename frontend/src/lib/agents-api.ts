@@ -31,10 +31,25 @@ export interface KnowledgeSource {
   name: string
   kind: "text" | "url" | "file"
   content: string
-  status: "pending" | "ready" | "error"
+  status: "pending" | "processing" | "ready" | "error"
   metadata: Record<string, unknown>
+  embeddingModel: string | null
+  chunkCount: number
+  error: string | null
   createdAt: string
   updatedAt: string
+}
+
+export interface KnowledgeChunk {
+  id: string
+  sourceId: string
+  agentId: string
+  index: number
+  text: string
+  charCount: number
+  tokenCount: number
+  embeddingModel: string | null
+  createdAt: string
 }
 
 export interface BuilderQuestion {
@@ -263,6 +278,19 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json()
 }
 
+async function requestForm<T>(path: string, form: FormData): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: getApiAuthHeaders(),
+    body: form,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+    throw new Error(body.error || body.message || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
 export const agentApi = {
   list: () => request<{ agents: Agent[] }>("/api/agents").then((r) => r.agents),
 
@@ -328,6 +356,21 @@ export const agentApi = {
       method: "POST",
       body: JSON.stringify(input),
     }).then((r) => r.source),
+
+  uploadKnowledge: (agentId: string, file: File, name?: string) => {
+    const form = new FormData()
+    form.append("file", file)
+    if (name?.trim()) form.append("name", name.trim())
+    return requestForm<{ source: KnowledgeSource }>(`/api/agents/${agentId}/knowledge/upload`, form).then((r) => r.source)
+  },
+
+  listKnowledgeChunks: (agentId: string, sourceId: string) =>
+    request<{ chunks: KnowledgeChunk[] }>(`/api/agents/${agentId}/knowledge/${sourceId}/chunks`).then((r) => r.chunks),
+
+  searchKnowledge: (agentId: string, query: string, limit = 4) =>
+    request<{ hits: Array<{ sourceId: string; sourceName: string; chunkId: string; index: number; text: string; score: number }> }>(
+      `/api/agents/${agentId}/knowledge/search?q=${encodeURIComponent(query)}&limit=${limit}`,
+    ).then((r) => r.hits),
 
   removeKnowledge: (agentId: string, sourceId: string) =>
     request<{ ok: boolean }>(`/api/agents/${agentId}/knowledge/${sourceId}`, { method: "DELETE" }),

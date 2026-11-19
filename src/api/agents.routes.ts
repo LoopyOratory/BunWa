@@ -10,6 +10,7 @@ import { validateToolDefinition } from '../core/tools/tool-schema';
 import { toFishWebhookTool } from '../core/tools/fish-tool.adapter';
 import { toGoogleFunctionDeclaration, toMcpToolDescriptor } from '../core/tools/google-tool.adapter';
 import { hashSecret, openSecret, sealSecret, secretPrefix } from '../core/security/secret-box';
+import { extractDocumentText } from '../core/knowledge/extract';
 
 function badRequest(c: any, message: string) {
   return c.json({ error: message }, 400);
@@ -305,7 +306,11 @@ export function createAgentsRouter(): Hono {
     '/:id/effective-prompt',
     policiesMiddleware(CanServer(Action.Retrieve)),
     async (c) => {
-      const prompt = await agentService.effectivePrompt(c.req.param('id'), c.req.query('userId') || undefined);
+      const prompt = await agentService.effectivePrompt(
+        c.req.param('id'),
+        c.req.query('userId') || undefined,
+        c.req.query('query') || undefined,
+      );
       if (prompt === null) return notFound(c, 'Agent not found');
       return c.json({ prompt });
     },
@@ -362,6 +367,60 @@ export function createAgentsRouter(): Hono {
         metadata: body.metadata && typeof body.metadata === 'object' ? body.metadata : {},
       });
       return c.json({ source }, 201);
+    },
+  );
+
+  router.post(
+    '/:id/knowledge/upload',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      let body: Record<string, unknown>;
+      try {
+        body = (await c.req.parseBody()) as Record<string, unknown>;
+      } catch {
+        return badRequest(c, 'Send the document as multipart/form-data.');
+      }
+      const file = body.file;
+      if (!(file instanceof File)) return badRequest(c, 'A document file is required.');
+      const requestedName = typeof body.name === 'string' ? body.name.trim() : '';
+      const fallbackName = file.name.replace(/\.[^.]+$/, '').trim() || 'Document';
+      try {
+        const extracted = await extractDocumentText(file);
+        const source = await agentService.addKnowledge(c.req.param('id'), {
+          name: requestedName || fallbackName,
+          kind: 'file',
+          content: extracted.text,
+          metadata: extracted.metadata,
+        });
+        return c.json({ source }, 201);
+      } catch (error) {
+        return badRequest(c, error instanceof Error ? error.message : 'Could not read the document.');
+      }
+    },
+  );
+
+  router.get(
+    '/:id/knowledge/search',
+    policiesMiddleware(CanServer(Action.Retrieve)),
+    async (c) => {
+      const query = c.req.query('q') || '';
+      if (!query.trim()) return badRequest(c, 'q is required');
+      const limit = Number(c.req.query('limit') || '4');
+      const hits = await agentService.searchKnowledge(
+        c.req.param('id'),
+        query,
+        Number.isFinite(limit) ? limit : 4,
+      );
+      return c.json({ hits });
+    },
+  );
+
+  router.get(
+    '/:id/knowledge/:sourceId/chunks',
+    policiesMiddleware(CanServer(Action.Retrieve)),
+    async (c) => {
+      const chunks = await agentService.listKnowledgeChunks(c.req.param('id'), c.req.param('sourceId'));
+      return c.json({ chunks });
     },
   );
 

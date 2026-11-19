@@ -19,6 +19,7 @@ frontend-dist/
 .sessions/
 .media/
 data/
+.cache/
 *.db
 *.sqlite
 *.sqlite3

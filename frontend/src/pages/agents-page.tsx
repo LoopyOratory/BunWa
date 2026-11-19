@@ -5,17 +5,21 @@ import {
   ChevronRight,
   Copy,
   Eye,
+  FileText,
   KeyRound,
+  Loader2,
   MessageSquare,
   Plus,
   RefreshCw,
   Sparkles,
   Trash2,
+  Upload,
 } from "lucide-react"
 import { toast } from "sonner"
 import { McpSkillPicker } from "@/components/mcp-skill-picker"
 import { ToolSetupGuide } from "@/components/tool-setup-guide"
 import { ExternalMcpServersDialog } from "@/components/external-mcp-servers-dialog"
+import { KnowledgeChunksDialog } from "@/components/knowledge-chunks-dialog"
 import { VoiceCallModelDialog } from "@/components/voice-call-model-dialog"
 import { PageLayout } from "@/components/page-layout"
 import { EmptyState, ErrorState, SectionHeading } from "@/components/primitives"
@@ -58,7 +62,7 @@ import {
 } from "@/lib/agents-api"
 
 type DraftSkill = { name: string; description: string; instructions: string; enabled: boolean }
-type DraftKnowledge = { name: string; kind: "text" | "url" | "file"; content: string }
+type DraftKnowledge = { name: string; kind: "text" | "file"; content: string; file?: File }
 
 const STEPS = ["Basics", "Prompt", "Skills", "Knowledge", "Tools", "Review"] as const
 type Step = (typeof STEPS)[number]
@@ -458,8 +462,9 @@ function CreateAgentDialog({
   const [skillName, setSkillName] = useState("")
   const [skillInstructions, setSkillInstructions] = useState("")
   const [knowledgeName, setKnowledgeName] = useState("")
-  const [knowledgeKind, setKnowledgeKind] = useState<"text" | "url">("text")
+  const [knowledgeKind, setKnowledgeKind] = useState<"text" | "file">("text")
   const [knowledgeContent, setKnowledgeContent] = useState("")
+  const [knowledgeFile, setKnowledgeFile] = useState<File | null>(null)
   const [mcpTools, setMcpTools] = useState<McpToolInfo[]>([])
   const [selectedMcpTools, setSelectedMcpTools] = useState<string[]>([])
   const [reviewEnabled, setReviewEnabled] = useState(true)
@@ -489,6 +494,7 @@ function CreateAgentDialog({
     setKnowledgeName("")
     setKnowledgeKind("text")
     setKnowledgeContent("")
+    setKnowledgeFile(null)
     setSelectedMcpTools([])
     setReviewEnabled(true)
     setBusy(false)
@@ -564,14 +570,31 @@ function CreateAgentDialog({
   }
 
   const addKnowledge = () => {
-    if (!knowledgeName.trim() || !knowledgeContent.trim()) {
-      toast.error("Give the source a name and content")
-      return
+    if (knowledgeKind === "text") {
+      if (!knowledgeName.trim() || !knowledgeContent.trim()) {
+        toast.error("Give the source a name and content")
+        return
+      }
+      setKnowledge((current) => [
+        ...current,
+        { name: knowledgeName.trim(), kind: "text", content: knowledgeContent.trim() },
+      ])
+    } else {
+      if (!knowledgeFile) {
+        toast.error("Choose a document to upload")
+        return
+      }
+      setKnowledge((current) => [
+        ...current,
+        {
+          name: knowledgeName.trim() || knowledgeFile.name.replace(/\.[^.]+$/, ""),
+          kind: "file",
+          content: "",
+          file: knowledgeFile,
+        },
+      ])
+      setKnowledgeFile(null)
     }
-    setKnowledge((current) => [
-      ...current,
-      { name: knowledgeName.trim(), kind: knowledgeKind, content: knowledgeContent.trim() },
-    ])
     setKnowledgeName("")
     setKnowledgeContent("")
   }
@@ -584,7 +607,9 @@ function CreateAgentDialog({
     }
     setSaving(true)
     try {
-      await agentApi.create({
+      const textKnowledge = knowledge.filter((source) => source.kind === "text")
+      const fileKnowledge = knowledge.filter((source) => source.kind === "file" && source.file)
+      const created = await agentApi.create({
         name: name.trim(),
         prompt: prompt.trim(),
         model: model.trim() || null,
@@ -605,13 +630,25 @@ function CreateAgentDialog({
           instructions: skill.instructions,
           enabled: skill.enabled,
         })),
-        knowledge: knowledge.map((source) => ({
+        knowledge: textKnowledge.map((source) => ({
           name: source.name,
-          kind: source.kind,
+          kind: "text" as const,
           content: source.content,
         })),
       })
-      toast.success("Agent created")
+
+      let uploaded = 0
+      for (const source of fileKnowledge) {
+        try {
+          await agentApi.uploadKnowledge(created.id, source.file!, source.name)
+          uploaded += 1
+        } catch (error) {
+          toast.error(
+            `${source.name}: ${error instanceof Error ? error.message : "could not index the document"}`,
+          )
+        }
+      }
+      toast.success(uploaded > 0 ? `Agent created · ${uploaded} document${uploaded === 1 ? "" : "s"} indexed` : "Agent created")
       onOpenChange(false)
       onCreated()
     } catch (error) {
@@ -792,7 +829,10 @@ function CreateAgentDialog({
             {step === "Knowledge" && (
               <div className="grid gap-5 lg:grid-cols-[1fr_1.1fr]">
                 <div className="space-y-3">
-                  <SectionHeading title="Add knowledge" description="Paste text or point at a URL. The knowledge base is used for retrieval." />
+                  <SectionHeading
+                    title="Add knowledge"
+                    description="Paste text or upload a document. Documents are indexed after the agent is created."
+                  />
                   <div className="space-y-2">
                     <Label htmlFor="knowledge-name">Name</Label>
                     <Input id="knowledge-name" value={knowledgeName} onChange={(event) => setKnowledgeName(event.target.value)} placeholder="Refund policy" />
@@ -800,28 +840,50 @@ function CreateAgentDialog({
                   </div>
                   <div className="flex gap-2">
                     <Button variant={knowledgeKind === "text" ? "default" : "outline"} size="sm" onClick={() => setKnowledgeKind("text")}>
-                      Text
+                      <FileText className="size-4" /> Paste text
                     </Button>
-                    <Button variant={knowledgeKind === "url" ? "default" : "outline"} size="sm" onClick={() => setKnowledgeKind("url")}>
-                      URL
+                    <Button variant={knowledgeKind === "file" ? "default" : "outline"} size="sm" onClick={() => setKnowledgeKind("file")}>
+                      <Upload className="size-4" /> Upload document
                     </Button>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="knowledge-content">{knowledgeKind === "url" ? "URL" : "Content"}</Label>
-                    <Textarea
-                      id="knowledge-content"
-                      value={knowledgeContent}
-                      onChange={(event) => setKnowledgeContent(event.target.value)}
-                      className="min-h-32"
-                      placeholder={knowledgeKind === "url" ? "https://example.com/policy" : "Paste the source text…"}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {knowledgeKind === "url" ? "The page is fetched and indexed." : "Paste the text the agent should know."}
-                    </p>
-                  </div>
+                  {knowledgeKind === "text" ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="knowledge-content">Content</Label>
+                      <Textarea
+                        id="knowledge-content"
+                        value={knowledgeContent}
+                        onChange={(event) => setKnowledgeContent(event.target.value)}
+                        className="min-h-32"
+                        placeholder="Paste the source text…"
+                      />
+                      <p className="text-xs text-muted-foreground">The text is split into chunks and embedded locally.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label htmlFor="knowledge-file">Document</Label>
+                      <Input
+                        id="knowledge-file"
+                        type="file"
+                        accept=".pdf,.docx,.txt,.md,.markdown,.csv,.json"
+                        onChange={(event) => setKnowledgeFile(event.target.files?.[0] ?? null)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        PDF, DOCX, TXT, Markdown, CSV, or JSON · up to 10 MB. Scanned PDFs need OCR and are not supported yet.
+                      </p>
+                      {knowledgeFile && (
+                        <p className="text-xs text-muted-foreground">
+                          Selected: <span className="font-medium text-foreground">{knowledgeFile.name}</span> ·{" "}
+                          {(knowledgeFile.size / 1024).toFixed(0)} KB
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <Button onClick={addKnowledge} className="w-full">
-                    <Plus className="size-4" /> Add knowledge
+                    <Plus className="size-4" /> {knowledgeKind === "text" ? "Add text" : "Add document"}
                   </Button>
+                  <p className="text-xs text-muted-foreground">
+                    After the agent is created, open its Knowledge tab to inspect every chunk the embedding model made.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <SectionHeading title={`Knowledge (${knowledge.length})`} description="Sources attached to this agent." />
@@ -838,7 +900,11 @@ function CreateAgentDialog({
                               <p className="truncate text-sm font-medium">{source.name}</p>
                               <Badge variant="outline">{source.kind}</Badge>
                             </div>
-                            <p className="mt-1 line-clamp-2 break-all text-xs text-muted-foreground">{source.content}</p>
+                            <p className="mt-1 line-clamp-2 break-all text-xs text-muted-foreground">
+                              {source.kind === "file"
+                                ? `${source.file?.name ?? "Document"} · indexes when you create the agent`
+                                : source.content}
+                            </p>
                           </div>
                           <Button
                             variant="ghost"
@@ -947,8 +1013,12 @@ function AgentDetailDialog({
   const [skillName, setSkillName] = useState("")
   const [skillInstructions, setSkillInstructions] = useState("")
   const [knowledgeName, setKnowledgeName] = useState("")
-  const [knowledgeKind, setKnowledgeKind] = useState<"text" | "url">("text")
+  const [knowledgeKind, setKnowledgeKind] = useState<"text" | "file">("text")
   const [knowledgeContent, setKnowledgeContent] = useState("")
+  const [knowledgeFile, setKnowledgeFile] = useState<File | null>(null)
+  const [knowledgeBusy, setKnowledgeBusy] = useState(false)
+  const [chunksOpen, setChunksOpen] = useState(false)
+  const [chunkSource, setChunkSource] = useState<KnowledgeSource | null>(null)
   const [mcpTools, setMcpTools] = useState<McpToolInfo[]>([])
   const [selectedMcpTools, setSelectedMcpTools] = useState<string[]>([])
   const [mcpEnabled, setMcpEnabled] = useState(false)
@@ -1119,20 +1189,43 @@ function AgentDetailDialog({
   }
 
   const addKnowledge = async () => {
-    if (!agent || !knowledgeName.trim() || !knowledgeContent.trim()) return
+    if (!agent) return
+    if (knowledgeKind === "text" && (!knowledgeName.trim() || !knowledgeContent.trim())) {
+      toast.error("Give the source a name and content")
+      return
+    }
+    if (knowledgeKind === "file" && !knowledgeFile) {
+      toast.error("Choose a document to upload")
+      return
+    }
+    setKnowledgeBusy(true)
     try {
-      const source = await agentApi.addKnowledge(agent.id, {
-        name: knowledgeName.trim(),
-        kind: knowledgeKind,
-        content: knowledgeContent.trim(),
-      })
+      const source =
+        knowledgeKind === "text"
+          ? await agentApi.addKnowledge(agent.id, {
+              name: knowledgeName.trim(),
+              kind: "text",
+              content: knowledgeContent.trim(),
+            })
+          : await agentApi.uploadKnowledge(
+              agent.id,
+              knowledgeFile!,
+              knowledgeName.trim() || knowledgeFile!.name.replace(/\.[^.]+$/, ""),
+            )
       setKnowledge((current) => [...current, source])
       setKnowledgeName("")
       setKnowledgeContent("")
-      toast.success("Knowledge source added")
+      setKnowledgeFile(null)
+      toast.success(
+        source.status === "ready"
+          ? `Knowledge indexed · ${source.chunkCount} chunk${source.chunkCount === 1 ? "" : "s"}`
+          : "Knowledge source added",
+      )
       onChanged()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not add the knowledge source")
+    } finally {
+      setKnowledgeBusy(false)
     }
   }
 
@@ -1280,14 +1373,50 @@ function AgentDetailDialog({
 
               <TabsContent value="knowledge" className="mt-0 grid gap-5 lg:grid-cols-[1fr_1.1fr]">
                 <div className="space-y-3">
-                  <SectionHeading title="Add knowledge" description="Text or URL sources for retrieval." />
+                  <SectionHeading
+                    title="Add knowledge"
+                    description="Paste text or upload a document. It is chunked and embedded locally with bge-small."
+                  />
                   <Input value={knowledgeName} onChange={(event) => setKnowledgeName(event.target.value)} placeholder="Source name" />
                   <div className="flex gap-2">
-                    <Button variant={knowledgeKind === "text" ? "default" : "outline"} size="sm" onClick={() => setKnowledgeKind("text")}>Text</Button>
-                    <Button variant={knowledgeKind === "url" ? "default" : "outline"} size="sm" onClick={() => setKnowledgeKind("url")}>URL</Button>
+                    <Button variant={knowledgeKind === "text" ? "default" : "outline"} size="sm" onClick={() => setKnowledgeKind("text")}>
+                      <FileText className="size-4" /> Paste text
+                    </Button>
+                    <Button variant={knowledgeKind === "file" ? "default" : "outline"} size="sm" onClick={() => setKnowledgeKind("file")}>
+                      <Upload className="size-4" /> Upload document
+                    </Button>
                   </div>
-                  <Textarea value={knowledgeContent} onChange={(event) => setKnowledgeContent(event.target.value)} placeholder={knowledgeKind === "url" ? "https://…" : "Paste text…"} className="min-h-28" />
-                  <Button onClick={addKnowledge} className="w-full"><Plus className="size-4" /> Add knowledge</Button>
+                  {knowledgeKind === "text" ? (
+                    <Textarea
+                      value={knowledgeContent}
+                      onChange={(event) => setKnowledgeContent(event.target.value)}
+                      placeholder="Paste text…"
+                      className="min-h-28"
+                    />
+                  ) : (
+                    <div className="space-y-2">
+                      <Input
+                        type="file"
+                        accept=".pdf,.docx,.txt,.md,.markdown,.csv,.json"
+                        onChange={(event) => setKnowledgeFile(event.target.files?.[0] ?? null)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        PDF, DOCX, TXT, Markdown, CSV, or JSON · up to 10 MB.
+                      </p>
+                      {knowledgeFile && (
+                        <p className="text-xs text-muted-foreground">
+                          Selected: <span className="font-medium text-foreground">{knowledgeFile.name}</span>
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <Button onClick={addKnowledge} disabled={knowledgeBusy} className="w-full">
+                    {knowledgeBusy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+                    {knowledgeBusy ? "Chunking and embedding…" : knowledgeKind === "text" ? "Add text" : "Upload and index"}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    The document is split into chunks, embedded with the built-in model, and stored in the vector index.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <SectionHeading title={`Knowledge (${knowledge.length})`} />
@@ -1297,17 +1426,63 @@ function AgentDetailDialog({
                     <div key={source.id} className="rounded-2xl border border-border/70 p-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <p className="truncate text-sm font-medium">{source.name}</p>
                             <Badge variant="outline">{source.kind}</Badge>
+                            {source.status === "ready" && (
+                              <Badge variant="secondary">{source.chunkCount} chunk{source.chunkCount === 1 ? "" : "s"}</Badge>
+                            )}
+                            {source.status === "processing" && (
+                              <Badge variant="outline" className="gap-1">
+                                <Loader2 className="size-3 animate-spin" /> Indexing
+                              </Badge>
+                            )}
+                            {source.status === "error" && <Badge variant="destructive">Failed</Badge>}
                           </div>
-                          <p className="mt-1 line-clamp-2 break-all text-xs text-muted-foreground">{source.content}</p>
+                          <p className="mt-1 line-clamp-2 break-all text-xs text-muted-foreground">
+                            {source.kind === "file"
+                              ? String(source.metadata?.fileName ?? source.content.slice(0, 160))
+                              : source.content}
+                          </p>
+                          {source.embeddingModel && (
+                            <p className="mt-1 text-[11px] text-muted-foreground/70">
+                              {source.embeddingModel}
+                              {source.status === "ready" ? ` · ${source.chunkCount} chunk${source.chunkCount === 1 ? "" : "s"} indexed` : ""}
+                            </p>
+                          )}
+                          {source.status === "error" && source.error && (
+                            <p className="mt-1 text-[11px] text-destructive">{source.error}</p>
+                          )}
                         </div>
-                        <Button variant="ghost" size="icon" onClick={() => removeKnowledge(source.id)}><Trash2 className="size-4" /></Button>
+                        <div className="flex shrink-0 items-center gap-1">
+                          {source.chunkCount > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-[11px]"
+                              onClick={() => {
+                                setChunkSource(source)
+                                setChunksOpen(true)
+                              }}
+                            >
+                              View chunks
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="icon" onClick={() => removeKnowledge(source.id)}><Trash2 className="size-4" /></Button>
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
+                {agent && (
+                  <KnowledgeChunksDialog
+                    agentId={agent.id}
+                    sourceId={chunkSource?.id ?? null}
+                    sourceName={chunkSource?.name ?? ""}
+                    open={chunksOpen}
+                    onOpenChange={setChunksOpen}
+                  />
+                )}
               </TabsContent>
 
               <TabsContent value="mcp" className="mt-0 space-y-4">

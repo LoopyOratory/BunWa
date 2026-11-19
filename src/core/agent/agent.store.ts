@@ -1,6 +1,7 @@
 import type {
   Agent,
   AgentSkill,
+  AddKnowledgeChunkInput,
   AnalyticsEvent,
   Conversation,
   CreateAgentInput,
@@ -13,6 +14,8 @@ import type {
   CreateExternalMcpServerInput,
   UpdateExternalMcpServerInput,
   UpsertExternalMcpToolInput,
+  KnowledgeChunk,
+  KnowledgeSearchHit,
   KnowledgeSource,
   ModelRole,
   ModelSettings,
@@ -70,6 +73,13 @@ export interface AgentStore {
   addKnowledge(agentId: string, input: CreateKnowledgeInput): Promise<KnowledgeSource>;
   listKnowledge(agentId: string): Promise<KnowledgeSource[]>;
   deleteKnowledge(agentId: string, sourceId: string): Promise<boolean>;
+  updateKnowledgeStatus(
+    sourceId: string,
+    input: { status: KnowledgeSource['status']; error?: string | null; embeddingModel?: string | null; chunkCount?: number },
+  ): Promise<KnowledgeSource | null>;
+  addKnowledgeChunks(chunks: AddKnowledgeChunkInput[]): Promise<KnowledgeChunk[]>;
+  listKnowledgeChunks(agentId: string, sourceId: string): Promise<KnowledgeChunk[]>;
+  searchKnowledge(agentId: string, embedding: number[], model: string, limit: number): Promise<KnowledgeSearchHit[]>;
 
   getUserProfile(userId: string): Promise<UserProfile | null>;
   upsertUserProfile(input: UpsertUserProfileInput): Promise<UserProfile>;

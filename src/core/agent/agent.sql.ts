@@ -9,6 +9,7 @@ import { sealSecret, tryOpenSecret, encryptionConfigured, isSealedSecret } from 
 import type {
   Agent,
   AgentSkill,
+  AddKnowledgeChunkInput,
   AnalyticsEvent,
   Conversation,
   CreateAgentInput,
@@ -19,6 +20,8 @@ import type {
   CreateUserProfileFactInput,
   ExternalMcpServer,
   ExternalMcpTool,
+  KnowledgeChunk,
+  KnowledgeSearchHit,
   KnowledgeSource,
   ModelSettings,
   ModelSettingsSecrets,
@@ -49,6 +52,8 @@ export interface SqlClient {
   dialect: 'sqlite' | 'postgres';
   query<T = any>(sql: string, params?: any[]): Promise<T[]>;
   execute(sql: string, params?: any[]): Promise<void>;
+  /** SQLite only: load a native extension (sqlite-vec). */
+  loadExtension?(path: string): void;
   close(): Promise<void>;
 }
 
@@ -80,6 +85,10 @@ export class BunSqliteClient implements SqlClient {
 
   async execute(sql: string, params: any[] = []): Promise<void> {
     this.db.run(sql, params);
+  }
+
+  loadExtension(path: string): void {
+    this.db.loadExtension(path);
   }
 
   async close(): Promise<void> {
@@ -240,8 +249,25 @@ function rowToKnowledge(row: any): KnowledgeSource {
     content: row.content ?? '',
     status: row.status,
     metadata: json(row.metadata, {}),
+    embeddingModel: asNullableString(row.embedding_model),
+    chunkCount: Number(row.chunk_count ?? 0),
+    error: asNullableString(row.error),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function rowToKnowledgeChunk(row: any): KnowledgeChunk {
+  return {
+    id: row.id,
+    sourceId: row.source_id,
+    agentId: row.agent_id,
+    index: Number(row.chunk_index),
+    text: row.text,
+    charCount: Number(row.char_count ?? row.text?.length ?? 0),
+    tokenCount: Number(row.token_count ?? 0),
+    embeddingModel: asNullableString(row.embedding_model),
+    createdAt: row.created_at,
   };
 }
 
@@ -427,6 +453,9 @@ const SCHEMA: string[] = [
     content TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'pending',
     metadata TEXT NOT NULL DEFAULT '{}',
+    embedding_model TEXT,
+    chunk_count INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   )`,
@@ -520,12 +549,104 @@ const SCHEMA: string[] = [
   `CREATE INDEX IF NOT EXISTS bunwa_analytics_events_conversation_idx ON bunwa_analytics_events (conversation_id)`,
 ];
 
+/**
+ * Knowledge chunks are dialect-specific: SQLite stores the vector as a BLOB
+ * and mirrors it into a sqlite-vec virtual table; Postgres uses pgvector's
+ * native `vector(384)` column. Keep the scalar columns identical.
+ */
+const KNOWLEDGE_CHUNK_SCHEMA_SQLITE = [
+  `CREATE TABLE IF NOT EXISTS bunwa_knowledge_chunks (
+    id TEXT PRIMARY KEY,
+    source_id TEXT NOT NULL,
+    agent_id TEXT NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    char_count INTEGER NOT NULL DEFAULT 0,
+    token_count INTEGER NOT NULL DEFAULT 0,
+    embedding BLOB,
+    embedding_model TEXT,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS bunwa_knowledge_chunks_source_idx ON bunwa_knowledge_chunks (source_id, chunk_index)`,
+  `CREATE INDEX IF NOT EXISTS bunwa_knowledge_chunks_agent_idx ON bunwa_knowledge_chunks (agent_id)`,
+];
+
+const KNOWLEDGE_CHUNK_SCHEMA_POSTGRES = [
+  `CREATE EXTENSION IF NOT EXISTS vector`,
+  `CREATE TABLE IF NOT EXISTS bunwa_knowledge_chunks (
+    id TEXT PRIMARY KEY,
+    source_id TEXT NOT NULL,
+    agent_id TEXT NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    char_count INTEGER NOT NULL DEFAULT 0,
+    token_count INTEGER NOT NULL DEFAULT 0,
+    embedding vector(384),
+    embedding_model TEXT,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS bunwa_knowledge_chunks_source_idx ON bunwa_knowledge_chunks (source_id, chunk_index)`,
+  `CREATE INDEX IF NOT EXISTS bunwa_knowledge_chunks_agent_idx ON bunwa_knowledge_chunks (agent_id)`,
+];
+
 export class SqlAgentStore implements AgentStore {
+  private vectorReady = false;
+  private vectorError: string | null = null;
+
   constructor(private readonly client: SqlClient) {}
 
   async init(): Promise<void> {
     for (const sql of SCHEMA) {
       await this.client.execute(sql);
+    }
+    if (this.client.dialect === 'sqlite') {
+      for (const sql of KNOWLEDGE_CHUNK_SCHEMA_SQLITE) {
+        await this.client.execute(sql);
+      }
+      try {
+        const { getLoadablePath } = await import('sqlite-vec');
+        this.client.loadExtension?.(getLoadablePath());
+        await this.client.execute(
+          `CREATE VIRTUAL TABLE IF NOT EXISTS bunwa_knowledge_vec USING vec0(embedding float[384] distance_metric=cosine)`,
+        );
+        this.vectorReady = true;
+      } catch (error) {
+        this.vectorError = String(error);
+        throw new Error(
+          `sqlite-vec is required for the SQLite knowledge base but failed to load: ${String(error)}`,
+        );
+      }
+    } else {
+      try {
+        for (const sql of KNOWLEDGE_CHUNK_SCHEMA_POSTGRES) {
+          await this.client.execute(sql);
+        }
+        this.vectorReady = true;
+      } catch (error) {
+        // PGlite (the conformance test server) and a Postgres install without
+        // pgvector cannot create a vector column. Keep the scalar chunk table
+        // usable for metadata/delete, and fail knowledge indexing/search with
+        // a clear message instead of taking the whole server down.
+        this.vectorError = String(error);
+        await this.client.execute(`CREATE TABLE IF NOT EXISTS bunwa_knowledge_chunks (
+          id TEXT PRIMARY KEY,
+          source_id TEXT NOT NULL,
+          agent_id TEXT NOT NULL,
+          chunk_index INTEGER NOT NULL,
+          text TEXT NOT NULL,
+          char_count INTEGER NOT NULL DEFAULT 0,
+          token_count INTEGER NOT NULL DEFAULT 0,
+          embedding TEXT,
+          embedding_model TEXT,
+          created_at TEXT NOT NULL
+        )`);
+        await this.client.execute(
+          `CREATE INDEX IF NOT EXISTS bunwa_knowledge_chunks_source_idx ON bunwa_knowledge_chunks (source_id, chunk_index)`,
+        );
+        await this.client.execute(
+          `CREATE INDEX IF NOT EXISTS bunwa_knowledge_chunks_agent_idx ON bunwa_knowledge_chunks (agent_id)`,
+        );
+      }
     }
     // Older databases were created before agents had a fallback model.
     if (!(await this.columnExists('bunwa_agents', 'fallback_model'))) {
@@ -537,6 +658,15 @@ export class SqlAgentStore implements AgentStore {
     }
     if (!(await this.columnExists('bunwa_external_mcp_servers', 'last_error'))) {
       await this.client.execute('ALTER TABLE bunwa_external_mcp_servers ADD COLUMN last_error TEXT');
+    }
+    if (!(await this.columnExists('bunwa_knowledge_sources', 'embedding_model'))) {
+      await this.client.execute('ALTER TABLE bunwa_knowledge_sources ADD COLUMN embedding_model TEXT');
+    }
+    if (!(await this.columnExists('bunwa_knowledge_sources', 'chunk_count'))) {
+      await this.client.execute('ALTER TABLE bunwa_knowledge_sources ADD COLUMN chunk_count INTEGER NOT NULL DEFAULT 0');
+    }
+    if (!(await this.columnExists('bunwa_knowledge_sources', 'error'))) {
+      await this.client.execute('ALTER TABLE bunwa_knowledge_sources ADD COLUMN error TEXT');
     }
     if (encryptionConfigured()) {
       await this.sealLegacyExternalMcpHeaders();
@@ -643,6 +773,17 @@ export class SqlAgentStore implements AgentStore {
     const existing = await this.getAgent(id);
     if (!existing) return false;
     await this.client.execute(`DELETE FROM bunwa_agent_skills WHERE agent_id = ?`, [id]);
+    if (this.client.dialect === 'sqlite' && this.vectorReady) {
+      const chunkRows = await this.client.query(`SELECT rowid FROM bunwa_knowledge_chunks WHERE agent_id = ?`, [id]);
+      if (chunkRows.length) {
+        const placeholders = chunkRows.map(() => '?').join(',');
+        await this.client.execute(
+          `DELETE FROM bunwa_knowledge_vec WHERE rowid IN (${placeholders})`,
+          chunkRows.map((row: any) => row.rowid),
+        );
+      }
+    }
+    await this.client.execute(`DELETE FROM bunwa_knowledge_chunks WHERE agent_id = ?`, [id]);
     await this.client.execute(`DELETE FROM bunwa_knowledge_sources WHERE agent_id = ?`, [id]);
     await this.client.execute(`DELETE FROM bunwa_agents WHERE id = ?`, [id]);
     return true;
@@ -1046,15 +1187,189 @@ export class SqlAgentStore implements AgentStore {
       content: input.content,
       status: 'pending',
       metadata: input.metadata ?? {},
+      embeddingModel: null,
+      chunkCount: 0,
+      error: null,
       createdAt: at,
       updatedAt: at,
     };
     await this.client.execute(
-      `INSERT INTO bunwa_knowledge_sources (id, agent_id, name, kind, content, status, metadata, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [source.id, source.agentId, source.name, source.kind, source.content, source.status, JSON.stringify(source.metadata), at, at],
+      `INSERT INTO bunwa_knowledge_sources
+         (id, agent_id, name, kind, content, status, metadata, embedding_model, chunk_count, error, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        source.id,
+        source.agentId,
+        source.name,
+        source.kind,
+        source.content,
+        source.status,
+        JSON.stringify(source.metadata),
+        source.embeddingModel,
+        source.chunkCount,
+        source.error,
+        at,
+        at,
+      ],
     );
     return source;
+  }
+
+  async updateKnowledgeStatus(
+    sourceId: string,
+    input: { status: KnowledgeSource['status']; error?: string | null; embeddingModel?: string | null; chunkCount?: number },
+  ): Promise<KnowledgeSource | null> {
+    const current = await this.client.query(`SELECT * FROM bunwa_knowledge_sources WHERE id = ? LIMIT 1`, [sourceId]);
+    if (!current[0]) return null;
+    const at = now();
+    await this.client.execute(
+      `UPDATE bunwa_knowledge_sources
+       SET status = ?, error = ?, embedding_model = ?, chunk_count = ?, updated_at = ?
+       WHERE id = ?`,
+      [
+        input.status,
+        input.error === undefined ? current[0].error ?? null : input.error,
+        input.embeddingModel === undefined ? current[0].embedding_model ?? null : input.embeddingModel,
+        input.chunkCount === undefined ? Number(current[0].chunk_count ?? 0) : input.chunkCount,
+        at,
+        sourceId,
+      ],
+    );
+    const rows = await this.client.query(`SELECT * FROM bunwa_knowledge_sources WHERE id = ? LIMIT 1`, [sourceId]);
+    return rows[0] ? rowToKnowledge(rows[0]) : null;
+  }
+
+  async addKnowledgeChunks(chunks: AddKnowledgeChunkInput[]): Promise<KnowledgeChunk[]> {
+    this.assertVectorReady();
+    if (!chunks.length) return [];
+    const at = now();
+    const saved: KnowledgeChunk[] = [];
+    for (const chunk of chunks) {
+      const id = Bun.randomUUIDv7();
+      const vectorExpr = this.client.dialect === 'postgres' ? '?::vector' : '?';
+      const embeddingParam =
+        this.client.dialect === 'postgres'
+          ? `[${chunk.embedding.join(',')}]`
+          : Buffer.from(new Float32Array(chunk.embedding).buffer);
+      await this.client.execute(
+        `INSERT INTO bunwa_knowledge_chunks
+           (id, source_id, agent_id, chunk_index, text, char_count, token_count, embedding, embedding_model, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ${vectorExpr}, ?, ?)`,
+        [
+          id,
+          chunk.sourceId,
+          chunk.agentId,
+          chunk.index,
+          chunk.text,
+          chunk.charCount,
+          chunk.tokenCount,
+          embeddingParam,
+          chunk.embeddingModel,
+          at,
+        ],
+      );
+      if (this.client.dialect === 'sqlite') {
+        const rows = await this.client.query(`SELECT rowid FROM bunwa_knowledge_chunks WHERE id = ? LIMIT 1`, [id]);
+        if (!rows[0]) throw new Error(`Could not read back knowledge chunk ${id}`);
+        await this.client.execute(`INSERT INTO bunwa_knowledge_vec(rowid, embedding) VALUES (?, ?)`, [
+          rows[0].rowid,
+          new Float32Array(chunk.embedding),
+        ]);
+      }
+      saved.push({
+        id,
+        sourceId: chunk.sourceId,
+        agentId: chunk.agentId,
+        index: chunk.index,
+        text: chunk.text,
+        charCount: chunk.charCount,
+        tokenCount: chunk.tokenCount,
+        embeddingModel: chunk.embeddingModel,
+        createdAt: at,
+      });
+    }
+    return saved;
+  }
+
+  async listKnowledgeChunks(agentId: string, sourceId: string): Promise<KnowledgeChunk[]> {
+    const rows = await this.client.query(
+      `SELECT * FROM bunwa_knowledge_chunks
+       WHERE agent_id = ? AND source_id = ?
+       ORDER BY chunk_index ASC`,
+      [agentId, sourceId],
+    );
+    return rows.map(rowToKnowledgeChunk);
+  }
+
+  async searchKnowledge(
+    agentId: string,
+    embedding: number[],
+    model: string,
+    limit: number,
+  ): Promise<KnowledgeSearchHit[]> {
+    this.assertVectorReady();
+    if (!embedding.length || limit <= 0) return [];
+    if (this.client.dialect === 'postgres') {
+      const literal = `[${embedding.join(',')}]`;
+      const rows = await this.client.query(
+        `SELECT c.id, c.source_id, c.chunk_index, c.text, s.name AS source_name,
+                1 - (c.embedding <=> ?::vector) AS score
+         FROM bunwa_knowledge_chunks c
+         JOIN bunwa_knowledge_sources s ON s.id = c.source_id
+         WHERE c.agent_id = ? AND c.embedding_model = ? AND c.embedding IS NOT NULL
+         ORDER BY c.embedding <=> ?::vector
+         LIMIT ?`,
+        [literal, agentId, model, literal, limit],
+      );
+      return rows.map((row: any) => ({
+        sourceId: row.source_id,
+        sourceName: row.source_name,
+        chunkId: row.id,
+        index: Number(row.chunk_index),
+        text: row.text,
+        score: Number(row.score),
+      }));
+    }
+
+    // sqlite-vec returns the nearest rowids; join the chunk metadata after.
+    const nearest = await this.client.query(
+      `SELECT rowid, distance FROM bunwa_knowledge_vec
+       WHERE embedding MATCH ? AND k = ?
+       ORDER BY distance`,
+      [new Float32Array(embedding), Math.max(limit * 4, limit)],
+    );
+    if (!nearest.length) return [];
+    const rowids = nearest.map((row: any) => row.rowid);
+    const placeholders = rowids.map(() => '?').join(',');
+    const rows = await this.client.query(
+      `SELECT c.id, c.source_id, c.chunk_index, c.text, s.name AS source_name, c.rowid
+       FROM bunwa_knowledge_chunks c
+       JOIN bunwa_knowledge_sources s ON s.id = c.source_id
+       WHERE c.rowid IN (${placeholders})
+         AND c.agent_id = ?
+         AND c.embedding_model = ?`,
+      [...rowids, agentId, model],
+    );
+    const distanceByRowid = new Map<number, number>(nearest.map((row: any) => [Number(row.rowid), Number(row.distance)]));
+    return rows
+      .map((row: any) => ({
+        sourceId: row.source_id,
+        sourceName: row.source_name,
+        chunkId: row.id,
+        index: Number(row.chunk_index),
+        text: row.text,
+        score: 1 - (distanceByRowid.get(Number(row.rowid)) ?? 1),
+      }))
+      .sort((a: KnowledgeSearchHit, b: KnowledgeSearchHit) => b.score - a.score)
+      .slice(0, limit);
+  }
+
+  private assertVectorReady(): void {
+    if (!this.vectorReady) {
+      throw new Error(
+        `Knowledge search is unavailable: ${this.vectorError ?? 'the vector store was not initialized'}`,
+      );
+    }
   }
 
   async listKnowledge(agentId: string): Promise<KnowledgeSource[]> {
@@ -1065,6 +1380,20 @@ export class SqlAgentStore implements AgentStore {
   async deleteKnowledge(agentId: string, sourceId: string): Promise<boolean> {
     const rows = await this.client.query(`SELECT id FROM bunwa_knowledge_sources WHERE id = ? AND agent_id = ? LIMIT 1`, [sourceId, agentId]);
     if (!rows[0]) return false;
+    if (this.client.dialect === 'sqlite' && this.vectorReady) {
+      const chunkRows = await this.client.query(
+        `SELECT rowid FROM bunwa_knowledge_chunks WHERE source_id = ? AND agent_id = ?`,
+        [sourceId, agentId],
+      );
+      if (chunkRows.length) {
+        const placeholders = chunkRows.map(() => '?').join(',');
+        await this.client.execute(
+          `DELETE FROM bunwa_knowledge_vec WHERE rowid IN (${placeholders})`,
+          chunkRows.map((row: any) => row.rowid),
+        );
+      }
+    }
+    await this.client.execute(`DELETE FROM bunwa_knowledge_chunks WHERE source_id = ? AND agent_id = ?`, [sourceId, agentId]);
     await this.client.execute(`DELETE FROM bunwa_knowledge_sources WHERE id = ? AND agent_id = ?`, [sourceId, agentId]);
     return true;
   }
