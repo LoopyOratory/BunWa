@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/sidebar"
 import {
   Home, MessageSquare, Eye, Server, LogOut, BookOpen,
-  Sun, Moon, Plug, FileText, Activity, Send, Settings, ListOrdered, MessageCircle, BarChart3, Bot, Users,
+  Sun, Moon, Plug, FileText, Activity, Send, Settings, ListOrdered, MessageCircle, BarChart3, Bot, Users, TrendingUp,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth"
 import { useTheme } from "@/components/theme-provider"
@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils"
 const overviewItems = [
   { path: "/", label: "Dashboard", icon: Home },
   { path: "/analytics", label: "Analytics", icon: BarChart3 },
+  { path: "/agent-analytics", label: "Agent analytics", icon: TrendingUp },
   { path: "/agents", label: "Agents", icon: Bot },
   { path: "/profiles", label: "User profiles", icon: Users },
 ]

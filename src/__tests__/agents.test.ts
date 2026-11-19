@@ -277,6 +277,36 @@ describe('agent store', () => {
     await store.close();
   });
 
+  test('builds a dashboard from stored conversations and events', async () => {
+    const store = makeStore();
+    await store.init();
+    const service = new AgentService();
+
+    const agent = await store.createAgent({ name: 'Analytics agent', status: 'active' });
+    const conversation = await store.createConversation({ agentId: agent.id, userId: '233500000000@c.us' });
+    await store.recordEvent({ type: 'conversation.started', agentId: agent.id, conversationId: conversation.id });
+    await store.recordEvent({
+      type: 'conversion',
+      agentId: agent.id,
+      conversationId: conversation.id,
+      data: { valueCents: 25000, currency: 'GHS' },
+    });
+    await store.closeConversation(conversation.id);
+    await store.setReviewRequested(conversation.id, new Date().toISOString());
+    await store.submitReview(conversation.id, 5, 'Quick and clear');
+
+    const dashboard = await service.analyticsDashboard({ range: '7d', channel: 'all' }, store);
+    expect(dashboard.totals.conversations).toBe(1);
+    expect(dashboard.totals.converted).toBe(1);
+    expect(dashboard.totals.averageRating).toBe(5);
+    expect(dashboard.currency).toBe('GHS');
+    expect(dashboard.leaderboard[0].agentName).toBe('Analytics agent');
+    expect(dashboard.recentConversations[0].outcome).toBe('converted');
+
+    setAgentStoreForTests(null);
+    await store.close();
+  });
+
   test('stores external MCP servers and their tools', async () => {
     const store = makeStore();
     await store.init();

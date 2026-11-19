@@ -103,10 +103,24 @@ export interface AgentStore {
 
   createConversation(input: CreateConversationInput): Promise<Conversation>;
   getConversation(id: string): Promise<Conversation | null>;
+  listConversations(filter?: {
+    agentId?: string;
+    channel?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+  }): Promise<Conversation[]>;
   closeConversation(id: string, endedAt?: string): Promise<Conversation | null>;
   setReviewRequested(id: string, at: string): Promise<Conversation | null>;
   submitReview(id: string, rating: number, text?: string): Promise<Conversation | null>;
 
   recordEvent(input: RecordEventInput): Promise<AnalyticsEvent>;
   listEvents(filter?: { agentId?: string; conversationId?: string; type?: string; limit?: number }): Promise<AnalyticsEvent[]>;
+  listEventsForAnalytics(filter?: {
+    agentId?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+  }): Promise<AnalyticsEvent[]>;
 }

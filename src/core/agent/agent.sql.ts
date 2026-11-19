@@ -536,6 +536,7 @@ const SCHEMA: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS bunwa_conversations_agent_idx ON bunwa_conversations (agent_id)`,
   `CREATE INDEX IF NOT EXISTS bunwa_conversations_user_idx ON bunwa_conversations (user_id)`,
+  `CREATE INDEX IF NOT EXISTS bunwa_conversations_started_idx ON bunwa_conversations (started_at)`,
   `CREATE TABLE IF NOT EXISTS bunwa_analytics_events (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,
@@ -548,6 +549,7 @@ const SCHEMA: string[] = [
   `CREATE INDEX IF NOT EXISTS bunwa_analytics_events_type_idx ON bunwa_analytics_events (type)`,
   `CREATE INDEX IF NOT EXISTS bunwa_analytics_events_agent_idx ON bunwa_analytics_events (agent_id)`,
   `CREATE INDEX IF NOT EXISTS bunwa_analytics_events_conversation_idx ON bunwa_analytics_events (conversation_id)`,
+  `CREATE INDEX IF NOT EXISTS bunwa_analytics_events_created_idx ON bunwa_analytics_events (created_at)`,
 ];
 
 /**
@@ -1783,6 +1785,42 @@ export class SqlAgentStore implements AgentStore {
     return rows[0] ? rowToConversation(rows[0]) : null;
   }
 
+  async listConversations(filter: {
+    agentId?: string;
+    channel?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+  } = {}): Promise<Conversation[]> {
+    const where: string[] = [];
+    const params: any[] = [];
+    if (filter.agentId) {
+      where.push('agent_id = ?');
+      params.push(filter.agentId);
+    }
+    if (filter.channel) {
+      where.push('channel = ?');
+      params.push(filter.channel);
+    }
+    if (filter.status) {
+      where.push('status = ?');
+      params.push(filter.status);
+    }
+    if (filter.from) {
+      where.push('started_at >= ?');
+      params.push(filter.from);
+    }
+    if (filter.to) {
+      where.push('started_at < ?');
+      params.push(filter.to);
+    }
+    const limit = Math.max(1, Math.min(filter.limit ?? 10_000, 50_000));
+    const sql = `SELECT * FROM bunwa_conversations${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY started_at DESC LIMIT ${limit}`;
+    const rows = await this.client.query(sql, params);
+    return rows.map(rowToConversation);
+  }
+
   async closeConversation(id: string, endedAt = now()): Promise<Conversation | null> {
     const current = await this.getConversation(id);
     if (!current) return null;
@@ -1852,6 +1890,32 @@ export class SqlAgentStore implements AgentStore {
     }
     const limit = Math.max(1, Math.min(filter.limit ?? 100, 1000));
     const sql = `SELECT * FROM bunwa_analytics_events${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY created_at DESC LIMIT ${limit}`;
+    const rows = await this.client.query(sql, params);
+    return rows.map(rowToEvent);
+  }
+
+  async listEventsForAnalytics(filter: {
+    agentId?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+  } = {}): Promise<AnalyticsEvent[]> {
+    const where: string[] = [];
+    const params: any[] = [];
+    if (filter.agentId) {
+      where.push('agent_id = ?');
+      params.push(filter.agentId);
+    }
+    if (filter.from) {
+      where.push('created_at >= ?');
+      params.push(filter.from);
+    }
+    if (filter.to) {
+      where.push('created_at < ?');
+      params.push(filter.to);
+    }
+    const limit = Math.max(1, Math.min(filter.limit ?? 50_000, 50_000));
+    const sql = `SELECT * FROM bunwa_analytics_events${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY created_at ASC LIMIT ${limit}`;
     const rows = await this.client.query(sql, params);
     return rows.map(rowToEvent);
   }

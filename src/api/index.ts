@@ -44,6 +44,7 @@ export function createApiRouter(): Hono {
   router.route('/health', createHealthRouter());
   router.route('/api/version', createVersionRouter());
   router.route('/api/server', createServerRouter());
+  router.route('/api/agents', createAgentsRouter());
   router.route('/api/sessions', createSessionsRouter());
   router.route('/api', createChattingRouter());
   router.route('/api', createBulkRouter());
@@ -68,7 +69,6 @@ export function createApiRouter(): Hono {
   router.route('/api/sessions', createSendingPolicyRouter());
   router.route('/api', createAuditRouter());
   router.route('/api', createInfraRouter());
-  router.route('/api/agents', createAgentsRouter());
   router.route('/api', createMcpConfigRouter());
   router.route('/api', createApiKeysRouter());
   router.route('/api/files', createFilesRouter());

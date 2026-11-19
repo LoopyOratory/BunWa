@@ -202,6 +202,31 @@ fallback; providers are limited to OpenAI-compatible, Anthropic, and Google.
 Limits are 16 MB per attachment and 24,000 characters of returned text
 (documents are also capped at 10 MB by the extractor).
 
+## Analytics dashboard
+
+`GET /api/agents/analytics/dashboard?range=24h|7d|30d|90d&channel=all|whatsapp|voice&agentId=…`
+returns one payload for the admin page at `/agent-analytics`:
+
+- KPIs with current value, previous-period value, delta, and sample size:
+  conversations, resolution rate, CSAT, median first response, handoffs, and
+  cost per conversation.
+- A bucketed series of started, engaged, resolved, converted, handoff, review,
+  rating, response-time and cost points.
+- The conversation funnel: started → engaged → qualified → resolved → converted.
+- A per-agent leaderboard, attention items, topic breakdown, tool health,
+  knowledge gaps, CSAT distribution and recent conversations.
+- `POST /api/agents/events` records the runtime events the dashboard needs:
+  `message.inbound`, `message.outbound`, `agent.reply`, `model.call`,
+  `model.error`, `tool.call`, `knowledge.search`, `handoff.requested`,
+  `conversion`, and `review.*`.
+
+Conversation metadata can carry `engaged`, `messageCount`, `qualified`,
+`outcome`, `topic`, `firstResponseMs`, `costCents`, and `currency` until the
+runtime writes native metric columns. A missing rate is returned as `null`, not
+zero; the UI shows “—”. The current implementation reads rows in the selected
+window and computes in `src/core/agent/agent.analytics.ts`; daily rollups are the
+next step for very large histories.
+
 ## User profiles
 
 A profile is a small set of decision-relevant facts about one person, shared by

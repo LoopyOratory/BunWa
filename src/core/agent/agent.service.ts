@@ -38,6 +38,13 @@ import { listExternalServerTools } from '../../mcp/external-mcp.client';
 import { chunkText } from '../knowledge/chunk';
 import { getEmbeddingProvider } from '../knowledge/embeddings';
 import { readAttachment as readAttachmentWithSettings, type AttachmentInput, type AttachmentResult } from './attachment-reader';
+import {
+  computeAgentAnalytics,
+  resolveAnalyticsWindow,
+  type AgentAnalyticsDashboard,
+  type AnalyticsChannel,
+  type AnalyticsRangeKey,
+} from './agent.analytics';
 import type { ModelProbeResult, ModelRole, ModelRoleSettings, ModelSettings, UpdateModelRoleSettingsInput, UpdateModelSettingsInput, VisionSettings } from './agent.types';
 
 let storePromise: Promise<AgentStore> | null = null;
@@ -532,6 +539,37 @@ export class AgentService {
       }
     }
     return lines.join('\n');
+  }
+
+  /** Full dashboard payload: KPIs, series, funnel, leaderboard, attention, topics, tools. */
+  async analyticsDashboard(input: {
+    range: AnalyticsRangeKey;
+    agentId?: string | null;
+    channel: AnalyticsChannel;
+    from?: string | null;
+    to?: string | null;
+  }, storeOverride?: AgentStore): Promise<AgentAnalyticsDashboard> {
+    const store = storeOverride ?? (await getStore());
+    const window = resolveAnalyticsWindow(input.range, input.from, input.to);
+    const channel = input.channel === 'all' ? undefined : input.channel;
+    const agentId = input.agentId || undefined;
+    const [agents, conversations, events, previousConversations, previousEvents] = await Promise.all([
+      store.listAgents(),
+      store.listConversations({ agentId, channel, from: window.from, to: window.to }),
+      store.listEventsForAnalytics({ agentId, from: window.from, to: window.to }),
+      store.listConversations({ agentId, channel, from: window.previousFrom, to: window.previousTo }),
+      store.listEventsForAnalytics({ agentId, from: window.previousFrom, to: window.previousTo }),
+    ]);
+    return computeAgentAnalytics({
+      agents,
+      conversations,
+      events,
+      previousConversations,
+      previousEvents,
+      window,
+      agentId: agentId ?? null,
+      channel: input.channel,
+    });
   }
 
   /** Aggregated counters for the admin dashboard. Cached for 10 seconds. */

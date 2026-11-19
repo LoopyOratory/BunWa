@@ -11,6 +11,7 @@ import { toFishWebhookTool } from '../core/tools/fish-tool.adapter';
 import { toGoogleFunctionDeclaration, toMcpToolDescriptor } from '../core/tools/google-tool.adapter';
 import { hashSecret, openSecret, sealSecret, secretPrefix } from '../core/security/secret-box';
 import { extractDocumentText } from '../core/knowledge/extract';
+import { isAnalyticsChannel, isAnalyticsRange } from '../core/agent/agent.analytics';
 
 function badRequest(c: any, message: string) {
   return c.json({ error: message }, 400);
@@ -124,6 +125,27 @@ export function createAgentsRouter(): Hono {
     '/analytics',
     policiesMiddleware(CanServer(Action.Retrieve)),
     async (c) => c.json(await agentService.analytics(c.req.query('agentId') || undefined)),
+  );
+
+  router.get(
+    '/analytics/dashboard',
+    policiesMiddleware(CanServer(Action.Retrieve)),
+    async (c) => {
+      const requestedRange = c.req.query('range');
+      const requestedChannel = c.req.query('channel');
+      const range = isAnalyticsRange(requestedRange) ? requestedRange : '7d';
+      const channel = isAnalyticsChannel(requestedChannel) ? requestedChannel : 'all';
+      const agentId = c.req.query('agentId') || null;
+      return c.json(
+        await agentService.analyticsDashboard({
+          range,
+          agentId,
+          channel,
+          from: c.req.query('from') || null,
+          to: c.req.query('to') || null,
+        }),
+      );
+    },
   );
 
   /* ---------------------------------------------------------------------- */

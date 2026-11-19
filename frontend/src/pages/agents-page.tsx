@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { Link } from "react-router-dom"
 import {
   Bot,
   Check,
@@ -1598,6 +1599,14 @@ function AgentDetailDialog({
               </TabsContent>
 
               <TabsContent value="analytics" className="mt-0 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">A quick read. Open the full dashboard for trends, funnels, tools and knowledge gaps.</p>
+                  {agent && (
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={`/agent-analytics?agentId=${agent.id}`}>Open full analytics</Link>
+                    </Button>
+                  )}
+                </div>
                 <div className="grid gap-3 sm:grid-cols-5">
                   <StatCard label="Conversations" value={String(analytics?.conversations ?? 0)} />
                   <StatCard label="Closed" value={String(analytics?.closedConversations ?? 0)} />

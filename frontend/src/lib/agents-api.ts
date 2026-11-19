@@ -86,6 +86,148 @@ export interface AgentAnalytics {
   events: Array<{ type: string; count: number }>
 }
 
+export type AnalyticsRangeKey = "24h" | "7d" | "30d" | "90d"
+export type AnalyticsChannel = "all" | "whatsapp" | "voice"
+export type AnalyticsUnit = "count" | "percent" | "ms" | "currency" | "rating"
+
+export interface AnalyticsKpi {
+  value: number | null
+  previous: number | null
+  delta: number | null
+  deltaPct: number | null
+  sample: number
+  unit: AnalyticsUnit
+}
+
+export interface AnalyticsSeriesPoint {
+  bucket: string
+  label: string
+  started: number
+  engaged: number
+  resolved: number
+  converted: number
+  handoffs: number
+  reviews: number
+  avgRating: number | null
+  medianResponseMs: number | null
+  costCents: number
+}
+
+export interface AnalyticsFunnel {
+  started: number
+  engaged: number
+  qualified: number
+  resolved: number
+  converted: number
+}
+
+export interface AnalyticsLeaderboardRow {
+  agentId: string
+  agentName: string
+  status: AgentStatus
+  conversations: number
+  resolved: number
+  resolutionRate: number | null
+  conversionRate: number | null
+  csat: number | null
+  reviews: number
+  medianResponseMs: number | null
+  costCents: number
+  costPerConversationCents: number | null
+  sparkline: number[]
+}
+
+export interface AnalyticsAttentionItem {
+  id: string
+  severity: "critical" | "warning" | "info"
+  title: string
+  detail: string
+  agentId?: string
+  agentName?: string
+}
+
+export interface AnalyticsTopicRow {
+  topic: string
+  conversations: number
+  resolved: number
+  conversionRate: number | null
+  share: number
+}
+
+export interface AnalyticsToolRow {
+  name: string
+  calls: number
+  successes: number
+  failures: number
+  successRate: number | null
+  p95Ms: number | null
+}
+
+export interface AnalyticsKnowledgeGap {
+  query: string
+  count: number
+  agentId: string | null
+  agentName: string | null
+  lastSeenAt: string
+}
+
+export type ConversationOutcome = "resolved" | "converted" | "handoff" | "abandoned" | "open" | "unclassified"
+
+export interface AnalyticsRecentConversation {
+  id: string
+  agentId: string
+  agentName: string
+  channel: string
+  status: "open" | "closing" | "closed"
+  outcome: ConversationOutcome
+  topic: string | null
+  rating: number | null
+  messages: number
+  durationMs: number | null
+  startedAt: string
+}
+
+export interface AgentAnalyticsDashboard {
+  range: AnalyticsRangeKey
+  from: string
+  to: string
+  previousFrom: string
+  previousTo: string
+  agentId: string | null
+  channel: AnalyticsChannel
+  currency: string
+  totals: {
+    conversations: number
+    engaged: number
+    resolved: number
+    converted: number
+    handoffs: number
+    reviews: number
+    averageRating: number | null
+    reviewResponseRate: number | null
+    totalCostCents: number
+    currency: string
+  }
+  kpis: {
+    conversations: AnalyticsKpi
+    resolution: AnalyticsKpi
+    csat: AnalyticsKpi
+    firstResponse: AnalyticsKpi
+    handoffs: AnalyticsKpi
+    cost: AnalyticsKpi
+  }
+  series: AnalyticsSeriesPoint[]
+  csatDistribution: number[]
+  funnel: AnalyticsFunnel
+  leaderboard: AnalyticsLeaderboardRow[]
+  attention: AnalyticsAttentionItem[]
+  topics: AnalyticsTopicRow[]
+  tools: AnalyticsToolRow[]
+  knowledgeGaps: AnalyticsKnowledgeGap[]
+  recentConversations: AnalyticsRecentConversation[]
+  generatedAt: string
+}
+
 export type ModelProviderType = "openai-compatible" | "anthropic" | "google" | "fish" | "elevenlabs"
 
 export type ModelRole = "chat" | "voice" | "call" | "vision"
@@ -404,6 +546,21 @@ export const agentApi = {
 
   analytics: (agentId?: string) =>
     request<AgentAnalytics>(`/api/agents/analytics${agentId ? `?agentId=${encodeURIComponent(agentId)}` : ""}`),
+
+  analyticsDashboard: (input: {
+    range: AnalyticsRangeKey
+    channel?: AnalyticsChannel
+    agentId?: string | null
+    from?: string | null
+    to?: string | null
+  }) => {
+    const params = new URLSearchParams({ range: input.range })
+    if (input.channel && input.channel !== "all") params.set("channel", input.channel)
+    if (input.agentId) params.set("agentId", input.agentId)
+    if (input.from) params.set("from", input.from)
+    if (input.to) params.set("to", input.to)
+    return request<AgentAnalyticsDashboard>(`/api/agents/analytics/dashboard?${params.toString()}`)
+  },
 
   modelSettings: () =>
     request<{ settings: ModelSettings }>("/api/agents/models/settings").then((r) => r.settings),
