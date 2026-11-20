@@ -18,7 +18,7 @@ import {
 } from 'whatsapp-web.js';
 import * as wwebjsRuntime from 'whatsapp-web.js';
 import { WebJSCallController, CallInfo, StartCallOptions, CallAudioChunk } from './calls.webjs';
-import NodeCache from 'node-cache';
+import { TtlCache } from '../../../utils/ttl-cache';
 import { Subject } from 'rxjs';
 import {
   ChatRequest,
@@ -178,7 +178,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   private presences = new Map<string, string>();
   private qr: QR = new QR();
   private meInfo: MeInfo | null = null;
-  private profilePicture: NodeCache = new NodeCache({ stdTTL: 24 * 60 * 60 });
+  private profilePicture: TtlCache<string | null> = new TtlCache({ stdTtl: 24 * 60 * 60 });
   private readyReconcileTimer: ReturnType<typeof setTimeout> | null = null;
   private readyReconcileStartedAt = 0;
   private authTimeout?: number;

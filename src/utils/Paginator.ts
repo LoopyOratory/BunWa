@@ -1,4 +1,4 @@
-import * as lodash from 'lodash';
+
 
 interface PaginationParams {
   sortBy?: string;
@@ -21,7 +21,7 @@ export abstract class Paginator {
   constructor(protected readonly pagination: PaginationParams | undefined) {}
 
   apply<T>(data: T): T {
-    if (lodash.isEmpty(this.pagination)) {
+    if (!this.pagination || Object.keys(this.pagination).length === 0) {
       return data;
     }
     return this.limit(this.sort(data));
@@ -37,11 +37,14 @@ export class PaginatorInMemory extends Paginator {
     if (!this.pagination?.sortBy) {
       return data;
     }
-    return lodash.orderBy(
-      data,
-      [this.NullLast(this.pagination.sortBy)],
-      [(this.pagination.sortOrder as 'asc' | 'desc') || 'asc'],
-    );
+    const iteratee = this.NullLast(this.pagination.sortBy);
+    const factor = (this.pagination.sortOrder as 'asc' | 'desc') === 'desc' ? -1 : 1;
+    return [...data].sort((a, b) => {
+      const av = iteratee(a);
+      const bv = iteratee(b);
+      if (av === bv) return 0;
+      return (av < bv ? -1 : 1) * factor;
+    });
   }
 
   protected limit(data: any[]) {

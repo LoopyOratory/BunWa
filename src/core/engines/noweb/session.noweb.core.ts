@@ -32,7 +32,7 @@ import makeWASocket, {
   USyncQuery,
   USyncUser,
 } from '@whiskeysockets/baileys';
-import type { BinaryNode } from '@whiskeysockets/baileys';
+import type { BinaryNode, CacheStore } from '@whiskeysockets/baileys';
 import { WACallEvent } from '@whiskeysockets/baileys/lib/Types/Call';
 import { BaileysEventMap } from '@whiskeysockets/baileys/lib/Types/Events';
 import { GroupMetadata } from '@whiskeysockets/baileys/lib/Types/GroupMetadata';
@@ -226,8 +226,8 @@ import { SingleDelayedJobRunner } from '../../../utils/SingleDelayedJobRunner';
 import { SinglePeriodicJobRunner } from '../../../utils/SinglePeriodicJobRunner';
 import { StatusTracker } from '../../../utils/StatusTracker';
 import { DefaultMap } from '../../../utils/DefaultMap';
-import * as lodash from 'lodash';
-import NodeCache from 'node-cache';
+
+import { TtlCache } from '../../../utils/ttl-cache';
 import {
   filter,
   fromEvent,
@@ -495,14 +495,14 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   private shouldRestart: boolean;
 
   private autoRestartJob: SinglePeriodicJobRunner;
-  private msgRetryCounterCache: NodeCache;
-  private placeholderResendCache: NodeCache;
+  private msgRetryCounterCache: TtlCache<number>;
+  private placeholderResendCache: TtlCache<unknown>;
   /**
    * Negative cache for profile picture lookups the server will not answer.
    * Lives on the session so it survives across requests; the TTL keeps a
    * dashboard page fast without hiding a picture that appears later for long.
    */
-  private profilePictureMisses?: NodeCache;
+  private profilePictureMisses?: TtlCache<boolean>;
   protected engineLogger: ILogger;
 
   private authNOWEBStore: any;
@@ -523,12 +523,12 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     this.events2.get(WAHAEvents.SESSION_SYNC).switch(this.historySync$.asObservable());
     // external map to store retry counts of messages when decryption/encryption fails
     // keep this out of the socket itself, to prevent a message decryption/encryption loop across socket restarts
-    this.msgRetryCounterCache = new NodeCache({
-      stdTTL: 60 * 60, // 1 hour
+    this.msgRetryCounterCache = new TtlCache({
+      stdTtl: 60 * 60, // 1 hour
       useClones: false,
     });
-    this.placeholderResendCache = new NodeCache({
-      stdTTL: 60 * 60, // 1 hour
+    this.placeholderResendCache = new TtlCache({
+      stdTtl: 60 * 60, // 1 hour
       useClones: false,
     });
 
@@ -631,8 +631,10 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       // Baileys' default skips FULL history batches even with syncFullHistory
       // on; accept every history type when full sync is enabled.
       ...(fullSyncEnabled ? { shouldSyncHistoryMessage: () => true } : {}),
-      msgRetryCounterCache: this.msgRetryCounterCache,
-      placeholderResendCache: this.placeholderResendCache,
+      // Baileys' CacheStore is a generic duck type; our TtlCache satisfies
+      // get/set/del/flushAll at runtime, the generic signature needs the bridge.
+      msgRetryCounterCache: this.msgRetryCounterCache as unknown as CacheStore,
+      placeholderResendCache: this.placeholderResendCache as unknown as CacheStore,
       markOnlineOnConnect: markOnlineOnConnect,
     };
   }
@@ -1074,8 +1076,8 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
         let votes: string[] = key.fromMe
           ? [...myIds, ...participantIds]
           : [...participantIds, ...myIds];
-        creators = lodash.uniq(creators.filter(Boolean));
-        votes = lodash.uniq(votes.filter(Boolean));
+        creators = [...new Set(creators.filter(Boolean))];
+        votes = [...new Set(votes.filter(Boolean))];
         let found = false;
         for (const [pollCreatorJid, voterJid] of pairs(creators, votes)) {
           try {
@@ -2514,9 +2516,13 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
   @Activity()
   public async createLabel(label: LabelDTO): Promise<Label> {
     const labels = await this.store.getLabels();
-    const highestLabelId = lodash.max(
-      labels.map((label) => parseInt(label.id)),
-    );
+    let highestLabelId: number | undefined;
+    for (const label of labels) {
+      const id = parseInt(label.id);
+      if (highestLabelId === undefined || id > highestLabelId) {
+        highestLabelId = id;
+      }
+    }
     const labelId = highestLabelId ? highestLabelId + 1 : 1;
     const labelAction: LabelActionBody = {
       id: labelId.toString(),
@@ -2579,8 +2585,8 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     const labelsIds = labels.map((label) => label.id);
     const currentLabels = await this.store.getChatLabels(jid);
     const currentLabelsIds = currentLabels.map((label) => label.id);
-    const addLabelsIds = lodash.difference(labelsIds, currentLabelsIds);
-    const removeLabelsIds = lodash.difference(currentLabelsIds, labelsIds);
+    const addLabelsIds = labelsIds.filter((id) => !currentLabelsIds.includes(id));
+    const removeLabelsIds = currentLabelsIds.filter((id) => !labelsIds.includes(id));
     for (const labelId of addLabelsIds) {
       await this.sock.addChatLabel(jid, labelId);
     }
@@ -2651,10 +2657,10 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     return contacts.map(this.toWAContact);
   }
 
-  private getProfilePictureMisses(): NodeCache {
+  private getProfilePictureMisses(): TtlCache<boolean> {
     if (!this.profilePictureMisses) {
-      this.profilePictureMisses = new NodeCache({
-        stdTTL: PROFILE_PICTURE_MISS_TTL_SECONDS,
+      this.profilePictureMisses = new TtlCache({
+        stdTtl: PROFILE_PICTURE_MISS_TTL_SECONDS,
         useClones: false,
       });
     }
@@ -2775,8 +2781,10 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
 
   public async getGroups(pagination: PaginationParams) {
     const groups = await this.store.getGroups(pagination);
-    // return {id: group} mapping for backward compatability
-    return lodash.keyBy(groups, 'id');
+    // return {id: group} mapping for backward compatability. The store returns
+    // an array, but stubs and legacy stores may return a dict — accept both.
+    const list = Array.isArray(groups) ? groups : Object.values(groups ?? {});
+    return Object.fromEntries(list.map((group) => [group.id, group]));
   }
 
   protected removeGroupsFieldParticipant(group: any) {
@@ -3023,7 +3031,10 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     if (!batchSize || batchSize == 0) {
       batchSize = 5_000;
     }
-    const chunks = lodash.chunk(jids, batchSize);
+        const chunks: string[][] = [];
+    for (let offset = 0; offset < jids.length; offset += batchSize) {
+      chunks.push(jids.slice(offset, offset + batchSize));
+    }
     if (chunks.length == 0) {
       throw new UnprocessableEntityException('No participants to send status');
     }
@@ -3751,9 +3762,9 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
         if (isPnUser(update.id) || isLidUser(update.id)) {
           // update 123@c.us and 123 profiles as well
           const cus = toCusFormat(update.id);
-          this.profilePictures.set(cus, url);
+          this.profilePictures.set(cus, url ?? null);
           const phone = update.id.split('@')[0];
-          this.profilePictures.set(phone, url);
+          this.profilePictures.set(phone, url ?? null);
         }
       }
     });
@@ -4217,11 +4228,9 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     const presences: WAHAPresenceData[] = [];
     for (const participant in storedPresences) {
       const data: PresenceData = storedPresences[participant];
-      const lastKnownPresence = lodash.get(
-        PresenceStatuses,
-        data.lastKnownPresence,
-        data.lastKnownPresence,
-      );
+      const lastKnownPresence =
+        (PresenceStatuses as Record<string, WAHAPresenceStatus>)[data.lastKnownPresence] ??
+        data.lastKnownPresence;
       const presence: WAHAPresenceData = {
         participant: toCusFormat(participant),
         // @ts-ignore

@@ -1,8 +1,8 @@
-import { Database } from 'bun:sqlite';
+import { Database, type SQLQueryBindings } from 'bun:sqlite';
 import { Field, Schema } from '../Schema';
 import { IJsonQuery } from '../sql/IJsonQuery';
 import { PaginationParams } from '../../../structures/pagination.dto';
-import * as lodash from 'lodash';
+
 import pino from 'pino';
 
 const log = pino({ name: 'BunSqliteKVRepository' });
@@ -77,7 +77,8 @@ export class BunSqliteKVRepository<Entity> {
 
   protected upsertBatch(entities: Entity[]): void {
     const all = entities.map((entity) => this.dump(entity));
-    const data = lodash.uniqBy(all, (d: any) => d.id);
+    // First occurrence wins (lodash.uniqBy semantics).
+    const data = [...new Map<string, any>(all.map((d: any) => [d.id as string, d])).values()];
     if (data.length !== all.length) {
       log.warn({ all: all.length, unique: data.length }, 'Duplicated entities for upsert batch');
     }
@@ -89,7 +90,7 @@ export class BunSqliteKVRepository<Entity> {
                  VALUES ${data.map(() => `(${placeholders})`).join(', ')}
                  ON CONFLICT(id) DO UPDATE SET ${updateSet}`;
 
-    const values = data.map((d) => Object.values(d)).flat();
+    const values = data.map((d) => Object.values(d)).flat() as SQLQueryBindings[];
     try {
       this.db.run(sql, values);
     } catch (err) {

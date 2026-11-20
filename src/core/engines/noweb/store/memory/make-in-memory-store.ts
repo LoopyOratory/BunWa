@@ -12,7 +12,6 @@ import type {
   WAMessageKey,
 } from '@whiskeysockets/baileys/lib/Types';
 import type { Label } from '@whiskeysockets/baileys/lib/Types/Label';
-import * as lodash from 'lodash';
 import type {
   LabelAssociation,
   MessageLabelAssociation,
@@ -286,7 +285,7 @@ export default (config: BaileysInMemoryStoreConfig) => {
               ev.emit('chats.upsert', [
                 {
                   id: jid,
-                  conversationTimestamp: lodash.toNumber(
+                  conversationTimestamp: Number(
                     msg.messageTimestamp as any,
                   ),
                   unreadCount: 1,

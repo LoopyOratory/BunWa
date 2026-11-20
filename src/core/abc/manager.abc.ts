@@ -12,7 +12,7 @@ import { IgnoreJidConfig } from '../utils/jids';
 import { WAHAWebhook } from '../../structures/webhooks.dto';
 import { waitUntil } from '../../utils/promiseTimeout';
 import { VERSION } from '../../version';
-import * as lodash from 'lodash';
+
 type PinoLogger = any;
 import { merge, Observable, of } from 'rxjs';
 
@@ -227,7 +227,13 @@ export abstract class SessionManager {
   protected ignoreChatsConfig(config: SessionConfig) {
     const ignore: IgnoreJidConfig = this.config.getIgnoreChatsConfig();
     // Given the default, overwrite from the config if any
-    return lodash.defaults({}, config?.ignore, ignore);
+    // lodash.defaults: the session config's values win, the global default
+    // fills only the keys the config leaves undefined.
+    const merged = { ...(config?.ignore ?? {}) } as Record<string, unknown>;
+    for (const [key, value] of Object.entries(ignore ?? {})) {
+      if (merged[key] === undefined) merged[key] = value;
+    }
+    return merged as unknown as IgnoreJidConfig;
   }
 }
 

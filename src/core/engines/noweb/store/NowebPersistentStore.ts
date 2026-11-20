@@ -31,8 +31,8 @@ import {
 } from '../../../../structures/pagination.dto';
 import { DefaultMap } from '../../../../utils/DefaultMap';
 import { waitUntil } from '../../../../utils/promiseTimeout';
-import * as lodash from 'lodash';
-import { toNumber } from 'lodash';
+
+
 import { Logger } from 'pino';
 
 import { IChatRepository } from './IChatRepository';
@@ -169,7 +169,7 @@ export class NowebPersistentStore implements INowebStore {
     ev.on('groups.update', (data) => {
       this.withLock('groups', () => this.onGroupUpdate(data));
       this.withNoLock('lids', async () => {
-        const participants = lodash.flatMap(data, (g) => g?.participants || []);
+        const participants = data.flatMap((g) => g?.participants || []);
         const lids = await this.handleLidPNUpdates(participants);
         this.logger.debug(
           `groups.update - '${lids.length}' synced lid to pn mapping`,
@@ -367,7 +367,7 @@ export class NowebPersistentStore implements INowebStore {
   private async onChatUpsert(chats: Chat[]) {
     for (const chat of chats) {
       delete chat['messages'];
-      chat.conversationTimestamp = toNumber(chat.conversationTimestamp) || null;
+      chat.conversationTimestamp = Number(chat.conversationTimestamp) || null;
     }
     chats = chats.filter((chat) => this.jids.include(chat.id));
     await this.chatRepo.upsertMany(chats);
@@ -408,7 +408,7 @@ export class NowebPersistentStore implements INowebStore {
     if (action == 'remove') {
       // Remove the group if the current user is removed
       const myJid = this.socket?.authState?.creds?.me?.id;
-      const participantsIncludesMe = lodash.find(participants, (p) =>
+      const participantsIncludesMe = participants.find((p) =>
         areJidsSameUser(p, myJid),
       );
       if (participantsIncludesMe) {
@@ -470,7 +470,7 @@ export class NowebPersistentStore implements INowebStore {
       }
       const chat = (await this.chatRepo.getById(update.id!)) || ({} as Chat);
       Object.assign(chat, update);
-      chat.conversationTimestamp = toNumber(chat.conversationTimestamp) || null;
+      chat.conversationTimestamp = Number(chat.conversationTimestamp) || null;
       delete chat['messages'];
       await this.chatRepo.save(chat);
     }
@@ -791,7 +791,7 @@ export class NowebPersistentStore implements INowebStore {
       }
     }
     // make lids unique by id
-    lids = lodash.uniqBy(lids, 'id');
+    lids = [...new Map(lids.map((lid) => [lid.id, lid])).values()];
     if (lids.length > 0) {
       await this.lidRepo.saveLids(lids);
     }

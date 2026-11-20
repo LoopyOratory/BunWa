@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from 'axios';
+import { createJsonClient, type HttpJsonClient } from './chatwoot-http';
 import pino from 'pino';
 import { ChatwootAppConfig, ChatwootWebhookPayload } from '../dto/chatwoot-config.dto';
 import { ChatwootAppRepository } from '../storage/ChatwootAppRepository';
@@ -199,7 +199,7 @@ export class ChatwootAppService {
   }
 
   private async findOrCreateContact(
-    client: AxiosInstance,
+    client: HttpJsonClient,
     accountId: number,
     inboxId: number,
     chatId: string,
@@ -259,7 +259,7 @@ export class ChatwootAppService {
   }
 
   private async findOrCreateConversation(
-    client: AxiosInstance,
+    client: HttpJsonClient,
     accountId: number,
     inboxId: number,
     contactId: number,
@@ -293,7 +293,7 @@ export class ChatwootAppService {
   }
 
   private async createMessage(
-    client: AxiosInstance,
+    client: HttpJsonClient,
     accountId: number,
     conversationId: number,
     text: string,
@@ -400,7 +400,14 @@ export class ChatwootAppService {
         messageBody.text = `[Media: ${payload.attachment.file_type || 'file'}]\n${text || ''}`;
       }
 
-      await axios.post(`${baseUrl}/api/sendText`, messageBody, { headers });
+      const response = await fetch(`${baseUrl}/api/sendText`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify(messageBody),
+      });
+      if (!response.ok) {
+        throw new Error(`Request failed with status code ${response.status}`);
+      }
 
       this.logger.info(
         { conversationId: payload.conversation?.id, to: sourceId },
@@ -458,14 +465,13 @@ export class ChatwootAppService {
 
   // ── HELPERS ─────────────────────────────────────────────────────
 
-  private createChatwootClient(baseUrl: string, accountToken: string): AxiosInstance {
-    return axios.create({
+  private createChatwootClient(baseUrl: string, accountToken: string): HttpJsonClient {
+    return createJsonClient({
       baseURL: baseUrl.replace(/\/$/, ''),
       headers: {
-        'Content-Type': 'application/json',
         'api_access_token': accountToken,
       },
-      timeout: 15_000,
+      timeoutMs: 15_000,
     });
   }
 }

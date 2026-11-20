@@ -1,13 +1,13 @@
-import NodeCache from 'node-cache';
+import { TtlCache } from '../../../utils/ttl-cache';
 
 export class PresenceProxy {
-  private cache: NodeCache;
+  private cache: TtlCache;
 
   public proxy: Record<string, any>;
 
   constructor() {
-    this.cache = new NodeCache({
-      stdTTL: 60, // 1 minute
+    this.cache = new TtlCache({
+      stdTtl: 60, // 1 minute
       checkperiod: 60, // 1 minute
       useClones: false,
     });
@@ -25,7 +25,7 @@ export class PresenceProxy {
         },
 
         deleteProperty: (_, prop: string) => {
-          return this.cache.del(prop) > 0;
+          return this.cache.has(prop) ? (this.cache.del(prop), true) : false;
         },
 
         has: (_, prop: string) => {

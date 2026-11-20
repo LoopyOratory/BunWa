@@ -45,8 +45,7 @@ import { LoggerBuilder } from '../../utils/logging';
 import { complete } from '../../utils/reactive/complete';
 import { SwitchObservable } from '../../utils/reactive/SwitchObservable';
 import * as fs from 'fs';
-import * as lodash from 'lodash';
-import NodeCache from 'node-cache';
+import { TtlCache } from '../../utils/ttl-cache';
 import { Logger } from 'pino';
 import {
   BehaviorSubject,
@@ -195,14 +194,14 @@ export abstract class WhatsappSession {
   private shouldPrintQR: boolean;
   protected events2: DefaultMap<WAHAEvents, SwitchObservable<any>>;
   private status$: Subject<WAHASessionStatus>;
-  protected profilePictures: NodeCache = new NodeCache({
-    stdTTL: 24 * 60 * 60, // 1 day
+  protected profilePictures: TtlCache<string | null> = new TtlCache({
+    stdTtl: 24 * 60 * 60, // 1 day
   });
 
   // Save sent messages ids in cache so we can determine if a message was sent
   // via API or APP
-  private sentMessageIds: NodeCache = new NodeCache({
-    stdTTL: 10 * 60, // 10 minutes
+  private sentMessageIds: TtlCache<true> = new TtlCache({
+    stdTtl: 10 * 60, // 10 minutes
   });
 
   private presenceOfflineTimeout?: ReturnType<typeof setTimeout>;
@@ -800,7 +799,7 @@ export abstract class WhatsappSession {
    */
   public async getLabel(labelId: string): Promise<Label | undefined> {
     const labels = await this.getLabels();
-    return lodash.find(labels, { id: labelId });
+    return labels.find((label) => label.id === labelId);
   }
 
   public getLabels(): Promise<Label[]> {
@@ -914,7 +913,7 @@ export abstract class WhatsappSession {
       this.logger.warn(err, err.stack);
       return null;
     });
-    this.profilePictures.set(id, url);
+    this.profilePictures.set(id, url ?? null);
     return url;
   }
 
