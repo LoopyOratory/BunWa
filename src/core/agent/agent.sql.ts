@@ -158,6 +158,13 @@ function asNullableString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+/**
+ * SQL row mappers keep `row: any` on purpose: rows arrive as raw snake_case
+ * records from both dialects and the mappers ARE the type boundary — they
+ * funnel every field through the asNullableString / bool / json helpers.
+ * The review's C4 drew the line here: product code gets strict types, the
+ * engine port and these row adapters stay loose.
+ */
 function bool(value: unknown): boolean {
   return value === true || value === 1 || value === '1' || value === 'true';
 }

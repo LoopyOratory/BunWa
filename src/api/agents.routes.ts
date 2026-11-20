@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { randomBytes } from 'crypto';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
@@ -15,11 +15,11 @@ import { hashSecret, openSecret, sealSecret, secretPrefix } from '../core/securi
 import { extractDocumentText } from '../core/knowledge/extract';
 import { isAnalyticsChannel, isAnalyticsRange, resolveAnalyticsWindow } from '../core/agent/agent.analytics';
 
-function badRequest(c: any, message: string) {
+function badRequest(c: Context, message: string) {
   return c.json({ error: message }, 400);
 }
 
-function notFound(c: any, message = 'Not found') {
+function notFound(c: Context, message = 'Not found') {
   return c.json({ error: message }, 404);
 }
 
@@ -103,7 +103,7 @@ export function createAgentsRouter(): Hono {
     policiesMiddleware(CanServer(Action.Retrieve)),
     async (c) => {
       const body = await c.req.json().catch(() => ({}));
-      const result = validateToolDefinition((body as any)?.tool ?? body);
+      const result = validateToolDefinition(typeof body?.tool === 'object' && body.tool ? body.tool : body);
       if (!result.ok) return c.json({ errors: result.errors }, 400);
 
       let fish: { ok: true; tool: ReturnType<typeof toFishWebhookTool> } | { ok: false; error: string };
