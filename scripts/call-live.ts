@@ -26,6 +26,7 @@ import { spawn } from 'bun';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { RuntimeRecorder } from '../src/core/agent/runtime-recorder';
 
 const LIVE_ENDPOINT =
   'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
@@ -309,6 +310,7 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
+
   // With BUNWA_AGENT_ID set, heartbeat "this agent is on a call" every 5 s.
   // The server prunes the state 15 s after a missed beat, so a crash never
   // leaves a stale "on call" badge behind.
@@ -323,9 +325,10 @@ async function main(): Promise<void> {
     const beat = setInterval(() => void report(true), 5_000);
     process.on('SIGINT', () => {
       clearInterval(beat);
-      void report(false).finally(() => process.exit(0));
+      void recorder.end().finally(() => report(false)).finally(() => process.exit(0));
     });
   }
+
 
   const writer = new SinkWriter(env.sink, CALL_RATE, env.pacing);
   const outboundResampler = new StreamingResampler(LIVE_RATE, CALL_RATE);
@@ -386,9 +389,11 @@ async function main(): Promise<void> {
       }
       if (content.inputTranscription?.text) {
         process.stdout.write(`\r[caller] ${content.inputTranscription.text}`);
+        void recorder.caller(content.inputTranscription.text);
       }
       if (content.outputTranscription?.text) {
         process.stdout.write(`\r[agent]  ${content.outputTranscription.text}`);
+        void recorder.reply(content.outputTranscription.text);
       }
       const parts = content.modelTurn?.parts || [];
       for (const part of parts) {

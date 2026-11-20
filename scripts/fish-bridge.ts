@@ -21,6 +21,7 @@ import {
   TrackSource,
   dispose,
 } from '@livekit/rtc-node';
+import { RuntimeRecorder } from '../src/core/agent/runtime-recorder';
 
 const CALL_RATE = 16_000;
 const LIVE_RATE = 48_000;
@@ -162,7 +163,10 @@ class PacatSink {
   }
 }
 
+/** Set by main() when BUNWA_AGENT_ID is configured; null when recording is off. */
 export class FishBridge {
+  recorder: RuntimeRecorder | null = null;
+
   private room: Room | null = null;
   private source: AudioSource | null = null;
   private localTrack: LocalAudioTrack | null = null;
@@ -207,6 +211,14 @@ export class FishBridge {
       try {
         const text = await reader.readAll();
         if (text.trim()) console.log('transcription', participantInfo.identity, JSON.stringify(text));
+        // Persist real turns when BUNWA_AGENT_ID is configured: user_prod_*
+        // transcriptions are the caller, agent_prod_* are the agent.
+        if (text.trim() && participantInfo.identity.startsWith('user_prod_')) {
+          void this.recorder?.caller(text.trim());
+        }
+        if (text.trim() && participantInfo.identity.startsWith('agent_prod_')) {
+          void this.recorder?.reply(text.trim());
+        }
       } catch (error) {
         console.log('transcription error', error instanceof Error ? error.message : error);
       }
@@ -501,11 +513,24 @@ if (import.meta.main) {
     ? setInterval(() => void reportActivity(true), 5_000)
     : null;
   if (env.bunwaAgentId) void reportActivity(true);
+
+  // With BUNWA_AGENT_ID set, persist the real turns (messages, events, first
+  // reply latency) so the analytics dashboard reflects this call.
+  const recorder = new RuntimeRecorder({
+    baseUrl: env.bunwaUrl,
+    apiKey: env.bunwaKey,
+    agentId: env.bunwaAgentId,
+    contact: Bun.env.BUNWA_CALL_CONTACT || 'caller',
+  });
+  if (env.bunwaAgentId) await recorder.begin({ kind: 'voice', provider: 'fish' });
+
   const bridge = new FishBridge();
+  bridge.recorder = recorder;
   await bridge.start();
   const shutdown = async () => {
     if (activityBeat) clearInterval(activityBeat);
     await bridge.stop();
+    await recorder.end();
     await reportActivity(false);
     process.exit(0);
   };

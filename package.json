@@ -25,7 +25,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src/",
     "lint-fix": "oxlint --fix src/",
-    "setup": "bun install && bash scripts/build-frontend.sh"
+    "setup": "bun install && bash scripts/build-frontend.sh",
+    "verify:recorder": "bun run scripts/recorder-smoke.ts"
   },
   "dependencies": {
     "@adiwajshing/keyed-db": "^0.2.4",
