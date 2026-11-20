@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/sidebar"
 import {
   Home, MessageSquare, Eye, Server, LogOut, BookOpen,
-  Sun, Moon, Plug, FileText, Activity, Send, Settings, ListOrdered, MessageCircle, BarChart3, Bot, Users, TrendingUp,
+  Sun, Moon, Plug, FileText, Activity, Send, Settings, MessageCircle, BarChart3, Bot, Users, TrendingUp,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth"
 import { useTheme } from "@/components/theme-provider"
@@ -31,7 +31,6 @@ const messagingItems = [
 const operationsItems = [
   { path: "/logs", label: "Audit logs", icon: Activity },
   { path: "/infrastructure", label: "Infrastructure", icon: Settings },
-  { path: "/queue", label: "Queue", icon: ListOrdered },
 ]
 
 const secondaryItems = [

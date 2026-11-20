@@ -81,7 +81,7 @@ export function AgentKpiCard({
       </div>
       <div className="mt-2 flex items-end justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[11px] leading-4 text-muted-foreground">{hint}</p>
+          <p className="text-xs leading-4 text-muted-foreground">{hint}</p>
           <span
             className={cn(
               "mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold",
@@ -129,8 +129,9 @@ export function VolumeOutcomeChart({ series }: { series: AnalyticsSeriesPoint[] 
     <Card className="glass-card flex min-w-0 flex-col gap-3 rounded-lg p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-heading text-sm font-semibold tracking-tight">Volume and outcomes</h3>
+          <h2 className="font-heading text-sm font-semibold tracking-tight">Volume and outcomes</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">Conversations started, resolved and converted</p>
+          <p className="sr-only">Line chart of conversations started, resolved and converted per day over the selected range.</p>
         </div>
         <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-label="Legend">
           {VOLUME_SERIES.map((item) => (
@@ -214,8 +215,9 @@ export function FunnelCard({ funnel }: { funnel: AnalyticsFunnel }) {
   return (
     <Card className="glass-card flex min-w-0 flex-col gap-3 rounded-lg p-5">
       <div>
-        <h3 className="font-heading text-sm font-semibold tracking-tight">Conversation funnel</h3>
+        <h2 className="font-heading text-sm font-semibold tracking-tight">Conversation funnel</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">Where conversations move forward, and where they stop</p>
+        <p className="sr-only">Funnel chart showing how many conversations started, engaged, qualified, resolved and converted.</p>
       </div>
       {started === 0 ? (
         <p className="rounded-lg border border-dashed border-border/70 p-5 text-sm text-muted-foreground">
@@ -262,12 +264,13 @@ export function CsatCard({ dashboard }: { dashboard: AgentAnalyticsDashboard }) 
     <Card className="glass-card flex min-w-0 flex-col gap-3 rounded-lg p-5">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="font-heading text-sm font-semibold tracking-tight">Customer satisfaction</h3>
+          <h2 className="font-heading text-sm font-semibold tracking-tight">Customer satisfaction</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">Review ratings submitted after a conversation</p>
+          <p className="sr-only">Bar chart of review counts for each star rating from one to five.</p>
         </div>
         <div className="text-right">
           <p className="font-heading text-2xl font-semibold leading-none">{formatRating(average)}</p>
-          <p className="mt-1 text-[11px] text-muted-foreground">
+          <p className="mt-1 text-xs text-muted-foreground">
             {reviews} review{reviews === 1 ? "" : "s"} · {formatPercent(responseRate)} response
           </p>
         </div>
@@ -292,7 +295,7 @@ export function CsatCard({ dashboard }: { dashboard: AgentAnalyticsDashboard }) 
               </div>
             ))}
           </div>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {formatPercent(responseRate)} of review requests were answered. Read the comments before changing the prompt.
           </p>
         </div>

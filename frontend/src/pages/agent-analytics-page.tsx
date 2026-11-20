@@ -212,7 +212,7 @@ export function AgentAnalyticsPage() {
       status={
         <span
           className="inline-flex items-center gap-1.5 rounded-full border border-success-border/60 bg-success-bg px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-success-foreground"
-          title={data ? `Updated ${new Date(data.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Waiting for data"}
+          title={data ? `Updated ${new Date(data.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · refreshes automatically` : "Waiting for data"}
         >
           <span className="size-1.5 animate-pulse rounded-full bg-success" />
           Live
@@ -271,7 +271,7 @@ export function AgentAnalyticsPage() {
                   onClick={() => setFilter("channel", item.value === "all" ? undefined : item.value)}
                   className={cn(
                     "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
-                    channel === item.value ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                    channel === item.value ? "bg-primary-strong text-primary-foreground" : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   <Icon className="size-3.5" />
@@ -297,7 +297,7 @@ export function AgentAnalyticsPage() {
                 onClick={() => setFilter("range", key === "7d" ? undefined : key)}
                 className={cn(
                   "rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
-                  !customRange && range === key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                  !customRange && range === key ? "bg-primary-strong text-primary-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 {key}
@@ -327,7 +327,7 @@ export function AgentAnalyticsPage() {
             {data.totals.conversations === 0 && (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-border/70 bg-card/50 px-4 py-3">
                 <p className="text-sm text-muted-foreground">
-                  No conversations in the {activeRangeLabel}. New chats and calls will appear here.
+                  No conversations in the {activeRangeLabel} yet. Analytics fill in automatically as your agents handle real chats and calls.
                 </p>
                 <Link to="/agents" className="text-xs font-semibold text-primary underline-offset-4 hover:underline">
                   Open agents

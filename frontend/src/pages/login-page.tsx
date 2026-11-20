@@ -94,7 +94,7 @@ export function LoginPage() {
                     onClick={() => setShowPassword((v) => !v)}
                     aria-label={showPassword ? "Hide password" : "Show password"}
                     aria-pressed={showPassword}
-                    className="absolute end-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-primary-soft hover:text-foreground"
+                    className="touch-target absolute end-1 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-primary-soft hover:text-foreground"
                   >
                     {showPassword ? (
                       <EyeOff className="size-3.5" strokeWidth={1.75} />

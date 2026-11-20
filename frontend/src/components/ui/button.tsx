@@ -11,7 +11,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "btn-dream bg-primary text-primary-foreground",
+        default: "btn-dream bg-primary-strong text-primary-foreground",
         outline:
           "btn-glass text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",
         secondary:

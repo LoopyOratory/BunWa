@@ -89,6 +89,12 @@ export function ChatPage({ initialSession }: ChatPageProps) {
     }
   }, [loadSessions])
 
+  // The chat surface skips PageLayout, so it owns its own tab title and h1.
+  useEffect(() => {
+    document.title = `${initialSession ? `${initialSession} · Chat` : "Chat"} · BunWa`
+  }, [initialSession])
+  const chatHeading = initialSession ? `${initialSession} chat` : "Chat"
+
   // Pick a session as soon as the list arrives (during render, not in an effect).
   if (!selectedSession && sessions.length > 0) {
     setSelectedSession(initialSession && sessions.some((s) => s.name === initialSession) ? initialSession : sessions[0].name)
@@ -493,8 +499,9 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   if (!selectedSession) {
     return (
       <ChatProvider currentUser={chatUser} theme="whatsapp" className="h-dvh" messageGroupingInterval={120}>
-        <div className="flex h-full flex-col overflow-hidden bg-[var(--chat-bg-main)]">
-          <div className="p-3 md:hidden">
+        <div id="main-content" className="flex h-full flex-col overflow-hidden bg-[var(--chat-bg-main)]">
+          <h1 className="sr-only">{chatHeading}</h1>
+          <div className="p-3">
             <SidebarTrigger />
           </div>
           <div className="flex flex-1 items-center justify-center px-4">
@@ -523,7 +530,8 @@ export function ChatPage({ initialSession }: ChatPageProps) {
   if (!selectedChat) {
     return (
       <ChatProvider currentUser={chatUser} theme="whatsapp" className="h-dvh" messageGroupingInterval={120} {...stable}>
-        <div className="flex h-full overflow-hidden bg-[var(--chat-bg-main)]">
+        <div id="main-content" className="flex h-full overflow-hidden bg-[var(--chat-bg-main)]">
+          <h1 className="sr-only">{chatHeading}</h1>
           <div
             className={`min-h-0 min-w-0 w-full shrink-0 ${
               collapsed ? "md:w-[var(--chat-sidebar-rail-width)]" : "md:w-[var(--chat-sidebar-width)]"
@@ -558,7 +566,8 @@ export function ChatPage({ initialSession }: ChatPageProps) {
       showSenders={selectedChat.id.endsWith("@g.us")}
       {...stable}
     >
-      <div className="chat-shell h-full overflow-hidden bg-[var(--chat-bg-main)]" data-sidebar={collapsed ? "rail" : "expanded"}>
+      <div id="main-content" className="chat-shell h-full overflow-hidden bg-[var(--chat-bg-main)]" data-sidebar={collapsed ? "rail" : "expanded"}>
+        <h1 className="sr-only">{chatHeading}</h1>
         <div className="hidden min-h-0 min-w-0 md:col-start-1 md:row-start-1 md:row-span-2 md:flex">{conversations}</div>
 
         <div className="col-start-2 row-start-1 min-w-0">

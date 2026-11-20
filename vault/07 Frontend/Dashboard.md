@@ -66,10 +66,10 @@ frontend/src/
 | `/messages`, `/messages/:chatId` | Message Tester | send test messages, `checkNumberStatus` |
 | `/logs` | Audit Logs | `GET /api/audit` with filters + CSV export (live-verified 2026-09-29: rows rendered for a full session lifecycle) |
 | `/infrastructure` | Infrastructure | DB / storage / queue settings, save + restart |
-| `/queue` | Queue Monitor | ⚠️ placeholder data derived from `/api/workers` — no real queue is wired |
-| `/events` | Event Monitor | live `/ws` stream (500-entry buffer), filter, search, pause, download (live-verified 2026-09-29: streamed every `session.status` transition) |
+| `/queue` | → `/infrastructure` | redirect — queue monitoring is not wired in this build; the sidebar no longer lists it, old bookmarks land on the queue configuration card |
+| `/events` | Event monitor | live `/ws` stream (500-entry buffer), filter, search, pause, download (live-verified 2026-09-29: streamed every `session.status` transition) |
 | `/docs` | Docs | iframe of `/api-docs/` |
-| `*` | Login | unauthenticated fallback |
+| `*` | Not found | explicit 404 with links to Dashboard, Agent analytics and API docs |
 
 QR pairing lives in `session-detail-dialog.tsx` (QR refreshed every 5 s, phone pairing code, screenshot).
 Webhook / proxy / engine / ignore / MCP settings live in `session-settings-dialog.tsx` tabs.
@@ -124,6 +124,55 @@ dashboard loads real data in both themes.
 
 Recent UI commits: `7c4124d` design tokens + primitives + dashboard modernisation,
 `0a819e4` page transitions + login split-screen + workers badges, `fee40b5` chat bubbles.
+
+### Accessibility pass (2026-11-20)
+
+A full audit-driven pass that took the console from 8.5 to a 10-grade UI surface:
+
+- **Primary button contrast (AA)**: `.btn-dream` now gradients between two literal greens —
+  `--primary-strong` `#15803d` (white text 5.0:1) and `--primary-deep` `#166534` (7.1:1). The old
+  gradient's lightest stop was 3.3:1. The travelling sheen moved from a `::after` overlay (which
+  washed *over* the label) into the `background-image` stack (renders *beneath* the label). Every
+  `bg-primary text-primary-foreground` surface (segmented pills, wizard step dots, engine option
+  cards, tool-guide numerals, transcript bubbles) became `bg-primary-strong`.
+- **Touch targets**: `@media (pointer: coarse)` gives every button a 44px minimum (buttons grow
+  visually — correct for touch); switches and absolutely-positioned controls keep their size and
+  gain an invisible 8px `::before` hit apron (`.touch-target` class; isolation-verified that a
+  click 8px outside the visual box still lands on the control). The login password reveal grew
+  24px → 32px + apron. Measured on a 390px touch viewport: zero buttons under 44px, segmented
+  range pills 44px tall, no horizontal overflow on any route.
+- **Skip link is the first tab stop**: moved from `PageLayout` into `DashboardLayout` so it
+  precedes the sidebar in the DOM (was tab stop 19). Chat pages carry their own
+  `#main-content` anchor so the link resolves everywhere.
+- **Chat identity**: `/chat` and `/sessions/:id/chat` now set `document.title` ("Chat · BunWa")
+  and render an sr-only `<h1>`; previously the title stayed the generic API default and the page
+  had no heading.
+- **Named controls**: profiles search input (`type="search"` + aria-label), message tester
+  textarea, and the mobile event-monitor pause button (text is hidden below `sm:`) all carry
+  accessible names.
+- **Heading order**: agent-analytics chart/panel card titles are `<h2>` (was `<h3>` directly
+  under the `<h1>`, skipping a level); "Health at a glance" on `/analytics` likewise. Verified
+  zero heading-level skips on both analytics pages.
+- **Chart text summaries**: each chart card (volume, funnel, CSAT) exposes an sr-only sentence
+  describing what the chart shows, for screen readers and skimmers.
+- **Deep-linkable agent dialog**: `/agents?agent=<id>&tab=<name>` opens the detail dialog on
+  load; tab switches update the URL (replace); closing cleans the params. A resolved-agent ref
+  guards against the one-frame race where a stale param re-opens a dialog mid-close.
+- **Queue placeholder removed**: `/queue` redirects to `/infrastructure` (which owns the queue
+  config card) and the sidebar no longer lists it. `queue-page.tsx` deleted.
+- **Explicit 404**: unknown routes render a "Page not found" page with links to Dashboard, Agent
+  analytics and API docs instead of a silent redirect to the dashboard.
+- **Live push, not just polling**: the chat-history table opens the existing `/ws` channel
+  (`events=message,message.any`) and refreshes on arrival (1s debounce), keeping the 5s/4s polls
+  as fallback; the Live pill tooltip says so.
+- **Shared StatCard**: `agents-page.tsx` and `profiles-page.tsx` dropped their local copies for
+  the `primitives.tsx` one.
+- **Title case**: "Event Monitor" → "Event monitor", matching the sidebar and other titles.
+
+Verified end to end: 17-route browser crawl with zero console/page/API errors; skip link first
+Tab press; dialog deep-link reload + clean Escape close; both mobile viewports overflow-free;
+lint delta zero (156 pre-existing problems, unchanged); backend suite 752 pass / 0 fail;
+frontend 19 pass; `tsc -b && vite build` clean.
 
 ## Auth flow
 

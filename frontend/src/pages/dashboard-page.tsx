@@ -165,7 +165,7 @@ export function DashboardPage() {
                 onClick={() => changeRange(key)}
                 className={cn(
                   "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
-                  range === key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                  range === key ? "bg-primary-strong text-primary-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 {key}

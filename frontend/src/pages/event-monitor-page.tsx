@@ -132,7 +132,7 @@ export function EventMonitorPage() {
   const uniqueEvents = [...new Set(events.map((e) => e.event))]
 
   return (
-    <PageLayout title="Event Monitor" description="Live WebSocket event stream from your WhatsApp sessions">
+    <PageLayout title="Event monitor" description="Live WebSocket event stream from your WhatsApp sessions">
       <div className="space-y-6">
         <Alert>
           {connected ? (
@@ -178,7 +178,12 @@ export function EventMonitorPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="sm" onClick={() => setPaused(!paused)}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPaused(!paused)}
+                aria-label={paused ? "Resume event stream" : "Pause event stream"}
+              >
                 {paused ? <Play className="size-4" strokeWidth={1.75} /> : <Pause className="size-4" strokeWidth={1.75} />}
                 <span className="ml-1 hidden sm:inline">{paused ? "Resume" : "Pause"}</span>
               </Button>

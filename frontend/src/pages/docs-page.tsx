@@ -121,7 +121,7 @@ export function DocsPage() {
   return (
     <div className="flex h-full flex-col overflow-auto">
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b bg-background/80 px-4 py-3 backdrop-blur-sm sm:px-6">
-        <SidebarTrigger className="md:hidden" />
+        <SidebarTrigger />
         <span className="text-sm font-medium text-muted-foreground">Documentation</span>
       </div>
 

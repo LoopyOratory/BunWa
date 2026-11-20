@@ -45,6 +45,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import { useWebSocket } from "@/lib/use-websocket"
 import { formatNumber, formatRating, outcomeLabel, outcomeTone } from "@/lib/agent-analytics-format"
 import {
   agentApi,
@@ -216,7 +217,10 @@ function TranscriptSheet({
               </Badge>
             ) : null}
             {live && (
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-success-foreground">
+              <span
+                className="inline-flex items-center gap-1.5 text-[11px] font-medium text-success-foreground"
+                title="Pushes on new messages; polls every few seconds as a fallback"
+              >
                 <span className="size-1.5 animate-pulse rounded-full bg-success" />
                 Live
               </span>
@@ -262,7 +266,7 @@ function TranscriptSheet({
                     <div
                       className={cn(
                         "flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
-                        mine ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                        mine ? "bg-primary-strong text-primary-foreground" : "bg-muted text-muted-foreground",
                       )}
                     >
                       {mine ? "AI" : "C"}
@@ -272,7 +276,7 @@ function TranscriptSheet({
                         className={cn(
                           "whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2.5 text-sm/relaxed",
                           mine
-                            ? "rounded-br-sm bg-primary text-primary-foreground"
+                            ? "rounded-br-sm bg-primary-strong text-primary-foreground"
                             : "rounded-bl-sm bg-muted text-foreground",
                         )}
                       >
@@ -369,6 +373,21 @@ export function ConversationHistoryTable({
     const interval = setInterval(() => void load(), LIST_POLL_MS)
     return () => clearInterval(interval)
   }, [live, load])
+
+  /* Push-driven refresh: a WhatsApp message event may have written new
+     conversation rows. The WebSocket makes updates land immediately; the
+     interval above stays as the fallback. Debounced to one refresh/second. */
+  const pushRef = useRef(0)
+  useWebSocket({
+    events: "message,message.any",
+    onMessage: () => {
+      if (!live) return
+      const now = Date.now()
+      if (now - pushRef.current < 1_000) return
+      pushRef.current = now
+      void load()
+    },
+  })
 
   useEffect(() => {
     // A filter change starts a new result set; keep the user on page one.
@@ -542,7 +561,10 @@ export function ConversationHistoryTable({
                   <h3 className="font-heading text-base font-semibold tracking-tight">Chat history &amp; transcripts</h3>
                   <Badge variant="outline" className="tabular-nums">{formatNumber(total)}</Badge>
                   {live && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-success-border/60 bg-success-bg/80 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-success-foreground">
+                    <span
+                      className="inline-flex items-center gap-1.5 rounded-full border border-success-border/60 bg-success-bg/80 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-success-foreground"
+                      title="Pushes on new messages; polls every few seconds as a fallback"
+                    >
                       <Radio className="size-3 animate-pulse" />
                       Live
                     </span>

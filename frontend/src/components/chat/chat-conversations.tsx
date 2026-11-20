@@ -261,7 +261,7 @@ export function ChatConversations({
         {/* Session context: which number this is, whether it is connected and
             how close it is to its sending limit. */}
         <div className="flex h-[var(--chat-header-height)] shrink-0 items-center gap-0.5 border-b border-[var(--chat-border)] bg-[var(--chat-bg-header)] px-2">
-          <SidebarTrigger className="shrink-0 md:hidden" />
+          <SidebarTrigger className="shrink-0" />
           <div className="min-w-0 flex-1">
             <SessionSelector
               sessions={sessions}

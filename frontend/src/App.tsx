@@ -19,7 +19,7 @@ import { AgentsPage } from "@/pages/agents-page"
 import { ProfilesPage } from "@/pages/profiles-page"
 import { MessageTesterPage } from "./pages/message-tester-page"
 import { InfrastructurePage } from "./pages/infrastructure-page"
-import { QueuePage } from "./pages/queue-page"
+import { NotFoundPage } from "./pages/not-found-page"
 import { DocsPage } from "./pages/docs-page"
 import { Toaster } from "@/components/ui/sonner"
 import { ErrorBoundary } from "./components/ErrorBoundary"
@@ -28,6 +28,10 @@ import { Aurora } from "./components/dream"
 function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider defaultOpen={true}>
+      {/* First tab stop on every page: jump past the whole sidebar rail. */}
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
       {/* One continuous sky behind sidebar and content alike. */}
       <Aurora />
       <AppSidebar />
@@ -63,11 +67,14 @@ function AppRoutes() {
         <Route path="/profiles" element={<ProfilesPage />} />
         <Route path="/logs" element={<LogsPage />} />
         <Route path="/infrastructure" element={<InfrastructurePage />} />
-        <Route path="/queue" element={<QueuePage />} />
+        {/* Queue monitoring is not wired in this build (no job queue endpoint).
+            Keep old bookmarks working by landing on the infrastructure page,
+            which owns the queue configuration. */}
+        <Route path="/queue" element={<Navigate to="/infrastructure" replace />} />
         <Route path="/events" element={<EventMonitorPage />} />
         {/* Written guide first; the raw Scalar reference stays one click away. */}
         <Route path="/docs" element={<DocsPage />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </DashboardLayout>
   )

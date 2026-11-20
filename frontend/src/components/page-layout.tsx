@@ -29,17 +29,13 @@ export function PageLayout({ title, eyebrow, status, meta, description, actions,
 
   return (
     <div className="relative flex h-dvh flex-col overflow-hidden">
-      <a href="#main-content" className="skip-link">
-        Skip to content
-      </a>
-
       <motion.header
         initial={reduce ? false : { opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
         className="page-header z-20 flex shrink-0 flex-wrap items-start gap-3 px-4 py-3.5 sm:px-6"
       >
-        <SidebarTrigger className="mt-1 md:hidden" />
+        <SidebarTrigger className="mt-1" />
         <div className="min-w-0 flex-1">
           {eyebrow && (
             <p className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.22em] text-primary-strong/75">{eyebrow}</p>

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react"
-import { Link } from "react-router-dom"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { Link, useSearchParams } from "react-router-dom"
 import {
   Bot,
   Check,
@@ -24,7 +24,7 @@ import { KnowledgeChunksDialog } from "@/components/knowledge-chunks-dialog"
 import { AttachmentReaderCard } from "@/components/attachment-reader-card"
 import { VoiceCallModelDialog } from "@/components/voice-call-model-dialog"
 import { PageLayout } from "@/components/page-layout"
-import { EmptyState, ErrorState, SectionHeading } from "@/components/primitives"
+import { EmptyState, ErrorState, SectionHeading, StatCard } from "@/components/primitives"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -80,18 +80,6 @@ function normalizeMcpSelection(selected: string[], tools: McpToolInfo[]) {
 
 function stepIndex(step: Step) {
   return STEPS.indexOf(step)
-}
-
-function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <Card className="border-border/70 bg-card/70">
-      <CardContent className="p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-        <p className="mt-1 font-heading text-2xl font-semibold">{value}</p>
-        {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
-      </CardContent>
-    </Card>
-  )
 }
 
 function StatusBadge({ status }: { status: Agent["status"] }) {
@@ -164,7 +152,7 @@ function BuilderChat({
               className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
                 message.role === "assistant"
                   ? "bg-card text-foreground shadow-sm"
-                  : "ml-auto bg-primary text-primary-foreground"
+                  : "ml-auto bg-primary-strong text-primary-foreground"
               }`}
             >
               {message.text}
@@ -682,7 +670,7 @@ function CreateAgentDialog({
                     onClick={() => setStep(label)}
                     className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${
                       active
-                        ? "bg-primary text-primary-foreground"
+                        ? "bg-primary-strong text-primary-foreground"
                         : complete
                           ? "bg-primary/10 text-primary"
                           : "text-muted-foreground hover:bg-muted"
@@ -996,10 +984,14 @@ function CreateAgentDialog({
 
 function AgentDetailDialog({
   agent,
+  tab,
+  onTabChange,
   onOpenChange,
   onChanged,
 }: {
   agent: Agent | null
+  tab: string
+  onTabChange: (tab: string) => void
   onOpenChange: (open: boolean) => void
   onChanged: () => void
 }) {
@@ -1305,7 +1297,7 @@ function AgentDetailDialog({
             </div>
           </DialogHeader>
 
-          <Tabs defaultValue="prompt" className="flex min-h-0 flex-1 flex-col">
+          <Tabs value={tab} onValueChange={onTabChange} className="flex min-h-0 flex-1 flex-col">
             <div className="border-b border-border/70 px-6 py-3">
               <TabsList>
                 <TabsTrigger value="prompt">Prompt</TabsTrigger>
@@ -1673,7 +1665,62 @@ export function AgentsPage() {
   const [modelSettingsOpen, setModelSettingsOpen] = useState(false)
   const [voiceCallOpen, setVoiceCallOpen] = useState(false)
   const [externalMcpOpen, setExternalMcpOpen] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
   const [selected, setSelected] = useState<Agent | null>(null)
+  const [detailTab, setDetailTab] = useState("prompt")
+  /** The agent id whose ?agent= link has already been resolved (opened or
+      closed) — stops a stale param from re-opening a dialog mid-close. */
+  const resolvedAgentRef = useRef<string | null>(null)
+
+  /** Keep ?agent=<id>&tab=<name> in the URL so a dialog state is shareable. */
+  const syncDialogParams = (agentId: string | null, tab: string) => {
+    const next = new URLSearchParams(searchParams)
+    if (agentId) next.set("agent", agentId)
+    else next.delete("agent")
+    if (agentId && tab !== "prompt") next.set("tab", tab)
+    else next.delete("tab")
+    setSearchParams(next, { replace: true })
+  }
+
+  const openAgent = (agent: Agent) => {
+    resolvedAgentRef.current = agent.id
+    setSelected(agent)
+    const tab = searchParams.get("tab") ?? "prompt"
+    setDetailTab(tab)
+    syncDialogParams(agent.id, tab)
+  }
+
+  const closeAgent = () => {
+    setSelected(null)
+    syncDialogParams(null, detailTab)
+  }
+
+  const changeDetailTab = (tab: string) => {
+    setDetailTab(tab)
+    if (selected) syncDialogParams(selected.id, tab)
+  }
+
+  // Deep link: /agents?agent=<id>&tab=<name> opens the dialog once the list
+  // loads. The ref records which link already resolved so closing the dialog
+  // cannot re-open it from a URL param that is one frame away from being
+  // cleaned by the router; an absent param resets the ref so pressing Back
+  // to the same link opens the dialog again.
+  useEffect(() => {
+    const agentId = searchParams.get("agent")
+    if (!agentId) {
+      resolvedAgentRef.current = null
+      return
+    }
+    if (loading || agents.length === 0) return
+    if (resolvedAgentRef.current === agentId) return
+    const found = agents.find((agent) => agent.id === agentId)
+    if (found) {
+      resolvedAgentRef.current = agentId
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- URL sync, not a render cascade
+      setSelected(found)
+      setDetailTab(searchParams.get("tab") ?? "prompt")
+    }
+  }, [agents, loading, searchParams])
 
   const load = async () => {
     setLoading(true)
@@ -1757,7 +1804,7 @@ export function AgentsPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {agents.map((agent) => (
-              <AgentCard key={agent.id} agent={agent} onOpen={setSelected} />
+              <AgentCard key={agent.id} agent={agent} onOpen={openAgent} />
             ))}
           </div>
         )}
@@ -1771,7 +1818,13 @@ export function AgentsPage() {
         onOpenChange={setExternalMcpOpen}
         onServersChanged={() => void load()}
       />
-      <AgentDetailDialog agent={selected} onOpenChange={(open) => !open && setSelected(null)} onChanged={() => void load()} />
+      <AgentDetailDialog
+        agent={selected}
+        tab={detailTab}
+        onTabChange={changeDetailTab}
+        onOpenChange={(open) => !open && closeAgent()}
+        onChanged={() => void load()}
+      />
     </PageLayout>
   )
 }

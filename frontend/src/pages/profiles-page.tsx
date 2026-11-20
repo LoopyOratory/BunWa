@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { Copy, Plus, RefreshCw, Search, Sparkles, Trash2, UserRound } from "lucide-react"
 import { toast } from "sonner"
 import { PageLayout } from "@/components/page-layout"
-import { EmptyState, ErrorState } from "@/components/primitives"
+import { EmptyState, ErrorState, StatCard } from "@/components/primitives"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -69,18 +69,6 @@ function valueText(value: unknown): string {
   } catch {
     return String(value)
   }
-}
-
-function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <Card className="border-border/70 bg-card/70">
-      <CardContent className="py-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-        <p className="mt-1 text-2xl font-semibold tracking-tight">{value}</p>
-        {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
-      </CardContent>
-    </Card>
-  )
 }
 
 export function ProfilesPage() {
@@ -159,9 +147,11 @@ export function ProfilesPage() {
         <div className="relative max-w-md">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search name, phone, user id, or tag"
+            aria-label="Search profiles"
             className="pl-9"
           />
         </div>

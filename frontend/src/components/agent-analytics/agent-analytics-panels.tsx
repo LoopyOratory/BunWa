@@ -88,7 +88,7 @@ export function AttentionPanel({
     <Panel>
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className={TITLE}>Needs attention</h3>
+          <h2 className={TITLE}>Needs attention</h2>
           <p className={HINT}>The things worth opening before the next conversation</p>
         </div>
         <Badge variant="outline">{items.length}</Badge>
@@ -157,7 +157,7 @@ export function LeaderboardPanel({
     <Panel>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className={TITLE}>Agent leaderboard</h3>
+          <h2 className={TITLE}>Agent leaderboard</h2>
           <p className={HINT}>Compare outcomes, speed, and cost across agents</p>
         </div>
         <Badge variant="outline">{rows.length} agents</Badge>
@@ -208,7 +208,7 @@ export function TopicsPanel({ rows }: { rows: AnalyticsTopicRow[] }) {
   return (
     <Panel>
       <div>
-        <h3 className={TITLE}>What customers ask</h3>
+        <h2 className={TITLE}>What customers ask</h2>
         <p className={HINT}>Topics recorded on conversations, with resolution and conversion</p>
       </div>
       {rows.length === 0 ? (
@@ -226,7 +226,7 @@ export function TopicsPanel({ rows }: { rows: AnalyticsTopicRow[] }) {
               <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                 <div className="h-full rounded-full bg-primary/70" style={{ width: `${(row.conversations / max) * 100}%` }} />
               </div>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-[11px] text-muted-foreground">
                 {formatPercent(row.share)} of conversations · {formatPercent(row.conversionRate)} converted
               </p>
             </li>
@@ -248,7 +248,7 @@ export function KnowledgeGapsPanel({
     <Panel>
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className={TITLE}>Knowledge gaps</h3>
+          <h2 className={TITLE}>Knowledge gaps</h2>
           <p className={HINT}>Questions the retriever could not answer well</p>
         </div>
         <Database className="size-4 text-muted-foreground" />
@@ -263,7 +263,7 @@ export function KnowledgeGapsPanel({
                 <p className="truncate text-sm font-medium" title={gap.query}>
                   {gap.query}
                 </p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   {gap.agentName ?? "Unknown agent"} · last seen {new Date(gap.lastSeenAt).toLocaleDateString()}
                 </p>
               </div>
@@ -288,7 +288,7 @@ export function ToolHealthPanel({ rows }: { rows: AnalyticsToolRow[] }) {
     <Panel>
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className={TITLE}>Tool health</h3>
+          <h2 className={TITLE}>Tool health</h2>
           <p className={HINT}>Calls, failures, and p95 latency from the runtime</p>
         </div>
         <Wrench className="size-4 text-muted-foreground" />
@@ -335,7 +335,7 @@ export function RecentConversationsPanel({
     <Panel>
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className={TITLE}>Recent conversations</h3>
+          <h2 className={TITLE}>Recent conversations</h2>
           <p className={HINT}>The latest sessions in this range, with outcome and rating</p>
         </div>
         <MessageCircle className="size-4 text-muted-foreground" />

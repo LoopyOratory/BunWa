@@ -213,7 +213,7 @@ export function CreateSessionDialog({ open, onOpenChange, onCreated }: CreateSes
                       }`}
                     >
                       <div className="mb-2 flex items-center gap-3">
-                        <div className={`rounded-md p-2 ${selected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                        <div className={`rounded-md p-2 ${selected ? "bg-primary-strong text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
                           <e.icon className="size-5" strokeWidth={1.75} />
                         </div>
                         <div>

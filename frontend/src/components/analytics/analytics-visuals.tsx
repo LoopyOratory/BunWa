@@ -88,7 +88,7 @@ export function SuccessGauges({ data }: { data: AnalyticsData }) {
   return (
     <Card className="p-5">
       <div className="mb-4">
-        <h3 className={TITLE}>Health at a glance</h3>
+        <h2 className={TITLE}>Health at a glance</h2>
         <p className={HINT}>Success rates over the selected range; green from 95%, amber from 80%</p>
       </div>
       <div className="grid grid-cols-2 gap-6 md:grid-cols-4">

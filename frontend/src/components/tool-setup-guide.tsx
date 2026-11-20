@@ -251,7 +251,7 @@ export function ToolSetupGuide({ compact = false }: { compact?: boolean }) {
 
       <CardHeader className={cn("relative border-b border-border/60", compact ? "pb-2" : "pb-3")}>
         <div className="flex items-start gap-3">
-          <div className="relative grid size-11 shrink-0 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-[0_12px_30px_-14px_var(--primary)]">
+          <div className="relative grid size-11 shrink-0 place-items-center rounded-2xl bg-primary-strong text-primary-foreground shadow-[0_12px_30px_-14px_var(--primary)]">
             <Workflow className="size-5" aria-hidden="true" />
             <span aria-hidden="true" className="absolute -right-1 -top-1 size-3 rounded-full border-2 border-card bg-emerald-300" />
           </div>

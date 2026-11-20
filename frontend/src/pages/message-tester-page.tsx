@@ -257,6 +257,7 @@ export function MessageTesterPage() {
                       {tab.value === "text" && (
                         <Textarea
                           placeholder="Type your message here"
+                          aria-label="Message text"
                           value={text}
                           onChange={e => setText(e.target.value)}
                           rows={5}

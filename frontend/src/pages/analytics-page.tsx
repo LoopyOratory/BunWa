@@ -130,7 +130,7 @@ export function AnalyticsPage() {
                 onClick={() => setFilter("range", key === "24h" ? undefined : key)}
                 className={cn(
                   "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
-                  range === key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                  range === key ? "bg-primary-strong text-primary-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 {key}
@@ -493,7 +493,7 @@ function KindChip({ active, onClick, label, count }: { active: boolean; onClick:
       onClick={onClick}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-        active ? "border-primary bg-primary text-primary-foreground" : "border-border/70 text-muted-foreground hover:text-foreground",
+        active ? "border-primary bg-primary-strong text-primary-foreground" : "border-border/70 text-muted-foreground hover:text-foreground",
       )}
     >
       {label}
