@@ -11,6 +11,7 @@ import { WhatsappConfigService } from './config.service';
 import { VERSION } from './version';
 import { globalErrorHandler } from './middleware/error-handler';
 import { usingEncryptionKeyFallback } from './core/security/secret-box';
+import { chatRuntime } from './core/agent/chat-runtime';
 import { createApiRouter } from './api';
 import { createMcpRouter } from './mcp';
 import { createWebSocketHandler, setSessionManager } from './api/websocket';
@@ -177,6 +178,17 @@ async function bootstrap() {
 
   // Restore sessions from disk and start predefined ones
   await sessionManager.restoreSessions();
+
+  // The chat runtime answers inbound WhatsApp messages for agents bound via
+  // settings.chat = { enabled, session }. No binding means no behaviour.
+  chatRuntime.configure({ manager: sessionManager, logger: log });
+  void chatRuntime.start().catch((err) => log.warn({ err }, 'chat runtime: failed to start'));
+  // Re-resolve bindings periodically: a new agent binding (or a removed one)
+  // takes effect without a restart.
+  const chatRuntimeRefresh = setInterval(() => {
+    void chatRuntime.start().catch(() => {});
+  }, 60_000);
+  chatRuntimeRefresh.unref?.();
   await sessionManager.startPredefinedSessions();
 
   const app = new Hono();
