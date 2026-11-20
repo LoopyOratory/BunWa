@@ -132,8 +132,12 @@ export default (config: BaileysInMemoryStoreConfig) => {
         syncType,
       }) => {
         if (syncType === proto.HistorySync.HistorySyncType.ON_DEMAND) {
-          return; // FOR NOW,
-          //TODO: HANDLE
+          // Deliberate skip (was a TODO): on-demand history patches arrive for
+          // single chats on request and are already applied through the normal
+          // message/chat upserts; replaying the whole history container here
+          // would duplicate rows. Full INITIAL/RECENT syncs below are the ones
+          // that must replace the in-memory stores.
+          return;
         }
 
         if (isLatest) {

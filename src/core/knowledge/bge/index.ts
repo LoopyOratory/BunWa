@@ -8,8 +8,8 @@ import type * as Ort from "onnxruntime-node"
 import type { EmbeddingProvider } from "../embeddings"
 import { createTokenizer, type Tokenizer } from "./tokenizer"
 
-export const BGE_MODEL = "bge-small-en-v1.5"
-export const BGE_DIMENSIONS = 384
+import { BGE_MODEL, BGE_DIMENSIONS } from "../model"
+export { BGE_MODEL, BGE_DIMENSIONS }
 const DIMENSIONS = BGE_DIMENSIONS
 export const QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 /** Half the cores, at most 4: the worker also runs WhatsApp and the reply pipeline. */

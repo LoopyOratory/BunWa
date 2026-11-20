@@ -330,14 +330,19 @@ export function createAgentsRouter(): Hono {
   router.get(
     '/events',
     policiesMiddleware(CanServer(Action.Retrieve)),
-    async (c) => c.json({
-      events: await agentService.listEvents({
-        agentId: c.req.query('agentId') || undefined,
-        conversationId: c.req.query('conversationId') || undefined,
-        type: c.req.query('type') || undefined,
-        limit: c.req.query('limit') ? Number(c.req.query('limit')) : undefined,
-      }),
-    }),
+    async (c) => {
+      const limitParam = c.req.query('limit');
+      const limit = limitParam ? Number(limitParam) : undefined;
+      return c.json({
+        events: await agentService.listEvents({
+          agentId: c.req.query('agentId') || undefined,
+          conversationId: c.req.query('conversationId') || undefined,
+          type: c.req.query('type') || undefined,
+          // A non-numeric ?limit= must not smuggle NaN into the store.
+          limit: limit !== undefined && Number.isFinite(limit) ? limit : undefined,
+        }),
+      });
+    },
   );
 
   router.post(

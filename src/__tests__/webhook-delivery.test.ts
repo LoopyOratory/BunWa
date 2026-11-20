@@ -1,5 +1,8 @@
 import 'reflect-metadata';
-import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, afterAll, mock } from 'bun:test';
+// Through the helper: the real module, bound before mock.module swaps the
+// registry (a direct import here would bind the mock to itself).
+import * as realSsrfGuard from './helpers/real-ssrf-guard';
 
 // ----- Injectable mock state for ssrf-guard -----
 let ssrfBlocked = false;
@@ -13,8 +16,23 @@ class MockSsrfBlockedError extends Error {
   }
 }
 
+// mock.module replaces the module registry for the WHOLE process: every file
+// bun runs afterwards imports this fake, not the real guard (the link-preview
+// tests are the known casualty — they silently got 'ok' for every page).
+// Two layers of hygiene: while THIS file's tests run, the mock behaves exactly
+// as designed; once the file is done, `fileDone` flips every override to call
+// through to the real implementation, and afterAll re-registers the real module
+// so the plain single-process `bun test` runner stays green for everyone later.
+let fileDone = false;
+afterAll(() => {
+  fileDone = true;
+  mock.module('../common/security/ssrf-guard', () => realSsrfGuard);
+});
+
 mock.module('../common/security/ssrf-guard', () => ({
+  ...realSsrfGuard,
   resolveAndPinFetch: mock(async (url: string, init?: RequestInit) => {
+    if (fileDone) return realSsrfGuard.resolveAndPinFetch(url, init);
     if (ssrfBlocked) {
       throw new MockSsrfBlockedError('Blocked internal address: 127.0.0.1');
     }
@@ -48,13 +66,15 @@ mock.module('../common/security/ssrf-guard', () => ({
 
     return new Response('ok', { status: 200 });
   }),
-  isSsrfProtectionEnabled: () => ssrfBlocked,
+  isSsrfProtectionEnabled: () => (fileDone ? realSsrfGuard.isSsrfProtectionEnabled() : ssrfBlocked),
   SsrfBlockedError: MockSsrfBlockedError,
-  resolveSafeFetchTarget: mock(() => {
+  resolveSafeFetchTarget: mock((url: string) => {
+    if (fileDone) return realSsrfGuard.resolveSafeFetchTarget(url);
     if (ssrfBlocked) throw new MockSsrfBlockedError('Blocked');
     return Promise.resolve(null);
   }),
   safeFetch: mock(async (url: string, init?: RequestInit) => {
+    if (fileDone) return realSsrfGuard.safeFetch(url, init);
     if (ssrfBlocked) throw new MockSsrfBlockedError('Blocked');
     if (mockFetchFn) return mockFetchFn(url, init);
     return new Response('ok', { status: 200 });

@@ -447,10 +447,10 @@ export class AuditService {
     const bucketCount = Math.max(1, Math.ceil((options.to.getTime() - fromMs) / bucketMs));
     const series = {
       bucketStart: Array.from({ length: bucketCount }, (_, i) => fromMs + i * bucketMs),
-      sent: new Array(bucketCount).fill(0),
-      failed: new Array(bucketCount).fill(0),
-      webhookDelivered: new Array(bucketCount).fill(0),
-      webhookFailed: new Array(bucketCount).fill(0),
+      sent: Array.from({ length: bucketCount }, () => 0),
+      failed: Array.from({ length: bucketCount }, () => 0),
+      webhookDelivered: Array.from({ length: bucketCount }, () => 0),
+      webhookFailed: Array.from({ length: bucketCount }, () => 0),
     };
     const bucketed = this.db
       .query(

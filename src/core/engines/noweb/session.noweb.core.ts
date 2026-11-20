@@ -267,6 +267,7 @@ import {
   WAHA_CLIENT_DEVICE_NAME,
 } from '../../env';
 import { StatusStringToStatus } from '../../utils/acks';
+import { hexFromLabelColor, labelColorFromHex } from './label-colors';
 import promiseRetry from 'promise-retry';
 import { container } from 'tsyringe';
 import {
@@ -2520,7 +2521,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     const labelAction: LabelActionBody = {
       id: labelId.toString(),
       name: label.name,
-      color: label.color as any, // TODO: needs real hex-string <-> WhatsApp LabelColor (0-19) conversion
+      color: labelColorFromHex(label.color),
       deleted: false,
       predefinedId: undefined,
     };
@@ -2530,10 +2531,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       id: labelId.toString(),
       name: label.name,
       color: label.color,
-      colorHex:
-        typeof label.color === 'number'
-          ? `#${label.color.toString(16).padStart(6, '0')}`
-          : label.color,
+      colorHex: hexFromLabelColor(labelColorFromHex(label.color)),
     };
   }
 
@@ -2542,7 +2540,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     const labelAction: LabelActionBody = {
       id: label.id,
       name: label.name,
-      color: label.color as any, // TODO: needs real hex-string <-> WhatsApp LabelColor (0-19) conversion
+      color: labelColorFromHex(label.color),
       deleted: false,
       predefinedId: undefined,
     };
@@ -2555,7 +2553,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     const labelAction: LabelActionBody = {
       id: label.id,
       name: label.name,
-      color: label.color as any, // TODO: needs real hex-string <-> WhatsApp LabelColor (0-19) conversion
+      color: labelColorFromHex(label.color),
       deleted: true,
       predefinedId: undefined,
     };
@@ -2597,7 +2595,7 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
       id: label.id,
       name: label.name,
       color: color,
-      colorHex: typeof color === 'number' ? `#${color.toString(16).padStart(6, '0')}` : color,
+      colorHex: typeof color === 'number' ? hexFromLabelColor(color) ?? `#${color.toString(16).padStart(6, '0')}` : color,
     };
   }
 

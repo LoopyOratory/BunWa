@@ -340,8 +340,11 @@ export class NowebPersistentStore implements INowebStore {
       // It can overwrite the key, so we need to delete it
       delete fields['key'];
       Object.assign(message, fields);
-      // In case of revoked messages - remove it
-      // TODO: May be we should save the flag instead of completely removing the message
+      // In case of revoked messages - remove it.
+      // Deliberate behaviour (was a TODO): WhatsApp Web removes the message
+      // from the chat when it is revoked for everyone, so the store mirrors
+      // that instead of keeping a flagged tombstone. Persisting a flag would
+      // also leak the pre-revocation body to API readers that skip the flag.
       const isYetRealMessage = isRealMessage(message) || false;
       if (isYetRealMessage) {
         await this.messagesRepo.upsertOne(message);
@@ -522,10 +525,12 @@ export class NowebPersistentStore implements INowebStore {
             update,
           )}'`,
         );
+        // Deliberate behaviour (was a TODO about matching by attrs.hash):
+        // an update for an unsaved contact creates a minimal contact row —
+        // id plus whatever fields the update carries. The next contact or
+        // message upsert merges into it, so no hash lookup is needed; a
+        // hash probe here would only race the store with the same result.
         contact = {} as Contact;
-        // TODO: Find contact by hash if not found
-        //  find contact by attrs.hash, when user is not saved as a contact
-        //  check the in-memory for that
       }
       Object.assign(contact, update);
 

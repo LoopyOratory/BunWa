@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { beforeAll, describe, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { BunSqliteClient, SqlAgentStore } from '../core/agent/agent.sql';
-import { hashSecret, openSecret, sealSecret } from '../core/security/secret-box';
+import { hashSecret, openSecret, sealSecret, usingEncryptionKeyFallback } from '../core/security/secret-box';
 
 beforeAll(() => {
   process.env.BUNWA_KEY_ENCRYPTION_SECRET ??= 'test-secret';
@@ -33,7 +33,39 @@ describe('secret box', () => {
   test('rejects a tampered ciphertext', () => {
     const sealed = sealSecret('secret');
     const tampered = sealed.slice(0, -2) + (sealed.endsWith('aa') ? 'bb' : 'aa');
-    expect(() => openSecret(tampered)).toThrow();
+    expect(() => openSecret(tampered)).toThrow(/sealed under a different master key/i);
+  });
+
+  test('says the master key rotated, not a generic crypto failure', () => {
+    const sealed = sealSecret('agent-key-material');
+    const saved = process.env.BUNWA_KEY_ENCRYPTION_SECRET;
+    process.env.BUNWA_KEY_ENCRYPTION_SECRET = 'rotated-to-something-else';
+    try {
+      expect(() => openSecret(sealed)).toThrow(/rotat|different master key|regenerate/i);
+    } finally {
+      process.env.BUNWA_KEY_ENCRYPTION_SECRET = saved;
+    }
+    // Restoring the original secret must make the value readable again.
+    expect(openSecret(sealed)).toBe('agent-key-material');
+  });
+
+  test('detects when the encryption key falls back to the API key', () => {
+    const savedSecret = process.env.BUNWA_KEY_ENCRYPTION_SECRET;
+    const savedWaha = process.env.WAHA_API_KEY;
+    const savedBunwa = process.env.BUNWA_API_KEY;
+    try {
+      delete process.env.BUNWA_KEY_ENCRYPTION_SECRET;
+      process.env.WAHA_API_KEY = 'waha-fallback-key';
+      delete process.env.BUNWA_API_KEY;
+      expect(usingEncryptionKeyFallback()).toBe(true);
+      process.env.BUNWA_KEY_ENCRYPTION_SECRET = 'explicit-secret';
+      expect(usingEncryptionKeyFallback()).toBe(false);
+    } finally {
+      if (savedSecret !== undefined) process.env.BUNWA_KEY_ENCRYPTION_SECRET = savedSecret;
+      else delete process.env.BUNWA_KEY_ENCRYPTION_SECRET;
+      if (savedWaha !== undefined) process.env.WAHA_API_KEY = savedWaha;
+      if (savedBunwa !== undefined) process.env.BUNWA_API_KEY = savedBunwa;
+    }
   });
 });
 

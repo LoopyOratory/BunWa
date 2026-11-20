@@ -97,8 +97,9 @@ describe('agent store', () => {
         },
       },
     });
-    expect((updated?.settings.mcp as any).enabled).toBe(false);
-    expect((updated?.settings.mcp as any).allowedTools).toEqual(['MessageSendText']);
+    if (!updated) throw new Error('updateAgent returned null');
+    expect((updated.settings as any).mcp.enabled).toBe(false);
+    expect((updated.settings as any).mcp.allowedTools).toEqual(['MessageSendText']);
     await store.close();
   });
 

@@ -1,4 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, afterAll, mock } from 'bun:test';
+// Through the helper: the real module, bound before mock.module swaps the
+// registry (a direct import here would bind the mock to itself).
+import * as realSsrfGuard from './helpers/real-ssrf-guard';
 
 // ----- Injectable mock state for ssrf-guard -----
 let ssrfBlocked = false;
@@ -13,8 +16,20 @@ class MockSsrfBlockedError extends Error {
   }
 }
 
+// mock.module is process-wide in the single-process runner. While this file's
+// tests run, the mock behaves as designed; once the file is done, every
+// override calls through to the real implementation so later files (e.g. the
+// link-preview tests) get real SSRF checks and real fetches, never 'ok'.
+let fileDone = false;
+afterAll(() => {
+  fileDone = true;
+  mock.module('../common/security/ssrf-guard', () => realSsrfGuard);
+});
+
 mock.module('../common/security/ssrf-guard', () => ({
+  ...realSsrfGuard,
   resolveAndPinFetch: mock(async (url: string, init?: RequestInit) => {
+    if (fileDone) return realSsrfGuard.resolveAndPinFetch(url, init);
     lastInit = init;
 
     if (ssrfBlocked) {

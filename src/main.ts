@@ -6,6 +6,7 @@ import { configureContainer } from './di/container';
 import { WhatsappConfigService } from './config.service';
 import { VERSION } from './version';
 import { globalErrorHandler } from './middleware/error-handler';
+import { usingEncryptionKeyFallback } from './core/security/secret-box';
 import { createApiRouter } from './api';
 import { createMcpRouter } from './mcp';
 import { createWebSocketHandler, setSessionManager } from './api/websocket';
@@ -108,6 +109,18 @@ process.on('unhandledRejection', (reason, promise) => {
 
 async function bootstrap() {
   log.info(`BUNWA (WhatsApp HTTP API) - Running ${VERSION.tier} version...`);
+
+  // Sealed keys (agent sk_agent_*, MCP keys, external-server headers) are only
+  // recoverable while the encryption master secret stays stable. Warn while it
+  // is derived from the API key: rotating WAHA_API_KEY/BUNWA_API_KEY then makes
+  // every sealed value unreadable and every reveal fails permanently.
+  if (usingEncryptionKeyFallback()) {
+    log.warn(
+      'BUNWA_KEY_ENCRYPTION_SECRET is not set — sealed keys fall back to the API key. ' +
+        'Rotating the API key will make every stored key and external-server header unreadable. ' +
+        'Set BUNWA_KEY_ENCRYPTION_SECRET explicitly before issuing any keys.',
+    );
+  }
 
   const container = configureContainer();
   const config = container.resolve(WhatsappConfigService);

@@ -124,10 +124,40 @@ async function resolveAgentScopeForKey(rawKey: string | undefined): Promise<{ id
     return typeof mcp?.apiKeyHash === 'string' && safeCompare(mcp.apiKeyHash, providedHash);
   });
   if (!agent) return undefined;
+  stampAgentKeyUsed(agent.id);
   return {
     id: agent.id,
     mcp: (agent.settings?.mcp as SessionConfig['mcp'] | undefined) ?? undefined,
   };
+}
+
+/**
+ * Record that an agent's MCP key was used, so the dashboard can tell a live
+ * key from a stale one. Throttled to one store write per agent per minute:
+ * tools/list and every tool call resolve the key, and writes on every call
+ * would burn the store for zero extra information.
+ */
+const LAST_USED_STAMP_INTERVAL_MS = 60_000;
+const lastUsedStampAt = new Map<string, number>();
+
+async function stampAgentKeyUsed(agentId: string): Promise<void> {
+  const last = lastUsedStampAt.get(agentId) ?? 0;
+  const elapsed = Date.now() - last;
+  if (elapsed < LAST_USED_STAMP_INTERVAL_MS) return;
+  lastUsedStampAt.set(agentId, Date.now());
+  try {
+    const agent = await agentService.getAgent(agentId);
+    const mcp = (agent?.settings?.mcp as Record<string, unknown> | undefined) ?? {};
+    if (!agent || typeof mcp.apiKeyHash !== 'string') return;
+    await agentService.updateAgent(agentId, {
+      settings: {
+        ...agent.settings,
+        mcp: { ...mcp, apiKeyLastUsedAt: new Date().toISOString() },
+      },
+    });
+  } catch {
+    // Best effort: a failed usage stamp must never break a tool call.
+  }
 }
 
 /**

@@ -5,6 +5,7 @@ import type Knex from 'knex';
 import { makePostgresKnex } from '../db/knex-postgres';
 import type { AgentStore } from './agent.store';
 import { externalToolQualifiedName } from './external-mcp.names';
+import { BGE_DIMENSIONS } from '../knowledge/model';
 import { sealSecret, tryOpenSecret, encryptionConfigured, isSealedSecret } from '../security/secret-box';
 import type {
   Agent,
@@ -83,7 +84,18 @@ export class KnexSqlClient implements SqlClient {
 
 export class BunSqliteClient implements SqlClient {
   readonly dialect = 'sqlite' as const;
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: Database) {
+    // The agent store takes concurrent runtime writes (messages, events,
+    // activity heartbeats) alongside dashboard reads. SQLite defaults make
+    // contention an immediate SQLITE_BUSY error instead of a short wait, so
+    // every store opens in WAL with a generous busy timeout. Foreign keys are
+    // ON for declarative cascades on fresh installs; databases created before
+    // the REFERENCES clauses existed keep their manual cascades, which the
+    // service performs in the same transactions as the parent delete.
+    this.db.run('PRAGMA journal_mode = WAL');
+    this.db.run('PRAGMA busy_timeout = 5000');
+    this.db.run('PRAGMA foreign_keys = ON');
+  }
 
   async query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
     return this.db.query(sql).all(...params) as T[];
@@ -569,7 +581,7 @@ const SCHEMA: string[] = [
   `CREATE INDEX IF NOT EXISTS bunwa_user_segments_type_idx ON bunwa_user_segments (user_id, segment_type)`,
   `CREATE TABLE IF NOT EXISTS bunwa_conversations (
     id TEXT PRIMARY KEY,
-    agent_id TEXT NOT NULL,
+    agent_id TEXT NOT NULL REFERENCES bunwa_agents(id) ON DELETE CASCADE,
     user_id TEXT,
     channel TEXT NOT NULL DEFAULT 'whatsapp',
     status TEXT NOT NULL DEFAULT 'open',
@@ -586,8 +598,8 @@ const SCHEMA: string[] = [
   `CREATE INDEX IF NOT EXISTS bunwa_conversations_started_idx ON bunwa_conversations (started_at)`,
   `CREATE TABLE IF NOT EXISTS bunwa_conversation_messages (
     id TEXT PRIMARY KEY,
-    conversation_id TEXT NOT NULL,
-    agent_id TEXT NOT NULL,
+    conversation_id TEXT NOT NULL REFERENCES bunwa_conversations(id) ON DELETE CASCADE,
+    agent_id TEXT NOT NULL REFERENCES bunwa_agents(id) ON DELETE CASCADE,
     user_id TEXT,
     role TEXT NOT NULL,
     channel TEXT NOT NULL DEFAULT 'whatsapp',
@@ -615,7 +627,8 @@ const SCHEMA: string[] = [
 /**
  * Knowledge chunks are dialect-specific: SQLite stores the vector as a BLOB
  * and mirrors it into a sqlite-vec virtual table; Postgres uses pgvector's
- * native `vector(384)` column. Keep the scalar columns identical.
+ * native `vector(N)` column. Keep the scalar columns identical. N comes from
+ * BGE_DIMENSIONS so the schemas can never drift from the embedding model.
  */
 const KNOWLEDGE_CHUNK_SCHEMA_SQLITE = [
   `CREATE TABLE IF NOT EXISTS bunwa_knowledge_chunks (
@@ -644,7 +657,7 @@ const KNOWLEDGE_CHUNK_SCHEMA_POSTGRES = [
     text TEXT NOT NULL,
     char_count INTEGER NOT NULL DEFAULT 0,
     token_count INTEGER NOT NULL DEFAULT 0,
-    embedding vector(384),
+    embedding vector(${BGE_DIMENSIONS}),
     embedding_model TEXT,
     created_at TEXT NOT NULL
   )`,
@@ -670,7 +683,7 @@ export class SqlAgentStore implements AgentStore {
         const { getLoadablePath } = await import('sqlite-vec');
         this.client.loadExtension?.(getLoadablePath());
         await this.client.execute(
-          `CREATE VIRTUAL TABLE IF NOT EXISTS bunwa_knowledge_vec USING vec0(embedding float[384] distance_metric=cosine)`,
+          `CREATE VIRTUAL TABLE IF NOT EXISTS bunwa_knowledge_vec USING vec0(embedding float[${BGE_DIMENSIONS}] distance_metric=cosine)`,
         );
         this.vectorReady = true;
       } catch (error) {
@@ -1319,6 +1332,18 @@ export class SqlAgentStore implements AgentStore {
   async addKnowledgeChunks(chunks: AddKnowledgeChunkInput[]): Promise<KnowledgeChunk[]> {
     this.assertVectorReady();
     if (!chunks.length) return [];
+    // The schemas are created with BGE_DIMENSIONS columns; an embedding whose
+    // geometry disagrees means the embedding model changed without updating
+    // BGE_DIMENSIONS (and recreating the vector tables). Fail with the cause,
+    // not a cryptic vec0/pgvector insert error.
+    const bad = chunks.find((chunk) => !Array.isArray(chunk.embedding) || chunk.embedding.length !== BGE_DIMENSIONS);
+    if (bad) {
+      const got = Array.isArray(bad.embedding) ? bad.embedding.length : 'none';
+      throw new Error(
+        `Knowledge chunk embedding has ${got} dimensions but the vector store expects ${BGE_DIMENSIONS}. ` +
+          'The embedding model and the database schema disagree — update BGE_DIMENSIONS and rebuild the vector tables together.',
+      );
+    }
     const at = now();
     const saved: KnowledgeChunk[] = [];
     for (const chunk of chunks) {
@@ -1385,6 +1410,12 @@ export class SqlAgentStore implements AgentStore {
     limit: number,
   ): Promise<KnowledgeSearchHit[]> {
     this.assertVectorReady();
+    if (!Array.isArray(embedding) || embedding.length !== BGE_DIMENSIONS) {
+      throw new Error(
+        `Search embedding has ${Array.isArray(embedding) ? embedding.length : 'no'} dimensions but the vector store expects ${BGE_DIMENSIONS}. ` +
+          'The embedding model and the database schema disagree — update BGE_DIMENSIONS and rebuild the vector tables together.',
+      );
+    }
     if (!embedding.length || limit <= 0) return [];
     if (this.client.dialect === 'postgres') {
       const literal = `[${embedding.join(',')}]`;

@@ -1,15 +1,30 @@
 import 'reflect-metadata';
-import { describe, it, expect, mock } from 'bun:test';
+import { describe, it, expect, afterAll, mock } from 'bun:test';
+// Through the helper: the real module, bound before mock.module swaps the
+// registry (a direct import here would bind the mock to itself).
+import * as realSsrfGuard from './helpers/real-ssrf-guard';
 
 // A caller-supplied file URL the remote host refuses is a client facing result,
 // not a server fault. Before this, a 404 from the file host surfaced as a bare
 // 500 "Internal server error" with no hint at the cause, and a missing ffmpeg
 // did the same even though the converter had an actionable message ready.
 
+// mock.module is process-wide in the single-process runner; this file's mock
+// answers 404 for every URL. While the file's tests run it behaves as designed;
+// afterwards every call passes through to the real guard so later files get
+// real fetches.
+let fileDone = false;
+afterAll(() => {
+  fileDone = true;
+  mock.module('../common/security/ssrf-guard', () => realSsrfGuard);
+});
+
 mock.module('../common/security/ssrf-guard', () => ({
-  resolveAndPinFetch: mock(async () =>
-    new Response('not found', { status: 404, statusText: 'Not Found' }),
-  ),
+  ...realSsrfGuard,
+  resolveAndPinFetch: mock(async (url: string, init?: RequestInit) => {
+    if (fileDone) return realSsrfGuard.resolveAndPinFetch(url, init);
+    return new Response('not found', { status: 404, statusText: 'Not Found' });
+  }),
 }));
 
 const { fetchBuffer } = await import('../utils/fetch');

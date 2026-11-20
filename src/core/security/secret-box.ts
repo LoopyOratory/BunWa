@@ -9,6 +9,22 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypt
  */
 const PREFIX = 'enc:v1:';
 
+function masterKeySource(): 'explicit' | 'waha-api-key' | 'bunwa-api-key' | null {
+  if (process.env.BUNWA_KEY_ENCRYPTION_SECRET) return 'explicit';
+  if (process.env.WAHA_API_KEY) return 'waha-api-key';
+  if (process.env.BUNWA_API_KEY) return 'bunwa-api-key';
+  return null;
+}
+
+/**
+ * True when the encryption master key is derived from the API key instead of
+ * BUNWA_KEY_ENCRYPTION_SECRET. Rotating that API key makes every sealed value
+ * unreadable, so callers should warn loudly while this fallback is active.
+ */
+export function usingEncryptionKeyFallback(): boolean {
+  return encryptionConfigured() && masterKeySource() !== 'explicit';
+}
+
 function masterKey(): Buffer {
   const secret =
     process.env.BUNWA_KEY_ENCRYPTION_SECRET ||
@@ -54,17 +70,30 @@ export function openSecret(value: string): string {
     throw new Error('Stored secret is malformed');
   }
 
-  const decipher = createDecipheriv(
-    'aes-256-gcm',
-    masterKey(),
-    Buffer.from(ivPart, 'base64url'),
-  );
-  decipher.setAuthTag(Buffer.from(tagPart, 'base64url'));
-  const plaintext = Buffer.concat([
-    decipher.update(Buffer.from(ciphertextPart, 'base64url')),
-    decipher.final(),
-  ]);
-  return plaintext.toString('utf8');
+  const key = masterKey();
+  try {
+    const decipher = createDecipheriv(
+      'aes-256-gcm',
+      key,
+      Buffer.from(ivPart, 'base64url'),
+    );
+    decipher.setAuthTag(Buffer.from(tagPart, 'base64url'));
+    const plaintext = Buffer.concat([
+      decipher.update(Buffer.from(ciphertextPart, 'base64url')),
+      decipher.final(),
+    ]);
+    return plaintext.toString('utf8');
+  } catch {
+    // GCM authentication failed: this was sealed under a different master key.
+    // Say so instead of leaking a generic crypto error, because the usual cause
+    // is WAHA_API_KEY (or BUNWA_KEY_ENCRYPTION_SECRET) being rotated after the
+    // value was sealed, and the recovery is restore-the-old-secret or re-issue.
+    throw new Error(
+      'Sealed secret cannot be decrypted — it was sealed under a different master key. ' +
+        'Restore BUNWA_KEY_ENCRYPTION_SECRET (or the API key) that was set when the value was stored, ' +
+        'or regenerate the key. Revealing with the current secret will never succeed.',
+    );
+  }
 }
 
 /** Best-effort open for lists: a rotated master key must not break the page. */
