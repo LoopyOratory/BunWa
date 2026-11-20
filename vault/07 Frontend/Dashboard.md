@@ -214,3 +214,7 @@ explicitly to avoid confusion ([[Runbook]]).
 ## Related
 
 [[REST API]] · [[WebSocket Events]] · [[API Docs]] · [[Configuration Reference]] · [[Known Gaps and Stubs]]
+
+## Naming (WAHA -> BUNWA, NOWEB -> BUNWEB)
+
+Every environment variable is `BUNWA_*`; the server falls back to the matching legacy `WAHA_*` spelling automatically (`src/common/env-alias.ts`), so old deployments keep working. The default engine id is `BUNWEB` (legacy `NOWEB` input normalizes to it at every input point). Frontend localStorage keys are `bunwa_dashboard_auth` / `bunwa_dashboard_user` / `bunwa-api-key`, with a one-time migration from the old `waha_*` keys so signed-in admins stay signed in. Webhook HTTP headers (`X-WAHA-Signature` and friends) stay `WAHA-*` on purpose: they are the external wire contract.

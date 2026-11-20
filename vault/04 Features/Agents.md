@@ -249,6 +249,15 @@ each customer and agent turn with the conversation id; the admin UI is read-only
 Text is capped at 20,000 characters per message. There is no automatic retention
 policy yet, so add one before high-volume production traffic.
 
+## Runtime recorder
+
+Call runtimes persist what actually happened, gated on `BUNWA_AGENT_ID` exactly like the activity heartbeat.
+
+- `src/core/agent/runtime-recorder.ts` is the write side: `begin()` opens a voice conversation; `caller()`/`reply()` persist turns as `bunwa_conversation_messages` plus `message.inbound`/`message.outbound` events; the first `reply()` also posts `agent.reply` carrying `firstResponseMs` (the median-response-time KPI's real source); `end()` closes the conversation.
+- `call-live.ts` records Gemini Live's input/output transcriptions; `fish-bridge.ts` records the Fish room's `lk.transcription` (`user_prod_*` = caller, `agent_prod_*` = agent).
+- Every write is best-effort with a warn log — a dashboard that is down must never break a live call. Without agent config the recorder is a silent no-op. Cost stays unset rather than faked until a provider reports usage.
+- Verify with `bun run verify:recorder` (live drill: seeded agent, four turns, full event chain, cleanup) and `bun test src/__tests__/runtime-recorder.test.ts`.
+
 ## Live activity indicator
 
 "Is this agent on a call or chatting right now" is **heartbeat state, never a
