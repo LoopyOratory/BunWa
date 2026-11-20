@@ -4,6 +4,7 @@ import { join } from 'path';
 import { EMPTY, merge, Observable, map, Subject } from 'rxjs';
 import { WhatsappConfigService } from '../config.service';
 import { WhatsappSession } from './session/session.abc';
+import { resolveEngineStorageDir } from './storage/storage-namespace';
 import { WhatsappSessionBunWebCore } from './engines/bunweb/session.bunweb.core';
 import { VERSION, BUNWAVersion } from '../version';
 import {
@@ -45,7 +46,10 @@ import { buildLidResolver } from './webhook-lid-resolver';
 // already-paired sessions' config every time `bun test` runs locally.
 function getSessionsDir(): string {
   const base = process.env.BUNWA_LOCAL_STORE_BASE_DIR || join(process.cwd(), '.sessions');
-  return join(base, 'bunweb');
+  // Engine-rename compat: an existing deployment's index lives in the legacy
+  // 'noweb' directory; keep reading it there instead of silently starting an
+  // empty index under the renamed engine directory.
+  return resolveEngineStorageDir(base);
 }
 function getSessionsIndexPath(): string {
   return join(getSessionsDir(), '.sessions-index.json');
