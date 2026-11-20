@@ -51,8 +51,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Non-root user for security
-RUN groupadd --system --gid 1001 waha && \
-    useradd --system --uid 1001 --gid waha waha
+RUN groupadd --system --gid 1001 bunwa && \
+    useradd --system --uid 1001 --gid bunwa bunwa
 
 # Runtime files only — no frontend/ source, no scripts/, no __tests__/
 COPY --from=builder /app/src ./src
@@ -76,9 +76,9 @@ RUN arch=$(uname -m | sed 's/x86_64/x64/; s/aarch64/arm64/') \
 #   /app/.media     → downloaded WhatsApp media files
 #   /app/data       → audit logs, templates, export/import
 RUN mkdir -p /app/.sessions /app/.media /app/data && \
-    chown -R waha:waha /app/.sessions /app/.media /app/data
+    chown -R bunwa:bunwa /app/.sessions /app/.media /app/data
 
-USER waha
+USER bunwa
 
 # ── defaults ──────────────────────────────────────────────────────────────────
 # Every variable can be overridden in Coolify's Environment tab.

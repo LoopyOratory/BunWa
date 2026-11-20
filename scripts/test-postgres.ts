@@ -2,24 +2,24 @@
 /**
  * PostgreSQL store smoke test.
  *
- * Exercises every knex/pg code path in the NOWEB session store and the
+ * Exercises every knex/pg code path in the BUNWEB session store and the
  * template repository against a live PostgreSQL server — a real Postgres, a
  * Docker service, or a PGlite socket server (see the vault note
  * "Postgres on PGlite").
  *
  * Usage:
- *   WAHA_DATABASE_URL=postgres://user:pass@host:5432/db bun run test:postgres
+ *   BUNWA_DATABASE_URL=postgres://user:pass@host:5432/db bun run test:postgres
  *
  * Exits non-zero on failure. Only touches rows it creates; safe to rerun.
  */
 import 'reflect-metadata';
-import { PostgresStorage } from '../src/core/engines/noweb/store/postgres/PostgresStorage';
+import { PostgresStorage } from '../src/core/engines/bunweb/store/postgres/PostgresStorage';
 import { PostgresTemplateRepository } from '../src/core/templates/postgres/PostgresTemplateRepository';
 import { makePostgresKnex } from '../src/core/db/knex-postgres';
 
-const url = process.env.WAHA_DATABASE_URL ?? process.env.WHATSAPP_SESSIONS_POSTGRESQL_URL;
+const url = process.env.BUNWA_DATABASE_URL ?? process.env.WHATSAPP_SESSIONS_POSTGRESQL_URL;
 if (!url) {
-  console.error('Set WAHA_DATABASE_URL (or WHATSAPP_SESSIONS_POSTGRESQL_URL) first.');
+  console.error('Set BUNWA_DATABASE_URL (or WHATSAPP_SESSIONS_POSTGRESQL_URL) first.');
   process.exit(2);
 }
 

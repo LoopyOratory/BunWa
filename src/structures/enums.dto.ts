@@ -1,6 +1,6 @@
 export const SECOND = 1000;
 
-export enum WAHAEvents {
+export enum BUNWAEvents {
   SESSION_STATUS = 'session.status',
   SESSION_SYNC = 'session.sync',
   MESSAGE = 'message',
@@ -34,14 +34,14 @@ export enum WAHAEvents {
   ENGINE_EVENT = 'engine.event',
 }
 
-export type AllEventType = WAHAEvents | '*';
-export const AllEvents = [...Object.values(WAHAEvents), '*'];
+export type AllEventType = BUNWAEvents | '*';
+export const AllEvents = [...Object.values(BUNWAEvents), '*'];
 
-export const WAHAEventsWild = Object.values(WAHAEvents).filter(
-  (e) => e !== WAHAEvents.STATE_CHANGE && e !== WAHAEvents.ENGINE_EVENT,
+export const BUNWAEventsWild = Object.values(BUNWAEvents).filter(
+  (e) => e !== BUNWAEvents.STATE_CHANGE && e !== BUNWAEvents.ENGINE_EVENT,
 );
 
-export enum WAHASessionStatus {
+export enum BUNWASessionStatus {
   STOPPED = 'STOPPED',
   STARTING = 'STARTING',
   SCAN_QR_CODE = 'SCAN_QR_CODE',
@@ -49,14 +49,31 @@ export enum WAHASessionStatus {
   FAILED = 'FAILED',
 }
 
-export enum WAHAEngine {
+export enum BUNWAEngine {
   WEBJS = 'WEBJS',
   WPP = 'WPP',
-  NOWEB = 'NOWEB',
+  BUNWEB = 'BUNWEB',
   GOWS = 'GOWS',
+  /**
+   * Legacy spelling from before the engine was renamed to BUNWEB. Old
+   * session configs and API requests that still say 'NOWEB' are normalized
+   * to BUNWEB at every input point (see normalizeBunwaEngine); nothing new
+   * should write this value.
+   */
+  NOWEB = 'NOWEB',
 }
 
-export enum WAHAPresenceStatus {
+/** Map any accepted engine spelling to the canonical member. */
+export function normalizeBunwaEngine(raw: string | undefined | null): BUNWAEngine {
+  const value = String(raw ?? '').trim().toUpperCase();
+  if (value === 'NOWEB') return BUNWAEngine.BUNWEB;
+  if (value === 'WEBJS') return BUNWAEngine.WEBJS;
+  if (value === 'WPP') return BUNWAEngine.WPP;
+  if (value === 'GOWS') return BUNWAEngine.GOWS;
+  return BUNWAEngine.BUNWEB;
+}
+
+export enum BUNWAPresenceStatus {
   OFFLINE = 'offline',
   ONLINE = 'online',
   TYPING = 'typing',

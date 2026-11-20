@@ -9,7 +9,7 @@ import { createApiRouter } from '../api';
 import { AuditService } from '../core/audit/audit.service';
 
 // Set up API key so fail-closed middleware works in tests
-process.env.WAHA_API_KEY = 'waha';
+process.env.BUNWA_API_KEY = 'waha';
 
 describe('API Key Authentication', () => {
   let app: Hono;

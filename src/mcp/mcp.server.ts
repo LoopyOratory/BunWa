@@ -1,5 +1,5 @@
 /**
- * MCP Server for WAHA-Bun.
+ * MCP Server for BunWa.
  *
  * Uses WebStandardStreamableHTTPServerTransport (native Web Standard APIs)
  * which works directly with Bun's fetch-based HTTP server and Hono framework.
@@ -57,11 +57,11 @@ function safeCompare(a: string, b: string): boolean {
 /**
  * API key validation against the configured key using timing-safe comparison.
  * With no key configured the endpoint is open (dev mode) unless the operator
- * set WAHA_ALLOW_NO_AUTH=false — the same fail-closed switch the REST API
+ * set BUNWA_ALLOW_NO_AUTH=false — the same fail-closed switch the REST API
  * honors, so keyless MCP access dies with it.
  */
 export function validateApiKey(rawKey: string | undefined, configuredKey: string | undefined): boolean {
-  if (!configuredKey) return process.env.WAHA_ALLOW_NO_AUTH !== 'false';
+  if (!configuredKey) return process.env.BUNWA_ALLOW_NO_AUTH !== 'false';
   if (!rawKey) return false;
   return safeCompare(rawKey, configuredKey);
 }
@@ -405,7 +405,7 @@ export function createMcpRouter(
   const basePath = (options.basePath ?? '/mcp').replace(/\/$/, '') || '/mcp';
   const serverInfo = options.serverInfo ?? { name: 'waha-bun', version: '1.0.0' };
   const readOnly = options.readOnly ?? process.env.MCP_READONLY === 'true';
-  const configuredKey = process.env.WAHA_API_KEY || undefined;
+  const configuredKey = process.env.BUNWA_API_KEY || undefined;
 
   // Build tool registry from all tool definition factories
   const allTools: ToolDescriptor[] = buildAllTools(sessionManager);

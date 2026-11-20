@@ -1,3 +1,4 @@
+import { normalizeBunwaEngine } from '../structures/enums.dto';
 import { Hono } from 'hono';
 import { container } from 'tsyringe';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
@@ -16,7 +17,7 @@ export function createWorkersRouter(): Hono {
     return c.json([{
       name: 'WAHA',
       apiUrl: c.req.url.replace(/\/api\/workers$/, ''),
-      engine: process.env.WHATSAPP_DEFAULT_ENGINE || 'NOWEB',
+      engine: normalizeBunwaEngine(process.env.WHATSAPP_DEFAULT_ENGINE),
       version: VERSION.version || '2026.5.1',
       tier: VERSION.tier || 'PLUS',
       uptime: process.uptime().toString(),

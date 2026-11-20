@@ -2149,7 +2149,6 @@ export class SqlAgentStore implements AgentStore {
 function postgresUrlFromEnv(): string | undefined {
   return (
     process.env.BUNWA_DATABASE_URL ||
-    process.env.WAHA_DATABASE_URL ||
     process.env.WHATSAPP_SESSIONS_POSTGRESQL_URL
   );
 }
@@ -2161,9 +2160,7 @@ function sqlitePathFromEnv(): string {
 export async function createAgentStore(): Promise<AgentStore> {
   const rawDriver =
     process.env.BUNWA_DATABASE_DRIVER ||
-    process.env.WAHA_DATABASE_DRIVER ||
     process.env.BUNWA_DB_TYPE ||
-    process.env.WAHA_DB_TYPE ||
     'sqlite';
   const driver = rawDriver.toLowerCase() === 'postgres' || rawDriver.toLowerCase() === 'postgresql'
     ? 'postgres'
@@ -2172,7 +2169,7 @@ export async function createAgentStore(): Promise<AgentStore> {
   if (driver === 'postgres') {
     const url = postgresUrlFromEnv();
     if (!url) {
-      throw new Error('Agent store: Postgres selected but BUNWA_DATABASE_URL / WAHA_DATABASE_URL is not set');
+      throw new Error('Agent store: Postgres selected but BUNWA_DATABASE_URL / BUNWA_DATABASE_URL is not set');
     }
     const store = new SqlAgentStore(new KnexSqlClient(makePostgresKnex(url)));
     await store.init();

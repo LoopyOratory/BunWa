@@ -1,11 +1,11 @@
 import { VERSION } from './version';
 import { applyRouteCoverage, type RouteLike } from './openapi/route-coverage';
-import { WAHA_WEBHOOKS } from './structures/webhooks';
+import { BUNWA_WEBHOOKS } from './structures/webhooks';
 
 export function buildOpenApiSpec(routes?: RouteLike[]): any {
   const webhooks: Record<string, any> = {};
 
-  for (const [event, description] of Object.entries(WAHA_WEBHOOKS)) {
+  for (const [event, description] of Object.entries(BUNWA_WEBHOOKS)) {
     webhooks[event] = {
       post: {
         summary: description,
@@ -2164,7 +2164,7 @@ export function buildOpenApiSpec(routes?: RouteLike[]): any {
         put: {
           tags: ['🆔 Profile'],
           summary: 'Set profile picture (Plus)',
-          description: 'Requires PLUS tier (the default — set WAHA_VERSION=CORE to disable). Returns AvailableInPlusVersion on Core.',
+          description: 'Requires PLUS tier (the default — set BUNWA_VERSION=CORE to disable). Returns AvailableInPlusVersion on Core.',
           operationId: 'setProfilePicture',
           security: [{ apiKey: [] }],
           parameters: [
@@ -2191,7 +2191,7 @@ export function buildOpenApiSpec(routes?: RouteLike[]): any {
         delete: {
           tags: ['🆔 Profile'],
           summary: 'Delete profile picture (Plus)',
-          description: 'Requires PLUS tier (the default — set WAHA_VERSION=CORE to disable). Returns AvailableInPlusVersion on Core.',
+          description: 'Requires PLUS tier (the default — set BUNWA_VERSION=CORE to disable). Returns AvailableInPlusVersion on Core.',
           operationId: 'deleteProfilePicture',
           security: [{ apiKey: [] }],
           parameters: [
@@ -2204,7 +2204,7 @@ export function buildOpenApiSpec(routes?: RouteLike[]): any {
         get: {
           tags: ['🖼️ Media'],
           summary: 'Get downloaded media file',
-          description: 'Serves media previously downloaded from an incoming message, when WAHA_STORAGE_TYPE=local (the default). The URL is returned as the media.url field on message objects.',
+          description: 'Serves media previously downloaded from an incoming message, when BUNWA_STORAGE_TYPE=local (the default). The URL is returned as the media.url field on message objects.',
           operationId: 'getMediaFile',
           security: [{ apiKey: [] }],
           parameters: [

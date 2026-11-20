@@ -3,7 +3,7 @@ import {
   WHATSAPP_LABEL_COLORS,
   hexFromLabelColor,
   labelColorFromHex,
-} from '../core/engines/noweb/label-colors';
+} from '../core/engines/bunweb/label-colors';
 
 describe('WhatsApp label colors', () => {
   test('has all 20 predefined colors, lowercase hex', () => {

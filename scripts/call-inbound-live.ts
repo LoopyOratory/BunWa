@@ -24,7 +24,7 @@ export function callRuntimeScript(provider: string): { provider: CallProvider; s
 const env = {
   bunwaUrl: process.env.BUNWA_URL || 'http://127.0.0.1:3001',
   session: process.env.BUNWA_SESSION || 'calltest',
-  apiKey: process.env.BUNWA_API_KEY || process.env.WAHA_API_KEY || '',
+  apiKey: process.env.BUNWA_API_KEY || process.env.BUNWA_API_KEY || '',
   geminiKey: process.env.GEMINI_API_KEY || '',
   fishKey: process.env.FISH_API_KEY || '',
   fishAgentId: process.env.FISH_AGENT_ID || '76d8826773b24aecbaec1a6796f8f5e5',

@@ -1,4 +1,4 @@
-import { WAHAEvents, WAHAEventsWild } from '../structures/enums.dto';
+import { BUNWAEvents, BUNWAEventsWild } from '../structures/enums.dto';
 
 /**
  * Unmask "*" in events list to exact values
@@ -6,7 +6,7 @@ import { WAHAEvents, WAHAEventsWild } from '../structures/enums.dto';
  */
 export function EventWildUnmask(events: string[] | string): string[] {
   const eventList = Array.isArray(events) ? events : [events];
-  const allEvents = WAHAEventsWild;
+  const allEvents = BUNWAEventsWild;
 
   const result: string[] = [];
 

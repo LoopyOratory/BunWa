@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-WAHA_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-FRONTEND_SRC="$WAHA_DIR/frontend"
-FRONTEND_DIST="$WAHA_DIR/frontend-dist"
+BUNWA_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+FRONTEND_SRC="$BUNWA_DIR/frontend"
+FRONTEND_DIST="$BUNWA_DIR/frontend-dist"
 
 echo "=== Building Frontend Dashboard ==="
 echo ""

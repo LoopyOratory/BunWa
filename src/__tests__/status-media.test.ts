@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { describe, it, expect } from 'bun:test';
 import { readdir } from 'fs/promises';
 import { tmpdir } from 'os';
-import { WhatsappSessionNoWebCore } from '../core/engines/noweb/session.noweb.core';
+import { WhatsappSessionBunWebCore } from '../core/engines/bunweb/session.bunweb.core';
 import { UnprocessableEntityException } from '../core/exceptions';
 import { getAudioDurationSeconds } from '../core/media/audio';
 
@@ -31,7 +31,7 @@ interface SentCall {
 function createSession() {
   const sent: SentCall[] = [];
   const converted: Buffer[] = [];
-  const session: any = Object.create(WhatsappSessionNoWebCore.prototype);
+  const session: any = Object.create(WhatsappSessionBunWebCore.prototype);
   session.sock = {
     user: { id: ME_JID },
     authState: { creds: { me: { id: ME_JID } } },

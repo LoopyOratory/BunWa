@@ -7,7 +7,7 @@ import { WhatsappSessionWebJs } from '../core/engines/webjs/session.webjs.core';
 import { SendingPolicyService } from '../core/sending-policy/sending-policy.service';
 import { TooManyRequestsException } from '../core/exceptions';
 
-// The anti-ban sending policy used to be enforced only inside the NOWEB
+// The anti-ban sending policy used to be enforced only inside the BUNWEB
 // engine, so a session on WEBJS had no caps, quiet hours or reachout timelock.
 // The gate now lives on the base session class; these tests pin that WEBJS
 // sends go through it.

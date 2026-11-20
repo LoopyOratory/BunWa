@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { describe, it, expect } from 'bun:test';
-import { extractInteractiveReply } from '../core/engines/noweb/session.noweb.core';
+import { extractInteractiveReply } from '../core/engines/bunweb/session.bunweb.core';
 
 /**
  * Structured interactive replies on the inbound payload: a tap must expose

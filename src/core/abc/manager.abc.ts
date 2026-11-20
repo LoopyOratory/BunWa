@@ -9,7 +9,7 @@ import { GowsBootstrap } from '../engines/gows/GowsBootstrap';
 import { ISessionMeRepository } from '../storage/ISessionMeRepository';
 import { ISessionWorkerRepository } from '../storage/ISessionWorkerRepository';
 import { IgnoreJidConfig } from '../utils/jids';
-import { WAHAWebhook } from '../../structures/webhooks.dto';
+import { BUNWAWebhook } from '../../structures/webhooks.dto';
 import { waitUntil } from '../../utils/promiseTimeout';
 import { VERSION } from '../../version';
 
@@ -17,9 +17,9 @@ type PinoLogger = any;
 import { merge, Observable, of } from 'rxjs';
 
 import {
-  WAHAEngine,
-  WAHAEvents,
-  WAHASessionStatus,
+  BUNWAEngine,
+  BUNWAEvents,
+  BUNWASessionStatus,
 } from '../../structures/enums.dto';
 import {
   SessionConfig,
@@ -83,17 +83,17 @@ export abstract class SessionManager {
     return this.lock.acquire(name, fn);
   }
 
-  protected abstract getEngine(engine: WAHAEngine): typeof WhatsappSession;
+  protected abstract getEngine(engine: BUNWAEngine): typeof WhatsappSession;
 
   protected abstract get EngineClass(): typeof WhatsappSession;
 
-  public getSessionEvent(session: string, event: WAHAEvents): Observable<any> {
+  public getSessionEvent(session: string, event: BUNWAEvents): Observable<any> {
     return of();
   }
 
   public getSessionEvents(
     session: string,
-    events: WAHAEvents[],
+    events: BUNWAEvents[],
   ): Observable<any> {
     return merge(
       ...events.map((event) => this.getSessionEvent(session, event)),
@@ -153,7 +153,7 @@ export abstract class SessionManager {
   }
 
   async getWorkingSession(sessionName: string): Promise<WhatsappSession> {
-    return this.waitUntilStatus(sessionName, [WAHASessionStatus.WORKING]);
+    return this.waitUntilStatus(sessionName, [BUNWASessionStatus.WORKING]);
   }
 
   /**
@@ -161,7 +161,7 @@ export abstract class SessionManager {
    */
   async waitUntilStatus(
     sessionName: string,
-    expected: WAHASessionStatus[],
+    expected: BUNWASessionStatus[],
   ): Promise<WhatsappSession> {
     if (!sessionName) {
       throw new UnprocessableEntityException(
@@ -217,8 +217,8 @@ export abstract class SessionManager {
     return session;
   }
 
-  protected getEngineBootstrap(engine: WAHAEngine): EngineBootstrap {
-    if (engine === WAHAEngine.GOWS) {
+  protected getEngineBootstrap(engine: BUNWAEngine): EngineBootstrap {
+    if (engine === BUNWAEngine.GOWS) {
       return new GowsBootstrap();
     }
     return new NoopEngineBootstrap();
@@ -238,10 +238,10 @@ export abstract class SessionManager {
 }
 
 export function populateSessionInfo(
-  event: WAHAEvents,
+  event: BUNWAEvents,
   session: WhatsappSession,
 ) {
-  return (payload: any): WAHAWebhook => {
+  return (payload: any): BUNWAWebhook => {
     const id = payload._eventId;
     const timestampMs = payload._timestampMs;
     const data = { ...payload };

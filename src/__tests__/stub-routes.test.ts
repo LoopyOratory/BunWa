@@ -11,13 +11,13 @@ import { SessionManager } from '../core/manager.core';
 import { WhatsappConfigService } from '../config.service';
 import { globalErrorHandler } from '../middleware/error-handler';
 import { NotImplementedByEngineError } from '../core/exceptions';
-import { WhatsappSessionNoWebCore } from '../core/engines/noweb/session.noweb.core';
+import { WhatsappSessionBunWebCore } from '../core/engines/bunweb/session.bunweb.core';
 
 // These routes used to answer success (or a fixed placeholder) without doing
 // anything, so integrations believed a reply, vote, event, delete or
 // conversion had happened. They now reach the engine, and an engine that
 // cannot do the work answers 422 instead of pretending.
-process.env.WAHA_API_KEY = 'stub-routes-test-key';
+process.env.BUNWA_API_KEY = 'stub-routes-test-key';
 const API_KEY = 'stub-routes-test-key';
 
 type Call = { method: string; args: any[] };
@@ -32,7 +32,7 @@ function makeFakeSession(calls: Call[], overrides: Record<string, any> = {}) {
     status: 'WORKING',
     sendButtonsReply: record('sendButtonsReply', { id: 'sent-reply' }),
     sendPollVote: record('sendPollVote', () => {
-      throw new NotImplementedByEngineError('Voting in a poll is not supported by the NOWEB engine yet.');
+      throw new NotImplementedByEngineError('Voting in a poll is not supported by the BUNWEB engine yet.');
     }),
     getChatsOverview: record('getChatsOverview', [
       { id: '15550000001@c.us', name: 'Alice', picture: null, lastMessage: null },
@@ -196,10 +196,10 @@ describe('Formerly stubbed routes reach the engine', () => {
   });
 });
 
-describe('NOWEB engine: events and poll votes', () => {
-  function makeNoweb() {
-    const session = new WhatsappSessionNoWebCore({
-      name: 'noweb-event-test',
+describe('BUNWEB engine: events and poll votes', () => {
+  function makeBunweb() {
+    const session = new WhatsappSessionBunWebCore({
+      name: 'bunweb-event-test',
       printQR: false,
       mediaManager: null as any,
       loggerBuilder: {
@@ -225,7 +225,7 @@ describe('NOWEB engine: events and poll votes', () => {
   }
 
   it('sendEvent builds a Baileys event message from the WAHA request', async () => {
-    const { session, sent } = makeNoweb();
+    const { session, sent } = makeBunweb();
     await session.sendEvent({
       chatId: '15550000001@c.us',
       event: {
@@ -250,7 +250,7 @@ describe('NOWEB engine: events and poll votes', () => {
   });
 
   it('sendPollVote refuses instead of sending an unencrypted vote', async () => {
-    const { session, sent } = makeNoweb();
+    const { session, sent } = makeBunweb();
     await expect(
       session.sendPollVote({ chatId: '15550000001@c.us', pollMessageId: 'x', votes: ['Yes'] } as any),
     ).rejects.toBeInstanceOf(NotImplementedByEngineError);

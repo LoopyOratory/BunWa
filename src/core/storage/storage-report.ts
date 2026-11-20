@@ -31,9 +31,9 @@ export function redactPostgresUrl(url: string): string {
 }
 
 export interface StorageReportOptions {
-  /** Session auth/index directory (always SQLite). Defaults to WAHA_LOCAL_STORE_BASE_DIR or .sessions. */
+  /** Session auth/index directory (always SQLite). Defaults to BUNWA_LOCAL_STORE_BASE_DIR or .sessions. */
   sessionsBaseDir?: string;
-  /** Internal database directory (audit, sending policy, SQLite templates). Defaults to WAHA_STORAGE_DIR or ./data. */
+  /** Internal database directory (audit, sending policy, SQLite templates). Defaults to BUNWA_STORAGE_DIR or ./data. */
   storageDir?: string;
   /** Postgres connection string; when omitted the config service is consulted. */
   postgresUrl?: string;
@@ -52,10 +52,10 @@ export function describeStorage(
 ): string {
   const driver = config.getDatabaseDriver();
   const sessionsBaseDir = resolve(
-    options.sessionsBaseDir ?? process.env.WAHA_LOCAL_STORE_BASE_DIR ?? '.sessions',
+    options.sessionsBaseDir ?? process.env.BUNWA_LOCAL_STORE_BASE_DIR ?? '.sessions',
   );
   const storageDir = resolve(
-    options.storageDir ?? process.env.WAHA_STORAGE_DIR ?? './data',
+    options.storageDir ?? process.env.BUNWA_STORAGE_DIR ?? './data',
   );
 
   const postgresRaw = options.postgresUrl ?? config.getSessionPostgresUrl();
@@ -66,7 +66,7 @@ export function describeStorage(
   const sessionsChat =
     driver === 'postgres'
       ? postgresTarget
-      : `sqlite ${sessionsBaseDir}/noweb/<session>/store.sqlite3`;
+      : `sqlite ${sessionsBaseDir}/bunweb/<session>/store.sqlite3`;
   const templates =
     driver === 'postgres' ? postgresTarget : `sqlite ${storageDir}/templates.db`;
 

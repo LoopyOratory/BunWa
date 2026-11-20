@@ -95,7 +95,7 @@ function generateId(): string {
  *
  * Configurable via environment variables:
  *   AUDIT_RETENTION_DAYS — Days to keep audit logs (default: 90, <= 0 to disable)
- *   WAHA_STORAGE_DIR     — Directory for audit.db (default: './data')
+ *   BUNWA_STORAGE_DIR     — Directory for audit.db (default: './data')
  */
 export interface AuditSummaryOptions {
   from: Date;
@@ -237,7 +237,7 @@ export class AuditService {
     } else if (dbOrPath instanceof Database) {
       this.db = dbOrPath;
     } else {
-      const storageDir = process.env.WAHA_STORAGE_DIR ?? './data';
+      const storageDir = process.env.BUNWA_STORAGE_DIR ?? './data';
       // Auto-create the storage dir so fresh clones boot without a manual mkdir
       // (fixes SQLITE_CANTOPEN on first run when ./data does not exist yet).
       const { mkdirSync } = require('fs');

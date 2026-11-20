@@ -1,6 +1,6 @@
 import { WAMessage } from './responses.dto';
 
-export class WAHAWebhook<Payload = any> {
+export class BUNWAWebhook<Payload = any> {
   id!: string;
   timestamp!: number;
   event!: string;

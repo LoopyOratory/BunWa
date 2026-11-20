@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 import { describe, it, expect } from 'bun:test';
-import { NowebPersistentStore } from '../core/engines/noweb/store/NowebPersistentStore';
+import { BunwebPersistentStore } from '../core/engines/bunweb/store/BunwebPersistentStore';
 import { JidFilter } from '../core/utils/jids';
-import type { HistoryBatch } from '../core/engines/noweb/store/HistorySyncTracker';
+import type { HistoryBatch } from '../core/engines/bunweb/store/HistorySyncTracker';
 
 /**
  * A messaging-history.set batch is stored the same way as live messages:
@@ -47,7 +47,7 @@ describe('history sync in the persistent store', () => {
   it('drops ignored chats before storing and reports what landed', async () => {
     const upserted: any[] = [];
     const batches: HistoryBatch[] = [];
-    const store = new NowebPersistentStore(
+    const store = new BunwebPersistentStore(
       logger,
       fakeStorage(upserted),
       new JidFilter({ status: false, groups: true, channels: false, broadcast: false }),

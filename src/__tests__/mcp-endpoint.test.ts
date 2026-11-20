@@ -32,8 +32,8 @@ describe('MCP endpoint (Streamable-HTTP JSON-RPC)', () => {
 
     // Build the same router main.ts uses, but don't require an API key so
     // tests 1–3 pass without auth. Test 4 sets a key and rebuilds.
-    savedKey = process.env.WAHA_API_KEY;
-    delete process.env.WAHA_API_KEY;
+    savedKey = process.env.BUNWA_API_KEY;
+    delete process.env.BUNWA_API_KEY;
 
     const router = createMcpRouter(sessionManager);
     app = new Hono();
@@ -42,7 +42,7 @@ describe('MCP endpoint (Streamable-HTTP JSON-RPC)', () => {
 
   afterAll(() => {
     if (savedKey !== undefined) {
-      process.env.WAHA_API_KEY = savedKey;
+      process.env.BUNWA_API_KEY = savedKey;
     }
   });
 
@@ -141,10 +141,10 @@ describe('MCP endpoint (Streamable-HTTP JSON-RPC)', () => {
 
   describe('auth', () => {
     it('rejects tools/call when WAHA_API_KEY is set and not provided', async () => {
-      const oldKey = process.env.WAHA_API_KEY;
+      const oldKey = process.env.BUNWA_API_KEY;
 
       // Set a test key and rebuild the router so it reads the key at mount time
-      process.env.WAHA_API_KEY = 'test-secret-key';
+      process.env.BUNWA_API_KEY = 'test-secret-key';
       try {
         const sessionManager = container.resolve(SessionManager);
         const authApp = new Hono();
@@ -175,7 +175,7 @@ describe('MCP endpoint (Streamable-HTTP JSON-RPC)', () => {
           body.includes('Invalid or missing API key');
         expect(hasUnauthorized).toBe(true);
       } finally {
-        process.env.WAHA_API_KEY = oldKey;
+        process.env.BUNWA_API_KEY = oldKey;
       }
     });
 
@@ -184,8 +184,8 @@ describe('MCP endpoint (Streamable-HTTP JSON-RPC)', () => {
       // without awaiting it, then iterated the returned Promise — throwing
       // "{} is not iterable" for any wrong-but-present key (never reached by
       // the no-key test above, which short-circuits before the lookup).
-      const oldKey = process.env.WAHA_API_KEY;
-      process.env.WAHA_API_KEY = 'test-secret-key';
+      const oldKey = process.env.BUNWA_API_KEY;
+      process.env.BUNWA_API_KEY = 'test-secret-key';
       try {
         const sessionManager = container.resolve(SessionManager);
         const authApp = new Hono();
@@ -212,7 +212,7 @@ describe('MCP endpoint (Streamable-HTTP JSON-RPC)', () => {
         expect(body).toContain('Invalid or missing API key');
         expect(body).not.toContain('is not iterable');
       } finally {
-        process.env.WAHA_API_KEY = oldKey;
+        process.env.BUNWA_API_KEY = oldKey;
       }
     });
   });

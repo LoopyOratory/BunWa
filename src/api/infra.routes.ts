@@ -1,3 +1,4 @@
+import { normalizeBunwaEngine } from '../structures/enums.dto';
 import { Hono } from 'hono';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
@@ -61,13 +62,13 @@ function configToEnv(body: any): Record<string, string> {
   };
 
   if (body.database) {
-    set('WAHA_DB_TYPE', body.database.type);
-    set('WAHA_DB_HOST', body.database.host);
-    set('WAHA_DB_PORT', body.database.port);
-    set('WAHA_DB_USERNAME', body.database.username);
-    set('WAHA_DB_PASSWORD', body.database.password);
-    set('WAHA_DB_NAME', body.database.name);
-    set('WAHA_DB_SSL', body.database.ssl);
+    set('BUNWA_DB_TYPE', body.database.type);
+    set('BUNWA_DB_HOST', body.database.host);
+    set('BUNWA_DB_PORT', body.database.port);
+    set('BUNWA_DB_USERNAME', body.database.username);
+    set('BUNWA_DB_PASSWORD', body.database.password);
+    set('BUNWA_DB_NAME', body.database.name);
+    set('BUNWA_DB_SSL', body.database.ssl);
 
     // Map the dashboard selection onto the canonical switches the runtime
     // actually reads, so choosing a backend here really moves the session
@@ -75,8 +76,8 @@ function configToEnv(body: any): Record<string, string> {
     // apply everywhere (the app never migrates data between backends).
     const type = String(body.database.type || '').trim().toLowerCase();
     if (type === 'postgres' || type === 'postgresql') {
-      env.WAHA_DATABASE_DRIVER = 'postgres';
-      env.WAHA_DATABASE_URL = buildPostgresUrl({
+      env.BUNWA_DATABASE_DRIVER = 'postgres';
+      env.BUNWA_DATABASE_URL = buildPostgresUrl({
         host: body.database.host,
         port: body.database.port,
         username: body.database.username,
@@ -85,28 +86,28 @@ function configToEnv(body: any): Record<string, string> {
         ssl: body.database.ssl === true || body.database.ssl === 'true',
       });
     } else if (type === 'sqlite') {
-      env.WAHA_DATABASE_DRIVER = 'sqlite';
-      // Any previously written WAHA_DATABASE_URL stays; the sqlite driver
+      env.BUNWA_DATABASE_DRIVER = 'sqlite';
+      // Any previously written BUNWA_DATABASE_URL stays; the sqlite driver
       // ignores it and it is reused if PostgreSQL is re-selected later.
     }
   }
   if (body.storage) {
-    set('WAHA_STORAGE_TYPE', body.storage.type);
-    set('WAHA_STORAGE_LOCAL_PATH', body.storage.localPath);
+    set('BUNWA_STORAGE_TYPE', body.storage.type);
+    set('BUNWA_STORAGE_LOCAL_PATH', body.storage.localPath);
     if (body.storage.s3) {
-      set('WAHA_S3_ENDPOINT', body.storage.s3.endpoint);
-      set('WAHA_S3_BUCKET', body.storage.s3.bucket);
-      set('WAHA_S3_REGION', body.storage.s3.region);
-      set('WAHA_S3_ACCESS_KEY', body.storage.s3.accessKeyId);
-      set('WAHA_S3_SECRET_KEY', body.storage.s3.secretAccessKey);
+      set('BUNWA_S3_ENDPOINT', body.storage.s3.endpoint);
+      set('BUNWA_S3_BUCKET', body.storage.s3.bucket);
+      set('BUNWA_S3_REGION', body.storage.s3.region);
+      set('BUNWA_S3_ACCESS_KEY', body.storage.s3.accessKeyId);
+      set('BUNWA_S3_SECRET_KEY', body.storage.s3.secretAccessKey);
     }
   }
   if (body.queue) {
-    set('WAHA_QUEUE_ENABLED', body.queue.enabled);
+    set('BUNWA_QUEUE_ENABLED', body.queue.enabled);
     if (body.queue.redis) {
-      set('WAHA_REDIS_HOST', body.queue.redis.host);
-      set('WAHA_REDIS_PORT', body.queue.redis.port);
-      set('WAHA_REDIS_PASSWORD', body.queue.redis.password);
+      set('BUNWA_REDIS_HOST', body.queue.redis.host);
+      set('BUNWA_REDIS_PORT', body.queue.redis.port);
+      set('BUNWA_REDIS_PASSWORD', body.queue.redis.password);
     }
   }
   set('WHATSAPP_DEFAULT_ENGINE', body.engine);
@@ -127,39 +128,39 @@ export function createInfraRouter(): Hono {
         database: {
           // Normalise casing so the value always matches the dashboard's
           // lowercase select options (the .env may use SQLITE/POSTGRES).
-          type: (process.env.WAHA_DB_TYPE || 'sqlite').toLowerCase(),
-          host: process.env.WAHA_DB_HOST || 'localhost',
-          port: process.env.WAHA_DB_PORT || '5432',
-          username: process.env.WAHA_DB_USERNAME || '',
-          password: process.env.WAHA_DB_PASSWORD || '',
-          name: process.env.WAHA_DB_NAME || './data/waha.sqlite',
-          ssl: process.env.WAHA_DB_SSL === 'true',
+          type: (process.env.BUNWA_DB_TYPE || 'sqlite').toLowerCase(),
+          host: process.env.BUNWA_DB_HOST || 'localhost',
+          port: process.env.BUNWA_DB_PORT || '5432',
+          username: process.env.BUNWA_DB_USERNAME || '',
+          password: process.env.BUNWA_DB_PASSWORD || '',
+          name: process.env.BUNWA_DB_NAME || './data/waha.sqlite',
+          ssl: process.env.BUNWA_DB_SSL === 'true',
         },
         storage: {
-          // Lowercased to match the dashboard select (.env ships WAHA_STORAGE_TYPE=LOCAL).
-          type: (process.env.WAHA_STORAGE_TYPE || 'local').toLowerCase(),
-          localPath: process.env.WAHA_STORAGE_LOCAL_PATH || './data/media',
+          // Lowercased to match the dashboard select (.env ships BUNWA_STORAGE_TYPE=LOCAL).
+          type: (process.env.BUNWA_STORAGE_TYPE || 'local').toLowerCase(),
+          localPath: process.env.BUNWA_STORAGE_LOCAL_PATH || './data/media',
           s3: {
-            endpoint: process.env.WAHA_S3_ENDPOINT || '',
-            bucket: process.env.WAHA_S3_BUCKET || '',
-            region: process.env.WAHA_S3_REGION || 'us-east-1',
-            accessKeyId: process.env.WAHA_S3_ACCESS_KEY || '',
-            secretAccessKey: process.env.WAHA_S3_SECRET_KEY || '',
+            endpoint: process.env.BUNWA_S3_ENDPOINT || '',
+            bucket: process.env.BUNWA_S3_BUCKET || '',
+            region: process.env.BUNWA_S3_REGION || 'us-east-1',
+            accessKeyId: process.env.BUNWA_S3_ACCESS_KEY || '',
+            secretAccessKey: process.env.BUNWA_S3_SECRET_KEY || '',
           },
         },
         queue: {
-          enabled: process.env.WAHA_QUEUE_ENABLED === 'true',
+          enabled: process.env.BUNWA_QUEUE_ENABLED === 'true',
           redis: {
-            host: process.env.WAHA_REDIS_HOST || 'localhost',
-            port: process.env.WAHA_REDIS_PORT || '6379',
-            password: process.env.WAHA_REDIS_PASSWORD || '',
+            host: process.env.BUNWA_REDIS_HOST || 'localhost',
+            port: process.env.BUNWA_REDIS_PORT || '6379',
+            password: process.env.BUNWA_REDIS_PASSWORD || '',
           },
         },
-        // Uppercased to match the app's engine ids (NOWEB/WEBJS) and the
+        // Uppercased to match the app's engine ids (BUNWEB/WEBJS) and the
         // dashboard's engine cards.
-        engine: (process.env.WHATSAPP_DEFAULT_ENGINE || 'NOWEB').toUpperCase(),
+        engine: normalizeBunwaEngine(process.env.WHATSAPP_DEFAULT_ENGINE),
         // What the runtime is ACTUALLY using right now (canonical switches,
-        // incl. the WAHA_DB_* fallback). The dashboard compares this with the
+        // incl. the BUNWA_DB_* fallback). The dashboard compares this with the
         // saved selection to show a live "runtime" badge.
         runtime: {
           databaseDriver: config.getDatabaseDriver(),

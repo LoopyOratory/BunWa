@@ -36,8 +36,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Non-root user
-RUN groupadd --system --gid 1001 waha && \
-    useradd --system --uid 1001 --gid waha waha
+RUN groupadd --system --gid 1001 bunwa && \
+    useradd --system --uid 1001 --gid bunwa bunwa
 
 # Runtime files only — no frontend/ source, no scripts/, no __tests__/
 # tsconfig.json is required at runtime: Bun reads experimentalDecorators /
@@ -62,7 +62,7 @@ RUN arch=$(uname -m | sed 's/x86_64/x64/; s/aarch64/arm64/') \
 # .media      — downloaded media files
 # data        — audit logs, templates, export/import artifacts
 RUN mkdir -p /app/.sessions /app/.media /app/data && \
-    chown -R waha:waha /app/.sessions /app/.media /app/data
+    chown -R bunwa:bunwa /app/.sessions /app/.media /app/data
 
 # ── volumes ──────────────────────────────────────────────────────────────────
 # Mount these from the host or a named volume so auth state and media survive
@@ -73,7 +73,7 @@ RUN mkdir -p /app/.sessions /app/.media /app/data && \
 #   /app/.env        — configuration (or use env vars)
 VOLUME ["/app/.sessions", "/app/.media", "/app/data"]
 
-USER waha
+USER bunwa
 
 # ── defaults (override with -e or .env) ──────────────────────────────────────
 ENV PORT=3000

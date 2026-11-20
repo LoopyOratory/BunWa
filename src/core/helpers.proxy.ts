@@ -1,7 +1,7 @@
 import { Agent } from 'https';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { SocksProxyAgent } from 'socks-proxy-agent';
-import { Agents } from './engines/noweb/types';
+import { Agents } from './engines/bunweb/types';
 
 export interface ProxyConfig {
   server: string;

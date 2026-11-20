@@ -16,7 +16,7 @@ export class MediaLocalStorage implements IMediaStorage {
     lifetimeSeconds: number = 180,
   ) {
     this.filesFolder = filesFolder;
-    this.baseUrl = baseUrl || `${process.env.WAHA_BASE_URL || 'http://localhost:3000'}/api/files`;
+    this.baseUrl = baseUrl || `${process.env.BUNWA_BASE_URL || 'http://localhost:3000'}/api/files`;
     this.lifetimeMs = lifetimeSeconds * 1000;
     this.logger = logger || pino({ name: 'MediaLocalStorage' });
   }

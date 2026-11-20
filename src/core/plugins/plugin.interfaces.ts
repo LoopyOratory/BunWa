@@ -1,5 +1,5 @@
 /**
- * Plugin System Interfaces — defines the contract for WAHA-Bun plugins.
+ * Plugin System Interfaces — defines the contract for BunWa plugins.
  * Simplified from OpenWA's plugin.interfaces.ts (no sandbox for now).
  */
 

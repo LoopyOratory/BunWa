@@ -103,7 +103,7 @@ const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
 const STACK: { term: string; detail: string }[] = [
   { term: "Runtime", detail: "Bun (drop-in Node.js replacement)" },
   { term: "Framework", detail: "Hono (lightweight, ultrafast)" },
-  { term: "WhatsApp NOWEB", detail: "Baileys (@whiskeysockets/baileys)" },
+  { term: "WhatsApp BUNWEB", detail: "Baileys (@whiskeysockets/baileys)" },
   { term: "WhatsApp WEBJS", detail: "whatsapp-web.js + Chrome/Puppeteer" },
   { term: "Storage", detail: "bun:sqlite + file-based auth" },
   { term: "DI", detail: "tsyringe for dependency injection" },
@@ -142,7 +142,7 @@ export function DocsPage() {
           <div className="mt-6 flex flex-wrap justify-center gap-2">
             <Pill icon={Zap}>Bun runtime</Pill>
             <Pill icon={Server}>Hono framework</Pill>
-            <Pill icon={Shield}>Same REST surface as WAHA</Pill>
+            <Pill icon={Shield}>Same REST surface as WAHA-compatible BunWa</Pill>
           </div>
                   {/* The generated reference lives outside this shell on purpose: it has
               its own navigation and auth, and framing it would nest scrolling. */}
@@ -190,7 +190,7 @@ export function DocsPage() {
         <section>
           <SectionHeading
             title="Engine support"
-            description="Engine choice is per session; NOWEB is the default."
+            description="Engine choice is per session; BUNWEB is the default."
             action={<Code className="size-4 text-primary" strokeWidth={1.75} />}
           />
           <DataTable className="mt-5" minWidthClassName="min-w-[620px]">
@@ -199,7 +199,7 @@ export function DocsPage() {
                 <TableHead className="w-40">Aspect</TableHead>
                 <TableHead>
                   <span className="flex items-center gap-2">
-                    <EngineBadge engine="NOWEB" />
+                    <EngineBadge engine="BUNWEB" />
                     <span className="text-xs font-normal text-primary">Default</span>
                   </span>
                 </TableHead>
@@ -266,7 +266,7 @@ export function DocsPage() {
           />
           <p className="mt-5 text-sm text-muted-foreground">
             Enter your phone number to receive a pairing code instead of scanning a QR code. Works
-            with both NOWEB and WEBJS engines. The session must be in SCAN_QR_CODE status.
+            with both BUNWEB and WEBJS engines. The session must be in SCAN_QR_CODE status.
           </p>
           <div className="mt-4">
             <CodeBlock
@@ -296,7 +296,7 @@ export function DocsPage() {
             ))}
           </dl>
           <p className="mt-3 text-xs text-muted-foreground">
-            NOWEB uses HttpsProxyAgent/SocksProxyAgent. WEBJS passes --proxy-server to Chrome.
+            BUNWEB uses HttpsProxyAgent/SocksProxyAgent. WEBJS passes --proxy-server to Chrome.
           </p>
         </section>
 
@@ -335,7 +335,7 @@ export function DocsPage() {
             <CommandStep step="Install dependencies" code="bun install" />
             <CommandStep step="Start the server" code="bun run src/main.ts" />
             <CommandStep
-              step="Create a NOWEB session"
+              step="Create a BUNWEB session"
               code={`curl -X POST http://localhost:3000/api/sessions {"name": "my-session"}`}
             />
             <CommandStep
@@ -352,7 +352,7 @@ export function DocsPage() {
         {/* Footer */}
         <footer className="border-t border-border pt-6 text-center text-sm text-muted-foreground">
           <p>BunWa, built with Bun, Hono, Baileys, and whatsapp-web.js.</p>
-          <p className="mt-1">Same REST surface as WAHA Bun (WhatsApp HTTP API).</p>
+          <p className="mt-1">Same REST surface as WAHA-compatible BunWa Bun (WhatsApp HTTP API).</p>
         </footer>
       </div>
     </div>

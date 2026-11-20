@@ -88,15 +88,15 @@ describe('MCP results end to end (session-scoped key)', () => {
   let savedKey: string | undefined;
 
   beforeAll(() => {
-    savedKey = process.env.WAHA_API_KEY;
-    process.env.WAHA_API_KEY = 'global-admin-key';
+    savedKey = process.env.BUNWA_API_KEY;
+    process.env.BUNWA_API_KEY = 'global-admin-key';
     app = new Hono();
     app.route('/', createMcpRouter(fakeManager));
   });
 
   afterAll(() => {
-    if (savedKey === undefined) delete process.env.WAHA_API_KEY;
-    else process.env.WAHA_API_KEY = savedKey;
+    if (savedKey === undefined) delete process.env.BUNWA_API_KEY;
+    else process.env.BUNWA_API_KEY = savedKey;
   });
 
   async function callTool(name: string, args: object) {

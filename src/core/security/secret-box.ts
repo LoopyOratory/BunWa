@@ -10,6 +10,8 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypt
 const PREFIX = 'enc:v1:';
 
 function masterKeySource(): 'explicit' | 'waha-api-key' | 'bunwa-api-key' | null {
+  // Reads the legacy WAHA_API_KEY name deliberately: this module must not
+  // depend on the env-alias proxy being installed (scripts import it too).
   if (process.env.BUNWA_KEY_ENCRYPTION_SECRET) return 'explicit';
   if (process.env.WAHA_API_KEY) return 'waha-api-key';
   if (process.env.BUNWA_API_KEY) return 'bunwa-api-key';
@@ -46,7 +48,7 @@ export function isSealedSecret(value: string): boolean {
 export function encryptionConfigured(): boolean {
   return Boolean(
     process.env.BUNWA_KEY_ENCRYPTION_SECRET ||
-      process.env.WAHA_API_KEY ||
+      process.env.BUNWA_API_KEY ||
       process.env.BUNWA_API_KEY,
   );
 }

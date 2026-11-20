@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { describe, it, expect } from 'bun:test';
 import { Subject } from 'rxjs';
 import { ChatwootAppService } from '../apps/chatwoot/services/ChatwootAppService';
-import { WAHAEvents } from '../structures/enums.dto';
+import { BUNWAEvents } from '../structures/enums.dto';
 
 /**
  * Chatwoot follows the session's life: an app added after boot, a session
@@ -25,8 +25,8 @@ function fakeSession() {
   const messages = new Subject<any>();
   return {
     messages,
-    getEventObservable(event: WAHAEvents) {
-      if (event !== WAHAEvents.MESSAGE_ANY) throw new Error('unexpected event');
+    getEventObservable(event: BUNWAEvents) {
+      if (event !== BUNWAEvents.MESSAGE_ANY) throw new Error('unexpected event');
       return messages;
     },
   };

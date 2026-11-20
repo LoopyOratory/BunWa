@@ -27,7 +27,7 @@ import {
 const ENGINES = [
   {
     id: "noweb",
-    name: "NOWEB",
+    name: "BUNWEB",
     subtitle: "Baileys (lightweight)",
     icon: Smartphone,
     description: "No browser required. Best for channels, newsletters, multi-session setups. Uses Baileys WhatsApp protocol implementation.",

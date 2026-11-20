@@ -11,7 +11,7 @@ const logger = pino({ name: 'Sqlite3TemplateRepository' });
  *
  * Accepts either an already-open Database handle (tests, callers that share a
  * connection) or a directory path. With neither, the file lives at
- * `${WAHA_STORAGE_DIR ?? './data'}/templates.db`, exactly as the service did
+ * `${BUNWA_STORAGE_DIR ?? './data'}/templates.db`, exactly as the service did
  * before the repository split.
  */
 export class Sqlite3TemplateRepository implements ITemplateRepository {
@@ -23,7 +23,7 @@ export class Sqlite3TemplateRepository implements ITemplateRepository {
     if (dbOrPath instanceof Database) {
       this.db = dbOrPath;
     } else {
-      const storageDir = directory ?? process.env.WAHA_STORAGE_DIR ?? './data';
+      const storageDir = directory ?? process.env.BUNWA_STORAGE_DIR ?? './data';
       // Auto-create the storage dir so fresh clones boot without a manual mkdir.
       mkdirSync(storageDir, { recursive: true });
       this.db = new Database(`${storageDir}/templates.db`);

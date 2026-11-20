@@ -33,8 +33,8 @@ describe('bulk sending across a session restart', () => {
   let app: Hono;
 
   beforeAll(() => {
-    savedKey = process.env.WAHA_API_KEY;
-    process.env.WAHA_API_KEY = API_KEY;
+    savedKey = process.env.BUNWA_API_KEY;
+    process.env.BUNWA_API_KEY = API_KEY;
     if (!container.isRegistered(AuditService)) {
       container.registerInstance(AuditService, new AuditService(mkdtempSync(join(tmpdir(), 'bunwa-bulk-audit-'))));
     }
@@ -46,8 +46,8 @@ describe('bulk sending across a session restart', () => {
 
   afterAll(() => {
     if (previousManager) container.registerInstance(SessionManager, previousManager as SessionManager);
-    if (savedKey === undefined) delete process.env.WAHA_API_KEY;
-    else process.env.WAHA_API_KEY = savedKey;
+    if (savedKey === undefined) delete process.env.BUNWA_API_KEY;
+    else process.env.BUNWA_API_KEY = savedKey;
   });
 
   const sendBulk = (chatId: string) =>

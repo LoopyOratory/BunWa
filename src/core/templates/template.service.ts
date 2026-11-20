@@ -57,8 +57,8 @@ function generateId(): string {
  * a local templates.db that is lost when the container is replaced.
  *
  * Configurable via environment variables:
- *   WAHA_DATABASE_DRIVER — 'postgres'/'postgresql' for PostgreSQL, else SQLite
- *   WAHA_STORAGE_DIR     — Directory for templates.db when using SQLite (default: './data')
+ *   BUNWA_DATABASE_DRIVER — 'postgres'/'postgresql' for PostgreSQL, else SQLite
+ *   BUNWA_STORAGE_DIR     — Directory for templates.db when using SQLite (default: './data')
  */
 @injectable()
 export class TemplateService {

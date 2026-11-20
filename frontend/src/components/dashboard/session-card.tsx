@@ -98,7 +98,7 @@ function PrimaryAction({ session, onAction }: { session: DashboardSession; onAct
   }
 }
 
-/** Polls a NOWEB session's history sync while it is running. */
+/** Polls a BUNWEB session's history sync while it is running. */
 function useHistorySync(name: string, enabled: boolean) {
   const [sync, setSync] = useState<HistorySyncStatus | null>(null)
   useEffect(() => {
@@ -133,7 +133,7 @@ export function SessionCard({
   const since = session.statusSince ? shortDuration(now - Date.parse(session.statusSince)) : null
   const limits = session.limits
   const stopped = session.status === "STOPPED"
-  const sync = useHistorySync(session.name, session.status === "WORKING" && session.engine.toUpperCase() === "NOWEB")
+  const sync = useHistorySync(session.name, session.status === "WORKING" && session.engine.toUpperCase() === "BUNWEB")
 
   return (
     <article

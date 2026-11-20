@@ -1,6 +1,6 @@
 import type { ServerWebSocket } from 'bun';
 import { SessionManager } from '../core/manager.core';
-import { WAHAEvents } from '../structures/enums.dto';
+import { BUNWAEvents } from '../structures/enums.dto';
 import { EventWildUnmask } from '../utils/events';
 import pino from 'pino';
 
@@ -40,7 +40,7 @@ export function createWebSocketHandler() {
         const sessionParam = ws.data?.session || url.searchParams.get('session') || '*';
         const eventsParam = url.searchParams.get('events') || '*';
 
-        const events = EventWildUnmask(eventsParam) as WAHAEvents[];
+        const events = EventWildUnmask(eventsParam) as BUNWAEvents[];
 
         const subscription = sessionManagerInstance
           .getSessionEvents(sessionParam, events)

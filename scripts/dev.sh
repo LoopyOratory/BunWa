@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-WAHA_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+BUNWA_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-echo "=== WAHA - Dev Mode ==="
+echo "=== BunWa - Dev Mode ==="
 echo ""
 echo "Starting backend API + frontend dev server (HMR)..."
 echo ""
@@ -19,9 +19,9 @@ cleanup() {
 }
 trap cleanup SIGINT SIGTERM
 
-cd "$WAHA_DIR"
+cd "$BUNWA_DIR"
 bun --watch run src/main.ts &
-cd "$WAHA_DIR/frontend"
+cd "$BUNWA_DIR/frontend"
 bun run dev &
 
 wait

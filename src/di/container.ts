@@ -34,7 +34,7 @@ export function configureContainer(): DependencyContainer {
   container.registerInstance(AuditService, new AuditService());
   container.registerInstance(TemplateService, new TemplateService());
   // Same optional-constructor shape as AuditService (dbOrPath), so it must be
-  // an explicit instance too. The NOWEB engine's send methods resolve it to
+  // an explicit instance too. The BUNWEB engine's send methods resolve it to
   // gate sends through the anti-ban policy.
   container.registerInstance(SendingPolicyService, new SendingPolicyService());
 

@@ -64,9 +64,9 @@ export class UploadTicketService {
 
 export const uploadTickets = new UploadTicketService();
 
-/** Public base for ticket URLs: WAHA_BASE_URL, else the caller's origin, else the configured host. */
+/** Public base for ticket URLs: BUNWA_BASE_URL, else the caller's origin, else the configured host. */
 export function uploadBaseUrl(requestOrigin?: string): string {
-  if (process.env.WAHA_BASE_URL) return process.env.WAHA_BASE_URL.replace(/\/$/, '');
+  if (process.env.BUNWA_BASE_URL) return process.env.BUNWA_BASE_URL.replace(/\/$/, '');
   if (requestOrigin) return requestOrigin.replace(/\/$/, '');
   return container.resolve(WhatsappConfigService).baseUrl;
 }

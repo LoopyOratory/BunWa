@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { describe, it, expect } from 'bun:test';
 import { sessionTools } from '../mcp/tools/session.tools';
-import { emptyHistorySyncStatus } from '../core/engines/noweb/store/HistorySyncTracker';
+import { emptyHistorySyncStatus } from '../core/engines/bunweb/store/HistorySyncTracker';
 
 const status = { ...emptyHistorySyncStatus('syncing'), batches: 3, messages: 120, progress: 42 };
 const manager: any = { getWorkingSession: async () => ({ getHistorySyncStatus: () => status }) };

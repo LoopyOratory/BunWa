@@ -8,16 +8,16 @@ import { MediaLocalStorage } from './MediaLocalStorage';
  */
 export function getLocalMediaFolder(): string {
   return (
-    process.env.WAHA_STORAGE_LOCAL_PATH ||
+    process.env.BUNWA_STORAGE_LOCAL_PATH ||
     process.env.WHATSAPP_FILES_FOLDER ||
     '/tmp/whatsapp-files'
   );
 }
 
 /**
- * Builds the media storage backend selected via WAHA_STORAGE_TYPE
+ * Builds the media storage backend selected via BUNWA_STORAGE_TYPE
  * (local | s3). Postgres media storage (src/plus/storage/postgres) isn't
- * wired here — there's no dashboard option to select it and WAHA_DB_TYPE
+ * wired here — there's no dashboard option to select it and BUNWA_DB_TYPE
  * already covers Postgres for session/chat data, so exposing a second,
  * separate Postgres config surface for media specifically isn't done
  * without a concrete need for it.
@@ -26,17 +26,17 @@ export async function buildMediaStorage(
   baseUrl: string,
   logger: any,
 ): Promise<IMediaStorage> {
-  const storageType = (process.env.WAHA_STORAGE_TYPE || 'local').toLowerCase();
+  const storageType = (process.env.BUNWA_STORAGE_TYPE || 'local').toLowerCase();
 
   if (storageType === 's3') {
     const { S3MediaStorage } = await import('../../plus/storage/s3/S3MediaStorage');
     return new S3MediaStorage({
-      bucket: process.env.WAHA_S3_BUCKET || '',
-      region: process.env.WAHA_S3_REGION || 'us-east-1',
-      accessKeyId: process.env.WAHA_S3_ACCESS_KEY || '',
-      secretAccessKey: process.env.WAHA_S3_SECRET_KEY || '',
-      endpoint: process.env.WAHA_S3_ENDPOINT || undefined,
-      forcePathStyle: Boolean(process.env.WAHA_S3_ENDPOINT),
+      bucket: process.env.BUNWA_S3_BUCKET || '',
+      region: process.env.BUNWA_S3_REGION || 'us-east-1',
+      accessKeyId: process.env.BUNWA_S3_ACCESS_KEY || '',
+      secretAccessKey: process.env.BUNWA_S3_SECRET_KEY || '',
+      endpoint: process.env.BUNWA_S3_ENDPOINT || undefined,
+      forcePathStyle: Boolean(process.env.BUNWA_S3_ENDPOINT),
     });
   }
 

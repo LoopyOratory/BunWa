@@ -1,9 +1,11 @@
 # BunWa - WhatsApp HTTP API server (Bun + Hono)
 # General-purpose single-node deployment. SQLite is the built-in default, so
-# this file sets no WAHA_DATABASE_DRIVER / WAHA_DATABASE_URL variables.
+# this file sets no BUNWA_DATABASE_DRIVER / BUNWA_DATABASE_URL variables.
 #
 # Setup:
-#   cp .env.example .env    # set WAHA_API_KEY (and WAHA_ALLOW_NO_AUTH=false)
+#   cp .env.example .env    # set BUNWA_API_KEY (and BUNWA_ALLOW_NO_AUTH=false)
+#   The app also accepts the legacy WAHA_* spellings; compose itself requires
+#   the BUNWA_* names below.
 #   docker compose -f docker-compose.yml up -d
 #
 # The API port is published on 127.0.0.1 only. Put a reverse proxy (Caddy,
@@ -18,8 +20,8 @@ services:
     env_file:
       - .env
     environment:
-      # Compose refuses to start when WAHA_API_KEY is unset or empty in .env.
-      WAHA_API_KEY: ${WAHA_API_KEY:?set WAHA_API_KEY in .env}
+      # Compose refuses to start when BUNWA_API_KEY is unset or empty in .env.
+      BUNWA_API_KEY: ${BUNWA_API_KEY:?set BUNWA_API_KEY in .env}
       # Downloaded media is ephemeral (about 180 s lifetime); keep it off the
       # read-only root filesystem and in the tmpfs mounted below.
       WHATSAPP_FILES_FOLDER: /tmp/whatsapp-files
@@ -64,7 +66,7 @@ services:
           memory: 1g
 
 volumes:
-  # Named volumes are owned by UID/GID 1001 (the waha user) after the first
+  # Named volumes are owned by UID/GID 1001 (the bunwa user) after the first
   # mount. If you replace them with host paths, run:
   #   mkdir -p /data/bunwa/sessions /data/bunwa/data
   #   chown -R 1001:1001 /data/bunwa

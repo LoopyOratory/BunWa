@@ -1,5 +1,5 @@
 /**
- * Session-related MCP tools for WAHA-Bun.
+ * Session-related MCP tools for BunWa.
  * Uses SessionManager directly instead of NestJS DI services.
  */
 import { z } from 'zod';
@@ -115,7 +115,7 @@ export function sessionTools(manager: SessionManager): ToolDescriptor[] {
       sessionScoped: true,
       inputSchema: z.object({
         sessionId,
-        phone: z.string().describe('Phone number (e.g. 628123456789, digits only) or a WhatsApp username (handle or @handle); username lookup needs the NOWEB engine'),
+        phone: z.string().describe('Phone number (e.g. 628123456789, digits only) or a WhatsApp username (handle or @handle); username lookup needs the BUNWEB engine'),
       }),
       handler: async (input: { sessionId: string; phone: string }) => {
         const session = await manager.getWorkingSession(input.sessionId);
@@ -136,7 +136,7 @@ export function sessionTools(manager: SessionManager): ToolDescriptor[] {
     {
       name: 'SessionSyncStatus',
       description:
-        'History sync status for a NOWEB session: state (idle, syncing, complete, unsupported), batches, messages, chats, contacts and progress. ' +
+        'History sync status for a BUNWEB session: state (idle, syncing, complete, unsupported), batches, messages, chats, contacts and progress. ' +
         'WhatsApp only sends history right after a device is linked; to sync an already linked session again, relink it.',
       tier: 'read',
       category: 'session',

@@ -1,4 +1,4 @@
-export class NowebConfig {
+export class BunwebConfig {
   store?: {
     enabled?: boolean;
     fullSync?: boolean;
@@ -106,7 +106,7 @@ export class SessionConfig {
   };
   ignore?: IgnoreConfig;
   client?: ClientSessionConfig;
-  noweb?: NowebConfig;
+  bunweb?: BunwebConfig;
   gows?: GowsConfig;
   webjs?: WebjsConfig;
   mcp?: McpConfig;

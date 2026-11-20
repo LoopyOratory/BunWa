@@ -17,7 +17,7 @@ import {
 
 // The four routes that used to answer 500 without a live session. They must
 // answer 404 for an unknown session and 422 for a known but not connected one.
-process.env.WAHA_API_KEY = 'session-guard-test-key';
+process.env.BUNWA_API_KEY = 'session-guard-test-key';
 
 const API_KEY = 'session-guard-test-key';
 
@@ -215,13 +215,13 @@ describe('Gated operations keep their engine status', () => {
   it('DELETE /api/:session/groups/:id answers 422 when the engine lacks deleteGroup', async () => {
     const original = fakeSession.deleteGroup;
     fakeSession.deleteGroup = () => {
-      throw new NotImplementedByEngineError('', 'NOWEB');
+      throw new NotImplementedByEngineError('', 'BUNWEB');
     };
     try {
       const res = await fetchRoute('/api/gated-session/groups/120363000000000002@g.us', 'DELETE');
       expect(res.status).toBe(422);
       const body: any = await res.json();
-      expect(body.message).toContain("'NOWEB' engine");
+      expect(body.message).toContain("'BUNWEB' engine");
     } finally {
       fakeSession.deleteGroup = original;
     }

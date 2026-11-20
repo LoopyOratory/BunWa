@@ -6,11 +6,11 @@ import { PostgresTemplateRepository } from './postgres/PostgresTemplateRepositor
 import { Sqlite3TemplateRepository } from './sqlite3/Sqlite3TemplateRepository';
 
 /**
- * Selects the template persistence driver the same way NowebStorageFactoryCore
+ * Selects the template persistence driver the same way BunwebStorageFactoryCore
  * selects the session store driver:
  *
- *   WAHA_DATABASE_DRIVER=postgres|postgresql → PostgreSQL
- *   WAHA_DATABASE_DRIVER=sqlite (or unset)   → SQLite
+ *   BUNWA_DATABASE_DRIVER=postgres|postgresql → PostgreSQL
+ *   BUNWA_DATABASE_DRIVER=sqlite (or unset)   → SQLite
  *   anything else                            → startup error (no silent fallback)
  *
  * An explicitly injected Database handle or directory path always means SQLite:
@@ -44,7 +44,7 @@ export class TemplateRepositoryFactory {
     const connectionString = config.getSessionPostgresUrl();
 
     if (!connectionString) {
-      throw new Error('WAHA_DATABASE_URL is required for PostgreSQL driver');
+      throw new Error('BUNWA_DATABASE_URL is required for PostgreSQL driver');
     }
 
     return new PostgresTemplateRepository(connectionString);

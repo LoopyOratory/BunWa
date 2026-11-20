@@ -29,7 +29,7 @@ export function StatusBadge({ status, kind }: { status?: string; kind?: StatusKi
   )
 }
 
-/* ── EngineBadge: NOWEB / WEBJS, defined once ─────────────────────────── */
+/* ── EngineBadge: BUNWEB / WEBJS, defined once ─────────────────────────── */
 export function EngineBadge({ engine, className }: { engine?: string; className?: string }) {
   const isWebjs = (engine || "").toUpperCase() === "WEBJS"
   const Icon = isWebjs ? AppWindow : Zap
@@ -41,7 +41,7 @@ export function EngineBadge({ engine, className }: { engine?: string; className?
       )}
     >
       <Icon className="size-3.5" strokeWidth={1.75} />
-      {isWebjs ? "WEBJS" : "NOWEB"}
+      {isWebjs ? "WEBJS" : "BUNWEB"}
     </span>
   )
 }

@@ -936,13 +936,13 @@ export function SessionSettingsDialog({ open, onOpenChange, session, onSaved, in
                       <SelectValue placeholder="Select engine" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="noweb">NOWEB (Baileys, lightweight)</SelectItem>
+                      <SelectItem value="noweb">BUNWEB (Baileys, lightweight)</SelectItem>
                       <SelectItem value="webjs">WEBJS (Chrome via Puppeteer)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                {/* NOWEB Config */}
+                {/* BUNWEB Config */}
                 {engineType === "noweb" && (
                   <div className="space-y-4">
                     <h4 className="text-sm font-medium">Baileys engine settings</h4>

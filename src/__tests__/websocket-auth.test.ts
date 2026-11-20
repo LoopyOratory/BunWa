@@ -157,7 +157,7 @@ describe('POST /api/ws/ticket', () => {
   const tickets = new WsTicketStore();
 
   beforeAll(() => {
-    process.env.WAHA_API_KEY = MASTER;
+    process.env.BUNWA_API_KEY = MASTER;
     container.registerInstance(
       AuditService,
       new AuditService(mkdtempSync(join(tmpdir(), 'bunwa-ws-audit-'))),

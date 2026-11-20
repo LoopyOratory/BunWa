@@ -1,5 +1,5 @@
 /**
- * Chat MCP tools for WAHA-Bun — messages, labels, and LID lookups.
+ * Chat MCP tools for BunWa — messages, labels, and LID lookups.
  * Uses session object methods directly (getChatMessages, pinMessage, etc.)
  */
 import { z } from 'zod';

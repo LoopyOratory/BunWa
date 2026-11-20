@@ -10,23 +10,23 @@ import { AuditService } from '../core/audit/audit.service';
 import { SessionManager } from '../core/manager.core';
 import { WhatsappConfigService } from '../config.service';
 import { globalErrorHandler } from '../middleware/error-handler';
-import { WhatsappSessionNoWebCore } from '../core/engines/noweb/session.noweb.core';
+import { WhatsappSessionBunWebCore } from '../core/engines/bunweb/session.bunweb.core';
 
-// A group or channel id the NOWEB engine cannot resolve must reach the caller
+// A group or channel id the BUNWEB engine cannot resolve must reach the caller
 // as a 404 naming the id, through the shared error handler; an operation the
 // engine does not implement must reach it as a 422 carrying the engine's own
 // message. None of these may turn into a 500.
-process.env.WAHA_API_KEY = 'resource-not-found-test-key';
+process.env.BUNWA_API_KEY = 'resource-not-found-test-key';
 
 const API_KEY = 'resource-not-found-test-key';
 
 /**
- * A real NOWEB session whose store has no groups and whose socket knows no
+ * A real BUNWEB session whose store has no groups and whose socket knows no
  * newsletters, the same state the live endpoint verifier hits for a
  * placeholder id. The methods under test live on the engine itself.
  */
-function makeSession(): WhatsappSessionNoWebCore {
-  const session = new WhatsappSessionNoWebCore({
+function makeSession(): WhatsappSessionBunWebCore {
+  const session = new WhatsappSessionBunWebCore({
     name: 'resource-test',
     printQR: false,
     mediaManager: null as any,
@@ -59,7 +59,7 @@ function makeSession(): WhatsappSessionNoWebCore {
 
 describe('Missing resource and unimplemented operation status codes', () => {
   let app: Hono;
-  let session: WhatsappSessionNoWebCore;
+  let session: WhatsappSessionBunWebCore;
 
   beforeAll(() => {
     container.registerInstance(

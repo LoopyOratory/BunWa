@@ -1,17 +1,17 @@
-export class WAHAPresenceData {
+export class BUNWAPresenceData {
   participant?: string;
   lastKnownPresence?: string;
   lastSeen?: number | null;
   status?: string;
 }
 
-export class WAHAChatPresences {
+export class BUNWAChatPresences {
   id?: string;
   chatId?: string;
-  presences!: WAHAPresenceData[] | Record<string, WAHAPresenceData>;
+  presences!: BUNWAPresenceData[] | Record<string, BUNWAPresenceData>;
 }
 
-export class WAHASessionPresence {
+export class BUNWASessionPresence {
   presence!: string;
   chatId?: string;
 }

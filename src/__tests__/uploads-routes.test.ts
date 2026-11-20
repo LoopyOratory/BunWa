@@ -11,7 +11,7 @@ import { join } from 'path';
 import { UploadStore } from '../core/uploads/upload-store';
 import { createUploadsRouter, createUploadTicketRouter, isUploadRoute } from '../api/uploads.routes';
 
-process.env.WAHA_API_KEY = 'uploads-test-key';
+process.env.BUNWA_API_KEY = 'uploads-test-key';
 const KEY = { 'X-Api-Key': 'uploads-test-key' };
 container.registerInstance(AuditService, new AuditService(mkdtempSync(join(tmpdir(), 'bunwa-upl-audit-'))));
 container.registerInstance(WhatsappConfigService, new WhatsappConfigService());

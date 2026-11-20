@@ -87,7 +87,7 @@ describe('MCP secret redaction', () => {
       getSession: () => ({
         status: 'WORKING',
         sessionConfig: {
-          engine: 'NOWEB',
+          engine: 'BUNWEB',
           mcp: { enabled: true, destructiveOps: false, apiKeyHash: 'deadbeef' },
           restApiKeys: [{ id: '1', name: 'k', keyHash: 'cafebabe' }],
         },
@@ -101,13 +101,13 @@ describe('MCP secret redaction', () => {
     expect(result.config.mcp.apiKeyHash).toBeUndefined();
     expect(result.config.restApiKeys).toBeUndefined();
     // the rest of the config still travels
-    expect(result.config.engine).toBe('NOWEB');
+    expect(result.config.engine).toBe('BUNWEB');
     expect(result.config.mcp.enabled).toBe(true);
   });
 
   it('the redaction helper drops both hashes and keeps everything else', () => {
     const redacted = redactSessionSecrets({
-      engine: 'NOWEB',
+      engine: 'BUNWEB',
       metadata: { shop: 'test' },
       mcp: { enabled: true, destructiveOps: true, apiKeyHash: 'x' },
       restApiKeys: [{ id: '1' }],

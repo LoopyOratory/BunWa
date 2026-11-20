@@ -41,10 +41,10 @@ export function isDebugEnabled() {
 
 export function getPinoHttpUseLevel(): LevelWithSilent {
   const levels = ['fatal', 'error', 'warn', 'info', 'debug', 'trace'];
-  const level = (process.env.WAHA_HTTP_LOG_LEVEL || 'info').toLowerCase();
+  const level = (process.env.BUNWA_HTTP_LOG_LEVEL || 'info').toLowerCase();
   if (!levels.includes(level)) {
     console.error(
-      `Unknown ${process.env.WAHA_HTTP_LOG_LEVEL}' value for WAHA_HTTP_LOG_LEVEL`,
+      `Unknown ${process.env.BUNWA_HTTP_LOG_LEVEL}' value for BUNWA_HTTP_LOG_LEVEL`,
     );
     return 'info';
   }
@@ -52,11 +52,11 @@ export function getPinoHttpUseLevel(): LevelWithSilent {
 }
 
 export function getDefaultPinoLogLevel(): Level {
-  const logLevel = (process.env.WAHA_LOG_LEVEL || 'info').toLowerCase();
+  const logLevel = (process.env.BUNWA_LOG_LEVEL || 'info').toLowerCase();
   const levels = ['fatal', 'error', 'warn', 'info', 'debug', 'trace'];
   if (!levels.includes(logLevel)) {
     console.error(
-      `Unknown ${process.env.WAHA_LOG_LEVEL}' value for WAHA_LOG_LEVEL`,
+      `Unknown ${process.env.BUNWA_LOG_LEVEL}' value for BUNWA_LOG_LEVEL`,
     );
     return 'info';
   }
@@ -64,7 +64,7 @@ export function getDefaultPinoLogLevel(): Level {
 }
 
 export function getPinoTransport() {
-  const logFormat = (process.env.WAHA_LOG_FORMAT || 'PRETTY').toUpperCase();
+  const logFormat = (process.env.BUNWA_LOG_FORMAT || 'PRETTY').toUpperCase();
   if (logFormat == 'JSON') {
     return undefined;
   }

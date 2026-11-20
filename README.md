@@ -60,7 +60,7 @@ bun install
 # Configure
 cp .env.example.minimal .env   # minimal production set, three required values
 #   or cp .env.example .env     # full reference with every option
-# Edit .env and set WAHA_API_KEY. In production also set WAHA_ALLOW_NO_AUTH=false.
+# Edit .env and set BUNWA_API_KEY. In production also set BUNWA_ALLOW_NO_AUTH=false.
 
 # Build the dashboard and start
 bun run setup            # installs dependencies and builds frontend-dist/
@@ -70,12 +70,12 @@ bun run start            # production server on http://localhost:3000 (same as b
 bun run dev              # API on http://localhost:3001, Vite dev server with HMR on http://localhost:5173
 ```
 
-The dashboard is served at `http://localhost:3000`. Set its login with `WAHA_DASHBOARD_USERNAME`
-and `WAHA_DASHBOARD_PASSWORD`; there is no built-in default. When `WAHA_API_KEY` is set and no
+The dashboard is served at `http://localhost:3000`. Set its login with `BUNWA_DASHBOARD_USERNAME`
+and `BUNWA_DASHBOARD_PASSWORD`; there is no built-in default. When `BUNWA_API_KEY` is set and no
 dashboard login is, the login screen says so instead of letting you in.
 
-> Set `WAHA_API_KEY` to a strong random value and `WAHA_ALLOW_NO_AUTH=false`. With no API key and
-> the default `WAHA_ALLOW_NO_AUTH=true`, the API, dashboard, WebSocket and MCP endpoint all accept
+> Set `BUNWA_API_KEY` to a strong random value and `BUNWA_ALLOW_NO_AUTH=false`. With no API key and
+> the default `BUNWA_ALLOW_NO_AUTH=true`, the API, dashboard, WebSocket and MCP endpoint all accept
 > unauthenticated requests.
 
 ## Deploy
@@ -83,14 +83,14 @@ dashboard login is, the login screen says so instead of letting you in.
 Four Compose files live at the repo root. The general, Postgres and Coolify files build the local
 image tagged with the version in `package.json`; the 1Panel file pulls the published multi-arch image
 from Docker Hub. All of them run the container as UID/GID 1001 with a read-only root filesystem, read
-the `.env` file next to the compose file, and refuse to start unless `WAHA_API_KEY` is set.
+the `.env` file next to the compose file, and refuse to start unless `BUNWA_API_KEY` is set.
 
 | File | Audience | Database | Required env | Command |
 | --- | --- | --- | --- | --- |
-| [`docker-compose.yml`](docker-compose.yml) | General single-node deployment behind your own reverse proxy. | SQLite (the built-in default, no database variables set). | `WAHA_API_KEY` | `docker compose -f docker-compose.yml up -d` |
-| [`docker-compose.postgres.yml`](docker-compose.postgres.yml) | Self-contained BunWa plus PostgreSQL 17. | Postgres for the session store and templates; audit and the anti-ban ledger stay in local SQLite. | `WAHA_API_KEY`, `POSTGRES_PASSWORD` | `docker compose -f docker-compose.postgres.yml up -d` |
-| [`docker-compose.coolify.yml`](docker-compose.coolify.yml) | Coolify's Docker Compose build pack. No published ports; Coolify's proxy routes to port 3000. | SQLite. | `WAHA_API_KEY` | `docker compose -f docker-compose.coolify.yml up -d` |
-| [`docker-compose.1panel.yml`](docker-compose.1panel.yml) | 1Panel's Compose feature. Pulls the published `loopyoratory/bunwa` image instead of building; publishes on `127.0.0.1:${BUNWA_PORT:-3000}` for 1Panel's reverse proxy. | SQLite. | `WAHA_API_KEY`; `BUNWA_TAG` selects the image tag (default `sha-ffd06de`) | `docker compose -f docker-compose.1panel.yml up -d` |
+| [`docker-compose.yml`](docker-compose.yml) | General single-node deployment behind your own reverse proxy. | SQLite (the built-in default, no database variables set). | `BUNWA_API_KEY` | `docker compose -f docker-compose.yml up -d` |
+| [`docker-compose.postgres.yml`](docker-compose.postgres.yml) | Self-contained BunWa plus PostgreSQL 17. | Postgres for the session store and templates; audit and the anti-ban ledger stay in local SQLite. | `BUNWA_API_KEY`, `POSTGRES_PASSWORD` | `docker compose -f docker-compose.postgres.yml up -d` |
+| [`docker-compose.coolify.yml`](docker-compose.coolify.yml) | Coolify's Docker Compose build pack. No published ports; Coolify's proxy routes to port 3000. | SQLite. | `BUNWA_API_KEY` | `docker compose -f docker-compose.coolify.yml up -d` |
+| [`docker-compose.1panel.yml`](docker-compose.1panel.yml) | 1Panel's Compose feature. Pulls the published `loopyoratory/bunwa` image instead of building; publishes on `127.0.0.1:${BUNWA_PORT:-3000}` for 1Panel's reverse proxy. | SQLite. | `BUNWA_API_KEY`; `BUNWA_TAG` selects the image tag (default `sha-ffd06de`) | `docker compose -f docker-compose.1panel.yml up -d` |
 
 The SQLite and Postgres files publish the API on `127.0.0.1` only; terminate TLS in the reverse
 proxy you put in front. The Coolify and 1Panel files expect their platform proxy to handle routing
@@ -118,8 +118,8 @@ To run the published multi-arch image (`linux/amd64`, `linux/arm64`) directly:
 ```bash
 docker run -d --name bunwa \
   -p 3000:3000 \
-  -e WAHA_API_KEY=change-me \
-  -e WAHA_ALLOW_NO_AUTH=false \
+  -e BUNWA_API_KEY=change-me \
+  -e BUNWA_ALLOW_NO_AUTH=false \
   -v bunwa-sessions:/app/.sessions \
   -v bunwa-data:/app/data \
   -v bunwa-media:/app/.media \
@@ -135,30 +135,30 @@ details.
 ## Core API tour
 
 All `/api` routes accept `X-Api-Key`. `/health` and `/ping` are public. The examples below assume
-`WAHA_API_KEY` is exported in your shell.
+`BUNWA_API_KEY` is exported in your shell.
 
 ```bash
 # Create a session
 curl -X POST http://localhost:3000/api/sessions \
-  -H "X-Api-Key: $WAHA_API_KEY" -H "Content-Type: application/json" \
+  -H "X-Api-Key: $BUNWA_API_KEY" -H "Content-Type: application/json" \
   -d '{"name":"my-session"}'
 
 # Start it
 curl -X POST http://localhost:3000/api/sessions/my-session/start \
-  -H "X-Api-Key: $WAHA_API_KEY"
+  -H "X-Api-Key: $BUNWA_API_KEY"
 
 # Read the QR code (base64 PNG) once the status is SCAN_QR_CODE.
 # Add ?phoneNumber=15551234567 for a pairing code instead.
-curl "http://localhost:3000/api/my-session/auth/qr" -H "X-Api-Key: $WAHA_API_KEY"
+curl "http://localhost:3000/api/my-session/auth/qr" -H "X-Api-Key: $BUNWA_API_KEY"
 
 # Send a text message
 curl -X POST http://localhost:3000/api/sendText \
-  -H "X-Api-Key: $WAHA_API_KEY" -H "Content-Type: application/json" \
+  -H "X-Api-Key: $BUNWA_API_KEY" -H "Content-Type: application/json" \
   -d '{"session":"my-session","chatId":"15551234567@c.us","text":"Hello from BunWa"}'
 
 # Send a message with reply buttons
 curl -X POST http://localhost:3000/api/sendButtons \
-  -H "X-Api-Key: $WAHA_API_KEY" -H "Content-Type: application/json" \
+  -H "X-Api-Key: $BUNWA_API_KEY" -H "Content-Type: application/json" \
   -d '{
     "session": "my-session",
     "chatId": "15551234567@c.us",
@@ -171,16 +171,16 @@ curl -X POST http://localhost:3000/api/sendButtons \
 
 # List the session's templates
 curl http://localhost:3000/api/sessions/my-session/templates \
-  -H "X-Api-Key: $WAHA_API_KEY"
+  -H "X-Api-Key: $BUNWA_API_KEY"
 
 # Render and send a template by name or id
 curl -X POST http://localhost:3000/api/sessions/my-session/templates/welcome-message/send \
-  -H "X-Api-Key: $WAHA_API_KEY" -H "Content-Type: application/json" \
+  -H "X-Api-Key: $BUNWA_API_KEY" -H "Content-Type: application/json" \
   -d '{"chatId":"15551234567@c.us","variables":{"name":"Ada"}}'
 
 # Read sending-policy usage counters and next-allowed times
 curl http://localhost:3000/api/sessions/my-session/policy/usage \
-  -H "X-Api-Key: $WAHA_API_KEY"
+  -H "X-Api-Key: $BUNWA_API_KEY"
 ```
 
 Buttons make a round trip. The engine wraps the interactive message in a view-once envelope, and
@@ -228,12 +228,12 @@ including `ContactCheckNumber` and `SessionCheckNumber`.
 ```bash
 # Send to a username instead of a phone number
 curl -X POST http://localhost:3000/api/sendText \
-  -H "X-Api-Key: $WAHA_API_KEY" -H "Content-Type: application/json" \
+  -H "X-Api-Key: $BUNWA_API_KEY" -H "Content-Type: application/json" \
   -d '{"session":"my-session","chatId":"@ada.lovelace","text":"Hello from BunWa"}'
 
 # Check a username
 curl "http://localhost:3000/api/checkNumberStatus?session=my-session&phone=@ada.lovelace" \
-  -H "X-Api-Key: $WAHA_API_KEY"
+  -H "X-Api-Key: $BUNWA_API_KEY"
 ```
 
 When a send target is a malformed handle, or a valid handle WhatsApp does not resolve, the send
@@ -276,8 +276,8 @@ Three credential types can reach the REST API. They differ in blast radius:
 
 | Credential | Header | Scope |
 | --- | --- | --- |
-| Master API key (`WAHA_API_KEY`) | `x-api-key` | Full admin: every session and action, key management, infra, server stop. |
-| Dashboard Basic credentials (`WAHA_DASHBOARD_USERNAME` / `WAHA_DASHBOARD_PASSWORD`) | `Authorization: Basic ...` | Full admin, identical to the master key. Intended for the dashboard UI. |
+| Master API key (`BUNWA_API_KEY`) | `x-api-key` | Full admin: every session and action, key management, infra, server stop. |
+| Dashboard Basic credentials (`BUNWA_DASHBOARD_USERNAME` / `BUNWA_DASHBOARD_PASSWORD`) | `Authorization: Basic ...` | Full admin, identical to the master key. Intended for the dashboard UI. |
 | Per-session REST API key (`sk_ses_...`) | `x-api-key` | One session only, and only the actions in its allowlist. Cannot list sessions, read the audit log, touch infra, stop the server, or manage keys for any session including its own. |
 
 Per-session REST keys are created from **Dashboard, Session settings, Access, REST API keys** or with
@@ -313,7 +313,7 @@ curl -s -X POST "$BASE/api/sendFile" -H "X-Api-Key: $KEY" -H 'Content-Type: appl
 ```
 
 MCP agents do the same with `UploadCreateTicket`. Uploads last 24 h and are capped at 100 MB
-(`UPLOAD_MAX_BYTES`). Set `WAHA_BASE_URL` to the public address so ticket links work from outside.
+(`UPLOAD_MAX_BYTES`). Set `BUNWA_BASE_URL` to the public address so ticket links work from outside.
 
 ## MCP
 
@@ -393,7 +393,7 @@ dialects, and the same webhook event names.
 | REST API | Route names, request bodies and response shapes follow WAHA, so existing clients and SDKs work unchanged. |
 | Sessions, messaging, chats, groups, channels, labels, presence, statuses | Present. |
 | MCP server | Fork-only. WAHA has no MCP surface. |
-| Redis / BullMQ queue | Not ported. Webhooks are delivered inline with bounded retries; `WAHA_QUEUE_*` variables are reported by the infrastructure endpoint only and have no runtime effect. |
+| Redis / BullMQ queue | Not ported. Webhooks are delivered inline with bounded retries; `BUNWA_QUEUE_*` variables are reported by the infrastructure endpoint only and have no runtime effect. |
 | Plugin marketplace and installer | Not ported. A plugin loader and hook manager exist in the tree but are not wired to any route. |
 | Prometheus metrics | Not present. Observability is `/health`, `/ping`, logs and the audit log. |
 | Docker module (container management) | Not ported. Use Coolify, 1Panel or your own orchestrator. |
@@ -435,13 +435,13 @@ These are the essentials:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `PORT` | `3000` | HTTP port. Takes precedence over `WHATSAPP_API_PORT`. |
-| `WAHA_API_KEY` | unset | API key for `X-Api-Key` (and the MCP endpoint). Set it in production. |
-| `WAHA_ALLOW_NO_AUTH` | `true` | Set to `false` to reject requests without a key. |
-| `WAHA_DASHBOARD_USERNAME` / `WAHA_DASHBOARD_PASSWORD` | unset | Dashboard login. Required for the dashboard whenever `WAHA_API_KEY` is set. |
+| `BUNWA_API_KEY` | unset | API key for `X-Api-Key` (and the MCP endpoint). Set it in production. |
+| `BUNWA_ALLOW_NO_AUTH` | `true` | Set to `false` to reject requests without a key. |
+| `BUNWA_DASHBOARD_USERNAME` / `BUNWA_DASHBOARD_PASSWORD` | unset | Dashboard login. Required for the dashboard whenever `BUNWA_API_KEY` is set. |
 | `WHATSAPP_DEFAULT_ENGINE` | `NOWEB` | `NOWEB` (Baileys) or `WEBJS` (whatsapp-web.js + Chrome). |
-| `WAHA_DATABASE_DRIVER` | `sqlite` | `sqlite`, `postgres` or `postgresql`. An unrecognised value, including `mongo`, fails the boot. |
-| `WAHA_STORAGE_TYPE` | `local` | Media storage backend: `local` or `s3`. |
-| `WAHA_LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error` or `fatal`. |
+| `BUNWA_DATABASE_DRIVER` | `sqlite` | `sqlite`, `postgres` or `postgresql`. An unrecognised value, including `mongo`, fails the boot. |
+| `BUNWA_STORAGE_TYPE` | `local` | Media storage backend: `local` or `s3`. |
+| `BUNWA_LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error` or `fatal`. |
 | `SEND_POLICY_ENABLED` | `true` | Master switch for the anti-ban sending policy. |
 | `MCP_ENABLED` | `true` | Set to `false` to unmount the MCP endpoint. |
 
@@ -454,9 +454,9 @@ These are the essentials:
 | `WHATSAPP_API_PORT` | `3000` | Fallback port if `PORT` is unset. |
 | `WHATSAPP_API_SCHEMA` | `http` | URL scheme (`http` or `https`). |
 | `WHATSAPP_API_HOSTNAME` | `localhost` | Server hostname. |
-| `WAHA_BASE_URL` | unset | Override the auto-generated `schema://hostname:port` base URL. |
+| `BUNWA_BASE_URL` | unset | Override the auto-generated `schema://hostname:port` base URL. |
 | `TRUSTED_PROXIES` | unset | Comma-separated trusted proxy IPs. When set, the rate limiter reads `x-forwarded-for` for the client IP. |
-| `WAHA_CORS_ORIGIN` | unset | Comma-separated CORS origins. When set, credentialed CORS is enabled for those origins; empty means wildcard without credentials. |
+| `BUNWA_CORS_ORIGIN` | unset | Comma-separated CORS origins. When set, credentialed CORS is enabled for those origins; empty means wildcard without credentials. |
 
 </details>
 
@@ -465,12 +465,12 @@ These are the essentials:
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `WAHA_API_KEY` | unset | API key for programmatic access (header `X-Api-Key`). Strongly recommended. |
-| `WAHA_ALLOW_NO_AUTH` | `true` | When `false`, requests without an API key are rejected. Set to `false` in production. |
+| `BUNWA_API_KEY` | unset | API key for programmatic access (header `X-Api-Key`). Strongly recommended. |
+| `BUNWA_ALLOW_NO_AUTH` | `true` | When `false`, requests without an API key are rejected. Set to `false` in production. |
 | `WHATSAPP_API_KEY_EXCLUDE_PATH` | unset | Comma-separated API paths excluded from API-key auth, for example `/api/health,/api/version`. |
-| `WAHA_DASHBOARD_ENABLED` | `true` | Enable or disable the dashboard UI. |
-| `WAHA_DASHBOARD_USERNAME` | unset | Dashboard Basic Auth username. |
-| `WAHA_DASHBOARD_PASSWORD` | unset | Dashboard Basic Auth password. |
+| `BUNWA_DASHBOARD_ENABLED` | `true` | Enable or disable the dashboard UI. |
+| `BUNWA_DASHBOARD_USERNAME` | unset | Dashboard Basic Auth username. |
+| `BUNWA_DASHBOARD_PASSWORD` | unset | Dashboard Basic Auth password. |
 | `WHATSAPP_SWAGGER_ENABLED` | `true` | Enable the interactive API docs at `/api-docs`. |
 | `WHATSAPP_SWAGGER_USERNAME` | `admin` | API docs Basic Auth username. |
 | `WHATSAPP_SWAGGER_PASSWORD` | empty | API docs Basic Auth password. Empty means no auth. |
@@ -489,11 +489,11 @@ are also accepted on API routes.
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `WAHA_LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error` or `fatal`. |
-| `WAHA_HTTP_LOG_LEVEL` | `info` | HTTP request log level. |
-| `WAHA_LOG_FORMAT` | `PRETTY` | `PRETTY` or `JSON`. |
+| `BUNWA_LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error` or `fatal`. |
+| `BUNWA_HTTP_LOG_LEVEL` | `info` | HTTP request log level. |
+| `BUNWA_LOG_FORMAT` | `PRETTY` | `PRETTY` or `JSON`. |
 | `DEBUG` | unset | Set to `1` for verbose Baileys debug output. |
-| `WAHA_DEBUG_MODE` | `false` | Enable extra diagnostics. |
+| `BUNWA_DEBUG_MODE` | `false` | Enable extra diagnostics. |
 
 </details>
 
@@ -504,23 +504,23 @@ are also accepted on API routes.
 | --- | --- | --- |
 | `WHATSAPP_DEFAULT_ENGINE` | `NOWEB` | `NOWEB` (Baileys) or `WEBJS` (whatsapp-web.js + Chrome). |
 | `ENGINE_TYPE` | unset | Alternative engine-type override. |
-| `WAHA_NAMESPACE` / `WAHA_SESSION_NAMESPACE` | engine name | Namespace prefix for session names. |
+| `BUNWA_NAMESPACE` / `BUNWA_SESSION_NAMESPACE` | engine name | Namespace prefix for session names. |
 | `CHROME_PATH` / `PUPPETEER_EXECUTABLE_PATH` | unset | Path to the Chrome or Chromium binary. Required for the WEBJS engine. |
-| `WAHA_PRINT_QR` | `true` | Set to `false` to suppress QR output in the console. |
-| `WAHA_CLIENT_DEVICE_NAME` | unset | Device name shown to WhatsApp (NOWEB). |
-| `WAHA_CLIENT_BROWSER_NAME` | unset | Browser name shown to WhatsApp (NOWEB). |
+| `BUNWA_PRINT_QR` | `true` | Set to `false` to suppress QR output in the console. |
+| `BUNWA_CLIENT_DEVICE_NAME` | unset | Device name shown to WhatsApp (NOWEB). |
+| `BUNWA_CLIENT_BROWSER_NAME` | unset | Browser name shown to WhatsApp (NOWEB). |
 | `WHATSAPP_START_SESSION` | unset | Comma-separated session names to auto-start on boot. |
 | `WHATSAPP_RESTART_ALL_SESSIONS` | `false` | Restore and start all previously running sessions on boot. |
-| `WAHA_AUTO_START_DELAY_SECONDS` | `0` | Delay before auto-starting sessions. |
-| `WAHA_WORKER_ID` | unset | Worker id for multi-worker deployments. |
-| `WAHA_WORKER_RESTART_SESSIONS` | `true` | Worker restores sessions on start. |
-| `WAHA_VERSION` | auto | `CORE` or `PLUS`. Defaults to `PLUS` unless explicitly set to `CORE`. Plus adds profile-picture writes, button header media and S3 media storage. |
-| `WAHA_PRESENCE_AUTO_ONLINE` | `true` | Mark the session ONLINE on any message activity. |
-| `WAHA_PRESENCE_AUTO_ONLINE_DURATION_SECONDS` | `25` | Seconds to keep the session ONLINE after activity. |
-| `WAHA_SESSION_CONFIG_IGNORE_STATUS` | `false` | Ignore status and list messages. |
-| `WAHA_SESSION_CONFIG_IGNORE_GROUPS` | `false` | Ignore group chats. |
-| `WAHA_SESSION_CONFIG_IGNORE_CHANNELS` | `false` | Ignore channels. |
-| `WAHA_SESSION_CONFIG_IGNORE_BROADCAST` | `false` | Ignore broadcast lists. |
+| `BUNWA_AUTO_START_DELAY_SECONDS` | `0` | Delay before auto-starting sessions. |
+| `BUNWA_WORKER_ID` | unset | Worker id for multi-worker deployments. |
+| `BUNWA_WORKER_RESTART_SESSIONS` | `true` | Worker restores sessions on start. |
+| `BUNWA_VERSION` | auto | `CORE` or `PLUS`. Defaults to `PLUS` unless explicitly set to `CORE`. Plus adds profile-picture writes, button header media and S3 media storage. |
+| `BUNWA_PRESENCE_AUTO_ONLINE` | `true` | Mark the session ONLINE on any message activity. |
+| `BUNWA_PRESENCE_AUTO_ONLINE_DURATION_SECONDS` | `25` | Seconds to keep the session ONLINE after activity. |
+| `BUNWA_SESSION_CONFIG_IGNORE_STATUS` | `false` | Ignore status and list messages. |
+| `BUNWA_SESSION_CONFIG_IGNORE_GROUPS` | `false` | Ignore group chats. |
+| `BUNWA_SESSION_CONFIG_IGNORE_CHANNELS` | `false` | Ignore channels. |
+| `BUNWA_SESSION_CONFIG_IGNORE_BROADCAST` | `false` | Ignore broadcast lists. |
 
 The WEBJS engine requires Chrome or Chromium on the host and fails with a clear error when it is
 missing. The Docker image does not bundle a browser.
@@ -531,7 +531,7 @@ missing. The Docker image does not bundle a browser.
 <summary><strong>Sending policy (anti-ban)</strong></summary>
 
 The policy gates every outbound message (REST, bulk and MCP) per session. Blocked sends answer 429
-with a `Retry-After` header, and counters persist in `${WAHA_STORAGE_DIR}/sending-limits.db`. The
+with a `Retry-After` header, and counters persist in `${BUNWA_STORAGE_DIR}/sending-limits.db`. The
 REST surface is `GET /api/sessions/:session/policy` for the effective configuration and usage,
 `PUT /api/sessions/:session/policy` for per-session overrides, and
 `GET /api/sessions/:session/policy/usage` for counters and next-allowed times.
@@ -554,7 +554,7 @@ REST surface is `GET /api/sessions/:session/policy` for the effective configurat
 <details>
 <summary><strong>Database</strong></summary>
 
-The driver is validated at boot. `WAHA_DATABASE_DRIVER` accepts `sqlite`, `postgres` and
+The driver is validated at boot. `BUNWA_DATABASE_DRIVER` accepts `sqlite`, `postgres` and
 `postgresql` (trimmed, case-insensitive); unset still means `sqlite`. Any other value fails startup
 naming the value received and the accepted list, and `mongo` fails with "MongoDB is not
 implemented". There is no silent fallback to SQLite. Boot then logs one `Storage:` line naming the
@@ -565,44 +565,44 @@ at startup instead of on the first chat or template read (commit `3391e17`).
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `WAHA_DATABASE_DRIVER` | `sqlite` | `sqlite`, `postgres` or `postgresql`. Any other value, including `mongo`, fails the boot. |
-| `WAHA_SQLITE_PATH` | `.sessions/waha.db` | Read by the config service getter only. The session store writes per-session `store.sqlite3` files under the local store directory. |
-| `WAHA_DATABASE_URL` | unset | PostgreSQL connection string (driver `postgres`). |
-| `WHATSAPP_SESSIONS_POSTGRESQL_URL` | unset | Alias for `WAHA_DATABASE_URL`. |
+| `BUNWA_DATABASE_DRIVER` | `sqlite` | `sqlite`, `postgres` or `postgresql`. Any other value, including `mongo`, fails the boot. |
+| `BUNWA_SQLITE_PATH` | `.sessions/waha.db` | Read by the config service getter only. The session store writes per-session `store.sqlite3` files under the local store directory. |
+| `BUNWA_DATABASE_URL` | unset | PostgreSQL connection string (driver `postgres`). |
+| `WHATSAPP_SESSIONS_POSTGRESQL_URL` | unset | Alias for `BUNWA_DATABASE_URL`. |
 | `WHATSAPP_SESSIONS_MONGO_URL` | unset | Read by the config service getter only. MongoDB session storage is not implemented, so setting it has no runtime effect. |
-| `WAHA_DB_TYPE` | `sqlite` | Dashboard database selection. Used as the driver when `WAHA_DATABASE_DRIVER` is unset; an unrecognised value fails the boot. |
-| `WAHA_DB_HOST` | `localhost` | Reported DB host. |
-| `WAHA_DB_PORT` | `5432` | Reported DB port. |
-| `WAHA_DB_USERNAME` | unset | Reported DB username. |
-| `WAHA_DB_NAME` | `./data/waha.sqlite` | Reported DB name. |
-| `WAHA_DB_SSL` | `false` | Reported DB SSL flag. |
+| `BUNWA_DB_TYPE` | `sqlite` | Dashboard database selection. Used as the driver when `BUNWA_DATABASE_DRIVER` is unset; an unrecognised value fails the boot. |
+| `BUNWA_DB_HOST` | `localhost` | Reported DB host. |
+| `BUNWA_DB_PORT` | `5432` | Reported DB port. |
+| `BUNWA_DB_USERNAME` | unset | Reported DB username. |
+| `BUNWA_DB_NAME` | `./data/waha.sqlite` | Reported DB name. |
+| `BUNWA_DB_SSL` | `false` | Reported DB SSL flag. |
 
 </details>
 
 <details>
 <summary><strong>Media and storage</strong></summary>
 
-Downloaded media is persisted through the backend selected by `WAHA_STORAGE_TYPE` and served back
+Downloaded media is persisted through the backend selected by `BUNWA_STORAGE_TYPE` and served back
 at `GET /api/files/:session/:filename`, which requires the same API key as the rest of the API.
 Local media URLs expire after about 180 seconds; use S3 for durable links.
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `WHATSAPP_FILES_FOLDER` | `/tmp/whatsapp-files` | Directory for downloaded media when `WAHA_STORAGE_TYPE=local` and `WAHA_STORAGE_LOCAL_PATH` is unset. |
+| `WHATSAPP_FILES_FOLDER` | `/tmp/whatsapp-files` | Directory for downloaded media when `BUNWA_STORAGE_TYPE=local` and `BUNWA_STORAGE_LOCAL_PATH` is unset. |
 | `WHATSAPP_DOWNLOAD_MEDIA` | `true` | Enable automatic media download. |
 | `WHATSAPP_FILES_MIMETYPES` | unset | Comma-separated allowed MIME types. Empty means all. |
 | `WHATSAPP_HEALTH_MEDIA_FILES_THRESHOLD_MB` | `100` | Media-files health threshold in MB. |
 | `WHATSAPP_HEALTH_SESSION_FILES_THRESHOLD_MB` | `100` | Session-files health threshold in MB. |
-| `WAHA_STORAGE_TYPE` | `local` | Media storage backend: `local` or `s3`. |
-| `WAHA_STORAGE_LOCAL_PATH` | falls back to `WHATSAPP_FILES_FOLDER` and `/tmp/whatsapp-files` | Local media storage path. |
-| `WAHA_LOCAL_STORE_BASE_DIR` | `.sessions` | Base directory for session auth data. |
-| `WAHA_STORAGE_DIR` | `./data` | Directory for the internal SQLite databases (audit, templates, sending limits). |
+| `BUNWA_STORAGE_TYPE` | `local` | Media storage backend: `local` or `s3`. |
+| `BUNWA_STORAGE_LOCAL_PATH` | falls back to `WHATSAPP_FILES_FOLDER` and `/tmp/whatsapp-files` | Local media storage path. |
+| `BUNWA_LOCAL_STORE_BASE_DIR` | `.sessions` | Base directory for session auth data. |
+| `BUNWA_STORAGE_DIR` | `./data` | Directory for the internal SQLite databases (audit, templates, sending limits). |
 | `AUDIT_RETENTION_DAYS` | `90` | Days to retain audit logs. `0` or negative disables retention. |
-| `WAHA_S3_ENDPOINT` | unset | S3-compatible endpoint URL (for example MinIO). Leave unset for AWS S3. |
-| `WAHA_S3_ACCESS_KEY` | unset | Access key id. |
-| `WAHA_S3_SECRET_KEY` | unset | Secret access key. |
-| `WAHA_S3_BUCKET` | unset | Bucket name. |
-| `WAHA_S3_REGION` | `us-east-1` | Region. |
+| `BUNWA_S3_ENDPOINT` | unset | S3-compatible endpoint URL (for example MinIO). Leave unset for AWS S3. |
+| `BUNWA_S3_ACCESS_KEY` | unset | Access key id. |
+| `BUNWA_S3_SECRET_KEY` | unset | Secret access key. |
+| `BUNWA_S3_BUCKET` | unset | Bucket name. |
+| `BUNWA_S3_REGION` | `us-east-1` | Region. |
 
 </details>
 
@@ -611,17 +611,17 @@ Local media URLs expire after about 180 seconds; use S3 for durable links.
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `WAHA_WEBHOOK_URL` | unset | Default webhook URL for all sessions, overridable per session. |
+| `BUNWA_WEBHOOK_URL` | unset | Default webhook URL for all sessions, overridable per session. |
 | `WEBHOOK_SSRF_PROTECT` | `true` | Enable SSRF protection for webhook delivery. |
 | `SSRF_ALLOWED_HOSTS` | unset | Comma-separated hosts or IPs allowed when SSRF protection is on. |
 | `WHATSAPP_PROXY_SERVER` | unset | Single proxy server, format `protocol://host:port`. Global proxy variables are not consumed by the runtime; configure the proxy per session in the dashboard or session config. |
 | `WHATSAPP_PROXY_SERVER_LIST` | unset | Comma-separated proxy list. |
 | `WHATSAPP_PROXY_SERVER_INDEX_PREFIX` | unset | Index prefix for mapping sessions to proxies. |
 | `WHATSAPP_PROXY_SERVER_USERNAME` / `WHATSAPP_PROXY_SERVER_PASSWORD` | unset | Proxy authentication. |
-| `WAHA_QUEUE_ENABLED` | `false` | Redis-backed queue toggle. Reported only; no queue backend is bundled. |
-| `WAHA_REDIS_HOST` | `localhost` | Reported Redis host. |
-| `WAHA_REDIS_PORT` | `6379` | Reported Redis port. |
-| `WAHA_REDIS_PASSWORD` | unset | Reported Redis password. |
+| `BUNWA_QUEUE_ENABLED` | `false` | Redis-backed queue toggle. Reported only; no queue backend is bundled. |
+| `BUNWA_REDIS_HOST` | `localhost` | Reported Redis host. |
+| `BUNWA_REDIS_PORT` | `6379` | Reported Redis port. |
+| `BUNWA_REDIS_PASSWORD` | unset | Reported Redis password. |
 | `MILO_API_URL` | `http://localhost:3003/api/webhooks/chatwoot/milo` | Milo API URL for Chatwoot webhook forwarding. |
 | `WHATSAPP_HEALTH_MONGO_TIMEOUT_MS` | `3000` | MongoDB health-check timeout in milliseconds. |
 
@@ -755,7 +755,7 @@ sequenceDiagram
 
 ## Troubleshooting
 
-If chat or templates fail to load, check `WAHA_DATABASE_URL` first. A container that points at
+If chat or templates fail to load, check `BUNWA_DATABASE_URL` first. A container that points at
 `127.0.0.1` instead of the database service name (for example `postgres` in
 `docker-compose.postgres.yml`) cannot reach the database. Since commit `3391e17` the boot validates
 the driver and verifies the connection, so a current build exits at startup with the connection
@@ -772,7 +772,7 @@ cd frontend && bun run build   # the same frontend build from the frontend packa
 ```
 
 `bun run test:postgres` runs the Postgres store smoke test against the server in
-`WAHA_DATABASE_URL` (real Postgres, Docker, or PGlite), and `bun run postgres:dev` starts a local
+`BUNWA_DATABASE_URL` (real Postgres, Docker, or PGlite), and `bun run postgres:dev` starts a local
 PGlite Postgres that speaks the wire protocol on `127.0.0.1:5432`.
 
 The driver conformance suite (`src/__tests__/conformance/`) runs the same assertions against SQLite
@@ -807,3 +807,5 @@ Full terms: [LICENSE.md](LICENSE.md).
   <br />
   <sub>WhatsApp HTTP API Server</sub>
 </div>
+
+> **Naming:** every environment variable is `BUNWA_*`. The legacy `WAHA_*` spellings still work (the server falls back to them automatically), so existing deployments keep running unchanged.

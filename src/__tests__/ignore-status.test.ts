@@ -1,13 +1,13 @@
 import 'reflect-metadata';
 import { describe, expect, it } from 'bun:test';
 import pino from 'pino';
-import { WhatsappSessionNoWebCore } from '../core/engines/noweb/session.noweb.core';
+import { WhatsappSessionBunWebCore } from '../core/engines/bunweb/session.bunweb.core';
 import { SessionManager } from '../core/manager.core';
 
 const defaults = { status: false, groups: true, channels: false, broadcast: false };
 
 function createSession(ignore: Record<string, boolean>) {
-  return new WhatsappSessionNoWebCore({
+  return new WhatsappSessionBunWebCore({
     name: 'ignore-status-test',
     printQR: false,
     loggerBuilder: pino({ level: 'silent' }),

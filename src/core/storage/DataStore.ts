@@ -5,5 +5,5 @@ export abstract class DataStore {
 
   abstract close(): Promise<any>;
 
-  abstract getWAHADatabase(): Knex.Knex;
+  abstract getBunwaDatabase(): Knex.Knex;
 }

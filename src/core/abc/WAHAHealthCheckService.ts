@@ -7,7 +7,7 @@ export class HealthCheckResult {
   details?: Record<string, any>;
 }
 
-export abstract class WAHAHealthCheckService {
+export abstract class BUNWAHealthCheckService {
   protected logger: any;
   constructor(
     protected sessionManager: SessionManager,

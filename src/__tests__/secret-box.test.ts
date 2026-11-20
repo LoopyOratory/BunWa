@@ -55,6 +55,8 @@ describe('secret box', () => {
     const savedBunwa = process.env.BUNWA_API_KEY;
     try {
       delete process.env.BUNWA_KEY_ENCRYPTION_SECRET;
+      // The legacy WAHA_API_KEY spelling is still a valid fallback source;
+      // secret-box reads it explicitly, without the env-alias proxy.
       process.env.WAHA_API_KEY = 'waha-fallback-key';
       delete process.env.BUNWA_API_KEY;
       expect(usingEncryptionKeyFallback()).toBe(true);
@@ -64,7 +66,9 @@ describe('secret box', () => {
       if (savedSecret !== undefined) process.env.BUNWA_KEY_ENCRYPTION_SECRET = savedSecret;
       else delete process.env.BUNWA_KEY_ENCRYPTION_SECRET;
       if (savedWaha !== undefined) process.env.WAHA_API_KEY = savedWaha;
+      else delete process.env.WAHA_API_KEY;
       if (savedBunwa !== undefined) process.env.BUNWA_API_KEY = savedBunwa;
+      else delete process.env.BUNWA_API_KEY;
     }
   });
 });

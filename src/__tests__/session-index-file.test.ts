@@ -15,7 +15,7 @@ describe('SessionIndexFile', () => {
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'bunwa-index-'));
-    path = join(dir, 'noweb', '.sessions-index.json');
+    path = join(dir, 'bunweb', '.sessions-index.json');
   });
 
   it('returns an empty index when no file exists', async () => {
@@ -24,15 +24,15 @@ describe('SessionIndexFile', () => {
 
   it('round-trips a written index and creates the directory', async () => {
     const file = new SessionIndexFile(path);
-    await file.write(() => ({ alpha: { engine: 'NOWEB' } }));
-    expect(await file.read()).toEqual({ alpha: { engine: 'NOWEB' } });
+    await file.write(() => ({ alpha: { engine: 'BUNWEB' } }));
+    expect(await file.read()).toEqual({ alpha: { engine: 'BUNWEB' } });
   });
 
   it('leaves no temp files behind', async () => {
     const file = new SessionIndexFile(path);
     await file.write(() => ({ a: {} }));
     await file.write(() => ({ b: {} }));
-    const leftovers = readdirSync(join(dir, 'noweb')).filter((name) => name.endsWith('.tmp'));
+    const leftovers = readdirSync(join(dir, 'bunweb')).filter((name) => name.endsWith('.tmp'));
     expect(leftovers).toEqual([]);
   });
 
@@ -67,7 +67,7 @@ describe('SessionIndexFile', () => {
 
     expect(index).toEqual({ keep: { webhooks: [] } });
     expect(existsSync(path)).toBe(false);
-    const aside = readdirSync(join(dir, 'noweb')).filter((name) => name.includes('.corrupt-'));
+    const aside = readdirSync(join(dir, 'bunweb')).filter((name) => name.includes('.corrupt-'));
     expect(aside).toHaveLength(1);
   });
 
@@ -85,9 +85,9 @@ describe('SessionIndexFile', () => {
     writeFileSync(path, 'not json');
 
     expect(await file.read()).toEqual({});
-    const aside = readdirSync(join(dir, 'noweb')).filter((name) => name.includes('.corrupt-'));
+    const aside = readdirSync(join(dir, 'bunweb')).filter((name) => name.includes('.corrupt-'));
     expect(aside).toHaveLength(1);
-    expect(readFileSync(join(dir, 'noweb', aside[0]), 'utf8')).toBe('not json');
+    expect(readFileSync(join(dir, 'bunweb', aside[0]), 'utf8')).toBe('not json');
   });
 
   it('a failed write does not block later writes', async () => {

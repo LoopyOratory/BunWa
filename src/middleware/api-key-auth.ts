@@ -32,16 +32,16 @@ function safeCompare(a: string, b: string): boolean {
 
 /**
  * Whether to allow requests without any authentication when no API key is configured.
- * Defaults to true for dev convenience; set WAHA_ALLOW_NO_AUTH=false to disable.
+ * Defaults to true for dev convenience; set BUNWA_ALLOW_NO_AUTH=false to disable.
  */
 function allowNoAuth(): boolean {
-  return process.env.WAHA_ALLOW_NO_AUTH !== 'false';
+  return process.env.BUNWA_ALLOW_NO_AUTH !== 'false';
 }
 
 /**
  * Auth middleware. Credentials are resolved in this order:
  *
- * 1. the master `WAHA_API_KEY` (via x-api-key) — full admin
+ * 1. the master `BUNWA_API_KEY` (via x-api-key) — full admin
  * 2. dashboard Basic credentials — full admin
  * 3. a per-session REST key (`sk_ses_...`) — scoped to one session and to the
  *    actions in its allowlist; never satisfies `CanServer`
@@ -144,14 +144,14 @@ export function apiKeyAuthMiddleware(): MiddlewareHandler {
       return c.json({ statusCode: 401, message: 'Invalid credentials' }, 401);
     }
 
-    // No API key configured and no auth provided — allow (dev mode) only if WAHA_ALLOW_NO_AUTH is not false
+    // No API key configured and no auth provided — allow (dev mode) only if BUNWA_ALLOW_NO_AUTH is not false
     if (!apiKey) {
       if (allowNoAuth()) {
         c.set('user', { isAdmin: true } as User);
         return next();
       }
-      // fail-closed: WAHA_ALLOW_NO_AUTH=false, reject unauthenticated requests
-      return c.json({ statusCode: 401, message: 'WAHA_ALLOW_NO_AUTH=false and no API key configured' }, 401);
+      // fail-closed: BUNWA_ALLOW_NO_AUTH=false, reject unauthenticated requests
+      return c.json({ statusCode: 401, message: 'BUNWA_ALLOW_NO_AUTH=false and no API key configured' }, 401);
     }
 
     return c.json({ statusCode: 401, message: 'Authentication required' }, 401);

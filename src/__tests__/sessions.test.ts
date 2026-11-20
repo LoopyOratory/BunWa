@@ -11,7 +11,7 @@ import { SessionManager } from '../core/manager.core';
 import { WhatsappConfigService } from '../config.service';
 
 // Set up API key so fail-closed middleware works in tests
-process.env.WAHA_API_KEY = 'waha';
+process.env.BUNWA_API_KEY = 'waha';
 
 describe('Sessions API', () => {
   let app: Hono;

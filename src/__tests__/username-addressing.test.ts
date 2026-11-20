@@ -7,17 +7,17 @@ import {
   toNeutralJid,
   usernameHandle,
 } from '../common/security/wa-id';
-import { WhatsappSessionNoWebCore } from '../core/engines/noweb/session.noweb.core';
+import { WhatsappSessionBunWebCore } from '../core/engines/bunweb/session.bunweb.core';
 import { UnprocessableEntityException } from '../core/exceptions';
 
 /**
  * WhatsApp username addressing: classification of the accepted spellings,
- * validation against Meta's published rules, and the NOWEB send-target
+ * validation against Meta's published rules, and the BUNWEB send-target
  * resolution (including the case where no address can be resolved).
  */
 
-function makeSession(): WhatsappSessionNoWebCore {
-  return new WhatsappSessionNoWebCore({
+function makeSession(): WhatsappSessionBunWebCore {
+  return new WhatsappSessionBunWebCore({
     name: 'username-test',
     printQR: false,
     mediaManager: null as any,
@@ -39,7 +39,7 @@ function makeSession(): WhatsappSessionNoWebCore {
 }
 
 /**
- * Raw USync answers, shaped exactly as the live NOWEB session produced them:
+ * Raw USync answers, shaped exactly as the live BUNWEB session produced them:
  * a resolved handle names a LID and answers contact type "in"; an unregistered
  * handle has no jid and answers contact type "out"; an empty answer has a list
  * with no user node at all.
@@ -191,7 +191,7 @@ describe('wa-id username classification', () => {
   });
 });
 
-describe('NOWEB send-target resolution', () => {
+describe('BUNWEB send-target resolution', () => {
   it('returns a non-username target unchanged', async () => {
     const session = makeSession();
     expect(await session.resolveSendTarget('15551234567@c.us')).toBe('15551234567@c.us');
@@ -272,7 +272,7 @@ describe('NOWEB send-target resolution', () => {
   });
 });
 
-describe('NOWEB checkNumberStatus with a username', () => {
+describe('BUNWEB checkNumberStatus with a username', () => {
   it('reports a resolved handle as the LID, never as a phone number', async () => {
     const session = makeSession();
     const { sock, calls } = socketAnswering(
@@ -389,7 +389,7 @@ describe('NOWEB checkNumberStatus with a username', () => {
   });
 });
 
-describe('NOWEB checkNumberStatus with a phone number', () => {
+describe('BUNWEB checkNumberStatus with a phone number', () => {
   it('reports a known number as resolved', async () => {
     const session = makeSession();
     session.sock = {

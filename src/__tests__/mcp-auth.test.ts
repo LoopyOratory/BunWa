@@ -100,25 +100,25 @@ describe('isToolAllowed (permission checks)', () => {
 
 describe('validateApiKey (fail-closed mode)', () => {
   it('rejects keyless access when WAHA_ALLOW_NO_AUTH=false', () => {
-    const previous = process.env.WAHA_ALLOW_NO_AUTH;
-    process.env.WAHA_ALLOW_NO_AUTH = 'false';
+    const previous = process.env.BUNWA_ALLOW_NO_AUTH;
+    process.env.BUNWA_ALLOW_NO_AUTH = 'false';
     try {
       expect(validateApiKey(undefined, undefined)).toBe(false);
       expect(validateApiKey('anything', undefined)).toBe(false);
     } finally {
-      if (previous === undefined) delete process.env.WAHA_ALLOW_NO_AUTH;
-      else process.env.WAHA_ALLOW_NO_AUTH = previous;
+      if (previous === undefined) delete process.env.BUNWA_ALLOW_NO_AUTH;
+      else process.env.BUNWA_ALLOW_NO_AUTH = previous;
     }
   });
 
   it('still accepts the configured key in fail-closed mode', () => {
-    const previous = process.env.WAHA_ALLOW_NO_AUTH;
-    process.env.WAHA_ALLOW_NO_AUTH = 'false';
+    const previous = process.env.BUNWA_ALLOW_NO_AUTH;
+    process.env.BUNWA_ALLOW_NO_AUTH = 'false';
     try {
       expect(validateApiKey('secret-key', 'secret-key')).toBe(true);
     } finally {
-      if (previous === undefined) delete process.env.WAHA_ALLOW_NO_AUTH;
-      else process.env.WAHA_ALLOW_NO_AUTH = previous;
+      if (previous === undefined) delete process.env.BUNWA_ALLOW_NO_AUTH;
+      else process.env.BUNWA_ALLOW_NO_AUTH = previous;
     }
   });
 });

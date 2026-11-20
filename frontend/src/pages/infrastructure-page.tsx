@@ -24,7 +24,7 @@ interface InfraConfig {
 
 const ENGINES = [
   {
-    value: "NOWEB",
+    value: "BUNWEB",
     title: "Baileys (noweb)",
     subtitle: "WhatsApp Web API",
     description: "Free, fast, no Chrome needed. Uses raw WhatsApp protocol.",
@@ -39,10 +39,10 @@ const ENGINES = [
 
 export function InfrastructurePage() {
   const [config, setConfig] = useState<InfraConfig>({
-    database: { type: "sqlite", host: "localhost", port: "5432", username: "", password: "", name: "./data/waha.sqlite", ssl: false },
+    database: { type: "sqlite", host: "localhost", port: "5432", username: "", password: "", name: "./data/bunwa.sqlite", ssl: false },
     storage: { type: "local", localPath: "./data/media", s3: { endpoint: "", bucket: "", region: "us-east-1", accessKeyId: "", secretAccessKey: "" } },
     queue: { enabled: false, redis: { host: "localhost", port: "6379", password: "" } },
-    engine: "NOWEB",
+    engine: "BUNWEB",
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -172,8 +172,8 @@ export function InfrastructurePage() {
                   // Carry over the defaults when the field still holds the
                   // other backend's default value.
                   const looksLikePath = db.name.includes("/") || /\.(sqlite3?|db)$/i.test(db.name)
-                  if (v === "postgres" && looksLikePath) db.name = "waha"
-                  if (v === "sqlite" && !looksLikePath) db.name = "./data/waha.sqlite"
+                  if (v === "postgres" && looksLikePath) db.name = "bunwa"
+                  if (v === "sqlite" && !looksLikePath) db.name = "./data/bunwa.sqlite"
                   setConfig({ ...config, database: db })
                 }}>
                   <SelectTrigger id="db-engine"><SelectValue /></SelectTrigger>

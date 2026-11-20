@@ -13,9 +13,9 @@ import { createMcpRouter } from '../mcp/mcp.server';
 import { hashRestApiKey } from '../core/api-keys/rest-api-keys';
 
 const MASTER_KEY = 'master-rest-key';
-process.env.WAHA_API_KEY = MASTER_KEY;
-process.env.WAHA_DASHBOARD_USERNAME = 'admin';
-process.env.WAHA_DASHBOARD_PASSWORD = 'admin-pass';
+process.env.BUNWA_API_KEY = MASTER_KEY;
+process.env.BUNWA_DASHBOARD_USERNAME = 'admin';
+process.env.BUNWA_DASHBOARD_PASSWORD = 'admin-pass';
 
 const BASIC_AUTH = `Basic ${Buffer.from('admin:admin-pass').toString('base64')}`;
 

@@ -1,21 +1,21 @@
 import 'reflect-metadata';
 import { describe, it, expect } from 'bun:test';
-import { WhatsappSessionNoWebCore } from '../core/engines/noweb/session.noweb.core';
+import { WhatsappSessionBunWebCore } from '../core/engines/bunweb/session.bunweb.core';
 import { evaluateFilters } from '../common/security/webhook-filters';
 
 /**
  * Inbound commerce typing: an order or product message must arrive on
  * WAMessage with a canonical type and a parsed payload, so a workflow can
  * branch on it without decoding the raw proto in _data. The fixtures below
- * are shaped exactly like the live NOWEB messages.upsert events WhatsApp
+ * are shaped exactly like the live BUNWEB messages.upsert events WhatsApp
  * sends for a cart shared from a catalog and for a product card.
  */
 
 const BUYER = '15551234567@c.us';
 const BUSINESS = '15551234567@s.whatsapp.net';
 
-function makeSession(): WhatsappSessionNoWebCore {
-  return new WhatsappSessionNoWebCore({
+function makeSession(): WhatsappSessionBunWebCore {
+  return new WhatsappSessionBunWebCore({
     name: 'commerce-test',
     printQR: false,
     mediaManager: null as any,

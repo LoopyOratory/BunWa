@@ -4,15 +4,15 @@ import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import pg from 'pg';
-import { PostgresStorage } from '../core/engines/noweb/store/postgres/PostgresStorage';
-import { sessionSchemaName } from '../core/engines/noweb/store/postgres/session-schema';
-import { NowebStorageFactoryCore } from '../core/engines/noweb/store/NowebStorageFactoryCore';
+import { PostgresStorage } from '../core/engines/bunweb/store/postgres/PostgresStorage';
+import { sessionSchemaName } from '../core/engines/bunweb/store/postgres/session-schema';
+import { BunwebStorageFactoryCore } from '../core/engines/bunweb/store/BunwebStorageFactoryCore';
 import { LocalStoreCore } from '../core/storage/LocalStoreCore';
 import { verifyStorageAtBoot } from '../core/storage/storage-bootstrap';
 import { WhatsappConfigService } from '../config.service';
 import { startEmbeddedPostgres, type EmbeddedPostgres } from './conformance/embedded-postgres';
 
-// On Postgres every NOWEB session used to share one set of tables with no
+// On Postgres every BUNWEB session used to share one set of tables with no
 // session column, so a session's chat list showed every session's chats and a
 // deleted session's rows stayed behind. Each session now has its own schema.
 
@@ -43,8 +43,8 @@ describe('Postgres store isolation', () => {
   let embedded: EmbeddedPostgres;
   let url: string;
   const saved = {
-    driver: process.env.WAHA_DATABASE_DRIVER,
-    url: process.env.WAHA_DATABASE_URL,
+    driver: process.env.BUNWA_DATABASE_DRIVER,
+    url: process.env.BUNWA_DATABASE_URL,
   };
 
   beforeAll(async () => {
@@ -53,10 +53,10 @@ describe('Postgres store isolation', () => {
   });
 
   afterAll(async () => {
-    process.env.WAHA_DATABASE_DRIVER = saved.driver;
-    process.env.WAHA_DATABASE_URL = saved.url;
-    if (saved.driver === undefined) delete process.env.WAHA_DATABASE_DRIVER;
-    if (saved.url === undefined) delete process.env.WAHA_DATABASE_URL;
+    process.env.BUNWA_DATABASE_DRIVER = saved.driver;
+    process.env.BUNWA_DATABASE_URL = saved.url;
+    if (saved.driver === undefined) delete process.env.BUNWA_DATABASE_DRIVER;
+    if (saved.url === undefined) delete process.env.BUNWA_DATABASE_URL;
     await embedded.stop();
   });
 
@@ -106,8 +106,8 @@ describe('Postgres store isolation', () => {
   });
 
   it('deleting a session drops only its own schema', async () => {
-    process.env.WAHA_DATABASE_DRIVER = 'postgres';
-    process.env.WAHA_DATABASE_URL = url;
+    process.env.BUNWA_DATABASE_DRIVER = 'postgres';
+    process.env.BUNWA_DATABASE_URL = url;
 
     const gamma = new PostgresStorage(url, sessionSchemaName('gamma'));
     const delta = new PostgresStorage(url, sessionSchemaName('delta'));
@@ -116,7 +116,7 @@ describe('Postgres store isolation', () => {
     await gamma.close();
     await delta.close();
 
-    await new NowebStorageFactoryCore().deleteStorage(new LocalStoreCore(), 'gamma');
+    await new BunwebStorageFactoryCore().deleteStorage(new LocalStoreCore(), 'gamma');
 
     const after = await schemas();
     expect(after).not.toContain('bunwa_gamma');
@@ -135,9 +135,9 @@ describe('Postgres store isolation', () => {
   });
 
   it('boot verification passes and leaves no store tables in public', async () => {
-    process.env.WAHA_DATABASE_DRIVER = 'postgres';
-    process.env.WAHA_DATABASE_URL = url;
-    process.env.WAHA_STORAGE_DIR = mkdtempSync(join(tmpdir(), 'bunwa-isolation-storage-'));
+    process.env.BUNWA_DATABASE_DRIVER = 'postgres';
+    process.env.BUNWA_DATABASE_URL = url;
+    process.env.BUNWA_STORAGE_DIR = mkdtempSync(join(tmpdir(), 'bunwa-isolation-storage-'));
 
     await verifyStorageAtBoot(new WhatsappConfigService());
 
@@ -158,8 +158,8 @@ describe('Postgres store isolation', () => {
 
 describe('SQLite store removal', () => {
   it('deleting a session removes its store file and leaves the rest of the session directory', async () => {
-    const saved = process.env.WAHA_DATABASE_DRIVER;
-    process.env.WAHA_DATABASE_DRIVER = 'sqlite';
+    const saved = process.env.BUNWA_DATABASE_DRIVER;
+    process.env.BUNWA_DATABASE_DRIVER = 'sqlite';
     try {
       const store = new LocalStoreCore();
       const name = `sqlite-delete-${Date.now()}`;
@@ -170,14 +170,14 @@ describe('SQLite store removal', () => {
       writeFileSync(`${file}-wal`, 'x');
       writeFileSync(join(dir, 'creds.json'), '{}');
 
-      await new NowebStorageFactoryCore().deleteStorage(store, name);
+      await new BunwebStorageFactoryCore().deleteStorage(store, name);
 
       expect(existsSync(file)).toBe(false);
       expect(existsSync(`${file}-wal`)).toBe(false);
       expect(existsSync(join(dir, 'creds.json'))).toBe(true);
     } finally {
-      if (saved === undefined) delete process.env.WAHA_DATABASE_DRIVER;
-      else process.env.WAHA_DATABASE_DRIVER = saved;
+      if (saved === undefined) delete process.env.BUNWA_DATABASE_DRIVER;
+      else process.env.BUNWA_DATABASE_DRIVER = saved;
     }
   });
 });

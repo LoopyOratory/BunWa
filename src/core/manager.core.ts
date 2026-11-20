@@ -4,12 +4,13 @@ import { join } from 'path';
 import { EMPTY, merge, Observable, map, Subject } from 'rxjs';
 import { WhatsappConfigService } from '../config.service';
 import { WhatsappSession } from './session/session.abc';
-import { WhatsappSessionNoWebCore } from './engines/noweb/session.noweb.core';
-import { VERSION, WAHAVersion } from '../version';
+import { WhatsappSessionBunWebCore } from './engines/bunweb/session.bunweb.core';
+import { VERSION, BUNWAVersion } from '../version';
 import {
-  WAHAEngine,
-  WAHAEvents,
-  WAHASessionStatus,
+  BUNWAEngine,
+  BUNWAEvents,
+  BUNWASessionStatus,
+  normalizeBunwaEngine,
 } from '../structures/enums.dto';
 import {
   SessionConfig,
@@ -25,7 +26,7 @@ import {
 } from './exceptions';
 import { LocalStoreCore } from './storage/LocalStoreCore';
 import { SessionIndexFile } from './session/session-index-file';
-import { NowebStorageFactoryCore } from './engines/noweb/store/NowebStorageFactoryCore';
+import { BunwebStorageFactoryCore } from './engines/bunweb/store/BunwebStorageFactoryCore';
 import { WebhookDelivery } from './webhook-delivery';
 import { AuditService, AuditAction } from './audit/audit.service';
 import { buildMediaStorage } from './media/MediaStorageFactory';
@@ -34,7 +35,7 @@ import AsyncLock from 'async-lock';
 import pino from 'pino';
 import { buildLidResolver } from './webhook-lid-resolver';
 
-// Lazily computed (not a top-level const) so WAHA_LOCAL_STORE_BASE_DIR can be
+// Lazily computed (not a top-level const) so BUNWA_LOCAL_STORE_BASE_DIR can be
 // overridden — e.g. by tests, via bunfig.toml's [test] preload — to point at
 // an isolated temp directory instead of the real session storage location.
 // A test suite that resolves SessionManager directly (bypassing
@@ -43,8 +44,8 @@ import { buildLidResolver } from './webhook-lid-resolver';
 // upsert()/delete() call; without this override that clobbers real,
 // already-paired sessions' config every time `bun test` runs locally.
 function getSessionsDir(): string {
-  const base = process.env.WAHA_LOCAL_STORE_BASE_DIR || join(process.cwd(), '.sessions');
-  return join(base, 'noweb');
+  const base = process.env.BUNWA_LOCAL_STORE_BASE_DIR || join(process.cwd(), '.sessions');
+  return join(base, 'bunweb');
 }
 function getSessionsIndexPath(): string {
   return join(getSessionsDir(), '.sessions-index.json');
@@ -64,7 +65,7 @@ export class SessionManager {
   private sessionConfigs: Map<string, SessionConfig> = new Map();
   private lock: any;
   private logger: any;
-  private events2: DefaultMap<WAHAEvents, SwitchObservable<any>>;
+  private events2: DefaultMap<BUNWAEvents, SwitchObservable<any>>;
 
   private webhook: WebhookDelivery | null = null;
   private subscriptions: Map<string, Array<{ unsubscribe: () => void }>> = new Map();
@@ -96,7 +97,7 @@ export class SessionManager {
       maxExecutionTime: 30_000,
     });
     this.logger = pino({ name: 'SessionManager' });
-    this.events2 = new DefaultMap<WAHAEvents, SwitchObservable<any>>(
+    this.events2 = new DefaultMap<BUNWAEvents, SwitchObservable<any>>(
       (event) => new SwitchObservable<any>(),
     );
     // Always initialize webhook delivery: per-session webhooks carry their own
@@ -119,23 +120,23 @@ export class SessionManager {
     return this.lock.acquire(name, fn);
   }
 
-  getEngine(engine: WAHAEngine): new (...args: any[]) => WhatsappSession {
-    if (engine === WAHAEngine.WEBJS) {
+  getEngine(engine: BUNWAEngine): new (...args: any[]) => WhatsappSession {
+    if (engine === BUNWAEngine.WEBJS) {
       // Dynamic import so we don't load puppeteer/chrome at boot
       const { WhatsappSessionWebJs } = require('./engines/webjs/session.webjs.core');
       return WhatsappSessionWebJs;
     }
-    if (VERSION.tier === WAHAVersion.PLUS) {
+    if (VERSION.tier === BUNWAVersion.PLUS) {
       // Dynamic import so the free/CORE tier never pulls in src/plus at all
-      const { WhatsappSessionNoWebPlus } = require('../plus/session.noweb.plus');
-      return WhatsappSessionNoWebPlus;
+      const { WhatsappSessionBunWebPlus } = require('../plus/session.bunweb.plus');
+      return WhatsappSessionBunWebPlus;
     }
-    return WhatsappSessionNoWebCore as any;
+    return WhatsappSessionBunWebCore as any;
   }
 
   get EngineClass(): new (...args: any[]) => WhatsappSession {
-    // Default to NOWEB, session config overrides in start()
-    return this.getEngine(WAHAEngine.NOWEB);
+    // Default to BUNWEB, session config overrides in start()
+    return this.getEngine(BUNWAEngine.BUNWEB);
   }
 
   /** The running session object, or undefined when it is stopped or unknown. */
@@ -143,7 +144,7 @@ export class SessionManager {
     return this.sessions.get(name) ?? undefined;
   }
 
-  getSessionEvent(session: string, event: WAHAEvents): Observable<any> {
+  getSessionEvent(session: string, event: BUNWAEvents): Observable<any> {
     // Use per-session event observable if session is specified
     if (session && session !== '*') {
       try {
@@ -165,7 +166,7 @@ export class SessionManager {
     return observable;
   }
 
-  getSessionEvents(session: string, events: WAHAEvents[]): Observable<any> {
+  getSessionEvents(session: string, events: BUNWAEvents[]): Observable<any> {
     // Tag each event with its type/session before merging: the underlying
     // per-event observables (WAMessage, WAMessageAck, WAMessageReaction,
     // session-status payloads, etc.) carry no self-describing "event" field,
@@ -185,7 +186,7 @@ export class SessionManager {
    * stream for a single event type. Used to (re)populate the wildcard
    * SwitchObservable in `events2`.
    */
-  private computeWildcardMerge(event: WAHAEvents): Observable<any> {
+  private computeWildcardMerge(event: BUNWAEvents): Observable<any> {
     const sessionObservables: Observable<any>[] = [];
     for (const [, sessionObj] of this.sessions) {
       if (!sessionObj) continue;
@@ -204,7 +205,7 @@ export class SessionManager {
    * subscribed to this event via the wildcard path (avoids creating
    * unnecessary SwitchObservable instances).
    */
-  private refreshWildcardEvent(event: WAHAEvents): void {
+  private refreshWildcardEvent(event: BUNWAEvents): void {
     if (!this.events2.has(event)) return;
     this.events2.get(event).switch(this.computeWildcardMerge(event));
   }
@@ -228,12 +229,12 @@ export class SessionManager {
 
   private async _start(name: string): Promise<any> {
     const sessionConfig = this.sessionConfigs.get(name) || {};
-    // Determine engine type from config, default to NOWEB
-    const engineRaw = sessionConfig?.engine || 'NOWEB';
-    const engine = engineRaw.toUpperCase() === 'WEBJS' ? WAHAEngine.WEBJS : WAHAEngine.NOWEB;
+    // Determine engine type from config, default to BUNWEB
+    const engineRaw = sessionConfig?.engine || 'BUNWEB';
+    const engine = engineRaw.toUpperCase() === 'WEBJS' ? BUNWAEngine.WEBJS : BUNWAEngine.BUNWEB;
 
     // Validate Chrome availability for webjs
-    if (engine === WAHAEngine.WEBJS) {
+    if (engine === BUNWAEngine.WEBJS) {
       const chromePath = getBrowserExecutablePath();
       if (!existsSync(chromePath)) {
         throw new BadRequestException(
@@ -257,7 +258,7 @@ export class SessionManager {
     } catch (err: any) {
       logger.error(
         { err },
-        `Failed to initialize media storage (WAHA_STORAGE_TYPE=${process.env.WAHA_STORAGE_TYPE || 'local'}); ` +
+        `Failed to initialize media storage (BUNWA_STORAGE_TYPE=${process.env.BUNWA_STORAGE_TYPE || 'local'}); ` +
           'downloaded media will not be persisted for this session (mimetype/filename metadata only)',
       );
       mediaManager = new MediaManager(null, this.config.mimetypes, logger);
@@ -278,7 +279,7 @@ export class SessionManager {
     });
 
     this.sessions.set(name, session);
-    this.markStatus(name, WAHASessionStatus.STARTING);
+    this.markStatus(name, BUNWASessionStatus.STARTING);
     this.refreshAllWildcardEvents();
     this.audit.logInfo(AuditAction.SESSION_STARTED, { sessionName: name });
 
@@ -286,18 +287,18 @@ export class SessionManager {
     const sessionSubs: Array<{ unsubscribe: () => void }> = [];
 
     // Track status transitions for connect/disconnect/QR audit events
-    let previousStatus: WAHASessionStatus | null = null;
+    let previousStatus: BUNWASessionStatus | null = null;
     try {
-      const statusSub = session.getEventObservable(WAHAEvents.SESSION_STATUS).subscribe({
+      const statusSub = session.getEventObservable(BUNWAEvents.SESSION_STATUS).subscribe({
         next: (data: any) => {
-          const status = data?.status as WAHASessionStatus | undefined;
+          const status = data?.status as BUNWASessionStatus | undefined;
           if (!status) return;
           this.markStatus(name, status);
-          if (status === WAHASessionStatus.SCAN_QR_CODE) {
+          if (status === BUNWASessionStatus.SCAN_QR_CODE) {
             this.audit.logInfo(AuditAction.SESSION_QR_GENERATED, { sessionName: name });
-          } else if (status === WAHASessionStatus.WORKING) {
+          } else if (status === BUNWASessionStatus.WORKING) {
             this.audit.logInfo(AuditAction.SESSION_CONNECTED, { sessionName: name });
-          } else if (previousStatus === WAHASessionStatus.WORKING) {
+          } else if (previousStatus === BUNWASessionStatus.WORKING) {
             this.audit.logWarn(AuditAction.SESSION_DISCONNECTED, { sessionName: name });
           }
           previousStatus = status;
@@ -336,7 +337,7 @@ export class SessionManager {
 
     return {
       name,
-      status: WAHASessionStatus.STARTING,
+      status: BUNWASessionStatus.STARTING,
       config: sessionConfig,
     };
   }
@@ -350,7 +351,7 @@ export class SessionManager {
     if (session) {
       await (session as any).stop();
       this.sessions.set(name, null as any);
-      this.markStatus(name, WAHASessionStatus.STOPPED);
+      this.markStatus(name, BUNWASessionStatus.STOPPED);
       this.refreshAllWildcardEvents();
       if (!silent) {
         this.logger.info(`Session ${name} stopped`);
@@ -379,7 +380,7 @@ export class SessionManager {
     const entry = this.statusSince.get(name);
     if (!entry) return null;
     const session = this.sessions.get(name);
-    const current = (session as any)?.status || WAHASessionStatus.STOPPED;
+    const current = (session as any)?.status || BUNWASessionStatus.STOPPED;
     return entry.status === current ? entry.at : null;
   }
 
@@ -399,8 +400,8 @@ export class SessionManager {
       throw new NotFoundException(`Session ${name} not found`);
     }
     const session = this.sessions.get(name);
-    const status = (session as any)?.status || WAHASessionStatus.STOPPED;
-    if (status !== WAHASessionStatus.WORKING) {
+    const status = (session as any)?.status || BUNWASessionStatus.STOPPED;
+    if (status !== BUNWASessionStatus.WORKING) {
       throw new UnprocessableEntityException(
         `Session ${name} is not connected (status: ${status}). Start the session and try again.`,
       );
@@ -417,7 +418,7 @@ export class SessionManager {
     for (const [name, session] of this.sessions) {
       sessions.push({
         name,
-        status: session ? (session as any).status || WAHASessionStatus.STOPPED : WAHASessionStatus.STOPPED,
+        status: session ? (session as any).status || BUNWASessionStatus.STOPPED : BUNWASessionStatus.STOPPED,
         config: this.sessionConfigs.get(name) || {},
         presence: session ? (session as any).presence || null : null,
         timestamps: {
@@ -469,7 +470,7 @@ export class SessionManager {
 
   private sessionIndexFile?: SessionIndexFile;
 
-  /** Resolved per call so a test-time WAHA_LOCAL_STORE_BASE_DIR override is honoured. */
+  /** Resolved per call so a test-time BUNWA_LOCAL_STORE_BASE_DIR override is honoured. */
   private getSessionIndexFile(): SessionIndexFile {
     const path = getSessionsIndexPath();
     if (this.sessionIndexFile?.path !== path) {
@@ -643,7 +644,7 @@ export class SessionManager {
   private async deleteSessionStore(name: string): Promise<void> {
     try {
       const store = new LocalStoreCore();
-      await new NowebStorageFactoryCore().deleteStorage(store, name);
+      await new BunwebStorageFactoryCore().deleteStorage(store, name);
     } catch (err: any) {
       this.logger.error(
         { err },
@@ -683,9 +684,9 @@ export class SessionManager {
     if (!this.webhook) return;
 
     const globalEvents = [
-      WAHAEvents.SESSION_STATUS,
-      WAHAEvents.MESSAGE,
-      WAHAEvents.MESSAGE_ANY,
+      BUNWAEvents.SESSION_STATUS,
+      BUNWAEvents.MESSAGE,
+      BUNWAEvents.MESSAGE_ANY,
     ];
     for (const event of globalEvents) {
       try {
@@ -738,7 +739,7 @@ export class SessionManager {
         filters: wh.filters,
       };
 
-      const allEvents = Object.values(WAHAEvents);
+      const allEvents = Object.values(BUNWAEvents);
       const webhookEvents = wh.events.includes('*')
         ? allEvents
         : allEvents.filter(e => wh.events.includes(e));

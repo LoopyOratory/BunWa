@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { describe, it, expect } from 'bun:test';
-import { WhatsappSessionNoWebCore } from '../core/engines/noweb/session.noweb.core';
+import { WhatsappSessionBunWebCore } from '../core/engines/bunweb/session.bunweb.core';
 
 const CONTACT = '15550001111@c.us';
 const LID = '111111111111111@lid';
@@ -21,7 +21,7 @@ function createSession(
   impl?: (jid: string, type: string, timeoutMs?: number) => Promise<string | undefined>,
 ) {
   const calls: LookupCall[] = [];
-  const session: any = Object.create(WhatsappSessionNoWebCore.prototype);
+  const session: any = Object.create(WhatsappSessionBunWebCore.prototype);
   session.sock = {
     profilePictureUrl: async (jid: string, type: string, timeoutMs?: number) => {
       calls.push({ jid, type, timeoutMs });

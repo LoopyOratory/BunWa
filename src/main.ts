@@ -1,3 +1,7 @@
+// Must be the first import: every module below reads BUNWA_* (with the
+// legacy WAHA_* fallback) from process.env at load time.
+import './common/env-alias';
+
 import { Hono } from 'hono';
 import { logger } from 'hono/logger';
 import { cors } from 'hono/cors';
@@ -90,8 +94,8 @@ async function serveStaticFile(filePath: string, ifNoneMatch: string | null): Pr
 }
 
 const log = pino({
-  level: process.env.WAHA_LOG_LEVEL || 'info',
-  transport: process.env.WAHA_LOG_LEVEL === 'debug' ? {
+  level: process.env.BUNWA_LOG_LEVEL || 'info',
+  transport: process.env.BUNWA_LOG_LEVEL === 'debug' ? {
     target: 'pino-pretty',
     options: { colorize: true },
   } : undefined,
@@ -112,7 +116,7 @@ async function bootstrap() {
 
   // Sealed keys (agent sk_agent_*, MCP keys, external-server headers) are only
   // recoverable while the encryption master secret stays stable. Warn while it
-  // is derived from the API key: rotating WAHA_API_KEY/BUNWA_API_KEY then makes
+  // is derived from the API key: rotating BUNWA_API_KEY/BUNWA_API_KEY then makes
   // every sealed value unreadable and every reveal fails permanently.
   if (usingEncryptionKeyFallback()) {
     log.warn(
@@ -141,9 +145,9 @@ async function bootstrap() {
 
   // Warn if running without API key in fail-closed mode
   const apiKey = config.getApiKey();
-  const allowNoAuth = process.env.WAHA_ALLOW_NO_AUTH !== 'false';
+  const allowNoAuth = process.env.BUNWA_ALLOW_NO_AUTH !== 'false';
   if (!apiKey && !allowNoAuth) {
-    log.warn('WAHA_ALLOW_NO_AUTH=false but no WAHA_API_KEY is set — all API requests will be rejected. Set WAHA_API_KEY or remove WAHA_ALLOW_NO_AUTH.');
+    log.warn('BUNWA_ALLOW_NO_AUTH=false but no BUNWA_API_KEY is set — all API requests will be rejected. Set BUNWA_API_KEY or remove BUNWA_ALLOW_NO_AUTH.');
   }
 
   // Restore sessions from disk and start predefined ones
@@ -154,10 +158,10 @@ async function bootstrap() {
 
   app.use('*', logger());
 
-  // CORS: configurable origin via WAHA_CORS_ORIGIN env var
+  // CORS: configurable origin via BUNWA_CORS_ORIGIN env var
   // When no origin is set, use '*' without credentials (safe default)
   // When origin is set, allow credentials for that specific origin
-  const corsOrigin = process.env.WAHA_CORS_ORIGIN;
+  const corsOrigin = process.env.BUNWA_CORS_ORIGIN;
   const hasExplicitOrigin = !!corsOrigin && corsOrigin !== '*';
   app.use('*', cors({
     origin: hasExplicitOrigin
@@ -232,12 +236,12 @@ async function bootstrap() {
   } else if (apiKey || !allowNoAuth) {
     // The API needs credentials but no dashboard login is set: say so, instead
     // of accepting any login and failing every request after it.
-    log.warn('No dashboard login configured: set WAHA_DASHBOARD_USERNAME and WAHA_DASHBOARD_PASSWORD to use the dashboard.');
+    log.warn('No dashboard login configured: set BUNWA_DASHBOARD_USERNAME and BUNWA_DASHBOARD_PASSWORD to use the dashboard.');
     app.get('/api/dashboard/login', (c) =>
       c.json(
         {
           ok: false,
-          message: 'Dashboard login is not configured on the server. Set WAHA_DASHBOARD_USERNAME and WAHA_DASHBOARD_PASSWORD, then restart.',
+          message: 'Dashboard login is not configured on the server. Set BUNWA_DASHBOARD_USERNAME and BUNWA_DASHBOARD_PASSWORD, then restart.',
         },
         401,
       ),
@@ -338,7 +342,7 @@ async function bootstrap() {
     log.info('MCP server available at POST /mcp');
     if (!apiKey && allowNoAuth) {
       log.warn(
-        'MCP is reachable without authentication (no WAHA_API_KEY set). Set WAHA_API_KEY, WAHA_ALLOW_NO_AUTH=false, or MCP_ENABLED=false.',
+        'MCP is reachable without authentication (no BUNWA_API_KEY set). Set BUNWA_API_KEY, BUNWA_ALLOW_NO_AUTH=false, or MCP_ENABLED=false.',
       );
     }
   } else {
@@ -379,7 +383,7 @@ async function bootstrap() {
         const auth = await authenticateWebSocket(req, url, {
           apiKey: config.getApiKey(),
           dashboardCredentials: container.resolve(DashboardConfigServiceCore).credentials,
-          allowNoAuth: process.env.WAHA_ALLOW_NO_AUTH !== 'false',
+          allowNoAuth: process.env.BUNWA_ALLOW_NO_AUTH !== 'false',
           manager: sessionManager,
           tickets: wsTickets,
         });
@@ -432,6 +436,6 @@ async function bootstrap() {
 }
 
 bootstrap().catch((error) => {
-  log.error(error, `Failed to start WAHA: ${error}`);
+  log.error(error, `Failed to start BunWa: ${error}`);
   process.exit(1);
 });

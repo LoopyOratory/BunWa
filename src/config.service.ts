@@ -34,7 +34,7 @@ export class WhatsappConfigService {
   }
 
   get baseUrl(): string {
-    let baseUrl = process.env.WAHA_BASE_URL || '';
+    let baseUrl = process.env.BUNWA_BASE_URL || '';
     if (!baseUrl) {
       baseUrl = `${this.schema}://${this.hostname}:${this.port}`;
     }
@@ -42,16 +42,16 @@ export class WhatsappConfigService {
   }
 
   get workerId(): string {
-    return process.env.WAHA_WORKER_ID || '';
+    return process.env.BUNWA_WORKER_ID || '';
   }
 
   get shouldRestartWorkerSessions(): boolean {
-    return parseBool(process.env.WAHA_WORKER_RESTART_SESSIONS || 'true');
+    return parseBool(process.env.BUNWA_WORKER_RESTART_SESSIONS || 'true');
   }
 
   get autoStartDelaySeconds(): number {
     try {
-      return parseInt(process.env.WAHA_AUTO_START_DELAY_SECONDS || '0', 10);
+      return parseInt(process.env.BUNWA_AUTO_START_DELAY_SECONDS || '0', 10);
     } catch {
       return 0;
     }
@@ -105,7 +105,7 @@ export class WhatsappConfigService {
   }
 
   getWebhookUrl(): string | undefined {
-    return process.env.WAHA_WEBHOOK_URL;
+    return process.env.BUNWA_WEBHOOK_URL;
   }
 
   getSessionMongoUrl(): string | undefined {
@@ -114,23 +114,23 @@ export class WhatsappConfigService {
 
   getSessionPostgresUrl(): string | undefined {
     const explicit =
-      process.env.WHATSAPP_SESSIONS_POSTGRESQL_URL || process.env.WAHA_DATABASE_URL;
+      process.env.WHATSAPP_SESSIONS_POSTGRESQL_URL || process.env.BUNWA_DATABASE_URL;
     if (explicit) {
       return explicit;
     }
     // Fall back to the dashboard's flat database fields when the
     // Infrastructure page has Postgres selected: configs saved before the
     // canonical switches were written still connect. A bare
-    // WAHA_DATABASE_DRIVER=postgres without dashboard fields keeps failing
+    // BUNWA_DATABASE_DRIVER=postgres without dashboard fields keeps failing
     // loudly in the factory instead of silently dialling localhost.
     if (this.getDashboardDatabaseType() === 'postgres') {
       return buildPostgresUrl({
-        host: process.env.WAHA_DB_HOST,
-        port: process.env.WAHA_DB_PORT,
-        username: process.env.WAHA_DB_USERNAME,
-        password: process.env.WAHA_DB_PASSWORD,
-        name: process.env.WAHA_DB_NAME,
-        ssl: process.env.WAHA_DB_SSL === 'true',
+        host: process.env.BUNWA_DB_HOST,
+        port: process.env.BUNWA_DB_PORT,
+        username: process.env.BUNWA_DB_USERNAME,
+        password: process.env.BUNWA_DB_PASSWORD,
+        name: process.env.BUNWA_DB_NAME,
+        ssl: process.env.BUNWA_DB_SSL === 'true',
       });
     }
     return undefined;
@@ -139,13 +139,13 @@ export class WhatsappConfigService {
   /**
    * Resolve the database driver.
    *
-   * `WAHA_DATABASE_DRIVER` wins over the dashboard's `WAHA_DB_TYPE` fallback.
+   * `BUNWA_DATABASE_DRIVER` wins over the dashboard's `BUNWA_DB_TYPE` fallback.
    * Only sqlite, postgres and postgresql are accepted; any other value is a
    * startup error so a typo can never silently leave the app on SQLite.
    * Unset means the sqlite default.
    */
   getDatabaseDriver(): DatabaseDriver {
-    const raw = (process.env.WAHA_DATABASE_DRIVER || '').trim();
+    const raw = (process.env.BUNWA_DATABASE_DRIVER || '').trim();
     if (raw) {
       const normalized = raw.toLowerCase();
       if (normalized === 'sqlite') {
@@ -156,25 +156,25 @@ export class WhatsappConfigService {
       }
       if (normalized === 'mongo' || normalized === 'mongodb') {
         throw new Error(
-          `Unsupported WAHA_DATABASE_DRIVER value '${raw}': MongoDB is not implemented. ` +
+          `Unsupported BUNWA_DATABASE_DRIVER value '${raw}': MongoDB is not implemented. ` +
             `Accepted values: ${ACCEPTED_DATABASE_DRIVERS.join(', ')}. ` +
             'Refusing to fall back to sqlite.',
         );
       }
-      throw unknownDriverError('WAHA_DATABASE_DRIVER', raw);
+      throw unknownDriverError('BUNWA_DATABASE_DRIVER', raw);
     }
-    // The Infrastructure page stores its selection as WAHA_DB_TYPE; honour it
+    // The Infrastructure page stores its selection as BUNWA_DB_TYPE; honour it
     // so a dashboard-configured Postgres actually drives the runtime even
     // before any canonical driver key exists.
     return this.getDashboardDatabaseType() ?? 'sqlite';
   }
 
   /**
-   * Normalise `WAHA_DB_TYPE` (the Infrastructure page's field). Returns
+   * Normalise `BUNWA_DB_TYPE` (the Infrastructure page's field). Returns
    * undefined when unset, throws for values the runtime cannot serve.
    */
   private getDashboardDatabaseType(): DatabaseDriver | undefined {
-    const raw = (process.env.WAHA_DB_TYPE || '').trim();
+    const raw = (process.env.BUNWA_DB_TYPE || '').trim();
     if (!raw) {
       return undefined;
     }
@@ -187,16 +187,16 @@ export class WhatsappConfigService {
     }
     if (normalized === 'mongo' || normalized === 'mongodb') {
       throw new Error(
-        `Unsupported WAHA_DB_TYPE value '${raw}': MongoDB is not implemented. ` +
+        `Unsupported BUNWA_DB_TYPE value '${raw}': MongoDB is not implemented. ` +
           `Accepted values: ${ACCEPTED_DATABASE_DRIVERS.join(', ')}. ` +
           'Refusing to fall back to sqlite.',
       );
     }
-    throw unknownDriverError('WAHA_DB_TYPE', raw);
+    throw unknownDriverError('BUNWA_DB_TYPE', raw);
   }
 
   getSqlitePath(): string {
-    return process.env.WAHA_SQLITE_PATH || '.sessions/waha.db';
+    return process.env.BUNWA_SQLITE_PATH || '.sessions/waha.db';
   }
 
   get(name: string, defaultValue: any = undefined): any {
@@ -204,7 +204,7 @@ export class WhatsappConfigService {
   }
 
   getApiKey(): string | undefined {
-    return process.env.WAHA_API_KEY;
+    return process.env.BUNWA_API_KEY;
   }
 
   getExcludedPaths(): string[] {
@@ -233,14 +233,14 @@ export class WhatsappConfigService {
   }
 
   get debugModeEnabled(): boolean {
-    return parseBool(process.env.WAHA_DEBUG_MODE || 'false');
+    return parseBool(process.env.BUNWA_DEBUG_MODE || 'false');
   }
 
   getIgnoreChatsConfig(): IgnoreJidConfig {
-    const status = parseBool(process.env.WAHA_SESSION_CONFIG_IGNORE_STATUS || 'false');
-    const groups = parseBool(process.env.WAHA_SESSION_CONFIG_IGNORE_GROUPS || 'false');
-    const channels = parseBool(process.env.WAHA_SESSION_CONFIG_IGNORE_CHANNELS || 'false');
-    const broadcast = parseBool(process.env.WAHA_SESSION_CONFIG_IGNORE_BROADCAST || 'false');
+    const status = parseBool(process.env.BUNWA_SESSION_CONFIG_IGNORE_STATUS || 'false');
+    const groups = parseBool(process.env.BUNWA_SESSION_CONFIG_IGNORE_GROUPS || 'false');
+    const channels = parseBool(process.env.BUNWA_SESSION_CONFIG_IGNORE_CHANNELS || 'false');
+    const broadcast = parseBool(process.env.BUNWA_SESSION_CONFIG_IGNORE_BROADCAST || 'false');
     return { status, groups, channels, broadcast };
   }
 }

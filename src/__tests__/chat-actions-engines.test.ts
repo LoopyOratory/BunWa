@@ -3,8 +3,8 @@ import { describe, it, expect } from 'bun:test';
 import { EventEmitter } from 'node:events';
 import pino from 'pino';
 import { WhatsappSessionWebJs } from '../core/engines/webjs/session.webjs.core';
-import { WhatsappSessionNoWebCore } from '../core/engines/noweb/session.noweb.core';
-import { WAHAEvents, WAHASessionStatus } from '../structures/enums.dto';
+import { WhatsappSessionBunWebCore } from '../core/engines/bunweb/session.bunweb.core';
+import { BUNWAEvents, BUNWASessionStatus } from '../structures/enums.dto';
 import { CHANNEL_CATEGORIES, CHANNEL_VIEWS, channelCountries } from '../core/channels/directory';
 
 const silent = { child: () => ({ info() {}, debug() {}, warn() {}, error() {}, trace() {} }) } as any;
@@ -31,7 +31,7 @@ function webjsSession() {
     };
   }
   (session as any).client = client;
-  session.status = WAHASessionStatus.WORKING;
+  session.status = BUNWASessionStatus.WORKING;
   return { session, client, calls };
 }
 
@@ -41,8 +41,8 @@ describe('WEBJS live messages', () => {
     (session as any).setupEventHandlers();
     const message: any[] = [];
     const any: any[] = [];
-    session.getEventObservable(WAHAEvents.MESSAGE).subscribe((m: any) => message.push(m));
-    session.getEventObservable(WAHAEvents.MESSAGE_ANY).subscribe((m: any) => any.push(m));
+    session.getEventObservable(BUNWAEvents.MESSAGE).subscribe((m: any) => message.push(m));
+    session.getEventObservable(BUNWAEvents.MESSAGE_ANY).subscribe((m: any) => any.push(m));
     client.emit('message', {
       id: { _serialized: 'false_233553919737@c.us_ABC', id: 'ABC' },
       from: '233553919737@c.us',
@@ -78,9 +78,9 @@ describe('chat mute, unmute, archive and mark unread', () => {
     expect(calls.slice(2).map((c) => c[0])).toEqual(['unmuteChat', 'archiveChat', 'unarchiveChat', 'markChatUnread']);
   });
 
-  it('NOWEB sends the mute end in ms, -1 for always, null to unmute', async () => {
-    const session = new WhatsappSessionNoWebCore({
-      name: 'noweb-actions',
+  it('BUNWEB sends the mute end in ms, -1 for always, null to unmute', async () => {
+    const session = new WhatsappSessionBunWebCore({
+      name: 'bunweb-actions',
       printQR: false,
       loggerBuilder: pino({ level: 'silent' }),
       sessionStore: {} as any,

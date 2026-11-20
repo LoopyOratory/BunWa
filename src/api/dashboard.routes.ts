@@ -1,3 +1,4 @@
+import { normalizeBunwaEngine } from '../structures/enums.dto';
 import { Hono } from 'hono';
 import { container } from 'tsyringe';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
@@ -44,7 +45,7 @@ export function createDashboardRouter(): Hono {
       ? container.resolve(SendingPolicyService)
       : null;
 
-    const defaultEngine = String(VERSION.engine || 'NOWEB').toUpperCase();
+    const defaultEngine = String(normalizeBunwaEngine(VERSION.engine));
     const listed = await manager.getSessions(true);
     const sessions: DashboardSessionInput[] = listed
       .filter((info) => !sessionFilter || info.name === sessionFilter)
@@ -139,7 +140,7 @@ export function createDashboardRouter(): Hono {
       return {
         name: info.name,
         status: String(info.status),
-        engine: String((info.config as any)?.engine || VERSION.engine || 'NOWEB').toUpperCase(),
+        engine: String(normalizeBunwaEngine((info.config as any)?.engine || VERSION.engine)),
         limits,
       };
     });

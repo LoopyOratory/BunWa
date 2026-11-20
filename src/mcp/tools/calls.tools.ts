@@ -2,7 +2,7 @@
  * Call MCP tools for BunWa.
  *
  * WEBJS only: WhatsApp Web's VoIP stack places the call and injects audio.
- * NOWEB sessions answer with a clear "not available" error.
+ * BUNWEB sessions answer with a clear "not available" error.
  */
 import { z } from 'zod';
 import type { SessionManager } from '../../core/manager.core';

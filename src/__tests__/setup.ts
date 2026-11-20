@@ -1,3 +1,4 @@
+import '../common/env-alias';
 // Bun test preload (see bunfig.toml [test] preload). Runs before any test
 // file's imports resolve, so env vars set here take effect on module-level
 // consts computed from them (e.g. manager.core.ts's getSessionsDir()).
@@ -12,6 +13,6 @@ import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-if (!process.env.WAHA_LOCAL_STORE_BASE_DIR) {
-  process.env.WAHA_LOCAL_STORE_BASE_DIR = mkdtempSync(join(tmpdir(), 'bunwa-test-sessions-'));
+if (!process.env.BUNWA_LOCAL_STORE_BASE_DIR) {
+  process.env.BUNWA_LOCAL_STORE_BASE_DIR = mkdtempSync(join(tmpdir(), 'bunwa-test-sessions-'));
 }

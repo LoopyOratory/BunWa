@@ -92,7 +92,7 @@ export const FILTER_FIELDS: Record<string, FieldDefinition[]> = {
       kind: 'id',
       operators: ID_OPERATORS,
       // In a group, `from` is the group: the person is `author` (WEBJS) or
-      // `participant` (NOWEB).
+      // `participant` (BUNWEB).
       resolve: data => str(data.author) ?? str(data.participant) ?? str(data.from),
     },
     {

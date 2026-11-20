@@ -3,14 +3,14 @@ import { LocalStore } from './LocalStore';
 import { existsSync, mkdirSync } from 'fs';
 import { join, resolve } from 'path';
 
-const BASE_DIR = process.env.WAHA_LOCAL_STORE_BASE_DIR || '.sessions';
+const BASE_DIR = process.env.BUNWA_LOCAL_STORE_BASE_DIR || '.sessions';
 
 export class LocalStoreCore extends LocalStore {
   private baseDir: string;
   private engineDir: string;
   private sessionDir: string;
 
-  constructor(namespace: string = 'noweb') {
+  constructor(namespace: string = 'bunweb') {
     super();
     this.baseDir = resolve(process.cwd(), BASE_DIR);
     this.engineDir = join(this.baseDir, namespace);
@@ -36,7 +36,7 @@ export class LocalStoreCore extends LocalStore {
     // Nothing to close
   }
 
-  getWAHADatabase(): any {
+  getBunwaDatabase(): any {
     return null;
   }
 

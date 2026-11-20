@@ -87,7 +87,7 @@ export interface WsAuthDeps {
  * per-session `sk_ses_` key (with the `read` action) in the `x-api-key` header
  * or query parameter; dashboard credentials as a Basic header or the legacy
  * `user`/`pass` query parameters. With none of these, the connection is
- * allowed only when no API key is configured and `WAHA_ALLOW_NO_AUTH` is not
+ * allowed only when no API key is configured and `BUNWA_ALLOW_NO_AUTH` is not
  * `false` — the same keyless dev mode REST honours. A credential that is
  * present but wrong is always refused rather than falling through.
  */

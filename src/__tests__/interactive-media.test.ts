@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { describe, it, expect } from 'bun:test';
-import { normalizeInteractiveMedia } from '../plus/session.noweb.plus';
+import { normalizeInteractiveMedia } from '../plus/session.bunweb.plus';
 
 /**
  * A header image on an interactive message can be a plain string (a URL, or a

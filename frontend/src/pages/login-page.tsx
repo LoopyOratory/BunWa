@@ -10,7 +10,7 @@ import { useAuth } from "@/lib/auth"
 
 // Short, verifiable capability lines (README: dual engine, HMAC webhooks, MCP).
 const FACTS: { icon: LucideIcon; text: string }[] = [
-  { icon: Zap, text: "Two engines: NOWEB (Baileys) and WEBJS (Chrome)" },
+  { icon: Zap, text: "Two engines: BUNWEB (Baileys) and WEBJS (Chrome)" },
   { icon: Webhook, text: "Webhooks signed with HMAC" },
   { icon: Braces, text: "MCP server at POST /mcp" },
 ]

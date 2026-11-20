@@ -15,8 +15,19 @@ const AuthContext = createContext<AuthState>({
   logout: () => {},
 })
 
-const STORAGE_KEY = "waha_dashboard_auth"
-const USERNAME_KEY = "waha_dashboard_user"
+const STORAGE_KEY = "bunwa_dashboard_auth"
+const USERNAME_KEY = "bunwa_dashboard_user"
+
+// One-time migration: admins signed in before the WAHA->BUNWA rename keep
+// their session instead of being logged out by a key name change.
+for (const [next, old] of [
+  [STORAGE_KEY, "waha_dashboard_auth"],
+  [USERNAME_KEY, "waha_dashboard_user"],
+] as const) {
+  if (!localStorage.getItem(next) && localStorage.getItem(old)) {
+    localStorage.setItem(next, localStorage.getItem(old) as string)
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {

@@ -1,10 +1,10 @@
 /**
  * Build a Postgres connection URL from the dashboard's flat database fields
- * (`WAHA_DB_HOST` / `WAHA_DB_PORT` / `WAHA_DB_USERNAME` / `WAHA_DB_PASSWORD` /
- * `WAHA_DB_NAME` / `WAHA_DB_SSL`).
+ * (`BUNWA_DB_HOST` / `BUNWA_DB_PORT` / `BUNWA_DB_USERNAME` / `BUNWA_DB_PASSWORD` /
+ * `BUNWA_DB_NAME` / `BUNWA_DB_SSL`).
  *
  * Shared by:
- * - the infra config endpoint, which writes the canonical `WAHA_DATABASE_URL`
+ * - the infra config endpoint, which writes the canonical `BUNWA_DATABASE_URL`
  *   when the dashboard selects PostgreSQL, and
  * - `WhatsappConfigService.getSessionPostgresUrl()`, which falls back to these
  *   fields when no explicit URL is configured.

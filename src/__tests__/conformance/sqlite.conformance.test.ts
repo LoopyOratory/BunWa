@@ -3,7 +3,7 @@ import { Database } from 'bun:sqlite';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { Sqlite3Storage } from '../../core/engines/noweb/store/sqlite3/Sqlite3Storage';
+import { Sqlite3Storage } from '../../core/engines/bunweb/store/sqlite3/Sqlite3Storage';
 import { Sqlite3TemplateRepository } from '../../core/templates/sqlite3/Sqlite3TemplateRepository';
 import { runDriverConformance } from './conformance.shared';
 

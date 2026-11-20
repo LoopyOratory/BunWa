@@ -10,18 +10,18 @@ import { AuditService } from '../core/audit/audit.service';
 import { SessionManager } from '../core/manager.core';
 import { WhatsappConfigService } from '../config.service';
 import { globalErrorHandler } from '../middleware/error-handler';
-import { WhatsappSessionNoWebCore } from '../core/engines/noweb/session.noweb.core';
+import { WhatsappSessionBunWebCore } from '../core/engines/bunweb/session.bunweb.core';
 
 // A client error from WhatsApp's newsletter directory (w:mex) must reach the
 // caller as its own 4xx with the reason, not as an opaque 500. The directory
 // answer arrives as a Boom error, which the shared error handler used to
 // flatten into "Internal server error".
-process.env.WAHA_API_KEY = 'channels-status-test-key';
+process.env.BUNWA_API_KEY = 'channels-status-test-key';
 
 const API_KEY = 'channels-status-test-key';
 
-function makeSession(): WhatsappSessionNoWebCore {
-  const session = new WhatsappSessionNoWebCore({
+function makeSession(): WhatsappSessionBunWebCore {
+  const session = new WhatsappSessionBunWebCore({
     name: 'channels-test',
     printQR: false,
     mediaManager: null as any,
@@ -54,7 +54,7 @@ function graphqlError(statusCode: number, message: string) {
 
 describe('Channel directory client errors', () => {
   let app: Hono;
-  let session: WhatsappSessionNoWebCore;
+  let session: WhatsappSessionBunWebCore;
 
   beforeAll(() => {
     container.registerInstance(
@@ -172,7 +172,7 @@ const RESULT_NODE = (data: any) => ({
 
 describe('Channel create and list', () => {
   let app: Hono;
-  let session: WhatsappSessionNoWebCore;
+  let session: WhatsappSessionBunWebCore;
 
   beforeAll(() => {
     session = makeSession();

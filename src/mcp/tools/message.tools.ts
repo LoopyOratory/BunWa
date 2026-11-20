@@ -1,5 +1,5 @@
 /**
- * Message/chatting MCP tools for WAHA-Bun.
+ * Message/chatting MCP tools for BunWa.
  * Uses session object methods directly (sendText, sendImage, etc.)
  */
 import { z } from 'zod';

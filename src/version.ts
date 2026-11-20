@@ -1,6 +1,6 @@
 import { getEngineName } from './config';
-import { WAHAEngine } from './structures/enums.dto';
-import { WAHAEnvironment } from './structures/environment.dto';
+import { BUNWAEngine } from './structures/enums.dto';
+import { BUNWAEnvironment } from './structures/environment.dto';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -20,37 +20,37 @@ function packageVersion(): string {
 
 import { existsSync } from 'fs';
 
-export enum WAHAVersion {
+export enum BUNWAVersion {
   PLUS = 'PLUS',
   CORE = 'CORE',
 }
 
-export function getWAHAVersion(): WAHAVersion {
-  const waha_version = process.env.WAHA_VERSION;
-  if (waha_version && waha_version === WAHAVersion.CORE) {
-    return WAHAVersion.CORE;
+export function getBunwaVersion(): BUNWAVersion {
+  const waha_version = process.env.BUNWA_VERSION;
+  if (waha_version && waha_version === BUNWAVersion.CORE) {
+    return BUNWAVersion.CORE;
   }
 
   const plusExists = existsSync(`${import.meta.dir}/plus`);
   if (plusExists) {
-    return WAHAVersion.PLUS;
+    return BUNWAVersion.PLUS;
   }
 
-  return WAHAVersion.PLUS;
+  return BUNWAVersion.PLUS;
 }
 
 export function getWorker() {
-  return { id: process.env.WAHA_WORKER_ID || null };
+  return { id: process.env.BUNWA_WORKER_ID || null };
 }
 
 function getPlatform() {
   return `${process.platform}/${process.arch}`;
 }
 
-export const VERSION: WAHAEnvironment = {
+export const VERSION: BUNWAEnvironment = {
   version: packageVersion(),
   engine: getEngineName(),
-  tier: getWAHAVersion(),
+  tier: getBunwaVersion(),
   browser: null,
   platform: getPlatform(),
   worker: getWorker(),

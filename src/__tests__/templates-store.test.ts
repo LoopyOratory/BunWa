@@ -21,9 +21,9 @@ import type { Template } from '../core/templates/template.types';
  */
 
 const ENV_KEYS = [
-  'WAHA_DATABASE_DRIVER',
-  'WAHA_STORAGE_DIR',
-  'WAHA_DATABASE_URL',
+  'BUNWA_DATABASE_DRIVER',
+  'BUNWA_STORAGE_DIR',
+  'BUNWA_DATABASE_URL',
   'WHATSAPP_SESSIONS_POSTGRESQL_URL',
 ] as const;
 
@@ -55,7 +55,7 @@ beforeAll(() => {
   for (const key of ENV_KEYS) {
     savedEnv.set(key, process.env[key]);
   }
-  // The factory resolves its config exactly like NowebStorageFactoryCore.
+  // The factory resolves its config exactly like BunwebStorageFactoryCore.
   container.registerInstance(WhatsappConfigService, new WhatsappConfigService());
 });
 
@@ -136,18 +136,18 @@ describe('Sqlite3TemplateRepository', () => {
 
 describe('TemplateRepositoryFactory', () => {
   it('returns SQLite when WAHA_DATABASE_DRIVER is unset', () => {
-    delete process.env.WAHA_DATABASE_DRIVER;
+    delete process.env.BUNWA_DATABASE_DRIVER;
     expect(new TemplateRepositoryFactory().create()).toBeInstanceOf(Sqlite3TemplateRepository);
   });
 
   it('returns SQLite for the sqlite driver', () => {
-    process.env.WAHA_DATABASE_DRIVER = 'sqlite';
+    process.env.BUNWA_DATABASE_DRIVER = 'sqlite';
     expect(new TemplateRepositoryFactory().create()).toBeInstanceOf(Sqlite3TemplateRepository);
   });
 
   it('returns PostgreSQL for the postgres driver', () => {
-    process.env.WAHA_DATABASE_DRIVER = 'postgres';
-    process.env.WAHA_DATABASE_URL = 'postgres://user:pass@127.0.0.1:5432/not_a_real_db';
+    process.env.BUNWA_DATABASE_DRIVER = 'postgres';
+    process.env.BUNWA_DATABASE_URL = 'postgres://user:pass@127.0.0.1:5432/not_a_real_db';
     delete process.env.WHATSAPP_SESSIONS_POSTGRESQL_URL;
 
     // Constructing the pool does not connect, so no live database is required.
@@ -155,26 +155,26 @@ describe('TemplateRepositoryFactory', () => {
   });
 
   it('returns PostgreSQL for the postgresql driver', () => {
-    process.env.WAHA_DATABASE_DRIVER = 'postgresql';
-    process.env.WAHA_DATABASE_URL = 'postgres://user:pass@127.0.0.1:5432/not_a_real_db';
+    process.env.BUNWA_DATABASE_DRIVER = 'postgresql';
+    process.env.BUNWA_DATABASE_URL = 'postgres://user:pass@127.0.0.1:5432/not_a_real_db';
     delete process.env.WHATSAPP_SESSIONS_POSTGRESQL_URL;
 
     expect(new TemplateRepositoryFactory().create()).toBeInstanceOf(PostgresTemplateRepository);
   });
 
   it('throws when postgres is selected without a connection URL', () => {
-    process.env.WAHA_DATABASE_DRIVER = 'postgres';
-    delete process.env.WAHA_DATABASE_URL;
+    process.env.BUNWA_DATABASE_DRIVER = 'postgres';
+    delete process.env.BUNWA_DATABASE_URL;
     delete process.env.WHATSAPP_SESSIONS_POSTGRESQL_URL;
 
     expect(() => new TemplateRepositoryFactory().create()).toThrow(
-      'WAHA_DATABASE_URL is required for PostgreSQL driver',
+      'BUNWA_DATABASE_URL is required for PostgreSQL driver',
     );
   });
 
   it('an injected directory or handle always means SQLite, even on the postgres driver', () => {
-    process.env.WAHA_DATABASE_DRIVER = 'postgres';
-    process.env.WAHA_DATABASE_URL = 'postgres://user:pass@127.0.0.1:5432/not_a_real_db';
+    process.env.BUNWA_DATABASE_DRIVER = 'postgres';
+    process.env.BUNWA_DATABASE_URL = 'postgres://user:pass@127.0.0.1:5432/not_a_real_db';
 
     expect(new TemplateRepositoryFactory().create(makeTempDir())).toBeInstanceOf(Sqlite3TemplateRepository);
 
@@ -190,8 +190,8 @@ describe('TemplateRepositoryFactory', () => {
 describe('TemplateService persistence', () => {
   it('creates the storage directory and templates.db on first boot', async () => {
     const storageDir = join(makeTempDir(), 'nested', 'data');
-    process.env.WAHA_STORAGE_DIR = storageDir;
-    delete process.env.WAHA_DATABASE_DRIVER;
+    process.env.BUNWA_STORAGE_DIR = storageDir;
+    delete process.env.BUNWA_DATABASE_DRIVER;
 
     const svc = new TemplateService();
     const created = await svc.create('session-1', { name: 'boot', body: 'hello' });

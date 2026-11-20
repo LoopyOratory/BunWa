@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { randomUUID } from 'crypto';
 import { AuditAction, AuditService, AuditSeverity } from '../../core/audit/audit.service';
 import { SendingPolicyService } from '../../core/sending-policy/sending-policy.service';
-import type { INowebStorage } from '../../core/engines/noweb/store/INowebStorage';
+import type { IBunwebStorage } from '../../core/engines/bunweb/store/IBunwebStorage';
 import type { ITemplateRepository } from '../../core/templates/ITemplateRepository';
 import type { Template } from '../../core/templates/template.types';
 
@@ -23,7 +23,7 @@ import type { Template } from '../../core/templates/template.types';
  */
 
 export interface ConformanceHarness {
-  storage: INowebStorage;
+  storage: IBunwebStorage;
   templates: ITemplateRepository;
   /** Directory for the driver independent components (audit, sending policy). */
   localDir: string;

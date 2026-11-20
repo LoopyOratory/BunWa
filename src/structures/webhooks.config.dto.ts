@@ -3,7 +3,7 @@ import { ApiProperty } from '../utils/decorators';
 import {
   AllEvents,
   type AllEventType,
-  WAHAEvents,
+  BUNWAEvents,
 } from './enums.dto';
 import { Type } from 'class-transformer';
 import {

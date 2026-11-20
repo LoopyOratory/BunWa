@@ -10,7 +10,7 @@ import { buildLidResolver } from '../core/webhook-lid-resolver';
 
 const when = (...conditions: WebhookFilters['conditions']): WebhookFilters => ({ conditions });
 
-// NOWEB: `from` is the chat; in a group the person is `participant`.
+// BUNWEB: `from` is the chat; in a group the person is `participant`.
 const dm = {
   from: '233553919737@c.us', to: '233200000000@c.us', fromMe: false,
   body: 'Is the Ankara dress in stock?', hasMedia: false, media: null,
@@ -37,7 +37,7 @@ describe('webhook filters', () => {
     expect(evaluateFilters(when({ field: 'sender', operator: 'is', value: ['233201111111', '233553919737'] }), 'message', dm)).toBe(true);
   });
 
-  it('Sender matches the person in a group, not the group (NOWEB participant, WEBJS author)', () => {
+  it('Sender matches the person in a group, not the group (BUNWEB participant, WEBJS author)', () => {
     const f = when({ field: 'sender', operator: 'is', value: '233553919737' });
     expect(evaluateFilters(f, 'message', groupMessage)).toBe(true);
     expect(evaluateFilters(f, 'message', webjsGroup)).toBe(true);

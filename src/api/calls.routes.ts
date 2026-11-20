@@ -8,7 +8,7 @@ import { workingSessionResolver } from '../middleware/session-resolver';
  * WhatsApp call endpoints.
  *
  * Only the WEBJS engine can place calls: it drives WhatsApp Web's own VoIP
- * stack. NOWEB (Baileys) can receive call events and reject them, but has no
+ * stack. BUNWEB (Baileys) can receive call events and reject them, but has no
  * call engine, so these routes answer 501 for it.
  */
 export function createCallsRouter(): Hono<{ Variables: { session: any; body: any } }> {
@@ -23,7 +23,7 @@ export function createCallsRouter(): Hono<{ Variables: { session: any; body: any
   };
 
   /**
-   * The call engine lives in WEBJS. NOWEB (Baileys) can receive call events and
+   * The call engine lives in WEBJS. BUNWEB (Baileys) can receive call events and
    * reject them, but it has no outgoing call or audio path, so answer 501
    * instead of letting a missing method surface as a 500.
    */
@@ -31,7 +31,7 @@ export function createCallsRouter(): Hono<{ Variables: { session: any; body: any
     const missing = methods.find((method) => typeof session?.[method] !== 'function');
     if (!missing) return null;
     return c.json(
-      { error: 'Calls require the WEBJS engine; NOWEB has no call engine' },
+      { error: 'Calls require the WEBJS engine; BUNWEB has no call engine' },
       501,
     );
   };

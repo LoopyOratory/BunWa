@@ -26,7 +26,7 @@ function createPluginLogger(pluginId: string): PluginLogger {
     warn: (msg, ...args) => console.warn(`[Plugin:${pluginId}] WARN: ${msg}`, ...args),
     error: (msg, ...args) => console.error(`[Plugin:${pluginId}] ERROR: ${msg}`, ...args),
     debug: (msg, ...args) => {
-      if (process.env.WAHA_LOG_LEVEL === 'debug') {
+      if (process.env.BUNWA_LOG_LEVEL === 'debug') {
         console.debug(`[Plugin:${pluginId}] ${msg}`, ...args);
       }
     },

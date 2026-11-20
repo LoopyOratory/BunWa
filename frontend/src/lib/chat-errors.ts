@@ -47,4 +47,4 @@ export const STORE_DISABLED_DESCRIPTION =
 
 export const DATABASE_UNREACHABLE_TITLE = "The database is unreachable"
 export const DATABASE_UNREACHABLE_DESCRIPTION =
-  "BunWa cannot reach the database that stores chats and messages. Check that WAHA_DATABASE_URL points at the right server and that the database service is running, then retry."
+  "BunWa cannot reach the database that stores chats and messages. Check that BUNWA_DATABASE_URL points at the right server and that the database service is running, then retry."

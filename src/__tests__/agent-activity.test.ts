@@ -160,8 +160,8 @@ describe('agent live engagement', () => {
   });
 
   test('activity routes validate input and expose live state', async () => {
-    const previousKey = process.env.WAHA_API_KEY;
-    process.env.WAHA_API_KEY = 'waha';
+    const previousKey = process.env.BUNWA_API_KEY;
+    process.env.BUNWA_API_KEY = 'waha';
     // The auth middleware resolves these through tsyringe; without shared
     // instances a request 500s before reaching the route (same fix as
     // sessions.test.ts, bound to a temp dir so the real audit DB is untouched).
@@ -220,8 +220,8 @@ describe('agent live engagement', () => {
       agentService.reportActivity(agent.id, { kind: 'voice', active: false });
     } finally {
       store.close();
-      if (previousKey === undefined) delete process.env.WAHA_API_KEY;
-      else process.env.WAHA_API_KEY = previousKey;
+      if (previousKey === undefined) delete process.env.BUNWA_API_KEY;
+      else process.env.BUNWA_API_KEY = previousKey;
     }
   });
 

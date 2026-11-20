@@ -3,7 +3,7 @@ import { describe, it, expect } from 'bun:test';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { HistorySyncTracker, type HistorySyncStatus } from '../core/engines/noweb/store/HistorySyncTracker';
+import { HistorySyncTracker, type HistorySyncStatus } from '../core/engines/bunweb/store/HistorySyncTracker';
 
 const file = () => join(mkdtempSync(join(tmpdir(), 'bunwa-sync-')), 'history-sync.json');
 

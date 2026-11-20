@@ -122,7 +122,7 @@ function usage(day: number, dayCap: number) {
 function session(overrides: Partial<DashboardSessionInput>): DashboardSessionInput {
   return {
     name: 's',
-    engine: 'NOWEB',
+    engine: 'BUNWEB',
     status: 'WORKING',
     statusSince: null,
     lastActivityAt: null,
@@ -135,7 +135,7 @@ function session(overrides: Partial<DashboardSessionInput>): DashboardSessionInp
 }
 
 const server = {
-  version: '2026.10.0', tier: 'PLUS', engine: 'NOWEB', uptimeSeconds: 10,
+  version: '2026.10.0', tier: 'PLUS', engine: 'BUNWEB', uptimeSeconds: 10,
   store: { driver: 'sqlite' as const, ok: true, checkedAt: '' },
 };
 
@@ -230,12 +230,12 @@ describe('GET /api/dashboard/summary', () => {
   let app: Hono;
 
   beforeAll(() => {
-    process.env.WAHA_API_KEY = 'dashboard-test-key';
+    process.env.BUNWA_API_KEY = 'dashboard-test-key';
     container.registerInstance(AuditService, auditDir());
     container.registerInstance(WhatsappConfigService, new WhatsappConfigService());
     container.registerInstance(SessionManager, {
       getSessions: async () => [
-        { name: 'alpha', status: 'SCAN_QR_CODE', config: { engine: 'NOWEB' }, timestamps: { activity: 1 } },
+        { name: 'alpha', status: 'SCAN_QR_CODE', config: { engine: 'BUNWEB' }, timestamps: { activity: 1 } },
       ],
       isRunning: () => false,
       getStatusSince: () => Date.now() - 60_000,
@@ -251,7 +251,7 @@ describe('GET /api/dashboard/summary', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.range.key).toBe('1h');
-    expect(body.sessions[0]).toMatchObject({ name: 'alpha', status: 'SCAN_QR_CODE', engine: 'NOWEB' });
+    expect(body.sessions[0]).toMatchObject({ name: 'alpha', status: 'SCAN_QR_CODE', engine: 'BUNWEB' });
     expect(body.attention[0]).toMatchObject({ action: 'qr', session: 'alpha' });
     expect(body.server.store.driver).toBeDefined();
     expect(body.series.bucketStart).toHaveLength(12);

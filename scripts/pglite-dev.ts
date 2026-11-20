@@ -11,12 +11,12 @@
  *   PGLITE_PORT=5433 bun run postgres:dev
  *
  * Then point BunWa at it:
- *   WAHA_DATABASE_DRIVER=postgres \
- *   WAHA_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/postgres \
+ *   BUNWA_DATABASE_DRIVER=postgres \
+ *   BUNWA_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/postgres \
  *   bun run src/main.ts
  *
  * Verify any deployment (this server, Docker Postgres, real Postgres):
- *   WAHA_DATABASE_URL=... bun run test:postgres
+ *   BUNWA_DATABASE_URL=... bun run test:postgres
  *
  * See the vault note "Postgres on PGlite" for the test matrix and caveats.
  */

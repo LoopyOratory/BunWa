@@ -38,16 +38,16 @@ describe('buildPostgresUrl', () => {
 describe('WhatsappConfigService database resolution', () => {
   const svc = new WhatsappConfigService();
   const ENV_KEYS = [
-    'WAHA_DATABASE_DRIVER',
-    'WAHA_DATABASE_URL',
+    'BUNWA_DATABASE_DRIVER',
+    'BUNWA_DATABASE_URL',
     'WHATSAPP_SESSIONS_POSTGRESQL_URL',
-    'WAHA_DB_TYPE',
-    'WAHA_DB_HOST',
-    'WAHA_DB_PORT',
-    'WAHA_DB_USERNAME',
-    'WAHA_DB_PASSWORD',
-    'WAHA_DB_NAME',
-    'WAHA_DB_SSL',
+    'BUNWA_DB_TYPE',
+    'BUNWA_DB_HOST',
+    'BUNWA_DB_PORT',
+    'BUNWA_DB_USERNAME',
+    'BUNWA_DB_PASSWORD',
+    'BUNWA_DB_NAME',
+    'BUNWA_DB_SSL',
   ];
   const original = new Map<string, string | undefined>();
 
@@ -71,43 +71,43 @@ describe('WhatsappConfigService database resolution', () => {
   });
 
   it('honours WAHA_DATABASE_DRIVER explicitly (case-insensitive)', () => {
-    process.env.WAHA_DATABASE_DRIVER = 'POSTGRES';
+    process.env.BUNWA_DATABASE_DRIVER = 'POSTGRES';
     expect(svc.getDatabaseDriver()).toBe('postgres');
   });
 
   it('falls back to the Infrastructure page selection (WAHA_DB_TYPE)', () => {
-    process.env.WAHA_DB_TYPE = 'postgres';
+    process.env.BUNWA_DB_TYPE = 'postgres';
     expect(svc.getDatabaseDriver()).toBe('postgres');
   });
 
   it('builds the connection URL from the dashboard fields when no explicit URL exists', () => {
-    process.env.WAHA_DB_TYPE = 'postgres';
-    process.env.WAHA_DB_HOST = 'pg.local';
-    process.env.WAHA_DB_PORT = '5433';
-    process.env.WAHA_DB_USERNAME = 'u';
-    process.env.WAHA_DB_PASSWORD = 'p';
-    process.env.WAHA_DB_NAME = 'waha';
+    process.env.BUNWA_DB_TYPE = 'postgres';
+    process.env.BUNWA_DB_HOST = 'pg.local';
+    process.env.BUNWA_DB_PORT = '5433';
+    process.env.BUNWA_DB_USERNAME = 'u';
+    process.env.BUNWA_DB_PASSWORD = 'p';
+    process.env.BUNWA_DB_NAME = 'waha';
     expect(svc.getSessionPostgresUrl()).toBe('postgres://u:p@pg.local:5433/waha');
   });
 
   it('prefers an explicit URL over the field-built fallback', () => {
-    process.env.WAHA_DB_TYPE = 'postgres';
-    process.env.WAHA_DB_HOST = 'pg.local';
-    process.env.WAHA_DB_NAME = 'waha';
-    process.env.WAHA_DATABASE_URL = 'postgres://explicit@host/db';
+    process.env.BUNWA_DB_TYPE = 'postgres';
+    process.env.BUNWA_DB_HOST = 'pg.local';
+    process.env.BUNWA_DB_NAME = 'waha';
+    process.env.BUNWA_DATABASE_URL = 'postgres://explicit@host/db';
     expect(svc.getSessionPostgresUrl()).toBe('postgres://explicit@host/db');
   });
 
   it('does not invent a URL for an explicit driver without dashboard fields', () => {
     // The factory is expected to fail loudly in this case (missing URL), not
     // silently dial localhost.
-    process.env.WAHA_DATABASE_DRIVER = 'postgres';
+    process.env.BUNWA_DATABASE_DRIVER = 'postgres';
     expect(svc.getSessionPostgresUrl()).toBeUndefined();
   });
 
   it('never invents a Postgres URL while the driver is sqlite', () => {
-    process.env.WAHA_DB_TYPE = 'sqlite';
-    process.env.WAHA_DB_HOST = 'pg.local';
+    process.env.BUNWA_DB_TYPE = 'sqlite';
+    process.env.BUNWA_DB_HOST = 'pg.local';
     expect(svc.getSessionPostgresUrl()).toBeUndefined();
   });
 });

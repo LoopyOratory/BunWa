@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { PostgresStorage } from '../../core/engines/noweb/store/postgres/PostgresStorage';
+import { PostgresStorage } from '../../core/engines/bunweb/store/postgres/PostgresStorage';
 import { PostgresTemplateRepository } from '../../core/templates/postgres/PostgresTemplateRepository';
 import { startEmbeddedPostgres, type EmbeddedPostgres } from './embedded-postgres';
 import { runDriverConformance } from './conformance.shared';

@@ -24,7 +24,7 @@ mkdirSync(join(mediaRoot, 'vivita'), { recursive: true });
 writeFileSync(join(mediaRoot, 'vivita', 'file-ok.bin'), Buffer.from('hello media'));
 writeFileSync(join(mediaRoot, 'vivita', 'file-big.bin'), Buffer.alloc(2048));
 writeFileSync(join(mediaRoot, 'vivita', 'note.txt'), Buffer.from('Pickup is on Saturday.'));
-process.env.WAHA_STORAGE_LOCAL_PATH = mediaRoot;
+process.env.BUNWA_STORAGE_LOCAL_PATH = mediaRoot;
 
 const session = {
   getChatMessage: async (_chatId: string, messageId: string) => {

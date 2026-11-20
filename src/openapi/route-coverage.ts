@@ -59,7 +59,7 @@ const sessionParam = {
 /** Curated documentation, keyed by `METHOD /api/{session}/...`. */
 export const CURATED: Record<string, RouteDoc> = {
   'GET /api/{session}/sync': {
-    summary: 'Link-time history sync status (NOWEB); WEBJS reports state "unsupported"',
+    summary: 'Link-time history sync status (BUNWEB); WEBJS reports state "unsupported"',
     tag: TAGS.sessions,
   },
   'POST /api/{session}/uploads/tickets': {
@@ -103,11 +103,11 @@ export const CURATED: Record<string, RouteDoc> = {
     tag: TAGS.chats,
   },
   'POST /api/{session}/chats/{chatId}/mute': {
-    summary: 'Mute a chat. Body: { duration?: seconds } — omitted or 0 mutes until unmuted (NOWEB and WEBJS)',
+    summary: 'Mute a chat. Body: { duration?: seconds } — omitted or 0 mutes until unmuted (BUNWEB and WEBJS)',
     tag: TAGS.chats,
   },
   'POST /api/{session}/chats/{chatId}/unmute': {
-    summary: 'Unmute a chat (NOWEB and WEBJS)',
+    summary: 'Unmute a chat (BUNWEB and WEBJS)',
     tag: TAGS.chats,
   },
   'GET /api/{session}/chats/{chatId}/messages/{messageId}/media': {
@@ -124,7 +124,7 @@ export const CURATED: Record<string, RouteDoc> = {
     tag: TAGS.chats,
   },
   'POST /api/{session}/events': {
-    summary: 'Send an event message (calendar invite) to a chat (NOWEB; 422 on other engines)',
+    summary: 'Send an event message (calendar invite) to a chat (BUNWEB; 422 on other engines)',
     tag: TAGS.chats,
     body: {
       chatId: { type: 'string' },
@@ -145,7 +145,7 @@ export const CURATED: Record<string, RouteDoc> = {
     responses: { '400': { description: 'Missing chatId, event.name or a valid event.startTime' } },
   },
   'GET /api/{session}/screenshot': {
-    summary: 'Screenshot the engine browser (WEBJS only, answers 422 naming the engine on NOWEB)',
+    summary: 'Screenshot the engine browser (WEBJS only, answers 422 naming the engine on BUNWEB)',
     tag: TAGS.chats,
   },
 
@@ -160,7 +160,7 @@ export const CURATED: Record<string, RouteDoc> = {
     },
   },
   'POST /api/send/buttons/reply': {
-    summary: 'Reply to a buttons message as if a button was tapped (NOWEB; 422 on other engines)',
+    summary: 'Reply to a buttons message as if a button was tapped (BUNWEB; 422 on other engines)',
     tag: TAGS.chatting,
     body: {
       session: { type: 'string' },
@@ -335,7 +335,7 @@ export const CURATED: Record<string, RouteDoc> = {
     tag: TAGS.sessions,
     body: {
       webhooks: { type: 'array', items: { type: 'object' } },
-      noweb: { type: 'object' },
+      bunweb: { type: 'object' },
       debug: { type: 'object' },
       metadata: { type: 'object' },
     },

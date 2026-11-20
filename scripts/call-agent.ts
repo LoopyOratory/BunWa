@@ -11,7 +11,7 @@
  *
  * Usage:
  *   BUNWA_URL=http://127.0.0.1:3001 \
- *   WAHA_API_KEY=... SESSION=calltest \
+ *   BUNWA_API_KEY=... SESSION=calltest \
  *   GEMINI_API_KEY=... FISH_API_KEY=... \
  *   bun run scripts/call-agent.ts
  */
@@ -316,7 +316,7 @@ export async function runLive(options: {
 
 async function main(): Promise<void> {
   const baseUrl = process.env.BUNWA_URL || 'http://127.0.0.1:3001';
-  const apiKey = process.env.WAHA_API_KEY || '';
+  const apiKey = process.env.BUNWA_API_KEY || '';
   const session = process.env.SESSION || '';
   const geminiKey = process.env.GEMINI_API_KEY || '';
   const fishKey = process.env.FISH_API_KEY || '';
@@ -325,7 +325,7 @@ async function main(): Promise<void> {
     || 'You are a concise phone assistant. Reply in one or two short sentences. Plain language, no lists.';
 
   if (!apiKey || !session || !geminiKey || !fishKey) {
-    console.error('Set WAHA_API_KEY, SESSION, GEMINI_API_KEY and FISH_API_KEY.');
+    console.error('Set BUNWA_API_KEY, SESSION, GEMINI_API_KEY and FISH_API_KEY.');
     process.exit(2);
   }
 

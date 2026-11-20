@@ -6,7 +6,7 @@
  * This module runs the schema creation for the configured driver during
  * startup so the real error stops the process instead.
  *
- * For Postgres it connects, checks the user may create schemas (each NOWEB
+ * For Postgres it connects, checks the user may create schemas (each BUNWEB
  * session's store lives in its own schema, created on session start), and
  * creates the templates table, then closes the pools. For SQLite it creates
  * the templates table eagerly; per-session store files are still created on
@@ -25,9 +25,9 @@ export async function verifyStorageAtBoot(config: WhatsappConfigService): Promis
     const connectionString = config.getSessionPostgresUrl();
     if (!connectionString) {
       throw new Error(
-        'WAHA_DATABASE_DRIVER=postgres requires a connection URL. Set WAHA_DATABASE_URL ' +
-          '(or WHATSAPP_SESSIONS_POSTGRESQL_URL), or set WAHA_DB_TYPE=postgres with the ' +
-          'WAHA_DB_HOST / WAHA_DB_PORT / WAHA_DB_USERNAME / WAHA_DB_PASSWORD / WAHA_DB_NAME fields.',
+        'BUNWA_DATABASE_DRIVER=postgres requires a connection URL. Set BUNWA_DATABASE_URL ' +
+          '(or WHATSAPP_SESSIONS_POSTGRESQL_URL), or set BUNWA_DB_TYPE=postgres with the ' +
+          'BUNWA_DB_HOST / BUNWA_DB_PORT / BUNWA_DB_USERNAME / BUNWA_DB_PASSWORD / BUNWA_DB_NAME fields.',
       );
     }
 
@@ -50,7 +50,7 @@ export async function verifyStorageAtBoot(config: WhatsappConfigService): Promis
 
 const log = pino({ name: 'StorageBootstrap' });
 
-/** Tables the NOWEB store used to share across every session in `public`. */
+/** Tables the BUNWEB store used to share across every session in `public`. */
 const LEGACY_SHARED_TABLES = ['chats', 'contacts', 'messages', 'groups', 'labels', 'labelAssociations', 'lid_map'];
 
 /**
@@ -66,7 +66,7 @@ async function verifyPostgresSessionStore(connectionString: string): Promise<voi
     );
     if (!privilege.rows?.[0]?.can_create) {
       throw new Error(
-        'The Postgres user cannot create schemas in this database. Each NOWEB session ' +
+        'The Postgres user cannot create schemas in this database. Each BUNWEB session ' +
           'stores its chats in its own schema, so grant CREATE on the database ' +
           '(GRANT CREATE ON DATABASE <db> TO <user>).',
       );
@@ -80,7 +80,7 @@ async function verifyPostgresSessionStore(connectionString: string): Promise<voi
     const found = (legacy.rows ?? []).map((row: { table_name: string }) => row.table_name);
     if (found.length > 0) {
       log.warn(
-        `Postgres: the shared NOWEB store tables in the public schema (${found.join(', ')}) ` +
+        `Postgres: the shared BUNWEB store tables in the public schema (${found.join(', ')}) ` +
           'are no longer used; each session now keeps its chats in its own bunwa_<session> schema. ' +
           'They are kept as an archive. Drop them when you no longer need them.',
       );

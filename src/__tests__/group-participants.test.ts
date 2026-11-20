@@ -1,12 +1,12 @@
 import 'reflect-metadata';
 import { describe, it, expect } from 'bun:test';
 import { SessionManager } from '../core/manager.core';
-import { WAHAEngine } from '../structures/enums.dto';
+import { BUNWAEngine } from '../structures/enums.dto';
 import { BadRequestException } from '../core/exceptions';
 import { participantId, toJID } from '../core/utils/jids';
 
 // The REST contract for group participants is a list of chat ids
-// (15551234567 or 15551234567@c.us). The NOWEB engine used to read every entry
+// (15551234567 or 15551234567@c.us). The BUNWEB engine used to read every entry
 // as an object with an `id`, so a string entry became undefined and Baileys sent
 // a malformed group IQ, which WhatsApp answered with "Invalid group metadata
 // response: missing <group> node" after a 30 second timeout. These tests pin the
@@ -17,12 +17,12 @@ import { participantId, toJID } from '../core/utils/jids';
 // global container made these tests depend on test order: other files
 // register a fake SessionManager there, and in a full run this file got the
 // fake (no getEngine) and all 14 tests failed.
-const engineClass = (engine: WAHAEngine) => SessionManager.prototype.getEngine(engine);
+const engineClass = (engine: BUNWAEngine) => SessionManager.prototype.getEngine(engine);
 
-function makeNowebSession() {
-  const EngineClass = engineClass(WAHAEngine.NOWEB);
+function makeBunwebSession() {
+  const EngineClass = engineClass(BUNWAEngine.BUNWEB);
   return new EngineClass({
-    name: 'group-participants-noweb',
+    name: 'group-participants-bunweb',
     printQR: false,
     mediaManager: null as any,
     loggerBuilder: {
@@ -43,7 +43,7 @@ function makeNowebSession() {
 }
 
 function makeWebjsSession() {
-  const EngineClass = engineClass(WAHAEngine.WEBJS);
+  const EngineClass = engineClass(BUNWAEngine.WEBJS);
   const session = new EngineClass({
     name: 'group-participants-webjs',
     printQR: false,
@@ -85,9 +85,9 @@ describe('participantId', () => {
   });
 });
 
-describe('NOWEB group participants', () => {
+describe('BUNWEB group participants', () => {
   it('createGroup turns chat ids into user JIDs for Baileys', async () => {
-    const session = makeNowebSession();
+    const session = makeBunwebSession();
     let received: any;
     session.sock = {
       groupCreate: async (name: string, participants: string[]) => {
@@ -109,7 +109,7 @@ describe('NOWEB group participants', () => {
   });
 
   it('createGroup accepts objects with an id', async () => {
-    const session = makeNowebSession();
+    const session = makeBunwebSession();
     let received: string[] = [];
     session.sock = {
       groupCreate: async (_name: string, participants: string[]) => {
@@ -127,7 +127,7 @@ describe('NOWEB group participants', () => {
   });
 
   it('keeps LID and group JIDs unchanged', async () => {
-    const session = makeNowebSession();
+    const session = makeBunwebSession();
     let received: string[] = [];
     session.sock = {
       groupCreate: async (_name: string, participants: string[]) => {
@@ -145,7 +145,7 @@ describe('NOWEB group participants', () => {
   });
 
   it('rejects a malformed participant instead of sending undefined', async () => {
-    const session = makeNowebSession();
+    const session = makeBunwebSession();
     session.sock = {
       groupCreate: async () => {
         throw new Error('must not be called');
@@ -158,7 +158,7 @@ describe('NOWEB group participants', () => {
   });
 
   it('participants add and remove use the same JID form', async () => {
-    const session = makeNowebSession();
+    const session = makeBunwebSession();
     const calls: any[] = [];
     session.sock = {
       groupParticipantsUpdate: async (id: string, participants: string[], action: string) => {
@@ -177,7 +177,7 @@ describe('NOWEB group participants', () => {
   });
 
   it('treats an empty participant list as an empty list', async () => {
-    const session = makeNowebSession();
+    const session = makeBunwebSession();
     let received: string[] | undefined;
     session.sock = {
       groupCreate: async (_name: string, participants: string[]) => {
@@ -233,8 +233,8 @@ describe('toJID', () => {
 });
 
 describe('group detail shape', () => {
-  it('NOWEB getGroup answers the documented GroupInfo', async () => {
-    const session = makeNowebSession();
+  it('BUNWEB getGroup answers the documented GroupInfo', async () => {
+    const session = makeBunwebSession();
     session.store = {
       getGroupById: async () => ({
         id: '120363000000000001@g.us',
@@ -268,8 +268,8 @@ describe('group detail shape', () => {
     expect((info as any).restrict).toBeUndefined();
   });
 
-  it('NOWEB getGroup leaves pn empty when the store has no mapping', async () => {
-    const session = makeNowebSession();
+  it('BUNWEB getGroup leaves pn empty when the store has no mapping', async () => {
+    const session = makeBunwebSession();
     session.store = {
       getGroupById: async () => ({
         id: '123@g.us',
@@ -285,8 +285,8 @@ describe('group detail shape', () => {
     expect(info.participants?.[0].role).toBe('participant');
   });
 
-  it('NOWEB keeps a phone number the engine already provided', async () => {
-    const session = makeNowebSession();
+  it('BUNWEB keeps a phone number the engine already provided', async () => {
+    const session = makeBunwebSession();
     let lookedUp = false;
     session.store = {
       getGroupById: async () => ({
@@ -312,8 +312,8 @@ describe('group detail shape', () => {
     expect(lookedUp).toBe(false);
   });
 
-  it('NOWEB reports membersCanSendMessages as the inverse of announce', async () => {
-    const session = makeNowebSession();
+  it('BUNWEB reports membersCanSendMessages as the inverse of announce', async () => {
+    const session = makeBunwebSession();
     session.store = {
       getGroupById: async () => ({ id: '123@g.us', announce: false, participants: [] }),
     };
@@ -325,7 +325,7 @@ describe('group detail shape', () => {
     expect((await session.getGroup('123@g.us')).membersCanSendMessages).toBe(false);
   });
 
-  it('NOWEB settings reads still see the raw metadata', async () => {    const session = makeNowebSession();
+  it('BUNWEB settings reads still see the raw metadata', async () => {    const session = makeBunwebSession();
     session.store = {
       getGroupById: async () => ({
         id: '123@g.us',

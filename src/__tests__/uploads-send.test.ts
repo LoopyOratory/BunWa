@@ -12,12 +12,12 @@ import { AuditService } from '../core/audit/audit.service';
 import { WhatsappConfigService } from '../config.service';
 import { globalErrorHandler } from '../middleware/error-handler';
 
-process.env.WAHA_API_KEY = 'uploads-send-test-key';
+process.env.BUNWA_API_KEY = 'uploads-send-test-key';
 container.registerInstance(AuditService, new AuditService(mkdtempSync(join(tmpdir(), 'bunwa-upl-send-audit-'))));
 container.registerInstance(WhatsappConfigService, new WhatsappConfigService());
 
 const root = mkdtempSync(join(tmpdir(), 'bunwa-upl-send-'));
-process.env.WAHA_STORAGE_LOCAL_PATH = root;
+process.env.BUNWA_STORAGE_LOCAL_PATH = root;
 const store = new UploadStore(root);
 
 const sent: any[] = [];

@@ -1,5 +1,5 @@
 /**
- * Presence MCP tools for WAHA-Bun.
+ * Presence MCP tools for BunWa.
  * Uses session object methods directly (getPresences, setPresence, etc.)
  */
 import { z } from 'zod';

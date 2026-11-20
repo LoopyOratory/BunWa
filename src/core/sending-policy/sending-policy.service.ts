@@ -176,7 +176,7 @@ export function effectiveCap(cap: number, factor: number): number {
  * gated through assertSendAllowed() at the engine's send methods.
  *
  * Storage mirrors AuditService: bun:sqlite at
- * `${WAHA_STORAGE_DIR or ./data}/sending-limits.db` in WAL mode, directory
+ * `${BUNWA_STORAGE_DIR or ./data}/sending-limits.db` in WAL mode, directory
  * auto-created.
  *
  * Configurable via environment variables (all overridable per session in the
@@ -282,7 +282,7 @@ export class SendingPolicyService {
     } else if (dbOrPath instanceof Database) {
       this.db = dbOrPath;
     } else {
-      const storageDir = process.env.WAHA_STORAGE_DIR ?? './data';
+      const storageDir = process.env.BUNWA_STORAGE_DIR ?? './data';
       // Auto-create the storage dir so fresh clones boot without a manual mkdir
       const { mkdirSync } = require('fs');
       mkdirSync(storageDir, { recursive: true });

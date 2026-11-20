@@ -1,4 +1,4 @@
-export class WAHAEnvironment {
+export class BUNWAEnvironment {
   version!: string;
   engine!: string;
   tier!: string;

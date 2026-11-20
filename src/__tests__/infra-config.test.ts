@@ -25,7 +25,7 @@ describe('Infra config — PUT persists to .env', () => {
     workdir = mkdtempSync(join(tmpdir(), 'bunwa-infra-'));
     writeFileSync(join(workdir, '.env'), 'EXISTING_KEY=keepme\n', 'utf8');
     process.chdir(workdir);
-    process.env.WAHA_API_KEY = KEY;
+    process.env.BUNWA_API_KEY = KEY;
 
     app = new Hono();
     app.route('/', createInfraRouter());
@@ -34,27 +34,27 @@ describe('Infra config — PUT persists to .env', () => {
   afterAll(() => {
     process.chdir(originalCwd);
     rmSync(workdir, { recursive: true, force: true });
-    delete process.env.WAHA_API_KEY;
+    delete process.env.BUNWA_API_KEY;
     // The mirrored config keys are real runtime inputs now (WAHA_DB_TYPE is
     // honoured as a driver fallback) — clear them so other suites see a clean
     // environment.
     for (const key of [
       'WHATSAPP_DEFAULT_ENGINE',
-      'WAHA_DB_TYPE',
-      'WAHA_DB_HOST',
-      'WAHA_DB_PORT',
-      'WAHA_DB_USERNAME',
-      'WAHA_DB_PASSWORD',
-      'WAHA_DB_NAME',
-      'WAHA_DB_SSL',
-      'WAHA_DATABASE_DRIVER',
-      'WAHA_DATABASE_URL',
-      'WAHA_STORAGE_TYPE',
-      'WAHA_S3_ENDPOINT',
-      'WAHA_S3_BUCKET',
-      'WAHA_S3_REGION',
-      'WAHA_S3_ACCESS_KEY',
-      'WAHA_S3_SECRET_KEY', // ggignore
+      'BUNWA_DB_TYPE',
+      'BUNWA_DB_HOST',
+      'BUNWA_DB_PORT',
+      'BUNWA_DB_USERNAME',
+      'BUNWA_DB_PASSWORD',
+      'BUNWA_DB_NAME',
+      'BUNWA_DB_SSL',
+      'BUNWA_DATABASE_DRIVER',
+      'BUNWA_DATABASE_URL',
+      'BUNWA_STORAGE_TYPE',
+      'BUNWA_S3_ENDPOINT',
+      'BUNWA_S3_BUCKET',
+      'BUNWA_S3_REGION',
+      'BUNWA_S3_ACCESS_KEY',
+      'BUNWA_S3_SECRET_KEY', // ggignore
     ]) {
       delete process.env[key];
     }
@@ -81,19 +81,19 @@ describe('Infra config — PUT persists to .env', () => {
     const env = readFileSync(join(workdir, '.env'), 'utf8');
     expect(env).toContain('EXISTING_KEY=keepme');       // untouched
     expect(env).toContain('WHATSAPP_DEFAULT_ENGINE=WEBJS');
-    expect(env).toContain('WAHA_DB_TYPE=postgres');
-    expect(env).toContain('WAHA_DB_PASSWORD=p');
-    expect(env).toContain('WAHA_STORAGE_TYPE=s3');
+    expect(env).toContain('BUNWA_DB_TYPE=postgres');
+    expect(env).toContain('BUNWA_DB_PASSWORD=p');
+    expect(env).toContain('BUNWA_STORAGE_TYPE=s3');
 
     // The canonical switches the runtime actually reads are written too, so
     // the dashboard selection really moves the session store.
-    expect(env).toContain('WAHA_DATABASE_DRIVER=postgres');
-    expect(env).toContain('WAHA_DATABASE_URL=postgres://u:p@db.local:5432/n?sslmode=require');
+    expect(env).toContain('BUNWA_DATABASE_DRIVER=postgres');
+    expect(env).toContain('BUNWA_DATABASE_URL=postgres://u:p@db.local:5432/n?sslmode=require');
 
     // Mirrored into process.env for immediate GET reflection.
     expect(process.env.WHATSAPP_DEFAULT_ENGINE).toBe('WEBJS');
-    expect(process.env.WAHA_DB_TYPE).toBe('postgres');
-    expect(process.env.WAHA_DATABASE_DRIVER).toBe('postgres');
+    expect(process.env.BUNWA_DB_TYPE).toBe('postgres');
+    expect(process.env.BUNWA_DATABASE_DRIVER).toBe('postgres');
   });
 
   it('GET returns the just-saved values with normalised casing', async () => {
@@ -117,7 +117,7 @@ describe('Infra config — PUT persists to .env', () => {
     });
     expect(res.status).toBe(200);
     const env = readFileSync(join(workdir, '.env'), 'utf8');
-    expect(env).toContain('WAHA_DATABASE_DRIVER=sqlite');
+    expect(env).toContain('BUNWA_DATABASE_DRIVER=sqlite');
 
     const get = await app.request('/infra/config', { headers: { 'x-api-key': KEY } });
     const cfg = await get.json() as any;

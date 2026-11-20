@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { container } from 'tsyringe';
 import sharp from 'sharp';
-import { WhatsappSessionNoWebCore, extractBody } from '../core/engines/noweb/session.noweb.core';
+import { WhatsappSessionBunWebCore, extractBody } from '../core/engines/bunweb/session.bunweb.core';
 import { UnprocessableEntityException } from '../core/exceptions';
 import { normalizePoll } from '../core/utils/poll';
 import { redactWireSecrets } from '../core/utils/redact';
@@ -40,8 +40,8 @@ const quietLogger = {
   },
 };
 
-function makeSession(): WhatsappSessionNoWebCore {
-  const session = new WhatsappSessionNoWebCore({
+function makeSession(): WhatsappSessionBunWebCore {
+  const session = new WhatsappSessionBunWebCore({
     name: 'findings-test',
     printQR: false,
     mediaManager: null as any,

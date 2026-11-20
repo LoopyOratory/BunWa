@@ -3,7 +3,7 @@ import pino from 'pino';
 import { ChatwootAppConfig, ChatwootWebhookPayload } from '../dto/chatwoot-config.dto';
 import { ChatwootAppRepository } from '../storage/ChatwootAppRepository';
 import { SessionManager } from '../../../core/manager.core';
-import { WAHAEvents } from '../../../structures/enums.dto';
+import { BUNWAEvents } from '../../../structures/enums.dto';
 import { verifyWebhookSignature as verifyHmac } from '../../../common/security/webhook-signing';
 
 interface ChatwootContact {
@@ -125,7 +125,7 @@ export class ChatwootAppService {
     if (!running || !(await this.repository.findBySession(session))) return;
 
     try {
-      const sub = running.getEventObservable(WAHAEvents.MESSAGE_ANY).subscribe({
+      const sub = running.getEventObservable(BUNWAEvents.MESSAGE_ANY).subscribe({
         next: async (data: any) => {
           try {
             await this.handleIncomingMessage(session, data);
@@ -379,7 +379,7 @@ export class ChatwootAppService {
 
     // Send the message via WAHA's own API (internal HTTP call)
     const baseUrl = `http://localhost:${process.env.PORT || process.env.WHATSAPP_API_PORT || '3000'}`;
-    const apiKey = process.env.WAHA_API_KEY;
+    const apiKey = process.env.BUNWA_API_KEY;
 
     try {
       const headers: Record<string, string> = {

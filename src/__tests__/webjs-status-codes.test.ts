@@ -16,11 +16,11 @@ import {
   NotImplementedByEngineError,
   NotFoundException,
 } from '../core/exceptions';
-import { WAHASessionStatus } from '../structures/enums.dto';
+import { BUNWASessionStatus } from '../structures/enums.dto';
 
 // The WEBJS engine must answer a missing chat as 404 and an operation its
 // library or WhatsApp Web build cannot do as 422 naming WEBJS, never as a 500.
-process.env.WAHA_API_KEY = 'webjs-status-test-key';
+process.env.BUNWA_API_KEY = 'webjs-status-test-key';
 
 const API_KEY = 'webjs-status-test-key';
 
@@ -44,7 +44,7 @@ function makeSession(): WhatsappSessionWebJs {
     engineConfig: {},
     ignore: { status: false, groups: false, channels: false, broadcast: false },
   });
-  session.status = WAHASessionStatus.WORKING;
+  session.status = BUNWASessionStatus.WORKING;
   return session;
 }
 
@@ -66,7 +66,7 @@ describe('WEBJS status codes', () => {
       } catch (error: any) {
         expect(error).toBeInstanceOf(NotImplementedByEngineError);
         expect(error.message).toContain("'WEBJS' engine");
-        expect(error.message).not.toContain("'NOWEB' engine");
+        expect(error.message).not.toContain("'BUNWEB' engine");
       }
     });
 

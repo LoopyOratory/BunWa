@@ -91,10 +91,10 @@ import {
   ContactUpdateBody,
 } from '../../structures/contacts.dto';
 import {
-  WAHAEngine,
-  WAHAEvents,
-  WAHAPresenceStatus,
-  WAHASessionStatus,
+  BUNWAEngine,
+  BUNWAEvents,
+  BUNWAPresenceStatus,
+  BUNWASessionStatus,
 } from '../../structures/enums.dto';
 import { EventMessageRequest } from '../../structures/events.dto';
 import {
@@ -105,7 +105,7 @@ import {
   ParticipantsRequest,
   SettingsSecurityChangeInfo,
 } from '../../structures/groups.dto';
-import { WAHAChatPresences } from '../../structures/presence.dto';
+import { BUNWAChatPresences } from '../../structures/presence.dto';
 import {
   MeInfo,
   ProxyConfig,
@@ -142,7 +142,7 @@ import { toJID } from '../utils/jids';
 import {
   emptyHistorySyncStatus,
   type HistorySyncStatus,
-} from '../engines/noweb/store/HistorySyncTracker';
+} from '../engines/bunweb/store/HistorySyncTracker';
 
 export function ensureSuffix(phone: any) {
   const suffix = '@c.us';
@@ -167,7 +167,7 @@ export class SessionParams {
 }
 
 export abstract class WhatsappSession {
-  public engine!: WAHAEngine;
+  public engine!: BUNWAEngine;
 
   public name: string;
   protected mediaManager: IMediaManager;
@@ -180,10 +180,10 @@ export abstract class WhatsappSession {
   protected unpairing: boolean = false;
   protected jids: JidFilter;
 
-  private _status: WAHASessionStatus;
+  private _status: BUNWASessionStatus;
   private _presence:
-    | WAHAPresenceStatus.ONLINE
-    | WAHAPresenceStatus.OFFLINE
+    | BUNWAPresenceStatus.ONLINE
+    | BUNWAPresenceStatus.OFFLINE
     | null = null;
   private lastActivityTimestamp?: number;
   protected presenceAutoOnlineConfig = {
@@ -192,8 +192,8 @@ export abstract class WhatsappSession {
   };
 
   private shouldPrintQR: boolean;
-  protected events2: DefaultMap<WAHAEvents, SwitchObservable<any>>;
-  private status$: Subject<WAHASessionStatus>;
+  protected events2: DefaultMap<BUNWAEvents, SwitchObservable<any>>;
+  private status$: Subject<BUNWASessionStatus>;
   protected profilePictures: TtlCache<string | null> = new TtlCache({
     stdTtl: 24 * 60 * 60, // 1 day
   });
@@ -219,16 +219,16 @@ export abstract class WhatsappSession {
     engineConfig,
     ignore,
   }: SessionParams) {
-    this._status = WAHASessionStatus.STOPPED;
+    this._status = BUNWASessionStatus.STOPPED;
     // BehaviorSubject so that new WebSocket subscribers receive the current
     // status on connect, not just future transitions.
-    this.status$ = new BehaviorSubject<WAHASessionStatus>(WAHASessionStatus.STOPPED);
+    this.status$ = new BehaviorSubject<BUNWASessionStatus>(BUNWASessionStatus.STOPPED);
 
     this.name = name;
     this.proxyConfig = proxyConfig;
     this.loggerBuilder = loggerBuilder;
     this.logger = loggerBuilder.child({ name: 'WhatsappSession' });
-    this.events2 = new DefaultMap<WAHAEvents, SwitchObservable<any>>(
+    this.events2 = new DefaultMap<BUNWAEvents, SwitchObservable<any>>(
       (key) =>
         new SwitchObservable((obs$) => {
           return obs$.pipe(
@@ -251,24 +251,24 @@ export abstract class WhatsappSession {
         }),
     );
 
-    this.events2.get(WAHAEvents.SESSION_STATUS).switch(
+    this.events2.get(BUNWAEvents.SESSION_STATUS).switch(
       this.status$
         // Wait for WORKING status to get all the info
         // https://github.com/devlikeapro/waha/issues/409
         .pipe(
-          switchMap((status: WAHASessionStatus) => {
+          switchMap((status: BUNWASessionStatus) => {
             const me = this.getSessionMeInfo();
             const hasMe = !!me?.pushName && !!me?.id;
             // Delay WORKING by 1 second if condition is met
             // Usually we get WORKING with all the info after
-            if (status === WAHASessionStatus.WORKING && !hasMe) {
+            if (status === BUNWASessionStatus.WORKING && !hasMe) {
               return of(status).pipe(delay(2000));
             }
             return of(status);
           }),
           // Remove consecutive duplicate WORKING statuses
           distinctUntilChanged(
-            (prev, curr) => prev === curr && curr === WAHASessionStatus.WORKING,
+            (prev, curr) => prev === curr && curr === BUNWASessionStatus.WORKING,
           ),
           // attach current time (ms)
           timestamp(),
@@ -315,17 +315,17 @@ export abstract class WhatsappSession {
     this.jids.ignore = ignore;
   }
 
-  /** Link-time history sync status. Only NOWEB tracks it. */
+  /** Link-time history sync status. Only BUNWEB tracks it. */
   public getHistorySyncStatus(): HistorySyncStatus {
     return emptyHistorySyncStatus('unsupported');
   }
 
-  public getEventObservable(event: WAHAEvents) {
+  public getEventObservable(event: BUNWAEvents) {
     return this.events2.get(event);
   }
 
-  public set status(value: WAHASessionStatus) {
-    if (this.unpairing && value !== WAHASessionStatus.STOPPED) {
+  public set status(value: BUNWASessionStatus) {
+    if (this.unpairing && value !== BUNWASessionStatus.STOPPED) {
       // In case of unpairing
       // wait for STOPPED event, ignore the rest
       return;
@@ -338,16 +338,16 @@ export abstract class WhatsappSession {
     return this._status;
   }
 
-  protected set presence(value: WAHAPresenceStatus) {
+  protected set presence(value: BUNWAPresenceStatus) {
     switch (value) {
       case null:
         this._presence = null;
         break;
-      case WAHAPresenceStatus.ONLINE:
-        this._presence = WAHAPresenceStatus.ONLINE;
+      case BUNWAPresenceStatus.ONLINE:
+        this._presence = BUNWAPresenceStatus.ONLINE;
         break;
-      case WAHAPresenceStatus.OFFLINE:
-        this._presence = WAHAPresenceStatus.OFFLINE;
+      case BUNWAPresenceStatus.OFFLINE:
+        this._presence = BUNWAPresenceStatus.OFFLINE;
         break;
       default:
         // Ignore chat relates presence
@@ -356,8 +356,8 @@ export abstract class WhatsappSession {
   }
 
   public get presence():
-    | WAHAPresenceStatus.ONLINE
-    | WAHAPresenceStatus.OFFLINE
+    | BUNWAPresenceStatus.ONLINE
+    | BUNWAPresenceStatus.OFFLINE
     | null {
     return this._presence;
   }
@@ -619,17 +619,17 @@ export abstract class WhatsappSession {
     if (!this.presenceAutoOnlineConfig.enabled) {
       return;
     }
-    if (this.status !== WAHASessionStatus.WORKING) {
+    if (this.status !== BUNWASessionStatus.WORKING) {
       return;
     }
     this.lastActivityTimestamp = Date.now();
     // If not ONLINE yet, send ONLINE
-    if (this._presence !== WAHAPresenceStatus.ONLINE) {
+    if (this._presence !== BUNWAPresenceStatus.ONLINE) {
       try {
         // Force set ONLINE in case of many requests comes at the same time
         // So we'll set ONLINE exactly once
-        this.presence = WAHAPresenceStatus.ONLINE;
-        await this.setPresence(WAHAPresenceStatus.ONLINE);
+        this.presence = BUNWAPresenceStatus.ONLINE;
+        await this.setPresence(BUNWAPresenceStatus.ONLINE);
         this.logger.debug('Set presence to ONLINE due to activity');
       } catch (error) {
         this.logger.debug({ err: error }, 'Failed to set presence ONLINE');
@@ -642,18 +642,18 @@ export abstract class WhatsappSession {
     // Schedule to go back OFFLINE after timeout without activity
     this.presenceOfflineTimeout = setTimeout(async () => {
       try {
-        const working = this.status === WAHASessionStatus.WORKING;
-        const online = this.presence === WAHAPresenceStatus.ONLINE;
+        const working = this.status === BUNWASessionStatus.WORKING;
+        const online = this.presence === BUNWAPresenceStatus.ONLINE;
         if (!working || !online) {
           // Nothing to do
           return;
         }
-        await this.setPresence(WAHAPresenceStatus.OFFLINE);
+        await this.setPresence(BUNWAPresenceStatus.OFFLINE);
         this.logger.debug(
           'Auto-set presence to OFFLINE after time without activity',
         );
       } catch (error) {
-        this.presence = WAHAPresenceStatus.OFFLINE;
+        this.presence = BUNWAPresenceStatus.OFFLINE;
         this.logger.debug({ err: error }, 'Failed to set presence OFFLINE');
       }
       this.cleanupPresenceTimeout();
@@ -1066,17 +1066,17 @@ export abstract class WhatsappSession {
   }
 
   public setPresence(
-    presence: WAHAPresenceStatus,
+    presence: BUNWAPresenceStatus,
     chatId?: string,
   ): Promise<void> {
     throw this.notImplemented();
   }
 
-  public getPresences(): Promise<WAHAChatPresences[]> {
+  public getPresences(): Promise<BUNWAChatPresences[]> {
     throw this.notImplemented();
   }
 
-  public getPresence(id: string): Promise<WAHAChatPresences> {
+  public getPresence(id: string): Promise<BUNWAChatPresences> {
     throw this.notImplemented();
   }
 
@@ -1198,7 +1198,7 @@ export abstract class WhatsappSession {
    * Run one outgoing send under the sending policy: refuse it with
    * TooManyRequestsException when a limit applies, otherwise send and record
    * the outcome. Counters are keyed by the normalized JID, the same key the
-   * NOWEB engine uses, so a session keeps its history across engines.
+   * BUNWEB engine uses, so a session keeps its history across engines.
    */
   protected async withSendingPolicy<T>(chatId: string, send: () => Promise<T>): Promise<T> {
     const policy = this.getSendingPolicy();
@@ -1257,7 +1257,7 @@ export abstract class WhatsappSession {
       return;
     }
     this.logger.info(
-      "You can disable QR in console by setting 'WAHA_PRINT_QR=false' in your environment variables.",
+      "You can disable QR in console by setting 'BUNWA_PRINT_QR=false' in your environment variables.",
     );
     qrcode.generate(qr.raw, { small: true });
   }

@@ -1,7 +1,7 @@
 /**
- * whatsapp-web.js Session for WAHA-Bun
+ * whatsapp-web.js Session for BunWa
  *
- * Extends WhatsappSession (the same base class used by NOWEB/Baileys) and
+ * Extends WhatsappSession (the same base class used by BUNWEB/Baileys) and
  * implements all abstract methods using whatsapp-web.js backed by Puppeteer/Chrome.
  *
  * This is Path A from the wiring plan — a proper session class that reuses all
@@ -40,10 +40,10 @@ import {
   ContactRequest,
 } from '../../../structures/contacts.dto';
 import {
-  WAHAEngine,
-  WAHAEvents,
-  WAHAPresenceStatus,
-  WAHASessionStatus,
+  BUNWAEngine,
+  BUNWAEvents,
+  BUNWAPresenceStatus,
+  BUNWASessionStatus,
 } from '../../../structures/enums.dto';
 import { BinaryFile, RemoteFile } from '../../../structures/files.dto';
 import {
@@ -83,7 +83,7 @@ import { participantId } from '../../utils/jids';
 /**
  * Resolve one entry of a participants payload into a whatsapp-web.js chat id.
  * The API contract is a list of chat ids (15551234567 or 15551234567@c.us);
- * objects carrying an `id` are accepted too, matching the NOWEB engine. A
+ * objects carrying an `id` are accepted too, matching the BUNWEB engine. A
  * malformed entry is a bad request instead of an undefined participant.
  */
 function toWebjsParticipantId(participant: unknown): string {
@@ -98,7 +98,7 @@ function toWebjsParticipantId(participant: unknown): string {
 
 /**
  * Map a whatsapp-web.js participant onto the API shape. The library reports
- * booleans (isAdmin, isSuperAdmin); the contract uses roles, matching the NOWEB
+ * booleans (isAdmin, isSuperAdmin); the contract uses roles, matching the BUNWEB
  * engine and the documented GroupParticipant.
  */
 function toGroupParticipant(participant: any): GroupParticipant {
@@ -171,7 +171,7 @@ function isHttpUrl(value: string): boolean {
 // Session class
 // ---------------------------------------------------------------------------
 export class WhatsappSessionWebJs extends WhatsappSession {
-  engine = WAHAEngine.WEBJS;
+  engine = BUNWAEngine.WEBJS;
 
   private client: Client | null = null;
   /** Last presence state seen per chat id (WEBJS has no presence store). */
@@ -185,14 +185,14 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   private calls: WebJSCallController | null = null;
 
   // RxJS Subjects for bridging whatsapp-web.js events → WAHA event observables
-  private eventSubjects: Map<WAHAEvents, Subject<any>> = new Map();
+  private eventSubjects: Map<BUNWAEvents, Subject<any>> = new Map();
 
   public constructor(config: any) {
     super(config);
     this.logger = this.loggerBuilder.child({ name: 'WebJsSession' });
   }
 
-  private getEventSubject(event: WAHAEvents): Subject<any> {
+  private getEventSubject(event: BUNWAEvents): Subject<any> {
     if (!this.eventSubjects.has(event)) {
       const subject = new Subject<any>();
       this.events2.get(event).switch(subject);
@@ -206,7 +206,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   // ------------------------------------------------------------------
 
   async start() {
-    this.status = WAHASessionStatus.STARTING;
+    this.status = BUNWASessionStatus.STARTING;
     this.logger.info('Starting whatsapp-web.js session...');
 
     // Ensure sessions directory exists
@@ -218,7 +218,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       await this.buildClient();
     } catch (err: any) {
       this.logger.error({ err }, 'Failed to start whatsapp-web.js client');
-      this.status = WAHASessionStatus.FAILED;
+      this.status = BUNWASessionStatus.FAILED;
     }
   }
 
@@ -283,22 +283,22 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   private setupEventHandlers(): void {
     if (!this.client) return;
 
-    const status$ = this.getEventSubject(WAHAEvents.SESSION_STATUS);
-    const msg$ = this.getEventSubject(WAHAEvents.MESSAGE);
-    const msgAny$ = this.getEventSubject(WAHAEvents.MESSAGE_ANY);
-    const msgAck$ = this.getEventSubject(WAHAEvents.MESSAGE_ACK);
-    const groupJoin$ = this.getEventSubject(WAHAEvents.GROUP_JOIN);
-    const groupLeave$ = this.getEventSubject(WAHAEvents.GROUP_LEAVE);
-    const presence$ = this.getEventSubject(WAHAEvents.PRESENCE_UPDATE);
+    const status$ = this.getEventSubject(BUNWAEvents.SESSION_STATUS);
+    const msg$ = this.getEventSubject(BUNWAEvents.MESSAGE);
+    const msgAny$ = this.getEventSubject(BUNWAEvents.MESSAGE_ANY);
+    const msgAck$ = this.getEventSubject(BUNWAEvents.MESSAGE_ACK);
+    const groupJoin$ = this.getEventSubject(BUNWAEvents.GROUP_JOIN);
+    const groupLeave$ = this.getEventSubject(BUNWAEvents.GROUP_LEAVE);
+    const presence$ = this.getEventSubject(BUNWAEvents.PRESENCE_UPDATE);
 
     this.client.on('qr', async (qrRaw: string) => {
       try {
         this.qr.save(qrRaw);
-        this.status = WAHASessionStatus.SCAN_QR_CODE;
+        this.status = BUNWASessionStatus.SCAN_QR_CODE;
         this.printQR(this.qr);
         this.logger.info('QR code received — scan with WhatsApp');
         status$.next({
-          status: WAHASessionStatus.SCAN_QR_CODE,
+          status: BUNWASessionStatus.SCAN_QR_CODE,
           qr: await this.qr.get(),
         });
       } catch (err) {
@@ -308,15 +308,15 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
     this.client.on('authenticated', () => {
       this.logger.info('Authenticated successfully');
-      if (this.status !== WAHASessionStatus.WORKING &&
-          this.status !== WAHASessionStatus.FAILED) {
-        this.status = WAHASessionStatus.STARTING;
+      if (this.status !== BUNWASessionStatus.WORKING &&
+          this.status !== BUNWASessionStatus.FAILED) {
+        this.status = BUNWASessionStatus.STARTING;
       }
     });
 
     this.client.on('auth_failure', (msg: string) => {
       this.logger.error({ msg }, 'Auth failure');
-      this.status = WAHASessionStatus.FAILED;
+      this.status = BUNWASessionStatus.FAILED;
     });
 
     this.client.on('ready', async () => {
@@ -329,7 +329,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     // WhatsApp Web can reload the page (for example after a version change),
     // which drops the injected shim; reinstall it once the page reconnects.
     this.client.on('change_state', (state: string) => {
-      if (state === 'CONNECTED' && this.status === WAHASessionStatus.WORKING) {
+      if (state === 'CONNECTED' && this.status === BUNWASessionStatus.WORKING) {
         void this.installChatModelShim();
         void this.installCalls();
       }
@@ -337,8 +337,8 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
     this.client.on('disconnected', (reason: WAState) => {
       this.logger.warn(`Disconnected: ${reason}`);
-      if (this.status === WAHASessionStatus.WORKING) {
-        this.status = WAHASessionStatus.FAILED;
+      if (this.status === BUNWASessionStatus.WORKING) {
+        this.status = BUNWASessionStatus.FAILED;
       }
     });
 
@@ -346,7 +346,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     // tracked by the call controller and the REST/MCP surface.
     this.client.on('call', (call: any) => {
       try {
-        this.getEventSubject(WAHAEvents.CALL_RECEIVED).next({
+        this.getEventSubject(BUNWAEvents.CALL_RECEIVED).next({
           id: call?.id,
           from: call?.from,
           isVideo: !!call?.isVideo,
@@ -377,7 +377,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
         } catch {}
 
         msg$.next(waMsg);
-        // message.any carries every message, incoming included (as on NOWEB).
+        // message.any carries every message, incoming included (as on BUNWEB).
         msgAny$.next(waMsg);
         this.maintainPresenceOnline();
       } catch (err) {
@@ -440,7 +440,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   async stop(): Promise<void> {
     this.logger.info('Stopping whatsapp-web.js session...');
     if (!this.client) {
-      this.status = WAHASessionStatus.STOPPED;
+      this.status = BUNWASessionStatus.STOPPED;
       return;
     }
     try {
@@ -450,7 +450,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     } finally {
       this.client = null;
       this.qr = new QR();
-      this.status = WAHASessionStatus.STOPPED;
+      this.status = BUNWASessionStatus.STOPPED;
       this.cleanupPresenceTimeout();
     }
   }
@@ -468,16 +468,16 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   private markReady(): void {
     this.clearReadyReconcile();
     this.populateMeInfo();
-    this.status = WAHASessionStatus.WORKING;
+    this.status = BUNWASessionStatus.WORKING;
     this.maintainPresenceOnline();
   }
 
   private scheduleReadyReconcile(): void {
     this.clearReadyReconcile();
-    if (this.status === WAHASessionStatus.WORKING) return;
+    if (this.status === BUNWASessionStatus.WORKING) return;
     this.readyReconcileStartedAt = Date.now();
     this.readyReconcileTimer = setTimeout(() => {
-      if (this.status === WAHASessionStatus.WORKING) return;
+      if (this.status === BUNWASessionStatus.WORKING) return;
       if (!this.client) return;
       this.populateMeInfo();
       if (this.meInfo) {
@@ -1109,14 +1109,14 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   // Presence
   // ------------------------------------------------------------------
 
-  async setPresence(presence: WAHAPresenceStatus, chatId?: string): Promise<void> {
+  async setPresence(presence: BUNWAPresenceStatus, chatId?: string): Promise<void> {
     if (!this.client) return;
     try {
       if (chatId) {
         const chat = await this.client!.getChatById(this.ensureSuffix(chatId));
-        if (presence === WAHAPresenceStatus.TYPING) {
+        if (presence === BUNWAPresenceStatus.TYPING) {
           await chat.sendStateTyping();
-        } else if (presence === WAHAPresenceStatus.RECORDING) {
+        } else if (presence === BUNWAPresenceStatus.RECORDING) {
           await chat.sendStateRecording();
         } else {
           await chat.clearState();
@@ -1354,7 +1354,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     if (!this.client) {
       throw new Error('Session is not started. Start the session first.');
     }
-    if (this.status !== WAHASessionStatus.WORKING) {
+    if (this.status !== BUNWASessionStatus.WORKING) {
       throw new Error('Session is not ready yet');
     }
   }
@@ -1400,7 +1400,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       type: mapWwebjsMessageType(msg.type || 'text'),
       timestamp: msg.timestamp || Math.floor(Date.now() / 1000),
       isForwarded: Boolean(msg.isForwarded),
-      // `fromMe`, the field NOWEB and every consumer (dashboard, Chatwoot,
+      // `fromMe`, the field BUNWEB and every consumer (dashboard, Chatwoot,
       // webhooks) read; this used to be `isFromMe`.
       fromMe: Boolean(msg.fromMe),
       hasMedia: Boolean(msg.hasMedia),

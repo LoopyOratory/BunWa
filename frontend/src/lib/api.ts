@@ -304,7 +304,7 @@ export interface RestApiKey {
 const API_BASE = window.location.origin
 
 function getDashboardAuth(): string | null {
-  return localStorage.getItem("waha_dashboard_auth")
+  return localStorage.getItem("bunwa_dashboard_auth") ?? localStorage.getItem("waha_dashboard_auth")
 }
 
 /**
@@ -312,11 +312,11 @@ function getDashboardAuth(): string | null {
  *
  * The console signs in with the dashboard credentials, which the server accepts
  * as admin-equivalent. A real API key can be supplied through localStorage
- * (`waha-api-key`) for deployments that require one.
+ * (`bunwa-api-key`) for deployments that require one.
  *
  * We deliberately never send a placeholder key: a wrong `x-api-key` is rejected
  * before Basic auth is considered, so a hardcoded fallback breaks every request
- * on a server that has a real WAHA_API_KEY set.
+ * on a server that has a real BUNWA_API_KEY set.
  */
 export function getApiAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {}
@@ -324,7 +324,9 @@ export function getApiAuthHeaders(): Record<string, string> {
   if (dashboardAuth) {
     headers["Authorization"] = `Basic ${dashboardAuth}`
   }
-  const apiKey = localStorage.getItem("waha-api-key")
+  // bunwa-api-key is canonical; the waha-api-key spelling stays readable
+  // so existing operator setups keep working after the rename.
+  const apiKey = localStorage.getItem("bunwa-api-key") ?? localStorage.getItem("waha-api-key")
   if (apiKey) {
     headers["x-api-key"] = apiKey
   }

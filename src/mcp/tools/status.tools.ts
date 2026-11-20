@@ -1,5 +1,5 @@
 /**
- * Status (WhatsApp Stories) MCP tools for WAHA-Bun.
+ * Status (WhatsApp Stories) MCP tools for BunWa.
  * Uses session object methods directly (sendTextStatus, deleteStatus, etc.)
  */
 import { z } from 'zod';

@@ -1,4 +1,4 @@
-export const WAHA_WEBHOOKS: Record<string, string> = {
+export const BUNWA_WEBHOOKS: Record<string, string> = {
   'session.status': 'Session status changed',
   'message': 'New message received',
   'message.reaction': 'Message reaction',
