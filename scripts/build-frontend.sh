@@ -22,6 +22,17 @@ rm -rf "$FRONTEND_DIST"
 cp -r "$FRONTEND_SRC/dist" "$FRONTEND_DIST"
 
 echo ""
+echo "[3b/3] Precompressing hashed assets (served on Accept-Encoding: gzip)..."
+cd "$FRONTEND_DIST"
+for f in assets/*.js assets/*.css; do
+  if [ -f "$f" ]; then
+    gzip -9 -k -n "$f"
+    echo "  $(basename "$f") -> $(basename "$f").gz ($(stat -c%s "$f") -> $(stat -c%s "$f.gz") bytes)"
+  fi
+done
+cd "$BUNWA_DIR"
+
+echo ""
 echo "=== Done! ==="
 echo "Frontend built and deployed."
 echo "Access at: http://localhost:3000/"

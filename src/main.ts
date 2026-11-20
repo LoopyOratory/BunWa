@@ -61,7 +61,7 @@ const IMMUTABLE_ASSET = /-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/;
  *
  * Returns null when the path does not exist, leaving the fallback to the caller.
  */
-async function serveStaticFile(filePath: string, ifNoneMatch: string | null): Promise<Response | null> {
+async function serveStaticFile(filePath: string, ifNoneMatch: string | null, acceptEncoding?: string | null): Promise<Response | null> {
   let fileStat;
   try {
     fileStat = await stat(filePath); // async: does not block the event loop per request
@@ -69,7 +69,7 @@ async function serveStaticFile(filePath: string, ifNoneMatch: string | null): Pr
     return null;
   }
   if (fileStat.isDirectory()) {
-    return serveStaticFile(join(filePath, 'index.html'), ifNoneMatch);
+    return serveStaticFile(join(filePath, 'index.html'), ifNoneMatch, acceptEncoding);
   }
 
   const isHtml = filePath.endsWith('.html');
@@ -86,6 +86,31 @@ async function serveStaticFile(filePath: string, ifNoneMatch: string | null): Pr
         ? 'public, max-age=31536000, immutable'
         : 'no-cache',
   };
+
+  // Precompressed assets: the build gzips the hashed bundle next to the source
+  // (index-*.js.gz). Bun 1.4.x ignores Bun.serve's compress option (verified:
+  // a 40 KB probe with compress:true ships identity), so compression happens
+  // at build time and this branch picks the .gz when the client accepts it.
+  // One-time CPU at deploy instead of per-request, and the SSE/WebSocket
+  // surfaces never pass through here.
+  const acceptsGzip = (acceptEncoding ?? '').includes('gzip');
+  if (acceptsGzip && !isHtml && IMMUTABLE_ASSET.test(filePath)) {
+    const gzPath = `${filePath}.gz`;
+    const gzStat = await stat(gzPath).catch(() => null);
+    if (gzStat?.isFile()) {
+      // ETag/Last-Modified stay derived from the SOURCE file so a deploy
+      // changes them once; Content-Type must name the source media type,
+      // not application/gzip.
+      return new Response(Bun.file(gzPath), {
+        headers: {
+          ...headers,
+          'Content-Type': Bun.file(filePath).type,
+          'Content-Encoding': 'gzip',
+          Vary: 'Accept-Encoding',
+        },
+      });
+    }
+  }
 
   if (ifNoneMatch === etag) {
     return new Response(null, { status: 304, headers });
@@ -265,7 +290,7 @@ async function bootstrap() {
         return next();
       }
 
-      const file = await serveStaticFile(filePath, c.req.header('if-none-match') ?? null);
+      const file = await serveStaticFile(filePath, c.req.header('if-none-match') ?? null, c.req.header('accept-encoding') ?? null);
       if (file) {
         return file;
       }
@@ -274,6 +299,7 @@ async function bootstrap() {
       const indexFile = await serveStaticFile(
         join(customDashboardPath, 'index.html'),
         c.req.header('if-none-match') ?? null,
+        c.req.header('accept-encoding') ?? null,
       );
       if (indexFile) {
         return indexFile;
@@ -312,7 +338,7 @@ async function bootstrap() {
           return next();
         }
 
-        const file = await serveStaticFile(filePath, c.req.header('if-none-match') ?? null);
+        const file = await serveStaticFile(filePath, c.req.header('if-none-match') ?? null, c.req.header('accept-encoding') ?? null);
         return file ?? next();
       });
 
