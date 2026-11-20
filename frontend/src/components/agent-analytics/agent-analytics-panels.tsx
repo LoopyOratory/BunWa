@@ -147,10 +147,13 @@ export function AttentionPanel({
 export function LeaderboardPanel({
   rows,
   currency,
+  liveAgentIds,
   onSelectAgent,
 }: {
   rows: AnalyticsLeaderboardRow[]
   currency: string
+  /** Agents with a live interaction right now; renders a pulsing dot beside them. */
+  liveAgentIds?: Set<string>
   onSelectAgent?: (agentId: string) => void
 }) {
   return (
@@ -184,6 +187,15 @@ export function LeaderboardPanel({
               <div className="col-span-2 flex min-w-0 items-center gap-2 md:col-span-1">
                 <span className="min-w-0 truncate text-sm font-medium">{row.agentName}</span>
                 <AgentStatusBadge status={row.status} />
+                {liveAgentIds?.has(row.agentId) && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-success-foreground"
+                    title="Interacting with someone right now"
+                  >
+                    <span className="size-1.5 animate-pulse rounded-full bg-success" />
+                    live
+                  </span>
+                )}
               </div>
               <p className="text-right text-sm tabular-nums">{formatNumber(row.conversations)}</p>
               <p className="text-right text-sm tabular-nums">

@@ -249,6 +249,54 @@ each customer and agent turn with the conversation id; the admin UI is read-only
 Text is capped at 20,000 characters per message. There is no automatic retention
 policy yet, so add one before high-volume production traffic.
 
+## Live activity indicator
+
+"Is this agent on a call or chatting right now" is **heartbeat state, never a
+stored field**: a live call dies with the process, so persisting it would lie
+after every restart. The runtime reports a heartbeat every ~5 s while an
+interaction is active; the server keeps an in-memory map and prunes entries
+whose last beat is older than **15 s**, so a crashed runtime heals itself
+instead of pinning a stale "on call" badge.
+
+- `POST /api/agents/:id/activity` — `{ kind: "voice" | "chat", active: true |
+  false, conversationId?, contact? }`. `active: true` upserts a heartbeat
+  (preserving `since` while the kind is unchanged); `active: false` ends it.
+  400 on a bad kind or missing `active`, 404 on an unknown agent.
+- `GET /api/agents/activity` — every live engagement, pruned first.
+- `GET /api/agents` now attaches `engaged` to each agent. A **paused agent
+  never reports as live** — pausing means the operator stopped it. Deleting
+  an agent clears its engagement.
+- `GET /api/agents/analytics/dashboard` carries `liveNow`
+  `{ count, voice, chat, agents[] }` so one request answers "who is busy
+  right now" alongside the period metrics.
+- `GET /api/agent-activity/stream?ticket=…` — ticket-authed SSE (same
+  single-use `POST /api/ws/ticket` exchange as the /ws channel) that emits
+  one `agent.activity` event per change, with a 15 s keepalive beat. It
+  lives at its own prefix because the `/api/agents` router applies the
+  API-key middleware to everything beneath it, which would 401 a
+  header-less EventSource.
+
+The dashboard consumes the stream through `useAgentActivityStream`
+(trailing-edge debounce: bursts coalesce, the final event always lands)
+with normal polling as the fallback. Indicators:
+
+- **Agent cards and the agent detail dialog** — pulsing pill
+  `On call · 2m 14s` / `Chatting with Ama · 45s` with a live elapsed
+  ticker; clicking a card's pill opens that agent's analytics. The pill
+  hides itself locally once a heartbeat is 15 s stale, even offline.
+- **Agent analytics** — `N active` pill in the header (voice/chat split in
+  its tooltip), a `live` dot in the leaderboard, and a pulsing status on
+  the matching row in the chat-history table when the heartbeat carries a
+  conversation id.
+
+Runtime hooks: `scripts/call-live.ts` (Gemini Live) and
+`scripts/fish-bridge.ts` (Fish) heartbeat `kind: "voice"` every 5 s and
+send a final `active: false` on shutdown — **only when `BUNWA_AGENT_ID`
+is exported**, so existing call runs are unchanged. The chat runtime sends
+`kind: "chat"` with the conversation id when it lands (one call at the
+reply site). Verified end to end: badge appears in ~0.4 s via SSE, clears
+in ~0.4 s on end, self-heals at 15 s TTL, suppressed when paused.
+
 ## User profiles
 
 A profile is a small set of decision-relevant facts about one person, shared by

@@ -43,6 +43,8 @@ const env = {
   sink: process.env.BUNWA_CALL_AUDIO_SINK || '',
   language: process.env.BUNWA_LANGUAGE || 'English',
   pacing: Number(process.env.BUNWA_AUDIO_PACING || '0'),
+  /** Optional BunWa agent id: set it to light the "On call" indicator. */
+  agentId: process.env.BUNWA_AGENT_ID || '',
   systemPrompt:
     process.env.BUNWA_SYSTEM_PROMPT ||
     'You are a helpful assistant on a live WhatsApp phone call. Keep every reply to one or two short spoken sentences. Never use markdown, lists, emoji, or stage directions. Speak naturally and leave room for the caller to interrupt.',
@@ -305,6 +307,24 @@ async function main(): Promise<void> {
         'Start it with `bun run call:audio-device` and export BUNWA_CALL_AUDIO_SINK=wa_out.',
     );
     process.exit(2);
+  }
+
+  // With BUNWA_AGENT_ID set, heartbeat "this agent is on a call" every 5 s.
+  // The server prunes the state 15 s after a missed beat, so a crash never
+  // leaves a stale "on call" badge behind.
+  if (env.agentId) {
+    const report = (active: boolean) =>
+      fetch(`${env.baseUrl}/api/agents/${env.agentId}/activity`, {
+        method: 'POST',
+        headers: { 'X-Api-Key': env.apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'voice', active }),
+      }).catch(() => {});
+    await report(true);
+    const beat = setInterval(() => void report(true), 5_000);
+    process.on('SIGINT', () => {
+      clearInterval(beat);
+      void report(false).finally(() => process.exit(0));
+    });
   }
 
   const writer = new SinkWriter(env.sink, CALL_RATE, env.pacing);

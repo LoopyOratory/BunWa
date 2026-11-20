@@ -30,6 +30,8 @@ const env = {
   bunwaUrl: Bun.env.BUNWA_URL || 'http://127.0.0.1:3001',
   bunwaKey: Bun.env.BUNWA_API_KEY || '',
   bunwaSession: Bun.env.BUNWA_SESSION || 'calltest',
+  /** Optional BunWa agent id: set it to light the "On call" indicator. */
+  bunwaAgentId: Bun.env.BUNWA_AGENT_ID || '',
   fishKey: Bun.env.FISH_API_KEY || '',
   agentId: Bun.env.FISH_AGENT_ID || '76d8826773b24aecbaec1a6796f8f5e5',
   sink: Bun.env.BUNWA_CALL_AUDIO_SINK || 'wa_tts',
@@ -483,10 +485,28 @@ if (import.meta.main) {
     console.error('FISH_API_KEY and BUNWA_API_KEY are required');
     process.exit(2);
   }
+  // With BUNWA_AGENT_ID set, heartbeat "this agent is on a call" every 5 s.
+  // The server prunes the state 15 s after a missed beat, so a crash never
+  // leaves a stale "on call" badge behind.
+  const reportActivity = (active: boolean) => {
+    if (!env.bunwaAgentId) return Promise.resolve();
+    return fetch(`${env.bunwaUrl}/api/agents/${env.bunwaAgentId}/activity`, {
+      method: 'POST',
+      headers: { 'X-Api-Key': env.bunwaKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'voice', active }),
+    })
+      .catch(() => {});
+  };
+  const activityBeat = env.bunwaAgentId
+    ? setInterval(() => void reportActivity(true), 5_000)
+    : null;
+  if (env.bunwaAgentId) void reportActivity(true);
   const bridge = new FishBridge();
   await bridge.start();
   const shutdown = async () => {
+    if (activityBeat) clearInterval(activityBeat);
     await bridge.stop();
+    await reportActivity(false);
     process.exit(0);
   };
   process.on('SIGINT', shutdown);

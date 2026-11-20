@@ -5,7 +5,7 @@
  * dashboard shape the UI consumes. Keeping the maths here means the REST
  * endpoint, tests and future rollups all agree on what a metric means.
  */
-import type { Agent, AnalyticsEvent, Conversation } from './agent.types';
+import type { Agent, AgentLiveNow, AnalyticsEvent, Conversation } from './agent.types';
 
 export type AnalyticsRangeKey = '24h' | '7d' | '30d' | '90d';
 export type AnalyticsChannel = 'all' | 'whatsapp' | 'voice';
@@ -139,6 +139,8 @@ export interface AgentAnalyticsDashboard {
   agentId: string | null;
   channel: AnalyticsChannel;
   currency: string;
+  /** Instantaneous "who is busy right now" state, attached by the service. */
+  liveNow?: AgentLiveNow;
   totals: AgentAnalyticsTotals;
   kpis: {
     conversations: AnalyticsKpi;

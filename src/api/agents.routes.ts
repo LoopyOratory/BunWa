@@ -1,11 +1,13 @@
 import { Hono } from 'hono';
+import { streamSSE } from 'hono/streaming';
 import { randomBytes } from 'crypto';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { Action, CanServer, policiesMiddleware } from '../middleware/policies';
 import { agentService } from '../core/agent/agent.service';
 import { conversationLifecycle } from '../core/agent/conversation-lifecycle';
 import type { BuilderAnswers } from '../core/agent/agent.builder';
-import type { Agent } from '../core/agent/agent.types';
+import type { Agent, AgentEngagement, AgentEngagementKind } from '../core/agent/agent.types';
+import { wsTickets } from './websocket-auth';
 import { validateToolDefinition } from '../core/tools/tool-schema';
 import { toFishWebhookTool } from '../core/tools/fish-tool.adapter';
 import { toGoogleFunctionDeclaration, toMcpToolDescriptor } from '../core/tools/google-tool.adapter';
@@ -35,7 +37,7 @@ function publicAgentMcp(mcp: Record<string, unknown>) {
 }
 
 /** Strip key material from an agent before it leaves the API. */
-function publicAgent(agent: Agent): Agent {
+function publicAgent(agent: Agent & { engaged?: AgentEngagement | null }): Agent & { engaged?: AgentEngagement | null } {
   const settings = { ...(agent.settings ?? {}) };
   const rawMcp = settings.mcp;
   if (rawMcp && typeof rawMcp === 'object' && !Array.isArray(rawMcp)) {
@@ -246,7 +248,7 @@ export function createAgentsRouter(): Hono {
   router.get(
     '/',
     policiesMiddleware(CanServer(Action.Retrieve)),
-    async (c) => c.json({ agents: (await agentService.listAgents()).map(publicAgent) }),
+    async (c) => c.json({ agents: (await agentService.listAgentsWithEngagement()).map(publicAgent) }),
   );
 
   router.post(
@@ -286,6 +288,37 @@ export function createAgentsRouter(): Hono {
         }
       }
       return c.json({ agent: publicAgent(agent) }, 201);
+    },
+  );
+
+  /* ---------------------------------------------------------------------- */
+  /* Live engagement — "on a call / chatting right now"                      */
+  /* Static routes stay above /:id so "activity" is not captured as an id.   */
+  /* ---------------------------------------------------------------------- */
+
+  router.get(
+    '/activity',
+    policiesMiddleware(CanServer(Action.Retrieve)),
+    (c) => c.json({ engagements: agentService.listEngagements() }),
+  );
+
+  router.post(
+    '/:id/activity',
+    policiesMiddleware(CanServer(Action.Manage)),
+    async (c) => {
+      const body = await c.req.json().catch(() => ({}));
+      const kind = body?.kind as AgentEngagementKind;
+      if (kind !== 'voice' && kind !== 'chat') return badRequest(c, 'kind must be "voice" or "chat"');
+      if (typeof body?.active !== 'boolean') return badRequest(c, 'active must be a boolean');
+      const agent = await agentService.getAgent(c.req.param('id'));
+      if (!agent) return notFound(c, 'Agent not found');
+      const engaged = agentService.reportActivity(agent.id, {
+        kind,
+        active: body.active,
+        conversationId: typeof body.conversationId === 'string' ? body.conversationId : null,
+        contact: typeof body.contact === 'string' ? body.contact : null,
+      });
+      return c.json({ engaged });
     },
   );
 
@@ -1073,6 +1106,49 @@ export function createAgentsRouter(): Hono {
       return c.json({ conversation });
     },
   );
+
+  return router;
+}
+
+/**
+ * SSE stream of live agent-interaction changes, mounted at its own
+ * /api/agent-activity prefix — NOT under /api/agents, whose router applies
+ * the API-key middleware to every path beneath it and would 401 an
+ * EventSource before this handler runs. A browser EventSource cannot send
+ * headers, so the stream authenticates with the same single-use ticket as
+ * the /ws channel (POST /api/ws/ticket). Each connection receives one
+ * `agent.activity` event per change; a keepalive beat every 15 s stops
+ * proxies from closing an idle stream. Consumers fall back to their normal
+ * polling when no ticket can be had.
+ */
+export function createAgentsActivityStreamRouter(): Hono {
+  const router = new Hono();
+
+  router.get('/stream', async (c) => {
+    const ticket = c.req.query('ticket');
+    const principal = ticket ? wsTickets.consume(ticket) : null;
+    if (!principal) {
+      return c.json({ error: 'A ticket from POST /api/ws/ticket is required' }, 401);
+    }
+    return streamSSE(c, async (stream) => {
+      let closed = false;
+      const unsubscribe = agentService.onEngagementChange((change) => {
+        if (closed) return;
+        void stream.writeSSE({ event: 'agent.activity', data: JSON.stringify(change) }).catch(() => {});
+      });
+      stream.onAbort(() => {
+        closed = true;
+        unsubscribe();
+      });
+      while (!closed) {
+        await new Promise((resolve) => setTimeout(resolve, 15_000));
+        if (closed) break;
+        // EventSource ignores unnamed events; consumers listen for
+        // "agent.activity" only, so this beat is invisible to them.
+        await stream.writeSSE({ data: 'keepalive' }).catch(() => {});
+      }
+    });
+  });
 
   return router;
 }

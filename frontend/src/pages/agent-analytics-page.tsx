@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
+import { useAgentActivityStream } from "@/hooks/use-agent-activity"
 import {
   Bot,
   CalendarRange,
@@ -192,7 +193,16 @@ export function AgentAnalyticsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestKey])
 
+  // Live interaction push: keep "N active", the leaderboard dots and the
+  // history rows current within a second of a heartbeat. The hook coalesces
+  // bursts from many agents heartbeating every 5 s.
+  useAgentActivityStream(() => void load(true))
+
   const selectedAgent = useMemo(() => agents.find((agent) => agent.id === agentId) ?? null, [agents, agentId])
+  const liveAgentIds = useMemo(
+    () => new Set((data?.liveNow?.agents ?? []).map((entry) => entry.id)),
+    [data?.liveNow],
+  )
   const showEmpty = !isLoading && agents.length === 0 && !error
 
   const selectAgent = (id: string) => {
@@ -210,12 +220,24 @@ export function AgentAnalyticsPage() {
       title="Agent analytics"
       eyebrow="Overview · Agent performance"
       status={
-        <span
-          className="inline-flex items-center gap-1.5 rounded-full border border-success-border/60 bg-success-bg px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-success-foreground"
-          title={data ? `Updated ${new Date(data.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · refreshes automatically` : "Waiting for data"}
-        >
-          <span className="size-1.5 animate-pulse rounded-full bg-success" />
-          Live
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full border border-success-border/60 bg-success-bg px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-success-foreground"
+            title={data ? `Updated ${new Date(data.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · refreshes automatically` : "Waiting for data"}
+          >
+            <span className="size-1.5 animate-pulse rounded-full bg-success" />
+            Live
+          </span>
+          {data?.liveNow && data.liveNow.count > 0 && (
+            <span
+              role="status"
+              title={`${data.liveNow.voice} on call · ${data.liveNow.chat} chatting`}
+              className="inline-flex items-center gap-1.5 rounded-full border border-success-border/60 bg-success-bg/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-success-foreground"
+            >
+              <span className="size-1.5 animate-pulse rounded-full bg-success" />
+              {data.liveNow.count} active
+            </span>
+          )}
         </span>
       }
       meta={
@@ -399,7 +421,12 @@ export function AgentAnalyticsPage() {
               <CsatCard dashboard={data} />
             </div>
 
-            <LeaderboardPanel rows={data.leaderboard} currency={data.currency} onSelectAgent={selectAgent} />
+            <LeaderboardPanel
+              rows={data.leaderboard}
+              currency={data.currency}
+              liveAgentIds={liveAgentIds}
+              onSelectAgent={selectAgent}
+            />
 
             <ConversationHistoryTable
               agents={agents}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Link, useSearchParams } from "react-router-dom"
+import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import {
   Bot,
   Check,
@@ -17,12 +17,14 @@ import {
   Upload,
 } from "lucide-react"
 import { toast } from "sonner"
+import { AgentEngagedBadge } from "@/components/agent-engaged-badge"
 import { McpSkillPicker } from "@/components/mcp-skill-picker"
 import { ToolSetupGuide } from "@/components/tool-setup-guide"
 import { ExternalMcpServersDialog } from "@/components/external-mcp-servers-dialog"
 import { KnowledgeChunksDialog } from "@/components/knowledge-chunks-dialog"
 import { AttachmentReaderCard } from "@/components/attachment-reader-card"
 import { VoiceCallModelDialog } from "@/components/voice-call-model-dialog"
+import { useAgentActivityStream } from "@/hooks/use-agent-activity"
 import { PageLayout } from "@/components/page-layout"
 import { EmptyState, ErrorState, SectionHeading, StatCard } from "@/components/primitives"
 import { Badge } from "@/components/ui/badge"
@@ -88,6 +90,7 @@ function StatusBadge({ status }: { status: Agent["status"] }) {
 }
 
 function AgentCard({ agent, onOpen }: { agent: Agent; onOpen: (agent: Agent) => void }) {
+  const navigate = useNavigate()
   return (
     <Card className="group cursor-pointer border-border/70 bg-card/70 transition hover:border-primary/40 hover:shadow-lg" onClick={() => onOpen(agent)}>
       <CardHeader className="pb-3">
@@ -105,7 +108,16 @@ function AgentCard({ agent, onOpen }: { agent: Agent; onOpen: (agent: Agent) => 
               </CardDescription>
             </div>
           </div>
-          <StatusBadge status={agent.status} />
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <StatusBadge status={agent.status} />
+            <AgentEngagedBadge
+              engaged={agent.engaged ?? null}
+              onClick={(event) => {
+                event.stopPropagation()
+                navigate(`/agent-analytics?agentId=${agent.id}`)
+              }}
+            />
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3 pt-0">
@@ -1248,6 +1260,7 @@ function AgentDetailDialog({
                 <DialogTitle className="flex items-center gap-2">
                   {agent?.name}
                   {agent && <StatusBadge status={agent.status} />}
+                  {agent?.engaged && <AgentEngagedBadge engaged={agent.engaged} />}
                 </DialogTitle>
                 <DialogDescription>
                   {agent?.model || "Default model"}
@@ -1722,15 +1735,17 @@ export function AgentsPage() {
     }
   }, [agents, loading, searchParams])
 
-  const load = async () => {
-    setLoading(true)
-    setError(null)
+  const load = async (quiet = false) => {
+    if (!quiet) {
+      setLoading(true)
+      setError(null)
+    }
     try {
       const [list, stats] = await Promise.all([agentApi.list(), agentApi.analytics()])
       setAgents(list)
       setAnalytics(stats)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load agents")
+      if (!quiet) setError(err instanceof Error ? err.message : "Could not load agents")
     } finally {
       setLoading(false)
     }
@@ -1738,6 +1753,20 @@ export function AgentsPage() {
 
   useEffect(() => {
     void load()
+  }, [])
+
+  // Live interaction push: agent.activity events update the roster in under a
+  // second. The hook coalesces bursts and always lands the final event; a
+  // quiet 15 s poll rides along as the fallback when the stream cannot
+  // connect (a badge then appears within 15 s instead of 1 s, and never
+  // sticks around past its TTL).
+  useAgentActivityStream(() => void load(true))
+
+  useEffect(() => {
+    const interval = setInterval(() => void load(true), 15_000)
+    return () => clearInterval(interval)
+    // The fallback poll only calls stable setters; instant refreshes arrive
+    // through the activity stream instead.
   }, [])
 
   const activeCount = useMemo(() => agents.filter((agent) => agent.status === "active").length, [agents])

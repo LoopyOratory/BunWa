@@ -2,6 +2,16 @@ import { getApiAuthHeaders } from "./api"
 
 export type AgentStatus = "draft" | "active" | "paused"
 
+export interface AgentEngagement {
+  kind: "voice" | "chat"
+  conversationId: string | null
+  contact: string | null
+  /** ISO timestamp of the first heartbeat of the current interaction. */
+  since: string
+  /** ISO timestamp of the latest heartbeat; stale entries clear after ~15s. */
+  lastBeatAt: string
+}
+
 export interface Agent {
   id: string
   name: string
@@ -13,6 +23,8 @@ export interface Agent {
   settings: Record<string, unknown>
   createdAt: string
   updatedAt: string
+  /** Live interaction state, absent when the API predates this field. */
+  engaged?: AgentEngagement | null
 }
 
 export interface AgentSkill {
@@ -187,6 +199,21 @@ export interface AnalyticsRecentConversation {
   startedAt: string
 }
 
+export interface AgentLiveNow {
+  count: number
+  voice: number
+  chat: number
+  agents: Array<{
+    id: string
+    name: string
+    kind: "voice" | "chat"
+    conversationId: string | null
+    contact: string | null
+    since: string
+    lastBeatAt: string
+  }>
+}
+
 export interface AgentAnalyticsDashboard {
   range: AnalyticsRangeKey
   from: string
@@ -196,6 +223,8 @@ export interface AgentAnalyticsDashboard {
   agentId: string | null
   channel: AnalyticsChannel
   currency: string
+  /** Instantaneous "who is busy right now" state. */
+  liveNow?: AgentLiveNow
   totals: {
     conversations: number
     engaged: number

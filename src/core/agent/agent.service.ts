@@ -2,7 +2,11 @@ import type { AgentStore } from './agent.store';
 import { createAgentStore } from './agent.sql';
 import type {
   Agent,
+  AgentEngagement,
+  AgentEngagementKind,
+  AgentLiveNow,
   AgentSkill,
+  AgentWithEngagement,
   AnalyticsEvent,
   Conversation,
   ConversationListFilter,
@@ -87,6 +91,128 @@ export class AgentService {
     storePromise = null;
   }
 
+  /* ─────────────────────────────────────────────────────────────────────
+     Live engagement: "this agent is on a call / chatting right now".
+
+     The runtime reports a heartbeat every ~5 s while an interaction is
+     active. State is in-memory on purpose — a live call dies with the
+     process, so a restart must not leave a stale "on call" row behind.
+     Entries older than the TTL prune on every read, so a crashed runtime
+     heals itself within 15 s instead of lying forever.
+     ───────────────────────────────────────────────────────────────────── */
+
+  /** A missed heartbeat window after which an interaction is no longer live. */
+  static readonly ENGAGEMENT_TTL_MS = 15_000;
+
+  private engagements = new Map<string, AgentEngagement>();
+  private engagementListeners = new Set<(change: { agentId: string; engaged: AgentEngagement | null }) => void>();
+
+  /** Subscribe to live-interaction changes; returns an unsubscribe fn. */
+  onEngagementChange(
+    listener: (change: { agentId: string; engaged: AgentEngagement | null }) => void,
+  ): () => void {
+    this.engagementListeners.add(listener);
+    return () => this.engagementListeners.delete(listener);
+  }
+
+  private notifyEngagementChange(agentId: string, engaged: AgentEngagement | null): void {
+    for (const listener of this.engagementListeners) {
+      try {
+        listener({ agentId, engaged });
+      } catch {
+        // A broken listener must never break the heartbeat path.
+      }
+    }
+  }
+
+  /**
+   * Record one interaction heartbeat. `active: true` upserts (preserving
+   * `since` while the kind is unchanged); `active: false` ends it. Every
+   * call prunes entries whose last beat is older than the TTL.
+   */
+  reportActivity(
+    agentId: string,
+    input: { kind: AgentEngagementKind; active: boolean; conversationId?: string | null; contact?: string | null },
+    now: number = Date.now(),
+  ): AgentEngagement | null {
+    if (input.kind !== 'voice' && input.kind !== 'chat') {
+      throw new Error('kind must be "voice" or "chat"');
+    }
+    this.pruneEngagements(now);
+    if (!input.active) {
+      if (this.engagements.delete(agentId)) this.notifyEngagementChange(agentId, null);
+      return null;
+    }
+    const previous = this.engagements.get(agentId);
+    const engaged: AgentEngagement = {
+      kind: input.kind,
+      conversationId: typeof input.conversationId === 'string' && input.conversationId ? input.conversationId : null,
+      contact: typeof input.contact === 'string' && input.contact ? input.contact.slice(0, 120) : null,
+      since: previous && previous.kind === input.kind ? previous.since : new Date(now).toISOString(),
+      lastBeatAt: new Date(now).toISOString(),
+    };
+    this.engagements.set(agentId, engaged);
+    this.notifyEngagementChange(agentId, engaged);
+    return engaged;
+  }
+
+  /** Every live interaction, oldest heartbeat pruned first. */
+  listEngagements(now: number = Date.now()): Array<{ agentId: string; engaged: AgentEngagement }> {
+    this.pruneEngagements(now);
+    return [...this.engagements.entries()].map(([agentId, engaged]) => ({ agentId, engaged }));
+  }
+
+  /** Drop interactions whose last heartbeat missed the TTL window. */
+  private pruneEngagements(now: number = Date.now()): void {
+    const ttl = AgentService.ENGAGEMENT_TTL_MS;
+    for (const [agentId, engaged] of this.engagements) {
+      if (now - Date.parse(engaged.lastBeatAt) > ttl) {
+        this.engagements.delete(agentId);
+        this.notifyEngagementChange(agentId, null);
+      }
+    }
+  }
+
+  /**
+   * Agents with their live interaction attached. A paused agent never shows
+   * as live: pausing means the operator stopped it, so a stale runtime
+   * heartbeat must not resurrect an "on call" badge on the roster.
+   */
+  async listAgentsWithEngagement(): Promise<AgentWithEngagement[]> {
+    const agents = await this.listAgents();
+    this.pruneEngagements();
+    return agents.map((agent) => ({
+      ...agent,
+      engaged: agent.status === 'paused' ? null : this.engagements.get(agent.id) ?? null,
+    }));
+  }
+
+  /** Dashboard snapshot: counts plus which agents are busy right now. */
+  liveNowSnapshot(agents: Agent[], agentId?: string | null): AgentLiveNow {
+    this.pruneEngagements();
+    const byId = new Map(agents.map((agent) => [agent.id, agent] as const));
+    const live = this.listEngagements()
+      .filter((entry) => (agentId ? entry.agentId === agentId : true))
+      .map((entry) => {
+        const agent = byId.get(entry.agentId);
+        return {
+          id: entry.agentId,
+          name: agent?.name ?? 'Unknown agent',
+          kind: entry.engaged.kind,
+          conversationId: entry.engaged.conversationId,
+          contact: entry.engaged.contact,
+          since: entry.engaged.since,
+          lastBeatAt: entry.engaged.lastBeatAt,
+        };
+      });
+    return {
+      count: live.length,
+      voice: live.filter((entry) => entry.kind === 'voice').length,
+      chat: live.filter((entry) => entry.kind === 'chat').length,
+      agents: live,
+    };
+  }
+
   builderQuestions(): BuilderQuestion[] {
     return BUILDER_QUESTIONS;
   }
@@ -125,6 +251,8 @@ export class AgentService {
     const removed = await (await getStore()).deleteAgent(id);
     await cache.del('bunwa:agents:analytics:all');
     await cache.del(`bunwa:agents:analytics:${id}`);
+    // A deleted agent cannot be interacting with anyone.
+    if (this.engagements.delete(id)) this.notifyEngagementChange(id, null);
     return removed;
   }
 
@@ -592,7 +720,7 @@ export class AgentService {
       store.listConversations({ agentId, channel, from: window.previousFrom, to: window.previousTo }),
       store.listEventsForAnalytics({ agentId, from: window.previousFrom, to: window.previousTo }),
     ]);
-    return computeAgentAnalytics({
+    const dashboard = computeAgentAnalytics({
       agents,
       conversations,
       events,
@@ -602,6 +730,10 @@ export class AgentService {
       agentId: agentId ?? null,
       channel: input.channel,
     });
+    // liveNow is instantaneous state, not a period metric: it rides on the
+    // dashboard payload so one request answers both "how did we do" and
+    // "who is busy right now".
+    return { ...dashboard, liveNow: this.liveNowSnapshot(agents, agentId ?? null) };
   }
 
   /** Aggregated counters for the admin dashboard. Cached for 10 seconds. */

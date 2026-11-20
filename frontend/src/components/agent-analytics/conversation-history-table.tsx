@@ -86,7 +86,7 @@ function conversationOutcome(row: ConversationSummary): string {
   return "resolved"
 }
 
-function StatusBadge({ status, channel }: { status: ConversationSummary["status"]; channel: string }) {
+function StatusBadge({ status, channel, live }: { status: ConversationSummary["status"]; channel: string; live?: boolean }) {
   const ChannelIcon = channel === "voice" ? Phone : MessageCircle
   const tone =
     status === "open"
@@ -95,11 +95,21 @@ function StatusBadge({ status, channel }: { status: ConversationSummary["status"
         ? "border-warning-border/70 bg-warning-bg/70 text-warning-foreground"
         : "border-border/70 bg-muted/45 text-muted-foreground"
   return (
-    <Badge variant="outline" className={cn("gap-1.5 border px-2 py-0.5 font-medium capitalize", tone)}>
+    <Badge
+      variant="outline"
+      className={cn("gap-1.5 border px-2 py-0.5 font-medium capitalize", tone)}
+      title={live ? "Agent interacting in this conversation right now" : undefined}
+    >
       <span className="inline-flex" title={channel === "voice" ? "Voice" : "Chat"}>
         <ChannelIcon className="size-3.5" aria-hidden />
       </span>
-      <span className={cn("size-1.5 rounded-full", status === "open" ? "bg-success" : status === "closing" ? "bg-warning" : "bg-muted-foreground/45")} />
+      <span
+        className={cn(
+          "size-1.5 rounded-full",
+          live ? "animate-pulse bg-success" : status === "open" ? "bg-success" : status === "closing" ? "bg-warning" : "bg-muted-foreground/45",
+        )}
+      />
+      {live && <span className="text-[10px] font-semibold uppercase tracking-wide">live</span>}
       {status}
     </Badge>
   )
@@ -336,6 +346,14 @@ export function ConversationHistoryTable({
   const [transcriptOpen, setTranscriptOpen] = useState(false)
 
   const agentNames = useMemo(() => new Map(agents.map((agent) => [agent.id, agent.name])), [agents])
+  // Conversations the runtime reports as active right now.
+  const liveConversationIds = useMemo(
+    () =>
+      new Set(
+        agents.flatMap((agent) => (agent.engaged?.conversationId ? [agent.engaged.conversationId] : [])),
+      ),
+    [agents],
+  )
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query.trim()), 300)
@@ -438,7 +456,13 @@ export function ConversationHistoryTable({
       {
         id: "status",
         header: "Status",
-        cell: ({ row }) => <StatusBadge status={row.original.status} channel={row.original.channel} />,
+        cell: ({ row }) => (
+          <StatusBadge
+            status={row.original.status}
+            channel={row.original.channel}
+            live={liveConversationIds.has(row.original.id)}
+          />
+        ),
       },
       {
         id: "lastMessage",
@@ -528,7 +552,7 @@ export function ConversationHistoryTable({
         ),
       },
     ]
-  }, [agentNames, onSelectAgent])
+  }, [agentNames, liveConversationIds, onSelectAgent])
 
   const pageCount = Math.max(1, Math.ceil((result?.total ?? 0) / pagination.pageSize))
   const table = useReactTable({

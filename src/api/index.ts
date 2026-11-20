@@ -28,7 +28,7 @@ import { createTemplatesRouter } from './templates.routes';
 import { createSendingPolicyRouter } from './sending-policy.routes';
 import { createAuditRouter } from './audit.routes';
 import { createInfraRouter } from './infra.routes';
-import { createAgentsRouter } from './agents.routes';
+import { createAgentsRouter, createAgentsActivityStreamRouter } from './agents.routes';
 import { createMcpConfigRouter } from './mcp-config.routes';
 import { createApiKeysRouter } from './api-keys.routes';
 import { createFilesRouter } from './files.routes';
@@ -45,6 +45,9 @@ export function createApiRouter(): Hono {
   router.route('/api/version', createVersionRouter());
   router.route('/api/server', createServerRouter());
   router.route('/api/agents', createAgentsRouter());
+  // Ticket-authed SSE for live agent activity, at its own prefix so the
+  // agents router's API-key middleware cannot 401 the header-less stream.
+  router.route('/api/agent-activity', createAgentsActivityStreamRouter());
   router.route('/api/sessions', createSessionsRouter());
   router.route('/api', createChattingRouter());
   router.route('/api', createBulkRouter());

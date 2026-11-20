@@ -21,6 +21,44 @@ export interface Agent {
   updatedAt: string;
 }
 
+export type AgentEngagementKind = 'voice' | 'chat';
+
+/**
+ * Ephemeral "this agent is interacting with someone right now" state.
+ * Derived from runtime heartbeats — never persisted: a live call dies with
+ * the process, so restarts must leave no stale "on call" rows behind.
+ */
+export interface AgentEngagement {
+  kind: AgentEngagementKind;
+  conversationId: string | null;
+  contact: string | null;
+  /** ISO timestamp of the first heartbeat of the current interaction. */
+  since: string;
+  /** ISO timestamp of the latest heartbeat; entries prune after a TTL. */
+  lastBeatAt: string;
+}
+
+/** An agent as the API serves it, with its live interaction attached. */
+export interface AgentWithEngagement extends Agent {
+  engaged: AgentEngagement | null;
+}
+
+/** Snapshot of every live interaction, for dashboards and streams. */
+export interface AgentLiveNow {
+  count: number;
+  voice: number;
+  chat: number;
+  agents: Array<{
+    id: string;
+    name: string;
+    kind: AgentEngagementKind;
+    conversationId: string | null;
+    contact: string | null;
+    since: string;
+    lastBeatAt: string;
+  }>;
+}
+
 export interface AgentSkill {
   id: string;
   agentId: string;
