@@ -26,6 +26,10 @@
 import type { SessionManager } from '../manager.core';
 import { agentService } from './agent.service';
 import { RuntimeRecorder } from './runtime-recorder';
+import { readAttachment, MAX_ATTACHMENT_BYTES, type AttachmentInput } from './attachment-reader';
+import { readMediaFile } from '../../mcp/tools/media.tools';
+import { transcribeAudio } from './stt';
+import { synthesizeSpeech } from './tts';
 import type { Agent, ModelSettingsSecrets } from './agent.types';
 import { BUNWAPresenceStatus, BUNWAEvents } from '../../structures/enums.dto';
 
@@ -38,6 +42,10 @@ const HUMAN_ACTIVE_HAND_BACK_MINUTES = Number(process.env.BUNWA_CHAT_HAND_BACK_M
 const MODEL_TIMEOUT_MS = 45_000;
 /** Conversation turns included as history for the model. */
 const HISTORY_TURNS = 12;
+/** Replies longer than this go out as voice notes (audio, per product rule). */
+const AUDIO_REPLY_MIN_CHARS = Number(process.env.BUNWA_CHAT_AUDIO_MIN_CHARS || 300);
+/** A back-and-forth (this many customer turns in the conversation) goes audio. */
+const AUDIO_REPLY_MIN_TURNS = Number(process.env.BUNWA_CHAT_AUDIO_MIN_TURNS || 3);
 
 export interface NormalizedChatMessage {
   id: string;
@@ -63,6 +71,9 @@ interface ChatRuntimeDeps {
   resolveAgentId?: (session: string) => Promise<string>;
   makeRecorder?: (agentId: string, chatId: string) => RuntimeRecorder;
   getModelSettings?: () => Promise<ModelSettingsSecrets | null>;
+  /** Inbound media -> text (vision description, document text, STT transcript). */
+  resolveAttachment?: (session: string, chatId: string, messageId: string, caption?: string) => Promise<{ kind: string; text: string } | null>;
+  synthesizeSpeech?: (text: string) => Promise<Buffer | null>;
 }
 
 const isGroup = (jid: string) => jid.endsWith('@g.us');
@@ -78,6 +89,8 @@ class ChatRuntimeService {
   private resolveAgentIdImpl?: (session: string) => Promise<string>;
   private makeRecorderImpl?: (agentId: string, chatId: string) => RuntimeRecorder;
   private getModelSettingsImpl?: () => Promise<ModelSettingsSecrets | null>;
+  private resolveAttachmentImpl?: (session: string, chatId: string, messageId: string, caption?: string) => Promise<{ kind: string; text: string } | null>;
+  private synthesizeSpeechImpl?: (text: string) => Promise<Buffer | null>;
 
   /** Live subscriptions: session -> unsubscribe. */
   private subscriptions = new Map<string, () => void>();
@@ -101,6 +114,8 @@ class ChatRuntimeService {
     if (deps.resolveAgentId) this.resolveAgentIdImpl = deps.resolveAgentId;
     if (deps.makeRecorder) this.makeRecorderImpl = deps.makeRecorder;
     if (deps.getModelSettings) this.getModelSettingsImpl = deps.getModelSettings;
+    if (deps.resolveAttachment) this.resolveAttachmentImpl = deps.resolveAttachment;
+    if (deps.synthesizeSpeech) this.synthesizeSpeechImpl = deps.synthesizeSpeech;
   }
 
   /**
@@ -180,11 +195,6 @@ class ChatRuntimeService {
       return;
     }
     if (!payload.body?.trim()) return;
-    if (payload.hasMedia) {
-      this.logger.info?.(`chat runtime: media message in '${chatId}' skipped (v1 handles text)`);
-      return;
-    }
-
     if ((this.humanActiveUntil.get(chatId) ?? 0) > this.now()) return;
 
     // Single-flight per chat: while replying, keep only the newest message.
@@ -217,9 +227,33 @@ class ChatRuntimeService {
           logger: this.logger,
         });
     const conversationId = await recorder.begin({ kind: 'chat', session });
+    // Inbound media becomes text the model can reason about: images through
+    // the vision model, documents through local extraction, voice notes
+    // through the stt role. A failed resolution degrades to a plain note,
+    // never to a dropped conversation.
+    let effectiveBody = inbound.body;
+    let customerTurns = 1;
+    if (inbound.hasMedia) {
+      const attachment = await (this.resolveAttachmentImpl
+        ? this.resolveAttachmentImpl(session, chatId, inbound.id, inbound.body)
+        : this.resolveAttachment(session, chatId, inbound.id, inbound.body));
+      if (attachment?.text?.trim()) {
+        effectiveBody = `${inbound.body?.trim() ? `${inbound.body.trim()}\n` : ''}[customer sent ${attachment.kind}: ${attachment.text.trim()}]`;
+      } else {
+        effectiveBody = `${inbound.body?.trim() ? `${inbound.body.trim()}\n` : ''}[customer sent a ${attachment?.kind ?? 'media attachment'} that could not be read]`;
+      }
+    }
+    if (conversationId) {
+      try {
+        const history = await agentService.listConversationMessages(conversationId, { limit: 100 });
+        customerTurns = history.filter((message) => message.role === 'customer').length + 1;
+      } catch {
+        // The turn count only feeds the audio-reply policy.
+      }
+    }
     // The inbound turn lands before the reply so the conversation history the
     // next turn reads from is in true chronological order.
-    await recorder.caller(inbound.body);
+    await recorder.caller(inbound.body || effectiveBody);
     const typingMs = this.randomTypingMs();
     const typingStartedAt = this.now();
     try {
@@ -231,7 +265,7 @@ class ChatRuntimeService {
       // 3. Model call runs inside the typing window; the reply is ready when
       //    both the hold and the completion are done.
       const [reply] = await Promise.all([
-        this.composeReply(agentId, conversationId, chatId, inbound),
+        this.composeReply(agentId, conversationId, chatId, { ...inbound, body: effectiveBody }),
         this.sleep(typingMs),
       ]);
 
@@ -241,7 +275,30 @@ class ChatRuntimeService {
         await recorder.recordEvent('model.error', { chatId, reason: 'no reply composed' });
         return;
       }
-      const sent = await this.guarded(() => whatsapp.sendText({ chatId, text: reply }), 'sendText');
+      // Delivery policy: a long reply, or a back-and-forth on an issue, goes
+      // out as a voice note (Fish TTS); anything short on a fresh thread stays
+      // text. A synthesis failure falls back to text — the customer is never
+      // left waiting on a TTS outage.
+      const asAudio =
+        reply.length > AUDIO_REPLY_MIN_CHARS ||
+        (customerTurns >= AUDIO_REPLY_MIN_TURNS && reply.length > 80);
+      let sent: unknown = null;
+      if (asAudio) {
+        const audio = await (this.synthesizeSpeechImpl ? this.synthesizeSpeechImpl(reply) : synthesizeSpeech(reply));
+        if (audio) {
+          sent = await this.guarded(
+            () => (whatsapp as any).sendVoice({ chatId, file: audio, convert: true }),
+            'sendVoice',
+          );
+          if (sent) await recorder.recordEvent('reply.delivered', { chatId, mode: 'voice', chars: reply.length });
+        }
+      }
+      if (!sent) {
+        sent = await this.guarded(() => whatsapp.sendText({ chatId, text: reply }), 'sendText');
+        if (sent && asAudio) {
+          await recorder.recordEvent('reply.delivered', { chatId, mode: 'text (tts fallback)', chars: reply.length });
+        }
+      }
       const sentId = this.extractMessageId(sent);
       if (sentId) this.botSentIds.add(sentId);
       await recorder.reply(reply);
@@ -360,6 +417,43 @@ class ChatRuntimeService {
       if (chat?.enabled && chat.session === session) return agent.id;
     }
     return '';
+  }
+
+  /**
+   * Production media resolver — the same recipe as the MessageReadAttachment
+   * MCP tool: load the message with media downloaded, read the stored file,
+   * then images/documents through the shared attachment reader and audio
+   * through the stt role.
+   */
+  private async resolveAttachment(
+    session: string,
+    chatId: string,
+    messageId: string,
+    caption?: string,
+  ): Promise<{ kind: string; text: string } | null> {
+    try {
+      const whatsapp = this.manager?.getWorkingSession(session);
+      const message: any = await (whatsapp as any)?.getChatMessage(chatId, messageId, { downloadMedia: true });
+      const media = message?.media;
+      if (!media) return null;
+      const storedName = media.url ? decodeURIComponent(String(media.url).split('/').pop() ?? '') : '';
+      const readName = storedName || media.filename || '';
+      if (!readName) return null;
+      const { bytes, mimetype } = await readMediaFile(session, readName, MAX_ATTACHMENT_BYTES);
+      if (mimetype.startsWith('audio/')) {
+        const transcript = await transcribeAudio({ bytes, mimetype, language: undefined });
+        return transcript ? { kind: 'voice note', text: transcript } : { kind: 'voice note', text: '' };
+      }
+      const input: AttachmentInput = { bytes, mimetype, filename: media.filename || readName, caption };
+      const settings = await agentService.getVisionSettings();
+      const result = await readAttachment(input, { settings });
+      if (result.kind === 'image') return { kind: 'image', text: result.text };
+      if (result.kind === 'document') return { kind: 'document', text: result.text };
+      return { kind: result.kind, text: '' };
+    } catch (error) {
+      this.logger.warn?.(`chat runtime: attachment resolution failed: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
   }
 
   /** The engines return different send receipts; accept the common shapes. */

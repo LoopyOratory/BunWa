@@ -201,7 +201,7 @@ export function createAgentsRouter(): Hono {
   /* Model role settings                                                    */
   /* ---------------------------------------------------------------------- */
 
-  const modelRole = (value: string) => (['chat', 'voice', 'call', 'vision'].includes(value) ? (value as 'chat' | 'voice' | 'call' | 'vision') : undefined);
+  const modelRole = (value: string) => (['chat', 'voice', 'call', 'vision', 'stt'].includes(value) ? (value as 'chat' | 'voice' | 'call' | 'vision' | 'stt') : undefined);
 
   router.get(
     '/models/roles',
@@ -214,7 +214,7 @@ export function createAgentsRouter(): Hono {
     policiesMiddleware(CanServer(Action.Retrieve)),
     async (c) => {
       const role = modelRole(c.req.param('role'));
-      if (!role) return badRequest(c, 'role must be chat, voice, call, or vision');
+      if (!role) return badRequest(c, 'role must be chat, voice, call, vision, or stt');
       return c.json({ settings: await agentService.getModelRoleSettings(role) });
     },
   );
@@ -224,7 +224,7 @@ export function createAgentsRouter(): Hono {
     policiesMiddleware(CanServer(Action.Manage)),
     async (c) => {
       const role = modelRole(c.req.param('role'));
-      if (!role) return badRequest(c, 'role must be chat, voice, call, or vision');
+      if (!role) return badRequest(c, 'role must be chat, voice, call, vision, or stt');
       const body = await c.req.json().catch(() => ({}));
       const settings = await agentService.updateModelRoleSettings(role, {
         provider: body.provider,

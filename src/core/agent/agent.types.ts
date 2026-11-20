@@ -187,7 +187,7 @@ export interface UpdateAgentInput {
 
 export type ModelProviderType = 'openai-compatible' | 'anthropic' | 'google' | 'fish' | 'elevenlabs';
 
-export type ModelRole = 'chat' | 'voice' | 'call' | 'vision';
+export type ModelRole = 'chat' | 'voice' | 'call' | 'vision' | 'stt';
 
 export interface ModelRoleConfig {
   provider: ModelProviderType;

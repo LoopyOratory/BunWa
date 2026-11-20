@@ -83,7 +83,7 @@ function statMediaFile(session: string, filename: string, maxBytes: number) {
   return { filePath, sizeBytes, mimetype: mimetypeFor(filename) };
 }
 
-async function readMediaFile(session: string, filename: string, maxBytes: number) {
+export async function readMediaFile(session: string, filename: string, maxBytes: number) {
   const { filePath, sizeBytes, mimetype } = statMediaFile(session, filename, maxBytes);
   const bytes = Buffer.from(await Bun.file(filePath).arrayBuffer());
   return { bytes, sizeBytes, mimetype };

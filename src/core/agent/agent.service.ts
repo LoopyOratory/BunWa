@@ -54,7 +54,7 @@ import {
   type AnalyticsChannel,
   type AnalyticsRangeKey,
 } from './agent.analytics';
-import type { ModelProbeResult, ModelRole, ModelRoleSettings, ModelSettings, ModelSettingsSecrets, UpdateModelRoleSettingsInput, UpdateModelSettingsInput, VisionSettings } from './agent.types';
+import type { ModelProbeResult, ModelRole, ModelRoleSettings, ModelRoleSettingsSecrets, ModelSettings, ModelSettingsSecrets, UpdateModelRoleSettingsInput, UpdateModelSettingsInput, VisionSettings } from './agent.types';
 
 let storePromise: Promise<AgentStore> | null = null;
 
@@ -268,6 +268,11 @@ export class AgentService {
   /** The chat model with its keys, for server-side pipelines (chat runtime). */
   async getModelSettingsSecrets(): Promise<ModelSettingsSecrets> {
     return (await getStore()).getModelSettingsSecrets();
+  }
+
+  /** Any model role with its keys, for server-side pipelines (stt, tts). */
+  async getModelRoleSettingsSecrets(role: ModelRole): Promise<ModelRoleSettingsSecrets> {
+    return (await getStore()).getModelRoleSettingsSecrets(role);
   }
 
   async updateModelSettings(input: UpdateModelSettingsInput): Promise<ModelSettings> {

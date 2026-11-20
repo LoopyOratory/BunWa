@@ -21,6 +21,11 @@ function recordCall(what: string, value?: string) {
 
 // A stub engine session recording every method in order.
 const stubSession = {
+  sendVoice: async (req: { chatId: string; file: Buffer; convert: boolean }) => {
+    recordCall('sendVoice', req.file ? 'audio' : 'no-audio');
+    return { id: 'BOT-VOICE-1' };
+  },
+  getChatMessage: async () => ({ media: { url: '/media/STORED-1.jpg', filename: 'photo.jpg' } }),
   sendSeen: async (req: { chatId: string }) => recordCall('read', req.chatId),
   setPresence: async (presence: string, chatId?: string) =>
     recordCall(presence === BUNWAPresenceStatus.TYPING ? 'typing on' : presence === BUNWAPresenceStatus.PAUSED ? 'typing off' : `presence:${presence}`, chatId),
@@ -45,6 +50,9 @@ const stubManager = {
 };
 
 const quiet = { info: () => {}, warn: () => {} };
+let lastAttachment: { kind: string; text: string } | null = null;
+const synthesizeCalls: string[] = [];
+let ttsFails = false;
 
 // The model call stub: any fetch goes to a fake OpenAI-compatible server.
 const modelResponses: Array<{ status: number; content?: string }> = [];
@@ -93,6 +101,14 @@ beforeAll(() => {
     fetchImpl: stubFetch,
     resolveAgentId: async () => 'agent-unit-test',
     makeRecorder: () => stubRecorder as any,
+    resolveAttachment: async (_session: string, _chatId: string, _messageId: string) => {
+      lastAttachment = { kind: 'image', text: 'A photo of a red dress with a GHC 250 price tag.' };
+      return lastAttachment;
+    },
+    synthesizeSpeech: async (text: string) => {
+      synthesizeCalls.push(text);
+      return ttsFails ? null : Buffer.from('FAKE-MP3');
+    },
     getModelSettings: async () => ({
       id: 'chat', provider: 'openai-compatible' as any, baseUrl: 'https://model.test/v1',
       hasApiKey: true as any, model: 'unit-model', fallbackProvider: 'openai-compatible' as any,
@@ -132,11 +148,10 @@ describe('chat runtime pipeline', () => {
     expect(envMax).toBeGreaterThan(envMin);
   });
 
-  test('skips groups, broadcasts, media and empty bodies', async () => {
+  test('skips groups, broadcasts and empty bodies (media is handled, not skipped)', async () => {
     calls.length = 0;
     await (chatRuntime as any).handleInbound('bound', message({ from: '120363@g.us', id: 'g1' }));
     await (chatRuntime as any).handleInbound('bound', message({ from: 'status@broadcast', id: 'b1' }));
-    await (chatRuntime as any).handleInbound('bound', message({ hasMedia: true, id: 'm1' }));
     await (chatRuntime as any).handleInbound('bound', message({ body: '   ', id: 'e1' }));
     expect(calls.filter((c) => c.what === 'send')).toHaveLength(0);
   });
@@ -190,6 +205,42 @@ describe('chat runtime pipeline', () => {
     expect(sends).toHaveLength(2); // first reply + the coalesced follow-up
     expect(sends[0]).toBe('first reply');
     expect(sends[1]).toBe('second reply');
+  });
+
+  test('inbound image becomes vision text the model answers', async () => {
+    calls.length = 0;
+    modelResponses.length = 0;
+    modelCalls = 0;
+    modelResponses.push({ status: 200, content: 'That red dress is two hundred and fifty cedis, in stock now.' });
+    await (chatRuntime as any).answer('bound', '233555000777@c.us', message({ hasMedia: true, body: '', id: 'IMG-1' }));
+    // A short first reply on a fresh thread goes as text.
+    expect(calls.find((c) => c.what === 'send')?.value).toBe('That red dress is two hundred and fifty cedis, in stock now.');
+    expect(calls.some((c) => c.what === 'sendVoice')).toBe(false);
+  });
+
+  test('a long reply is delivered as a voice note', async () => {
+    calls.length = 0;
+    modelResponses.length = 0;
+    modelCalls = 0;
+    const longReply = 'Thank you for reaching out. Let me walk you through the whole process step by step. First, you place the order through the catalog link and choose your delivery area. Second, you confirm the payment via mobile money to the number on the invoice, and the order moves to packing the same afternoon. Delivery within Accra takes one to two working days, and you get a tracking message the moment the rider picks it up. If anything arrives damaged, reply here with a photo and we replace it at no cost within a week of purchase.';
+    modelResponses.push({ status: 200, content: longReply });
+    await (chatRuntime as any).answer('bound', '233555000888@c.us', message());
+    expect(synthesizeCalls).toHaveLength(1);
+    expect(synthesizeCalls[0]).toBe(longReply);
+    expect(calls.some((c) => c.what === 'sendVoice')).toBe(true);
+    expect(calls.some((c) => c.what === 'send')).toBe(false);
+  });
+
+  test('TTS failure falls back to text — the customer still gets the reply', async () => {
+    calls.length = 0;
+    modelResponses.length = 0;
+    modelCalls = 0;
+    ttsFails = true;
+    modelResponses.push({ status: 200, content: 'x'.repeat(400) });
+    await (chatRuntime as any).answer('bound', '233555000999@c.us', message());
+    ttsFails = false;
+    expect(calls.some((c) => c.what === 'sendVoice')).toBe(false);
+    expect(calls.some((c) => c.what === 'send')).toBe(true);
   });
 
   test('reads carry the inbound message id; presence targets the chat', async () => {
