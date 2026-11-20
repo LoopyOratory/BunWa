@@ -47,6 +47,7 @@ import { chunkText } from '../knowledge/chunk';
 import { getEmbeddingProvider } from '../knowledge/embeddings';
 import { readAttachment as readAttachmentWithSettings, type AttachmentInput, type AttachmentResult } from './attachment-reader';
 import {
+  ANALYTICS_EVENT_TYPES,
   computeAgentAnalytics,
   resolveAnalyticsWindow,
   type AgentAnalyticsDashboard,
@@ -79,6 +80,10 @@ function compactProfileValue(value: unknown): string {
     return String(value);
   }
 }
+
+/** When an analytics window exceeds this many events, rollups are due (review S6). */
+const ANALYTICS_ROLLUP_TRIGGER_EVENTS = 10_000;
+let lastRollupWarningAt = 0;
 
 export class AgentService {
   async init(): Promise<void> {
@@ -713,13 +718,29 @@ export class AgentService {
     const window = resolveAnalyticsWindow(input.range, input.from, input.to);
     const channel = input.channel === 'all' ? undefined : input.channel;
     const agentId = input.agentId || undefined;
-    const [agents, conversations, events, previousConversations, previousEvents] = await Promise.all([
+    // The reducer only consumes ANALYTICS_EVENT_TYPES, so the store filters the
+    // window to that set — a runtime posting high-volume telemetry (acks,
+    // presence, engine events) cannot inflate the dashboard's memory. The
+    // reducer still prefers conversation metadata and falls back to events,
+    // so nothing visible changes.
+    const [agents, conversations, events, previousConversations, previousEvents, eventCount] = await Promise.all([
       store.listAgents(),
       store.listConversations({ agentId, channel, from: window.from, to: window.to }),
-      store.listEventsForAnalytics({ agentId, from: window.from, to: window.to }),
+      store.listEventsForAnalytics({ agentId, from: window.from, to: window.to, types: [...ANALYTICS_EVENT_TYPES] }),
       store.listConversations({ agentId, channel, from: window.previousFrom, to: window.previousTo }),
-      store.listEventsForAnalytics({ agentId, from: window.previousFrom, to: window.previousTo }),
+      store.listEventsForAnalytics({ agentId, from: window.previousFrom, to: window.previousTo, types: [...ANALYTICS_EVENT_TYPES] }),
+      store.countEventsForAnalytics({ agentId, from: window.from, to: window.to, types: [...ANALYTICS_EVENT_TYPES] }),
     ]);
+    // The rollup trigger from the backend review, made measurable: past this
+    // point the raw-scan dashboard stops scaling and day-by-agent rollups are
+    // due. Warn at most once a minute, never on the request path.
+    if (eventCount > ANALYTICS_ROLLUP_TRIGGER_EVENTS && Date.now() - lastRollupWarningAt > 60_000) {
+      lastRollupWarningAt = Date.now();
+      console.warn(
+        `Agent analytics window '${window.key}' holds ${eventCount} events (> ${ANALYTICS_ROLLUP_TRIGGER_EVENTS}). ` +
+          'Dashboard loads are still bounded, but day-by-agent rollup tables are due — see backend review S6.',
+      );
+    }
     const dashboard = computeAgentAnalytics({
       agents,
       conversations,

@@ -129,5 +129,13 @@ export interface AgentStore {
     from?: string;
     to?: string;
     limit?: number;
+    types?: string[];
   }): Promise<AnalyticsEvent[]>;
+  /** Count analytics-scope events in a window without loading them. */
+  countEventsForAnalytics(filter?: {
+    agentId?: string;
+    from?: string;
+    to?: string;
+    types?: string[];
+  }): Promise<number>;
 }

@@ -2120,6 +2120,8 @@ export class SqlAgentStore implements AgentStore {
     from?: string;
     to?: string;
     limit?: number;
+    /** Restrict to these event types; the analytics reducer consumes a fixed set. */
+    types?: string[];
   } = {}): Promise<AnalyticsEvent[]> {
     const where: string[] = [];
     const params: any[] = [];
@@ -2135,10 +2137,46 @@ export class SqlAgentStore implements AgentStore {
       where.push('created_at <= ?');
       params.push(filter.to);
     }
+    if (filter.types?.length) {
+      where.push(`type IN (${filter.types.map(() => '?').join(', ')})`);
+      params.push(...filter.types);
+    }
     const limit = Math.max(1, Math.min(filter.limit ?? 50_000, 50_000));
     const sql = `SELECT * FROM bunwa_analytics_events${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY created_at ASC LIMIT ${limit}`;
     const rows = await this.client.query(sql, params);
     return rows.map(rowToEvent);
+  }
+
+  /** Count analytics-scope events in a window without loading them. */
+  async countEventsForAnalytics(filter: {
+    agentId?: string;
+    from?: string;
+    to?: string;
+    types?: string[];
+  } = {}): Promise<number> {
+    const where: string[] = [];
+    const params: any[] = [];
+    if (filter.agentId) {
+      where.push('agent_id = ?');
+      params.push(filter.agentId);
+    }
+    if (filter.from) {
+      where.push('created_at >= ?');
+      params.push(filter.from);
+    }
+    if (filter.to) {
+      where.push('created_at <= ?');
+      params.push(filter.to);
+    }
+    if (filter.types?.length) {
+      where.push(`type IN (${filter.types.map(() => '?').join(', ')})`);
+      params.push(...filter.types);
+    }
+    const rows = await this.client.query<{ count: number }>(
+      `SELECT COUNT(*) AS count FROM bunwa_analytics_events${where.length ? ` WHERE ${where.join(' AND ')}` : ''}`,
+      params,
+    );
+    return Number(rows[0]?.count ?? 0);
   }
 }
 

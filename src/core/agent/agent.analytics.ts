@@ -8,6 +8,28 @@
 import type { Agent, AgentLiveNow, AnalyticsEvent, Conversation } from './agent.types';
 
 export type AnalyticsRangeKey = '24h' | '7d' | '30d' | '90d';
+
+/**
+ * Every event type the dashboard consumes. The store filters analytics
+ * windows to this set so high-volume telemetry (message.ack, presence, engine
+ * events) never loads for a reducer that ignores it. Keep in sync with the
+ * event.type comparisons in this file.
+ */
+export const ANALYTICS_EVENT_TYPES: readonly string[] = [
+  'agent.reply',
+  'conversation.started',
+  'conversation.closed',
+  'conversion',
+  'conversion.completed',
+  'handoff.requested',
+  'handoff.completed',
+  'knowledge.search',
+  'message.inbound',
+  'message.outbound',
+  'model.call',
+  'model.error',
+  'tool.call',
+];
 export type AnalyticsChannel = 'all' | 'whatsapp' | 'voice';
 export type AnalyticsUnit = 'count' | 'percent' | 'ms' | 'currency' | 'rating';
 
