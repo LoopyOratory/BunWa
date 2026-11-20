@@ -94,8 +94,8 @@ function AgentCard({ agent, onOpen }: { agent: Agent; onOpen: (agent: Agent) => 
   return (
     <Card className="group cursor-pointer border-border/70 bg-card/70 transition hover:border-primary/40 hover:shadow-lg" onClick={() => onOpen(agent)}>
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary">
               <Bot className="size-5" strokeWidth={1.8} />
             </div>
