@@ -24,7 +24,7 @@ export async function synthesizeSpeech(text: string): Promise<Buffer | null> {
   // bridge uses — one cloned voice per install.
   const apiKey = (isFish ? role?.apiKey : null) || process.env.FISH_API_KEY?.trim() || '';
   const fishModel = (isFish ? role?.model : null) || process.env.FISH_MODEL?.trim() || 's2.1-pro-free';
-  const referenceId = process.env.FISH_AGENT_ID?.trim() || '';
+  const referenceId = process.env.FISH_AGENT_ID?.trim() || process.env.FISH_REFERENCE_ID?.trim() || '';
   if (!apiKey) {
     return null;
   }
