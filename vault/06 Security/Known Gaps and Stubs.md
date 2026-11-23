@@ -2,7 +2,7 @@
 type: note
 section: security
 tags: [bunwa, gap, reference]
-updated: 2026-10-09
+updated: 2026-11-23
 source: whole-repo audit (see each row)
 status: gap
 ---
@@ -64,6 +64,30 @@ Live drill against the running NOWEB engine, plus fixes for what it found.
 | See-through toasts and menus | Sonner's rich-colour variables pointed at themselves (`--success-bg: var(--success-bg)`), which CSS treats as invalid, so toasts were transparent. Overlays now use the opaque `--surface-overlay`. |
 | Dashboard numbers from a 500-row sample | `GET /api/dashboard/summary` counts in SQL over the whole range and builds the attention list. |
 
+## 0.4 Resolved 2026-11-23: engine parity audit (BUNWEB + WEBJS)
+
+Found by reading both engine implementations against the `WhatsappSession` contract and the shared
+DTOs. Every item below has a regression test or is covered by the existing suite.
+
+| Item | Detail |
+|---|---|
+| WEBJS emitted every inbound message twice | webjs fires both `message` and `message_create` for the same inbound message, and the engine listens to both (some LID chats only fire one). Both handlers now go through one `emitInbound()` path with a 5-minute id cache, matching BUNWEB's `DistinctMessages()`. Previously webhooks, WebSocket clients and analytics saw duplicates. |
+| WEBJS message shape diverged from BUNWEB | Inbound messages and send responses lacked `source`, `type`, `ack`, `ackName` and `replyTo`; `wrapMessage` returned `body: ''` for every send. Both now follow `WAMessage` like BUNWEB. |
+| WEBJS ack events used a private shape | `{ ack, status: 'read' \| 'delivered' \| ... }` — consumers read `ackName` (BUNWEB) and saw nothing. Now `{ ack, ackName, fromMe, participant }`. |
+| WEBJS reply/react/delete/single-read only searched 100 messages | `getChatMessages` returned the chat's own order and **ignored the `timestamp` / `fromMe` / `ack` filter** and `sortOrder`. Messages are now resolved through `client.getMessageById` first (with the scan as fallback), filtered, and sorted newest-first like the BUNWEB store. |
+| WEBJS could forward only from the first 10 chats | `forwardMessage` scanned `chats.slice(0, 10)` × 100 messages. It now resolves the source through `getMessageById` before scanning. |
+| WEBJS stuck in STARTING when a shim failed | The `ready` handler awaited `installChatModelShim()` and `installCalls()` before `markReady()`; a throw left a connected session reporting STARTING forever. Shims are now individually guarded and `markReady()` runs in `finally`. The `scheduleReadyReconcile()` safety net (previously dead code) runs after `start()` and is cleared by `stop()`. |
+| WEBJS non-ready sessions answered 500 | `ensureClientReady()` threw a plain `Error` for "not started"/"not ready". It now throws `UnprocessableEntityException` naming the status, like the rest of the API. |
+| BUNWEB sends on a dead socket answered 500 | `policyGate()` reached Baileys with no socket and failed with a TypeError. It now answers 422 naming the status, mirroring WEBJS's guard. |
+| BUNWEB fresh login skipped WORKING | `connection.update` handled `isNewLogin` **before** `connection === 'open'`, so a fresh pairing restarted instead of setting WORKING and clearing the QR. The open branch now runs first; the restart still happens when `isNewLogin`. |
+| BUNWEB history-sync timer survived `failed()` | `stop()` disposed the tracker; `failed()` and `clearAuthAndRestart()` did not, so the idle timer fired `session.sync` for a dead engine. Both now dispose it. |
+| BUNWEB stop-during-start leaked a socket | `buildClient()` continued wiring events after a concurrent `stop()` (which set `shouldRestart=false`) and left the socket created by `makeSocket()` open. It now closes that socket and returns. |
+| WEBJS ignored proxy credentials | `username`/`password` in `ProxyConfig` were dropped; only `--proxy-server` was set. Credentials are now split out and passed as wwebjs `proxyAuthentication` (`page.authenticate`). |
+| WEBJS stopped sessions kept stale state | `stop()` now clears the presence map and `meInfo`, closes the dedupe cache and cancels the ready-reconcile timer. |
+
+WEBJS also now pins the WhatsApp Web build (see [[WEBJS Engine]]) — the root cause of the
+`CompanionHelloError` / 30 s `inject()` failures that were previously misread as a login problem.
+
 ## 1. Routes that can never succeed
 
 These are mounted and documented, but always fail:
@@ -106,10 +130,9 @@ Full subsystems, written and tested in places, with **zero call sites**:
 ## 4. Dead code worth deleting
 
 - `src/api/contacts.session.routes.ts` — imported in `api/index.ts` but **never mounted** (2 dead routes).
-- `src/core/engines/noweb/PresenceProxy.ts` — never imported.
+- `src/core/engines/bunweb/PresenceProxy.ts` — never imported.
 - `src/core/engines/noweb/rxjs.ts`, `rxjs/operators.ts`, `src/core/abc/rxjs/operators.ts`, `src/utils/reactive/*` — re-export shims with no users.
 - `src/core/engines/noweb/store/sql/SqlChatMethods.ts`, `SqlMessagesMethods.ts` — mixins nothing uses.
-- `scheduleReadyReconcile()` in the WEBJS engine — defined, never called.
 - `validateBody` / `validateQuery` (`src/middleware/validation.ts`) — never applied to a route.
 - `sessionResolver()` (non-working variant) — unused.
 - `media/IMediaManager` style placeholder interfaces (`ISessionAuthRepository` etc.) — declared as `[key: string]: any` classes.

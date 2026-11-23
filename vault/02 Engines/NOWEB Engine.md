@@ -2,17 +2,21 @@
 type: note
 section: engines
 tags: [bunwa, engine, noweb, baileys]
-updated: 2026-09-14
+updated: 2026-11-23
 source: src/core/engines/noweb/
 status: shipped
 ---
 
-# 🌐 NOWEB Engine
+# 🌐 BUNWEB Engine (formerly NOWEB)
 
-The default and fully-featured engine: **`WhatsappSessionNoWebCore`** in
-`src/core/engines/noweb/session.noweb.core.ts` (≈3 640 lines), built on
+The default and fully-featured engine: **`WhatsappSessionBunWebCore`** in
+`src/core/engines/bunweb/session.bunweb.core.ts` (≈4 800 lines), built on
 `@whiskeysockets/baileys` **7.0.0-rc14**. It speaks the WhatsApp Web multi-device protocol directly —
 no browser, no DOM, no Chrome.
+
+> The engine id is **BUNWEB**; `NOWEB` is still accepted at every input point and normalized by
+> `normalizeBunwaEngine`. On-disk state under `.sessions/noweb/` is deliberately kept under the
+> legacy name so a rename never orphans a paired session.
 
 > `rc14` matters: rc13 could get stuck in `STARTING` and never surface a QR. The upgrade was
 > commit `7c19e04`. If QR codes hang, check the Baileys version first.
@@ -21,12 +25,12 @@ no browser, no DOM, no Chrome.
 
 | File | Role |
 |---|---|
-| `session.noweb.core.ts` | the engine — socket, lifecycle, and the entire WhatsApp operation surface |
-| `NowebAuthFactoryCore.ts` | builds the auth state; **only supports `LocalStore`** (throws for anything else, so the Plus Postgres/Mongo auth repos are unreachable here) |
+| `session.bunweb.core.ts` | the engine — socket, lifecycle, and the entire WhatsApp operation surface |
+| `BunwebAuthFactoryCore.ts` | builds the auth state; **only supports `LocalStore`** (throws for anything else, so the Plus Postgres/Mongo auth repos are unreachable here) |
 | `useMultiFileAuthState.ts` | Bun-tuned multi-file auth: preloads every key file into a `Map` via `Bun.file`, writes under an `AsyncLock` |
-| `noweb.newsletter.ts` | channels/newsletters — metadata mapping + manual directory search |
-| `noweb.buttons.ts` | builds the `biz`/`interactive`/`native_flow` binary nodes for buttons & lists |
-| `groups.noweb.ts` | pure mappers for group info, participants and group events |
+| `bunweb.newsletter.ts` | channels/newsletters — metadata mapping + manual directory search |
+| `bunweb.buttons.ts` | builds the `biz`/`interactive`/`native_flow` binary nodes for buttons & lists |
+| `groups.bunweb.ts` | pure mappers for group info, participants and group events |
 | `labels/LabelAssociationType.ts` | `label_jid` vs `label_message` association enum |
 | `PresenceProxy.ts` | ⚠️ dead code, never imported |
 | `types.ts` / `utils.ts` | `Agents {socket, fetch}` proxy agents, media extraction, JID helpers |

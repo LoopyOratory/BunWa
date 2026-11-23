@@ -2,7 +2,7 @@
 type: note
 section: engines
 tags: [bunwa, engine, architecture]
-updated: 2026-09-14
+updated: 2026-11-23
 source: src/core/session/session.abc.ts, src/core/manager.core.ts, src/structures/enums.dto.ts
 status: shipped
 ---
@@ -14,10 +14,13 @@ to WhatsApp — and both engines coexist in the same process, even on the same a
 
 | Engine | Library | Transport | Weight | Status |
 |---|---|---|---|---|
-| **NOWEB** (default) | `@whiskeysockets/baileys` 7.0.0-rc14 | WhatsApp Web WebSocket protocol (Signal E2E) | light, no browser | ✅ the main path |
-| **WEBJS** | `whatsapp-web.js` + Puppeteer | headless Chrome driving web.whatsapp.com | heavy | ✅ works, narrower surface |
-| GOWS | — | — | — | ⚠️ stub — `GowsBootstrap` is empty ("not supported in Bun version"); the enum value and `SessionConfig.gows` exist but `getEngine()` maps GOWS → NOWEB |
+| **BUNWEB** (default; legacy input `NOWEB`) | `@whiskeysockets/baileys` 7.0.0-rc14 | WhatsApp Web WebSocket protocol (Signal E2E) | light, no browser | ✅ the main path |
+| **WEBJS** | `whatsapp-web.js` + Puppeteer | headless Chrome driving web.whatsapp.com | heavy | ✅ chat + **voice calls**; narrower surface |
+| GOWS | — | — | — | ⚠️ stub — `GowsBootstrap` is empty ("not supported in Bun version"); the enum value and `SessionConfig.gows` exist but `getEngine()` maps GOWS → BUNWEB |
 | WPP | — | — | — | ⚠️ enum value only, no implementation |
+
+> Engine code lives in `src/core/engines/bunweb/` with `Bunweb*` class names; the id `NOWEB` is
+> still accepted at every input point and normalized to `BUNWEB`.
 
 ## The contract
 
@@ -49,25 +52,28 @@ The base class additionally provides: the status `BehaviorSubject`, the per-even
 
 ```text
 sessionConfig.engine === 'WEBJS'  ─►  engines/webjs/session.webjs.core   (Chrome binary pre-checked)
-VERSION.tier === PLUS             ─►  plus/session.noweb.plus           (NOWEB + picture/media extras)
-otherwise                         ─►  engines/noweb/session.noweb.core  (WhatsappSessionNoWebCore)
+VERSION.tier === PLUS             ─►  plus/session.bunweb.plus          (BUNWEB + picture/media extras)
+otherwise                         ─►  engines/bunweb/session.bunweb.core (WhatsappSessionBunWebCore)
 ```
 
-The default comes from `WHATSAPP_DEFAULT_ENGINE` (`NOWEB`). Any unrecognised value degrades to NOWEB
-rather than failing.
+The default comes from `WHATSAPP_DEFAULT_ENGINE` (`BUNWEB`). Any unrecognised value degrades to
+BUNWEB rather than failing.
 
 ## Capability flags — there are none
 
 > ⚠️ There is **no** formal capability matrix and **no** `supports` flag. `getEngineInfo()` exists on
 > the base class, returns `{}`, and is never overridden.
 
-Routes feature-detect ad hoc, which produces a few permanently-broken endpoints:
+Routes feature-detect ad hoc, and the two engines are **not** at parity — the honest matrix lives in
+[[WEBJS Engine#Verified capability]] and [[Known Gaps and Stubs]]. The gaps that still return an
+error are deliberate and documented:
 
 | Endpoint | Behaviour | Why |
 |---|---|---|
-| `POST /api/contacts/block` · `/unblock` | always 500 "not available in NOWEB" | stubbed even though NOWEB has the primitive |
-| `DELETE .../groups/:id` | always 500 "not available in NOWEB" | stub, though `deleteGroup` exists |
-| `POST .../chats/:chatId/mute` · `/unmute` | always 400 | guards on `typeof session.muteChat === 'function'`, which no engine defines |
+| `POST /api/contacts/block` · `/unblock` | 422 on WEBJS | whatsapp-web.js has no block primitive wired in the engine |
+| `DELETE .../groups/:id` | delegates to the engine; 422 where unsupported | `deleteGroup` exists on BUNWEB only |
+| `POST .../chats/:chatId/mute` · `/unmute` | works on both engines | BUNWEB uses `chatModify`, WEBJS `muteChat`/`unmuteChat` |
+| `POST /api/sendPollVote` | 422 on every engine | votes must be encrypted and Baileys only ships the decrypt side |
 
 Full list in [[Known Gaps and Stubs]].
 
