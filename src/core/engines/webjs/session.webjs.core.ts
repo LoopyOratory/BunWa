@@ -594,6 +594,9 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       this.presences.clear();
       this.meInfo = null;
       this.status = BUNWASessionStatus.STOPPED;
+      // Media storage is built per session; closing it releases the expiry
+      // sweeper (BUNWEB already did this).
+      this.mediaManager?.close();
       this.cleanupPresenceTimeout();
     }
   }

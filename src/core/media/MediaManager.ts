@@ -54,7 +54,15 @@ export class MediaManager implements IMediaManager {
       };
 
       if (this.storage) {
-        await this.storage.save(buffer, data);
+        const saved = await this.storage.save(buffer, data);
+        if (!saved) {
+          // The backend reported a failure. Returning a URL here would hand
+          // the caller a link that 404s; say the media was not stored.
+          this.logger.error(
+            `Media storage did not persist ${messageId} for session ${session}`,
+          );
+          return null;
+        }
         const storageData = await this.storage.getStorageData(data);
         return {
           url: storageData.url,
@@ -75,6 +83,11 @@ export class MediaManager implements IMediaManager {
   }
 
   close(): void {
-    // Cleanup if needed
+    // Release the storage backend (the local store owns one expiry sweeper).
+    // It used to be a no-op, so a stopped session kept its sweep timer and an
+    // S3 client alive until process exit.
+    this.storage?.close().catch((error) =>
+      this.logger.warn(`Failed to close media storage: ${error}`),
+    );
   }
 }

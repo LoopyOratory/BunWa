@@ -2,7 +2,7 @@
 type: note
 section: architecture
 tags: [bunwa, architecture, storage, ops]
-updated: 2026-10-09
+updated: 2026-11-23
 source: src/core/storage/ (incl. storage-report.ts, storage-bootstrap.ts), src/core/engines/noweb/store/, src/core/media/, src/config.service.ts
 ---
 
@@ -45,13 +45,21 @@ See [[Session Stores]] for the driver matrix and the per-repository file list.
 ## Media
 
 - `MediaManager.processMedia()` filters by `WHATSAPP_FILES_MIMETYPES`, stores through an
-  `IMediaStorage` implementation and returns `{url, mimetype, filename}`.
+  `IMediaStorage` implementation and returns `{url, mimetype, filename, s3?}`. If the backend
+  reports a failed save it returns `null` — it never hands back a URL for a file that was not written.
 - **Local** (default): `MediaLocalStorage` writes to `<folder>/<session>/<id>.<ext>` and serves
-  `GET /api/files/:session/:filename` (api-key protected, path-traversal guarded). Files get a
-  **~180 s lifetime** then are unlinked — treat the URL as ephemeral.
-- **S3** (Plus-flavoured): presigned GET URLs, 1 h expiry, key `{session}/{messageId}.{ext}`
+  `GET /api/files/:session/:filename` (api-key protected, path-traversal guarded). The folder is
+  `BUNWA_STORAGE_LOCAL_PATH` → `WHATSAPP_FILES_FOLDER` → `/tmp/whatsapp-files`.
+  Files get a **~180 s lifetime** then are unlinked — treat the URL as ephemeral. One unref'd
+  sweeper per storage instance removes expired files (it replaced a `setTimeout` per saved file,
+  which leaked on restart and held one timer per message). The file stem and extension are
+  sanitized, so a hostile message id or filename cannot escape the session directory.
+- **S3** (`BUNWA_STORAGE_TYPE=s3`): presigned GET URLs, 1 h expiry, key `{session}/{messageId}.{ext}`
   ([[Plus Tier]]).
 - **Postgres BYTEA** storage exists (`PostgresMediaStorage`) but is deliberately not connected.
+- **Only BUNWEB persists inbound media.** Its message processor downloads the bytes and stores them;
+  WEBJS has no `processMedia` call, so inbound WEBJS media carries metadata but no `mediaUrl`, and
+  `getChatMessages(downloadMedia: true)` answers 422. Outgoing media is never stored on either engine.
 - Voice conversion shells out to **ffmpeg** (OGG/Opus, 32 kbps, 48 kHz mono) — required in the image,
   and `sendVoice` with `convert=true` fails without it.
 
