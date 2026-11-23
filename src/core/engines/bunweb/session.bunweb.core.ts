@@ -80,6 +80,12 @@ import {
 } from '../../exceptions';
 import { toVcardV3 } from '../../vcard';
 import { createAgentProxy } from '../../helpers.proxy';
+import {
+  UNSUPPORTED_FILE_INPUT,
+  isBase64,
+  isHttpUrl,
+  parseDataUrl,
+} from '../../media/media-input';
 import type { Agent } from 'https';
 import { IMediaEngineProcessor } from '../../media/IMediaEngineProcessor';
 import { LottieMediaProcessorWrapper } from '../../media/LottieMediaProcessorWrapper';
@@ -433,9 +439,6 @@ function parseUsernameUsyncAnswer(
   };
 }
 
-const UNSUPPORTED_FILE_INPUT =
-  'Unsupported file input. Use a { data, mimetype } object, a data URL, a base64 string, an http(s) URL or a local file path.';
-
 /**
  * Bound for one profile picture lookup. The server answers a resolvable id in
  * about a second; for an id it will not answer it never responds at all, and
@@ -466,23 +469,6 @@ function isProfilePictureLookupMiss(error: any): boolean {
     error.message === 'item-not-found' ||
     error.message === 'not-authorized'
   );
-}
-
-/** True for absolute, relative, home or Windows-drive paths. */
-function isPathLike(value: string): boolean {
-  return (
-    value.startsWith('/') ||
-    value.startsWith('./') ||
-    value.startsWith('../') ||
-    value.startsWith('~/') ||
-    value.startsWith('\\\\') ||
-    /^[A-Za-z]:[\\/]/.test(value)
-  );
-}
-
-/** True for a syntactically valid base64 string (not a file path). */
-function isBase64(value: string): boolean {
-  return value.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(value);
 }
 
 export class WhatsappSessionBunWebCore extends WhatsappSession {
@@ -1788,14 +1774,11 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
       return file;
     }
     if (typeof file === 'string') {
-      if (file.startsWith('data:')) {
-        const comma = file.indexOf(',');
-        if (comma === -1) {
-          throw new UnprocessableEntityException(UNSUPPORTED_FILE_INPUT);
-        }
-        return Buffer.from(file.slice(comma + 1), 'base64');
+      const dataUrl = parseDataUrl(file);
+      if (dataUrl) {
+        return dataUrl.buffer;
       }
-      if (/^https?:\/\//i.test(file)) {
+      if (isHttpUrl(file)) {
         return file;
       }
       // A bare base64 string. Baileys would otherwise treat it as a local
@@ -1803,21 +1786,22 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
       // before path-like strings: a base64 JPEG starts with "/9j/", which
       // would otherwise look like an absolute path.
       const compact = file.replace(/\s+/g, '');
-      if (isBase64(compact)) {
+      if (compact.length > 0 && isBase64(compact)) {
         return Buffer.from(compact, 'base64');
-      }
-      if (isPathLike(file)) {
-        return file;
       }
       if (!file) {
         throw new UnprocessableEntityException(UNSUPPORTED_FILE_INPUT);
       }
-      // A relative path with no path separators (for example "photo.png").
+      // A path, including a relative one with no separators ("photo.png").
       return file;
     }
     if (file && typeof file === 'object') {
       if (typeof file.data === 'string' && file.data) {
         // { mimetype, filename, data: "data:image/png;base64,..." }
+        const dataUrl = parseDataUrl(file.data);
+        if (dataUrl) {
+          return dataUrl.buffer;
+        }
         const base64 = file.data.includes(',') ? file.data.split(',')[1] : file.data;
         return Buffer.from(base64, 'base64');
       }

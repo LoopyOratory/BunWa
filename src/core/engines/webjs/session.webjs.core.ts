@@ -50,7 +50,6 @@ import {
   CreateGroupRequest,
   GroupInfo,
   GroupParticipant,
-  GroupParticipantRole,
   ParticipantsRequest,
 } from '../../../structures/groups.dto';
 import {
@@ -79,41 +78,19 @@ import {
 } from '../../exceptions';
 import { fetchBuffer } from '../../../utils/fetch';
 import { isUsernameAddress } from '../../../common/security/wa-id';
-import { participantId } from '../../utils/jids';
 import { WAMessageAck } from '../../utils/acks';
-
-/**
- * Resolve one entry of a participants payload into a whatsapp-web.js chat id.
- * The API contract is a list of chat ids (15551234567 or 15551234567@c.us);
- * objects carrying an `id` are accepted too, matching the BUNWEB engine. A
- * malformed entry is a bad request instead of an undefined participant.
- */
-function toWebjsParticipantId(participant: unknown): string {
-  const id = participantId(participant);
-  if (!id) {
-    throw new BadRequestException(
-      'Each group participant must be a chat id like 15551234567@c.us, or an object with an id field.',
-    );
-  }
-  return id.includes('@') ? id : `${id}@c.us`;
-}
-
-/**
- * Map a whatsapp-web.js participant onto the API shape. The library reports
- * booleans (isAdmin, isSuperAdmin); the contract uses roles, matching the BUNWEB
- * engine and the documented GroupParticipant.
- */
-function toGroupParticipant(participant: any): GroupParticipant {
-  return {
-    id: participant?.id?._serialized ?? participant?.id,
-    role: participant?.isSuperAdmin
-      ? GroupParticipantRole.SUPERADMIN
-      : participant?.isAdmin
-        ? GroupParticipantRole.ADMIN
-        : GroupParticipantRole.PARTICIPANT,
-    username: participant?.username || undefined,
-  };
-}
+import {
+  UNSUPPORTED_FILE_INPUT,
+  readMediaFile,
+  resolveMediaInput,
+} from '../../media/media-input';
+import {
+  formatPairingCode,
+  mapWwebjsMessageType,
+  splitProxyConfig,
+  toGroupParticipant,
+  toWebjsParticipantId,
+} from './webjs.mappers';
 
 // ---------------------------------------------------------------------------
 // Chrome path — resolved at launch time by the shared browser-path helper
@@ -224,58 +201,6 @@ installMessageIdShim();
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function mapWwebjsMessageType(wwebjsType: string): string {
-  const map: Record<string, string> = {
-    chat: 'text',
-    text: 'text',
-    image: 'image',
-    video: 'video',
-    audio: 'audio',
-    ptt: 'audio',
-    document: 'document',
-    sticker: 'sticker',
-    location: 'location',
-    contact_card: 'contact',
-    contacts_vcard: 'contact',
-    reaction: 'reaction',
-  };
-  return map[wwebjsType] || 'unknown';
-}
-
-function isHttpUrl(value: string): boolean {
-  return /^https?:\/\//i.test(value);
-}
-
-/**
- * Chromium takes the proxy as `scheme://host:port` and authenticates through
- * `page.authenticate` (wwebjs `proxyAuthentication`). Credentials embedded in
- * the server URL are split out so the flag stays a valid proxy endpoint and
- * the username/password actually reach Chromium — BUNWEB embeds them in its
- * agent URL, and both engines must honour the same ProxyConfig.
- */
-function splitProxyConfig(config: { server: string; username?: string; password?: string }): {
-  server: string;
-  authentication?: { username: string; password: string };
-} {
-  let username = config.username;
-  let password = config.password;
-  let server = config.server;
-  try {
-    const url = new URL(config.server);
-    if (!username && url.username) username = decodeURIComponent(url.username);
-    if (!password && url.password) password = decodeURIComponent(url.password);
-    url.username = '';
-    url.password = '';
-    server = url.toString();
-  } catch {
-    // Not a parseable URL — pass it through unchanged.
-  }
-  return {
-    server,
-    authentication:
-      username && password ? { username, password } : undefined,
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Session class
@@ -780,9 +705,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     if (result?.ok && result.code) {
       // Same ABCD-ABCD presentation as the BUNWEB engine.
       const code = String(result.code);
-      const formatted =
-        code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code;
-      return { code: formatted, codeRaw: code, phoneNumber };
+      return { code: formatPairingCode(code), codeRaw: code, phoneNumber };
     }
     // 429 rate-overlimit is WhatsApp throttling this number/IP; retrying now
     // only extends the window, so surface it as a retryable 429.
@@ -866,49 +789,21 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   async sendImage(request: MessageImageRequest) {
     this.ensureClientReady();
     const chatId = this.ensureSuffix(request.chatId);
-    const fileData = this.fileToBuffer(request.file);
-    const buf = typeof fileData === 'string' && isHttpUrl(fileData)
-      ? await fetchBuffer(fileData)
-      : typeof fileData === 'string'
-        ? Buffer.from(fileData, 'base64')
-        : fileData;
-    const media = new MessageMedia(
-      request.file?.mimetype || 'image/png',
-      buf.toString('base64'),
-    );
+    const media = await this.toMessageMedia(request.file, 'image/png');
     return this.withSendingPolicy(chatId, () => this.sendMedia(chatId, media, { caption: request.caption }));
   }
 
   async sendFile(request: MessageFileRequest) {
     this.ensureClientReady();
     const chatId = this.ensureSuffix(request.chatId);
-    const fileData = this.fileToBuffer(request.file);
-    const buf = typeof fileData === 'string' && isHttpUrl(fileData)
-      ? await fetchBuffer(fileData)
-      : typeof fileData === 'string'
-        ? Buffer.from(fileData, 'base64')
-        : fileData;
-    const media = new MessageMedia(
-      request.file?.mimetype || 'application/octet-stream',
-      buf.toString('base64'),
-      request.file?.filename || 'file',
-    );
+    const media = await this.toMessageMedia(request.file, 'application/octet-stream', 'file');
     return this.withSendingPolicy(chatId, () => this.sendMedia(chatId, media, { caption: request.caption }));
   }
 
   async sendVoice(request: MessageVoiceRequest) {
     this.ensureClientReady();
     const chatId = this.ensureSuffix(request.chatId);
-    const fileData = this.fileToBuffer(request.file);
-    const buf = typeof fileData === 'string' && isHttpUrl(fileData)
-      ? await fetchBuffer(fileData)
-      : typeof fileData === 'string'
-        ? Buffer.from(fileData, 'base64')
-        : fileData;
-    const media = new MessageMedia(
-      request.file?.mimetype || 'audio/ogg',
-      buf.toString('base64'),
-    );
+    const media = await this.toMessageMedia(request.file, 'audio/ogg');
     return this.withSendingPolicy(chatId, () => this.sendMedia(chatId, media, {
       sendAudioAsVoice: request.convert !== false,
     }));
@@ -917,17 +812,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   async sendVideo(request: MessageVideoRequest) {
     this.ensureClientReady();
     const chatId = this.ensureSuffix(request.chatId);
-    const fileData = this.fileToBuffer(request.file);
-    const buf = typeof fileData === 'string' && isHttpUrl(fileData)
-      ? await fetchBuffer(fileData)
-      : typeof fileData === 'string'
-        ? Buffer.from(fileData, 'base64')
-        : fileData;
-    const media = new MessageMedia(
-      request.file?.mimetype || 'video/mp4',
-      buf.toString('base64'),
-      request.file?.filename || 'video',
-    );
+    const media = await this.toMessageMedia(request.file, 'video/mp4', 'video');
     return this.withSendingPolicy(chatId, () => this.sendMedia(chatId, media, { caption: request.caption }));
   }
 
@@ -1696,21 +1581,35 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     }
   }
 
-  private fileToBuffer(file: any): Buffer | string {
-    if (typeof file === 'string') {
-      return file;
+  /**
+   * Materialize any accepted media input into a MessageMedia for webjs.
+   *
+   * The old path forwarded every string to `Buffer.from(str, 'base64')`, so a
+   * local path or a `{ url }` object became garbage bytes. The shared resolver
+   * distinguishes buffer / base64 / data URL / http(s) URL / local path, and
+   * this method does the one bit of I/O MessageMedia requires.
+   */
+  private async toMessageMedia(
+    file: unknown,
+    fallbackMimetype: string,
+    fallbackFilename?: string,
+  ): Promise<MessageMedia> {
+    const resolved = resolveMediaInput(file);
+    let buffer: Buffer;
+    if (resolved.buffer) {
+      buffer = resolved.buffer;
+    } else if (resolved.url) {
+      buffer = await fetchBuffer(resolved.url);
+    } else if (resolved.path) {
+      buffer = await readMediaFile(resolved.path);
+    } else {
+      throw new UnprocessableEntityException(UNSUPPORTED_FILE_INPUT);
     }
-    // Raw bytes (an upload reference resolves to { data: Buffer }). Checked
-    // first: a Buffer has .includes but no .split, so binary data containing
-    // a comma would otherwise crash the data-URL branch below.
-    if (file && typeof file === 'object' && Buffer.isBuffer(file.data)) {
-      return file.data;
-    }
-    if (file && typeof file === 'object' && file.data) {
-      const base64 = file.data.includes(',') ? file.data.split(',')[1] : file.data;
-      return Buffer.from(base64, 'base64');
-    }
-    return file;
+    return new MessageMedia(
+      resolved.mimetype || fallbackMimetype,
+      buffer.toString('base64'),
+      resolved.filename || fallbackFilename,
+    );
   }
 
   protected ensureSuffix(phone: string): string {
