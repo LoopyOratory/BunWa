@@ -84,6 +84,7 @@ DTOs. Every item below has a regression test or is covered by the existing suite
 | BUNWEB stop-during-start leaked a socket | `buildClient()` continued wiring events after a concurrent `stop()` (which set `shouldRestart=false`) and left the socket created by `makeSocket()` open. It now closes that socket and returns. |
 | WEBJS ignored proxy credentials | `username`/`password` in `ProxyConfig` were dropped; only `--proxy-server` was set. Credentials are now split out and passed as wwebjs `proxyAuthentication` (`page.authenticate`). |
 | WEBJS stopped sessions kept stale state | `stop()` now clears the presence map and `meInfo`, closes the dedupe cache and cancels the ready-reconcile timer. |
+| WEBJS misread local paths and `{ url }` media | `sendImage` / `sendFile` / `sendVoice` / `sendVideo` treated every non-URL string as base64, so a local path was sent as the base64 of its own text, and a `{ url }` object reached `Buffer.from` as `[object Object]`. Media parsing now lives in one shared `src/core/media/media-input.ts` used by both engines: buffer, base64, data URL, http(s) URL and local path are distinguished, declared mimetype/filename are carried, and a missing local file answers 422 instead of ENOENT. |
 
 WEBJS also now pins the WhatsApp Web build (see [[WEBJS Engine]]) — the root cause of the
 `CompanionHelloError` / 30 s `inject()` failures that were previously misread as a login problem.

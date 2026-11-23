@@ -110,6 +110,8 @@ gated by the library's own API shape:
 - Inbound dedupe: webjs emits both `message` and `message_create` for the same inbound message, and the engine listens to both because some LID chats fire only one. A 5-minute id cache keeps downstream consumers at one event, matching BUNWEB's `DistinctMessages()`.
 - Message contract: inbound and sent messages now carry `source` (`app`/`api`), `type`, `ack`, `ackName` and `replyTo`, and a send returns the real body instead of an empty string. Ack events carry `ackName`/`fromMe` instead of a private `status` string.
 - `getChatMessages`: applies the `timestamp` / `fromMe` / `ack` filter and sorts newest-first like the BUNWEB store, instead of returning the chat's own order and ignoring the filter.
+- Media inputs (`sendImage` / `sendFile` / `sendVoice` / `sendVideo`) resolve through the shared `src/core/media/media-input.ts`: buffer, base64, data URL, http(s) URL and local path are distinguished (a path is read from disk instead of being base64-encoded), and the declared mimetype/filename are carried into `MessageMedia`.
+- Pure mapping helpers (`mapWwebjsMessageType`, `toWebjsParticipantId`, `toGroupParticipant`, `splitProxyConfig`, `formatPairingCode`) live in `webjs.mappers.ts`, unit-tested without a browser.
 - Proxy: a `ProxyConfig` with `username`/`password` is split into `--proxy-server` plus wwebjs `proxyAuthentication` (Chromium ignores credentials in the flag).
 
 ### Outstanding
