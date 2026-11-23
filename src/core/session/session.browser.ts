@@ -33,6 +33,37 @@ export function getBrowserExecutablePath(): string {
   if (override) {
     return override;
   }
+
+  // Prefer the headless shell binary — it uses ~half the memory of full
+  // Chrome (209 MB vs 376 MB) and starts 2x faster. Fall back to regular
+  // Chrome if the shell binary is not available.
+  const shellCandidates = [];
+  try {
+    const cacheDir = process.env.HOME ? `${process.env.HOME}/.cache/ms-playwright` : '';
+    if (cacheDir && fs.existsSync(cacheDir)) {
+      const entries = fs.readdirSync(cacheDir);
+      for (const entry of entries) {
+        if (entry.startsWith('chromium_headless_shell-')) {
+          const shellPath = `${cacheDir}/${entry}/chrome-headless-shell-linux64/chrome-headless-shell`;
+          if (fs.existsSync(shellPath)) {
+            shellCandidates.push(shellPath);
+          }
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+  shellCandidates.push('/usr/bin/chrome-headless-shell');
+  shellCandidates.push('/usr/bin/chromium-headless-shell');
+
+  for (const p of shellCandidates) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+
+  // Fall back to regular Chrome/Chromium
   const paths = BROWSER_PATHS[process.platform] ?? BROWSER_PATHS['linux'];
   for (const p of paths) {
     if (fs.existsSync(p)) {

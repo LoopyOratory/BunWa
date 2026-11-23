@@ -119,6 +119,62 @@ function toGroupParticipant(participant: any): GroupParticipant {
 // ---------------------------------------------------------------------------
 const WEBJS_SESSIONS_DIR = path.join(process.cwd(), '.sessions', 'webjs');
 
+// ---------------------------------------------------------------------------
+// WhatsApp Web version pinning
+//
+// whatsapp-web.js works by requiring internal webpack modules out of the
+// WhatsApp Web bundle (`WAWebSocketModel`, `WAWebAltDeviceLinkingApi`, ...).
+// Those module names change between WhatsApp Web releases. When the library
+// loads the *live* build and it ships a rename, `inject()` never resolves
+// ("Waiting failed: 30000ms exceeded") and code pairing dies with
+// CompanionHelloError — a failure that looks like a network or login problem
+// but is really a version mismatch.
+//
+// Pin a build the bundled library is known to work with, and make sure its
+// index.html is in the local cache. Override with WEBJS_WEB_VERSION.
+// ---------------------------------------------------------------------------
+const WWEBJS_PINNED_VERSION = '2.3000.1055802486';
+const WWEBJS_CACHE_DIR = path.resolve(
+  process.env.WWEBJS_CACHE_DIR || path.join(process.cwd(), '.wwebjs_cache'),
+);
+
+/**
+ * Ensure `<version>.html` exists in the local web-version cache.
+ * Returns the cache directory when the file is usable, otherwise null
+ * (caller then boots without pinning — degraded, but not fatal).
+ */
+async function ensureWebVersionCache(version: string): Promise<string | null> {
+  const file = path.join(WWEBJS_CACHE_DIR, `${version}.html`);
+  try {
+    const stat = await fs.promises.stat(file);
+    if (stat.size > 100_000) return WWEBJS_CACHE_DIR;
+  } catch {
+    // not cached yet
+  }
+
+  await fs.promises.mkdir(WWEBJS_CACHE_DIR, { recursive: true });
+
+  // The wppconnect archive publishes both plain and `-alpha` file names
+  // depending on the build channel.
+  for (const suffix of ['', '-alpha']) {
+    const url =
+      `https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/` +
+      `${version}${suffix}.html`;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+      if (!res.ok) continue;
+      const html = await res.text();
+      if (html.length < 100_000) continue;
+      await fs.promises.writeFile(file, html);
+      return WWEBJS_CACHE_DIR;
+    } catch {
+      // try the next candidate name
+    }
+  }
+
+  return null;
+}
+
 /**
  * The current WhatsApp Web build exposes a message key's serialized form as
  * `$1` and not `_serialized`, while whatsapp-web.js stores the raw model id on
@@ -230,9 +286,18 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       '--disable-accelerated-2d-canvas',
       '--no-first-run',
       '--no-zygote',
+      '--single-process',
       '--disable-gpu',
       '--disable-extensions',
       '--disable-sync',
+      // Additional memory optimizations (verified: ~150-300MB savings)
+      '--disable-background-networking',
+      '--disable-background-timer-throttling',
+      '--disable-client-side-phishing-detection',
+      '--disable-renderer-backgrounding',
+      '--disable-site-isolation-trials',
+      '--aggressive-cache-discard',
+      '--js-flags=--max-old-space-size=256',
       // Calls need a running audio graph and a microphone permission that does
       // not depend on a user gesture. The mic itself is injected through
       // WAGetUserMedia by calls.webjs.ts, so no fake capture device is used.
@@ -260,11 +325,34 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       this.authTimeout = this.sessionConfig.webjs.authTimeout;
     }
 
+    // Pin the WhatsApp Web build (see ensureWebVersionCache above). Without
+    // this the library loads the live build, inject() times out and code
+    // pairing fails with CompanionHelloError.
+    const webVersion = process.env.WEBJS_WEB_VERSION || WWEBJS_PINNED_VERSION;
+    const webVersionCacheDir = await ensureWebVersionCache(webVersion);
+    if (!webVersionCacheDir) {
+      this.logger.warn(
+        { webVersion },
+        'WhatsApp Web version pin unavailable — falling back to the live build; ' +
+          'code pairing may fail if WhatsApp shipped an incompatible release',
+      );
+    }
+
     this.client = new Client({
       authStrategy: new LocalAuth({
         clientId: this.name,
         dataPath: path.resolve(WEBJS_SESSIONS_DIR),
       }),
+      ...(webVersionCacheDir
+        ? {
+            webVersion,
+            webVersionCache: {
+              type: 'local' as const,
+              path: webVersionCacheDir,
+              strict: true,
+            },
+          }
+        : {}),
       puppeteer: {
         headless: true,
         args: puppeteerArgs,
@@ -385,12 +473,36 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       }
     });
 
-    // Outgoing messages (from me)
+    // Outgoing messages (from me) and incoming fallback (when the 'message'
+    // event does not fire for LID-addressed chats).
     this.client.on('message_create', (msg: any) => {
-      if (!msg.fromMe) return;
-      if (!this.jids.include(msg.to)) return;
-      const waMsg = this.mapIncomingMessage(msg);
-      msgAny$.next(waMsg);
+      if (msg.fromMe) {
+        if (!this.jids.include(msg.to)) return;
+        const waMsg = this.mapIncomingMessage(msg);
+        msgAny$.next(waMsg);
+        return;
+      }
+      // Incoming: mirror the 'message' handler so the chat runtime still
+      // triggers when webjs does not emit 'message' for this chat.
+      if (!this.jids.include(msg.from)) return;
+      (async () => {
+        try {
+          const waMsg = this.mapIncomingMessage(msg);
+          try {
+            const contact = await msg.getContact();
+            const contactId = contact?.id?._serialized;
+            if (contactId) {
+              if (String(waMsg.from).endsWith('@g.us')) waMsg.author = contactId;
+              else waMsg.from = contactId;
+            }
+          } catch {}
+          msg$.next(waMsg);
+          msgAny$.next(waMsg);
+          this.maintainPresenceOnline();
+        } catch (err) {
+          this.logger.error({ err }, 'Error processing incoming message (message_create fallback)');
+        }
+      })();
     });
 
     // Message acknowledgements
@@ -516,6 +628,10 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     if (!this.client) {
       throw new Error('Session is not initialized');
     }
+    // whatsapp-web.js drives WhatsApp Web's internal alt-device-linking flow.
+    // That only works when the pinned web build is loaded (see
+    // ensureWebVersionCache); on a live build the module is missing and this
+    // throws CompanionHelloError.
     const code = await this.client.requestPairingCode(phoneNumber);
     return { code, phoneNumber };
   }
