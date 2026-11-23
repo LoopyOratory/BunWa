@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -85,6 +86,45 @@ describe('MediaLocalStorage', () => {
     expect(await storage.save(Buffer.from('y'), media({ message: { id: 'B', chatId: '1@c.us' } }))).toBe(true);
     await storage.purge();
     expect(fs.existsSync(path.join(root, 'demo', 'B.png'))).toBe(true);
+  });
+});
+
+describe('BUNWEB inbound media', () => {
+  it('exposes the stored URL on both media and mediaUrl', async () => {
+    const { WhatsappSessionBunWebCore } = await import(
+      '../core/engines/bunweb/session.bunweb.core'
+    );
+    const session: any = new WhatsappSessionBunWebCore({
+      name: 'bunweb-media',
+      printQR: false,
+      loggerBuilder: {
+        child: () => ({ info() {}, debug() {}, warn() {}, error() {}, trace() {} }),
+      },
+      sessionStore: {} as any,
+      mediaManager: {} as any,
+      engineConfig: {},
+      sessionConfig: {},
+      ignore: { status: false, groups: false, channels: false, broadcast: false },
+    });
+    session.mediaManager = {
+      processMedia: async () => ({
+        url: 'http://test/api/files/demo/M1.png',
+        mimetype: 'image/png',
+        filename: 'photo.png',
+      }),
+    };
+
+    const message = {
+      key: { id: 'M1', remoteJid: '15551234567@s.whatsapp.net', fromMe: false },
+      message: { imageMessage: { mimetype: 'image/png', caption: 'hi' } },
+      messageTimestamp: 1_700_000_000,
+    };
+    const result = await session.processIncomingMessage(message, true);
+
+    expect(result?.media?.url).toBe('http://test/api/files/demo/M1.png');
+    // The Chatwoot bridge reads only mediaUrl; it used to be undefined even
+    // though the file had been stored.
+    expect(result?.mediaUrl).toBe('http://test/api/files/demo/M1.png');
   });
 });
 

@@ -3986,6 +3986,11 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
     // Media
     if (downloadMedia && wamessage.hasMedia) {
       wamessage.media = await this.downloadMediaSafe(message);
+      // `toWAMessage` reads the URL off the raw proto, which never carries a
+      // stored `media` object, so mediaUrl stayed undefined even when the file
+      // was saved. Consumers that only read mediaUrl (the Chatwoot bridge)
+      // then dropped the attachment. Set it from the download result.
+      wamessage.mediaUrl = wamessage.media?.url;
     }
 
     if (downloadMedia && wamessage.replyTo?.hasMedia) {
