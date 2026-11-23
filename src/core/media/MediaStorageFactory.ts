@@ -44,7 +44,20 @@ export async function buildMediaStorage(
     logger,
     getLocalMediaFolder(),
     `${baseUrl}/api/files`,
+    mediaLifetimeSeconds(),
   );
   await storage.init();
   return storage;
+}
+
+/**
+ * How long a locally stored media URL stays valid. Defaults to 180 s; the URL
+ * is ephemeral by design, so a dashboard that needs to keep a link around can
+ * raise it without patching code.
+ */
+function mediaLifetimeSeconds(): number {
+  const raw = process.env.BUNWA_MEDIA_LIFETIME_SECONDS;
+  if (raw === undefined || raw === '') return 180;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : 180;
 }

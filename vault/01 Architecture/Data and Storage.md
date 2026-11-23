@@ -50,7 +50,7 @@ See [[Session Stores]] for the driver matrix and the per-repository file list.
 - **Local** (default): `MediaLocalStorage` writes to `<folder>/<session>/<id>.<ext>` and serves
   `GET /api/files/:session/:filename` (api-key protected, path-traversal guarded). The folder is
   `BUNWA_STORAGE_LOCAL_PATH` → `WHATSAPP_FILES_FOLDER` → `/tmp/whatsapp-files`.
-  Files get a **~180 s lifetime** then are unlinked — treat the URL as ephemeral. One unref'd
+  Files get a **~180 s lifetime** (`BUNWA_MEDIA_LIFETIME_SECONDS`) then are unlinked — treat the URL as ephemeral. One unref'd
   sweeper per storage instance removes expired files (it replaced a `setTimeout` per saved file,
   which leaked on restart and held one timer per message). The file stem and extension are
   sanitized, so a hostile message id or filename cannot escape the session directory.
