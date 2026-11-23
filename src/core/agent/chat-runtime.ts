@@ -23,6 +23,34 @@
  *   error-reply loop is worse than a late reply.
  */
 
+/**
+ * Strip leading greetings from a reply. Models (especially free ones) tend to
+ * add "Hi there!", "Hello!", etc. even when told not to. This is a safety net.
+ */
+function stripLeadingGreeting(text: string): string {
+  const greetingPatterns = [
+    /^(hi|hello|hey|hiya|howdy|greetings|good (morning|afternoon|evening|day))[!,.\s]*/i,
+    /^(hi there|hello there|hey there|hiya there)[!,.\s]*/i,
+    /^(welcome back|welcome to vivita)[!,.\s]*/i,
+  ];
+  let result = text.trim();
+  let stripped = false;
+  for (const pattern of greetingPatterns) {
+    const next = result.replace(pattern, '');
+    if (next !== result) {
+      stripped = true;
+      result = next;
+    }
+  }
+  // If we stripped everything, return original
+  if (!result.trim()) return text.trim();
+  // Only re-capitalize when a greeting was actually removed — otherwise this
+  // silently rewrites the model's casing (e.g. "first reply" → "First reply").
+  if (!stripped) return result.trim();
+  result = result.charAt(0).toUpperCase() + result.slice(1);
+  return result.trim();
+}
+
 import type { SessionManager } from '../manager.core';
 import { agentService } from './agent.service';
 import { RuntimeRecorder } from './runtime-recorder';
@@ -104,6 +132,11 @@ class ChatRuntimeService {
   /** Message ids already handled (replays must not re-answer). */
   private handledIds = new Set<string>();
 
+  /** Bound sessions (for polling fallback). */
+  private boundSessions = new Set<string>();
+  /** Polling timer for unread messages (fallback when events don't fire). */
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+
   configure(deps: ChatRuntimeDeps): void {
     this.manager = deps.manager ?? this.manager;
     this.logger = deps.logger ?? this.logger;
@@ -135,6 +168,9 @@ class ChatRuntimeService {
       bound.set(session, [...(bound.get(session) ?? []), agent]);
     }
 
+    // Save bound sessions for polling fallback.
+    this.boundSessions = new Set(bound.keys());
+
     // Subscribe new sessions, drop gone ones.
     for (const session of bound.keys()) {
       if (this.subscriptions.has(session)) continue;
@@ -149,11 +185,87 @@ class ChatRuntimeService {
         this.logger.info?.(`chat runtime: no agent bound to '${session}', unsubscribed`);
       }
     }
+
+    this.startPolling();
   }
 
   stop(): void {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
     for (const unsubscribe of this.subscriptions.values()) unsubscribe();
     this.subscriptions.clear();
+  }
+
+  private startPolling(): void {
+    if (this.pollTimer) return;
+    this.pollTimer = setInterval(() => {
+      void this.pollUnread().catch((err) =>
+        this.logger?.warn?.(`chat runtime: poll error: ${String(err)}`),
+      );
+    }, 4000);
+  }
+
+  private async pollUnread(): Promise<void> {
+    if (!this.manager) return;
+    for (const session of this.boundSessions) {
+      if (!this.manager.isRunning(session)) continue;
+      const whatsapp = this.manager.getSession(session);
+      if (!whatsapp) continue;
+      let chats: any[] = [];
+      try {
+        chats = await (whatsapp as any).getChats?.({ limit: 1000, offset: 0 });
+      } catch {
+        continue;
+      }
+      if (!Array.isArray(chats)) continue;
+      for (const chat of chats) {
+        if (!chat?.id || !chat.unreadCount) continue;
+        if (isGroup(chat.id) || isBroadcast(chat.id)) continue;
+        let msgs: any[] = [];
+        try {
+          msgs = await (whatsapp as any).getChatMessages?.(chat.id, { limit: 5 }, {});
+        } catch {
+          continue;
+        }
+        if (!Array.isArray(msgs) || !msgs.length) continue;
+        // Find the latest inbound (fromMe false) message.
+        const inboundMsgs = msgs.filter((m: any) => !m.fromMe);
+        if (!inboundMsgs.length) continue;
+        const m = inboundMsgs[inboundMsgs.length - 1];
+        if (!m || m.fromMe) continue;
+        if (!m.body?.trim() && !m.hasMedia) continue;
+        const payload: NormalizedChatMessage = {
+          id: m.id,
+          from: m.from || chat.id,
+          to: m.to,
+          body: m.body || '',
+          type: m.type,
+          timestamp: m.timestamp,
+          fromMe: false,
+          hasMedia: Boolean(m.hasMedia),
+        };
+        if ((this.humanActiveUntil.get(chat.id) ?? 0) > this.now()) continue;
+        if (this.handledIds.has(payload.id)) {
+          // Already handled; mark read to clear unread badge.
+          try { await (whatsapp as any).sendSeen?.({ chatId: chat.id, messageId: payload.id }); } catch {}
+          continue;
+        }
+        this.handledIds.add(payload.id);
+        if (this.handledIds.size > 5000) this.handledIds.clear();
+        if (this.inFlight.get(chat.id)) {
+          this.pending.set(chat.id, payload);
+          continue;
+        }
+        await this.answer(session, chat.id, payload);
+        const next = this.pending.get(chat.id);
+        if (next) {
+          this.pending.delete(chat.id);
+          await this.answer(session, chat.id, next);
+        }
+      }
+    }
   }
 
   private subscribeSession(session: string): () => void {
@@ -332,6 +444,7 @@ class ChatRuntimeService {
     if (!agentId) return null;
     const system = await agentService.effectivePrompt(agentId, chatId, inbound.body).catch(() => null);
     const history: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+    let isContinuing = false;
     if (conversationId) {
       try {
         const messages = await agentService.listConversationMessages(conversationId, { limit: HISTORY_TURNS * 2 + 1 });
@@ -341,11 +454,28 @@ class ChatRuntimeService {
           history.push({ role: message.role === 'agent' ? 'assistant' : 'user', content: message.text.slice(0, 2000) });
         }
         history.reverse();
+        // Check if this is a continuing conversation (last message within 6 hours)
+        if (messages.length > 0) {
+          const lastMsg = messages[messages.length - 1];
+          const lastTime = new Date(lastMsg.createdAt).getTime();
+          const sixHoursAgo = Date.now() - 6 * 60 * 60 * 1000;
+          if (lastTime > sixHoursAgo) {
+            isContinuing = true;
+          }
+        }
       } catch {
         // History is best-effort; the current message alone still works.
       }
     }
     history.push({ role: 'user', content: inbound.body.slice(0, 4000) });
+
+    // Build system prompt with conversation continuity instruction
+    let systemPrompt = system || '';
+    if (isContinuing) {
+      systemPrompt += '\n\nIMPORTANT: This is a CONTINUING conversation (last message was within the last 6 hours). Do NOT greet, introduce yourself, or say "hi/hello/hey". Continue the conversation naturally. Answer directly.';
+    } else {
+      systemPrompt += '\n\nIMPORTANT: Do not introduce yourself or greet the customer unless this is the very first message. Answer directly and concisely.';
+    }
 
     const settings = this.getModelSettingsImpl
       ? await this.getModelSettingsImpl().catch(() => null)
@@ -355,10 +485,12 @@ class ChatRuntimeService {
       return null;
     }
     const messages = [
-      ...(system ? [{ role: 'system' as const, content: system }] : []),
+      ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
       ...history,
     ];
-    const reply = await this.callChatModel(settings, messages);
+    const rawReply = await this.callChatModel(settings, messages);
+    // Post-process: strip leading greetings
+    const reply = rawReply ? stripLeadingGreeting(rawReply) : null;
     if (reply) return reply;
     // Fallback model when the primary fails (same contract as vision).
     if (settings.fallbackApiKey && settings.fallbackModel) {
@@ -389,6 +521,7 @@ class ChatRuntimeService {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${settings.apiKey}`,
+          ...(settings.baseUrl?.includes('opencode.ai') ? { 'x-opencode-session': 'bunwa-chat' } : {}),
         },
         body: JSON.stringify({ model: settings.model, messages, max_tokens: 700, temperature: 0.7 }),
         signal: controller.signal,
