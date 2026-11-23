@@ -1,8 +1,12 @@
 import { Hono } from 'hono';
 import { container } from 'tsyringe';
+import pino from 'pino';
 import { apiKeyAuthMiddleware } from '../middleware/api-key-auth';
 import { policiesMiddleware, CanSession, Action, FromParam } from '../middleware/policies';
 import { SessionManager } from '../core/manager.core';
+import { isClientFacingError } from '../core/exceptions';
+
+const logger = pino({ name: 'AuthRoutes' });
 
 export function createAuthRouter(): Hono {
   const router = new Hono();
@@ -66,12 +70,38 @@ export function createAuthRouter(): Hono {
       const sessionName = c.req.param('session');
       const body = await c.req.json();
 
+      if (!body?.phoneNumber) {
+        return c.json(
+          { statusCode: 400, message: 'phoneNumber is required, in international format without + (e.g. 15551234567).' },
+          400,
+        );
+      }
+
       try {
         const session = manager.getSession(sessionName);
-        const result = await (session as any).requestCode?.(body.phoneNumber, body.method, body);
+        if (typeof (session as any).requestCode !== 'function') {
+          return c.json(
+            { statusCode: 422, message: `Code pairing is not supported by the ${session?.engine ?? 'selected'} engine.` },
+            422,
+          );
+        }
+        const result = await (session as any).requestCode(body.phoneNumber, body.method, body);
         return c.json(result || { result: true });
-      } catch (error) {
-        return c.json({ statusCode: 500, message: 'Internal server error' }, 500);
+      } catch (error: any) {
+        // Client-facing errors (not ready, rate limited, unsupported engine)
+        // go through the shared error handler so they keep their 4xx status
+        // and the Retry-After header; only genuine faults become a 500.
+        if (isClientFacingError(error)) {
+          throw error;
+        }
+        logger.error({ err: error, session: sessionName }, 'Request pairing code failed');
+        return c.json(
+          {
+            statusCode: 500,
+            message: error?.message || 'Internal server error',
+          },
+          500,
+        );
       }
     }
   );

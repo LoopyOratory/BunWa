@@ -61,6 +61,91 @@ describe('WEBJS live messages', () => {
   });
 });
 
+describe('WEBJS message contract parity with BUNWEB', () => {
+  it('message + message_create for the same inbound id emit once', async () => {
+    const { session, client } = webjsSession();
+    (session as any).setupEventHandlers();
+    const message: any[] = [];
+    session.getEventObservable(BUNWAEvents.MESSAGE).subscribe((m: any) => message.push(m));
+    const inbound = {
+      id: { _serialized: 'false_233553919737@c.us_DUP', id: 'DUP' },
+      from: '233553919737@c.us',
+      to: 'me@c.us',
+      body: 'only once',
+      fromMe: false,
+      type: 'chat',
+      timestamp: 1,
+      getContact: async () => null,
+    };
+    client.emit('message', inbound);
+    client.emit('message_create', inbound);
+    await Bun.sleep(5);
+    expect(message).toHaveLength(1);
+  });
+
+  it('ack events carry ackName and fromMe like BUNWEB', async () => {
+    const { session, client } = webjsSession();
+    (session as any).setupEventHandlers();
+    const acks: any[] = [];
+    session.getEventObservable(BUNWAEvents.MESSAGE_ACK).subscribe((a: any) => acks.push(a));
+    client.emit('message_ack', {
+      id: { _serialized: 'true_233553919737@c.us_ACK', id: 'ACK' },
+      from: 'me@c.us',
+      to: '233553919737@c.us',
+      fromMe: true,
+    }, 3);
+    await Bun.sleep(5);
+    expect(acks).toHaveLength(1);
+    expect(acks[0].ackName).toBe('READ');
+    expect(acks[0].fromMe).toBe(true);
+    expect(acks[0]).not.toHaveProperty('status');
+  });
+
+  it('mapIncomingMessage carries source, ack and the reply target', () => {
+    const { session } = webjsSession();
+    const mapped = (session as any).mapIncomingMessage({
+      id: { _serialized: 'false_1@c.us_REPLY', id: 'REPLY' },
+      from: '1@c.us',
+      to: 'me@c.us',
+      body: 'answer',
+      fromMe: false,
+      type: 'chat',
+      timestamp: 123,
+      ack: 2,
+      _data: {
+        contextInfo: {
+          stanzaId: 'QUOTED',
+          participant: '1@c.us',
+          quotedMessage: { conversation: 'question' },
+        },
+      },
+    });
+    expect(mapped.source).toBe('app');
+    expect(mapped.ack).toBe(2);
+    expect(mapped.ackName).toBe('DEVICE');
+    expect(mapped.replyTo.id).toBe('QUOTED');
+    expect(mapped._data).toBeDefined();
+  });
+
+  it('wrapMessage returns what was sent instead of an empty body', () => {
+    const { session } = webjsSession();
+    const sent = (session as any).wrapMessage({
+      id: { _serialized: 'true_1@c.us_SENT', id: 'SENT' },
+      from: 'me@c.us',
+      to: '1@c.us',
+      body: 'hello there',
+      type: 'chat',
+      fromMe: true,
+      timestamp: 456,
+      ack: 1,
+    });
+    expect(sent.body).toBe('hello there');
+    expect(sent.type).toBe('text');
+    expect(sent.source).toBe('api');
+    expect(sent.ackName).toBe('SERVER');
+  });
+});
+
 describe('chat mute, unmute, archive and mark unread', () => {
   it('WEBJS calls whatsapp-web.js with a Date for a timed mute and none for always', async () => {
     const { session, calls } = webjsSession();

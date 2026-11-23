@@ -94,6 +94,26 @@ export class TooManyRequestsException extends Error {
 }
 
 /**
+ * WhatsApp rate-limited the pairing-code request (`rate-overlimit`, 429). This
+ * is server-side throttling, not a local failure: retrying immediately only
+ * extends the block. Distinct from the sending-policy 429 because the reason
+ * and the retry hint are different.
+ */
+export class PairingRateLimitedException extends Error {
+  public readonly statusCode = 429;
+  public readonly retryAfterMs: number;
+
+  constructor(retryAfterMs: number, detail = 'WhatsApp rate-limited code pairing') {
+    const minutes = Math.max(1, Math.ceil(retryAfterMs / 60_000));
+    super(
+      `${detail}. Wait about ${minutes} minute${minutes === 1 ? '' : 's'} before requesting another code — asking again now extends the block.`,
+    );
+    this.name = 'PairingRateLimitedException';
+    this.retryAfterMs = Math.max(0, retryAfterMs);
+  }
+}
+
+/**
  * Errors the global error handler already maps to a client-facing 4xx
  * response. Route handlers rethrow these instead of flattening them into a
  * generic 500, so the reason (a blocked send, a bad target, a username that
@@ -104,6 +124,7 @@ export function isClientFacingError(error: unknown): boolean {
   return (
     error instanceof BadRequestException ||
     error instanceof UnprocessableEntityException ||
+    error instanceof PairingRateLimitedException ||
     error instanceof TooManyRequestsException ||
     error instanceof NotImplementedByEngineError ||
     error instanceof AvailableInPlusVersion ||

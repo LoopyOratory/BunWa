@@ -76,6 +76,7 @@ import {
   BadRequestException,
   NotFoundException,
   NotImplementedByEngineError,
+  PairingRateLimitedException,
 } from '../../exceptions';
 import { toVcardV3 } from '../../vcard';
 import { createAgentProxy } from '../../helpers.proxy';
@@ -758,10 +759,17 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
     // still being built. Rebuild it when it was dropped, and skip the bind
     // entirely when the session is no longer wanted, so connectStore() never
     // sees a null store.
-    if (this.shouldRestart) {
-      await this.ensureStore();
-      this.connectStore();
+    if (!this.shouldRestart) {
+      // stop() ran while makeSocket() was in flight; that socket was created
+      // after end() and would otherwise stay open forever.
+      this.logger.debug(
+        'Session stopped while building the client — closing the new socket',
+      );
+      this.sock?.end(undefined);
+      return;
     }
+    await this.ensureStore();
+    this.connectStore();
     this.listenConnectionEvents();
     this.subscribeEngineEvents2();
     this.listenContactsUpdatePictureProfile();
@@ -823,17 +831,19 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
       if (connection === 'open') {
         this.logger.info(`[${this.name}] WhatsApp connection OPEN in ${Date.now() - startTime}ms`);
       }
-      if (isNewLogin) {
-        this.restartClient();
-      } else if (connection === 'open') {
+      if (connection === 'open') {
         this.qr.save('');
         this.status = BUNWASessionStatus.WORKING;
-        // Do we need to resubscribe?
-        // Ideally not, we need to explicitly call interesting
-        // jids every 1 minute
-        // this.resubscribeToKnownPresences();
+        // A brand-new login may need one reconnect to pick up full session
+        // state — but the session is WORKING first. Previously `isNewLogin`
+        // short-circuited this branch, so a fresh pairing reported STARTING
+        // (and skipped the QR clear) until the restart finished.
+        if (isNewLogin) {
+          this.restartClient();
+        }
         return;
-      } else if (connection === 'close') {
+      }
+      if (connection === 'close') {
         this.logger.info(`[${this.name}] Connection closed after ${Date.now() - startTime}ms`);
         this.qr.save('');
         const error = lastDisconnect?.error as any;
@@ -930,6 +940,9 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
     this.shouldRestart = false;
     this.startDelayedJob.cancel();
     this.autoRestartJob.stop();
+    // The idle-completion timer would otherwise keep firing after the socket
+    // is gone and emit `session.sync` for a dead engine.
+    this.historySync?.dispose();
 
     // We'll restart the client if it's in the process of unpairing
     this.status = BUNWASessionStatus.FAILED;
@@ -955,6 +968,7 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
     this.shouldRestart = false;
     this.startDelayedJob.cancel();
     this.autoRestartJob.stop();
+    this.historySync?.dispose();
 
     await this.end();
     await this.closeStore();
@@ -1230,12 +1244,28 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
     }
 
     this.logger.info(`Requesting pairing code for '${phoneNumber}'...`);
-    const code: string = await this.sock.requestPairingCode(phoneNumber);
+    let code: string;
+    try {
+      code = await this.sock.requestPairingCode(phoneNumber);
+    } catch (error: any) {
+      // Baileys forwards the server's IQ error. `rate-overlimit` is WhatsApp
+      // throttling pairing for this number/IP — retrying immediately only
+      // extends the block, so answer 429 instead of a generic 500.
+      const statusCode =
+        error?.output?.statusCode ?? error?.data?.statusCode ?? error?.statusCode;
+      const reason = String(
+        error?.data?.text ?? error?.output?.payload?.text ?? error?.message ?? '',
+      );
+      if (statusCode === 429 || /rate[-_ ]?overlimit/i.test(reason)) {
+        throw new PairingRateLimitedException(10 * 60_000);
+      }
+      throw error;
+    }
     // show it as ABCD-ABCD
     const parts = splitAt(code, 4);
     const codeRepr = parts.join('-');
     this.logger.info(`Your code: ${codeRepr}`);
-    return { code: codeRepr };
+    return { code: codeRepr, codeRaw: code, phoneNumber };
   }
 
   async getScreenshot(): Promise<Buffer> {
@@ -1412,6 +1442,15 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
    * TooManyRequestsException when the send must not go out.
    */
   private policyGate(requestChatId: string): string {
+    // Sends on a stopped/disconnected session used to reach Baileys and throw
+    // a TypeError deep in the socket (`Cannot read properties of undefined
+    // (reading 'sendMessage')`), which surfaced as a 500. Answer like WEBJS's
+    // ensureClientReady instead: 422 naming the state.
+    if (!this.sock || this.sock.ws?.isClosed === true) {
+      throw new UnprocessableEntityException(
+        `The BUNWEB session is not connected (status ${this.status}). Start the session and wait for WORKING.`,
+      );
+    }
     const chatId = toJID(this.ensureSuffix(requestChatId));
     this.getSendingPolicy()?.assertSendAllowed(this.name, chatId);
     return chatId;

@@ -9,6 +9,7 @@ import {
   AvailableInPlusVersionAll,
   NotImplementedByEngineError,
   TooManyRequestsException,
+  PairingRateLimitedException,
 } from '../core/exceptions';
 import pino from 'pino';
 
@@ -63,6 +64,17 @@ export const globalErrorHandler: ErrorHandler = (err, c) => {
   // Report them as 429 with a Retry-After header and keep them out of the
   // error log.
   if (err instanceof TooManyRequestsException) {
+    const retryAfterSeconds = Math.max(1, Math.ceil(err.retryAfterMs / 1000));
+    c.header('Retry-After', String(retryAfterSeconds));
+    return c.json(
+      { statusCode: 429, message: err.message, retryAfterSeconds },
+      429,
+    );
+  }
+
+  // WhatsApp itself throttled the pairing-code request. Same 429 surface, but
+  // a different reason; the message says how long to wait.
+  if (err instanceof PairingRateLimitedException) {
     const retryAfterSeconds = Math.max(1, Math.ceil(err.retryAfterMs / 1000));
     c.header('Retry-After', String(retryAfterSeconds));
     return c.json(

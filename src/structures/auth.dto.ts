@@ -14,6 +14,10 @@ export class RequestCodeRequest {
 
 export class PairingCodeResponse {
   code?: string;
+  /** The code without the ABCD-ABCD dash, for clients that strip it. */
+  codeRaw?: string;
+  /** The phone number the code was issued for. */
+  phoneNumber?: string;
 }
 
 export enum QRCodeFormat {

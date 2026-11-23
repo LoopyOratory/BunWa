@@ -74,11 +74,13 @@ import {
   BadRequestException,
   NotImplementedByEngineError,
   NotFoundException,
+  PairingRateLimitedException,
   UnprocessableEntityException,
 } from '../../exceptions';
 import { fetchBuffer } from '../../../utils/fetch';
 import { isUsernameAddress } from '../../../common/security/wa-id';
 import { participantId } from '../../utils/jids';
+import { WAMessageAck } from '../../utils/acks';
 
 /**
  * Resolve one entry of a participants payload into a whatsapp-web.js chat id.
@@ -137,6 +139,27 @@ const WWEBJS_PINNED_VERSION = '2.3000.1055802486';
 const WWEBJS_CACHE_DIR = path.resolve(
   process.env.WWEBJS_CACHE_DIR || path.join(process.cwd(), '.wwebjs_cache'),
 );
+
+/**
+ * Chrome keeps a service-worker copy of the WhatsApp Web app inside the
+ * profile. After a long session that copy can silently upgrade to the live
+ * build, and on the next start the service worker serves it *instead of* the
+ * pinned HTML — `inject()` then times out again even though `<version>.html`
+ * is on disk.
+ *
+ * WhatsApp's login lives in Local Storage and IndexedDB, so only the code and
+ * HTTP caches are removed. Called before the browser launches (profile unlocked).
+ */
+async function purgeWebBuildCaches(sessionDir: string, logger: any): Promise<void> {
+  const profile = path.join(sessionDir, 'Default');
+  for (const dir of ['Service Worker', 'Cache', 'Code Cache']) {
+    try {
+      await fs.promises.rm(path.join(profile, dir), { recursive: true, force: true });
+    } catch (err: any) {
+      logger?.warn?.({ err, dir }, 'Could not clear the WhatsApp Web cache');
+    }
+  }
+}
 
 /**
  * Ensure `<version>.html` exists in the local web-version cache.
@@ -223,6 +246,37 @@ function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value);
 }
 
+/**
+ * Chromium takes the proxy as `scheme://host:port` and authenticates through
+ * `page.authenticate` (wwebjs `proxyAuthentication`). Credentials embedded in
+ * the server URL are split out so the flag stays a valid proxy endpoint and
+ * the username/password actually reach Chromium — BUNWEB embeds them in its
+ * agent URL, and both engines must honour the same ProxyConfig.
+ */
+function splitProxyConfig(config: { server: string; username?: string; password?: string }): {
+  server: string;
+  authentication?: { username: string; password: string };
+} {
+  let username = config.username;
+  let password = config.password;
+  let server = config.server;
+  try {
+    const url = new URL(config.server);
+    if (!username && url.username) username = decodeURIComponent(url.username);
+    if (!password && url.password) password = decodeURIComponent(url.password);
+    url.username = '';
+    url.password = '';
+    server = url.toString();
+  } catch {
+    // Not a parseable URL — pass it through unchanged.
+  }
+  return {
+    server,
+    authentication:
+      username && password ? { username, password } : undefined,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Session class
 // ---------------------------------------------------------------------------
@@ -237,6 +291,14 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   private profilePicture: TtlCache<string | null> = new TtlCache({ stdTtl: 24 * 60 * 60 });
   private readyReconcileTimer: ReturnType<typeof setTimeout> | null = null;
   private readyReconcileStartedAt = 0;
+  /**
+   * whatsapp-web.js emits both `message` and `message_create` for the same
+   * inbound message. The engine mirrors the handler on purpose (some LID chats
+   * only emit one of the two), so ids are deduped here — BUNWEB does the same
+   * with DistinctMessages(). Without it every webhook and WS client sees the
+   * message twice.
+   */
+  private seenMessageIds = new TtlCache<boolean>({ stdTtl: 300, checkperiod: 60 });
   private authTimeout?: number;
   private calls: WebJSCallController | null = null;
 
@@ -264,6 +326,9 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   async start() {
     this.status = BUNWASessionStatus.STARTING;
     this.logger.info('Starting whatsapp-web.js session...');
+    // A stopped session can be started again; the dedupe cache is closed by
+    // stop(), so build a fresh one for this run.
+    this.seenMessageIds = new TtlCache<boolean>({ stdTtl: 300, checkperiod: 60 });
 
     // Ensure sessions directory exists
     if (!fs.existsSync(WEBJS_SESSIONS_DIR)) {
@@ -272,6 +337,10 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
     try {
       await this.buildClient();
+      // `ready` is the normal path, but it can be missed when the page
+      // reconnects before the handler is attached. Reconcile once the client
+      // reports an identity so the session does not sit in STARTING forever.
+      this.scheduleReadyReconcile();
     } catch (err: any) {
       this.logger.error({ err }, 'Failed to start whatsapp-web.js client');
       this.status = BUNWASessionStatus.FAILED;
@@ -315,10 +384,17 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       puppeteerArgs.push(`--use-file-for-fake-audio-capture=${process.env.WEBJS_FAKE_AUDIO_FILE}`);
     }
 
-    // Add proxy if configured
+    // Add proxy if configured. Credentials go through page.authenticate
+    // (proxyAuthentication) instead of being left in the flag, which Chromium
+    // ignores.
+    let proxyAuthentication: { username: string; password: string } | undefined;
     if (this.proxyConfig?.server) {
-      puppeteerArgs.push(`--proxy-server=${this.proxyConfig.server}`);
-      this.logger.info(`Using proxy: ${this.proxyConfig.server}`);
+      const proxy = splitProxyConfig(this.proxyConfig);
+      puppeteerArgs.push(`--proxy-server=${proxy.server}`);
+      proxyAuthentication = proxy.authentication;
+      this.logger.info(
+        `Using proxy: ${proxy.server}${proxyAuthentication ? ' (authenticated)' : ''}`,
+      );
     }
 
     if (this.sessionConfig?.webjs?.authTimeout) {
@@ -330,7 +406,15 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     // pairing fails with CompanionHelloError.
     const webVersion = process.env.WEBJS_WEB_VERSION || WWEBJS_PINNED_VERSION;
     const webVersionCacheDir = await ensureWebVersionCache(webVersion);
-    if (!webVersionCacheDir) {
+    if (webVersionCacheDir) {
+      // The HTML pin only decides what the browser is *served*. A service
+      // worker left by a previous run can still hand the page the live build,
+      // which is exactly the state that breaks inject() and code pairing.
+      await purgeWebBuildCaches(
+        path.join(WEBJS_SESSIONS_DIR, `session-${this.name}`),
+        this.logger,
+      );
+    } else {
       this.logger.warn(
         { webVersion },
         'WhatsApp Web version pin unavailable — falling back to the live build; ' +
@@ -362,10 +446,47 @@ export class WhatsappSessionWebJs extends WhatsappSession {
         executablePath: getBrowserExecutablePath(),
       },
       ...(this.authTimeout ? { authTimeoutMs: this.authTimeout } : {}),
+      ...(proxyAuthentication ? { proxyAuthentication } : {}),
     });
 
     this.setupEventHandlers();
     await this.client.initialize();
+  }
+
+  /**
+   * Single inbound path for both `message` and `message_create`.
+   *
+   * webjs emits both for an inbound message, and the engine listens to both
+   * because some LID-addressed chats only fire one of them. Dedupe by message
+   * id so downstream consumers (webhooks, WS, chat runtime) see one event.
+   */
+  private async emitInbound(msg: any): Promise<void> {
+    if (!this.jids.include(msg.fromMe ? msg.to : msg.from)) return;
+    try {
+      const waMsg = this.mapIncomingMessage(msg);
+      if (waMsg.id) {
+        if (this.seenMessageIds.has(waMsg.id)) return;
+        this.seenMessageIds.set(waMsg.id, true);
+      }
+
+      // Attach sender contact info. In a group `from` must stay the group
+      // (it is the chat); the person is `author`.
+      try {
+        const contact = await msg.getContact();
+        const contactId = contact?.id?._serialized;
+        if (contactId) {
+          if (String(waMsg.from).endsWith('@g.us')) waMsg.author = contactId;
+          else waMsg.from = contactId;
+        }
+      } catch {}
+
+      this.getEventSubject(BUNWAEvents.MESSAGE).next(waMsg);
+      // message.any carries every message, incoming included (as on BUNWEB).
+      this.getEventSubject(BUNWAEvents.MESSAGE_ANY).next(waMsg);
+      this.maintainPresenceOnline();
+    } catch (err) {
+      this.logger.error({ err }, 'Error processing incoming message');
+    }
   }
 
   private setupEventHandlers(): void {
@@ -409,17 +530,32 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
     this.client.on('ready', async () => {
       this.logger.info('Client ready — session is WORKING');
-      await this.installChatModelShim();
-      await this.installCalls();
-      this.markReady();
+      // A shim failure must never leave a genuinely connected session stuck in
+      // STARTING: mark ready in `finally` and log what failed.
+      try {
+        await this.installChatModelShim();
+      } catch (err) {
+        this.logger.warn({ err }, 'Failed to install the chat-model shim');
+      }
+      try {
+        await this.installCalls();
+      } catch (err) {
+        this.logger.warn({ err }, 'Failed to install the call controller');
+      } finally {
+        this.markReady();
+      }
     });
 
     // WhatsApp Web can reload the page (for example after a version change),
     // which drops the injected shim; reinstall it once the page reconnects.
     this.client.on('change_state', (state: string) => {
       if (state === 'CONNECTED' && this.status === BUNWASessionStatus.WORKING) {
-        void this.installChatModelShim();
-        void this.installCalls();
+        void this.installChatModelShim().catch((err) =>
+          this.logger.warn({ err }, 'Failed to reinstall the chat-model shim'),
+        );
+        void this.installCalls().catch((err) =>
+          this.logger.warn({ err }, 'Failed to reinstall the call controller'),
+        );
       }
     });
 
@@ -448,29 +584,8 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     });
 
     // Incoming messages
-    this.client.on('message', async (msg: any) => {
-      if (!this.jids.include(msg.fromMe ? msg.to : msg.from)) return;
-      try {
-        const waMsg = this.mapIncomingMessage(msg);
-
-        // Attach sender contact info. In a group `from` must stay the group
-        // (it is the chat); the person is `author`.
-        try {
-          const contact = await msg.getContact();
-          const contactId = contact?.id?._serialized;
-          if (contactId) {
-            if (String(waMsg.from).endsWith('@g.us')) waMsg.author = contactId;
-            else waMsg.from = contactId;
-          }
-        } catch {}
-
-        msg$.next(waMsg);
-        // message.any carries every message, incoming included (as on BUNWEB).
-        msgAny$.next(waMsg);
-        this.maintainPresenceOnline();
-      } catch (err) {
-        this.logger.error({ err }, 'Error processing incoming message');
-      }
+    this.client.on('message', (msg: any) => {
+      void this.emitInbound(msg);
     });
 
     // Outgoing messages (from me) and incoming fallback (when the 'message'
@@ -484,36 +599,23 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       }
       // Incoming: mirror the 'message' handler so the chat runtime still
       // triggers when webjs does not emit 'message' for this chat.
-      if (!this.jids.include(msg.from)) return;
-      (async () => {
-        try {
-          const waMsg = this.mapIncomingMessage(msg);
-          try {
-            const contact = await msg.getContact();
-            const contactId = contact?.id?._serialized;
-            if (contactId) {
-              if (String(waMsg.from).endsWith('@g.us')) waMsg.author = contactId;
-              else waMsg.from = contactId;
-            }
-          } catch {}
-          msg$.next(waMsg);
-          msgAny$.next(waMsg);
-          this.maintainPresenceOnline();
-        } catch (err) {
-          this.logger.error({ err }, 'Error processing incoming message (message_create fallback)');
-        }
-      })();
+      void this.emitInbound(msg);
     });
 
-    // Message acknowledgements
+    // Message acknowledgements. The payload matches BUNWEB's
+    // WAMessageAckBody: consumers read `ackName`, and a bare `status` string
+    // (the previous shape) was invisible to them.
     this.client.on('message_ack', (msg: any, ack: number) => {
       if (!this.jids.include(msg.fromMe ? msg.to : msg.from)) return;
+      const numericAck = Number.isFinite(ack) ? ack : WAMessageAck.PENDING;
       msgAck$.next({
         id: this.messageIdSerialized(msg.id),
-        from: msg.from,
-        to: msg.to,
-        ack,
-        status: ack >= 3 ? 'read' : ack === 2 ? 'delivered' : ack === 1 ? 'sent' : 'pending',
+        from: msg.from || '',
+        to: msg.to || '',
+        participant: msg.fromMe ? undefined : msg.from,
+        fromMe: Boolean(msg.fromMe),
+        ack: numericAck,
+        ackName: WAMessageAck[numericAck] || 'UNKNOWN',
         timestamp: Date.now(),
       });
     });
@@ -551,6 +653,8 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
   async stop(): Promise<void> {
     this.logger.info('Stopping whatsapp-web.js session...');
+    this.clearReadyReconcile();
+    this.seenMessageIds.close();
     if (!this.client) {
       this.status = BUNWASessionStatus.STOPPED;
       return;
@@ -562,6 +666,8 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     } finally {
       this.client = null;
       this.qr = new QR();
+      this.presences.clear();
+      this.meInfo = null;
       this.status = BUNWASessionStatus.STOPPED;
       this.cleanupPresenceTimeout();
     }
@@ -626,14 +732,72 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
   async requestCode(phoneNumber: string, method: string, params?: any): Promise<any> {
     if (!this.client) {
-      throw new Error('Session is not initialized');
+      throw new UnprocessableEntityException(
+        'The WEBJS session is not started. Start the session and wait for the QR screen before requesting a code.',
+      );
     }
-    // whatsapp-web.js drives WhatsApp Web's internal alt-device-linking flow.
-    // That only works when the pinned web build is loaded (see
-    // ensureWebVersionCache); on a live build the module is missing and this
-    // throws CompanionHelloError.
-    const code = await this.client.requestPairingCode(phoneNumber);
-    return { code, phoneNumber };
+    // Match the BUNWEB contract: a code is only meaningful while the session is
+    // waiting for a link. Requesting one on a paired session used to reach
+    // WhatsApp and fail with a minified error.
+    if (this.status === BUNWASessionStatus.WORKING) {
+      throw new UnprocessableEntityException(
+        'The session is already paired. Unpair it before requesting a new pairing code.',
+      );
+    }
+    if (this.status !== BUNWASessionStatus.SCAN_QR_CODE) {
+      throw new UnprocessableEntityException(
+        `Can request code only in SCAN_QR_CODE status. The current status is ${this.status}`,
+      );
+    }
+    // Drive the alt-device-linking flow in the page instead of calling
+    // client.requestPairingCode(): the library rethrows a serialized Error
+    // whose message is minified ("t"), so the real reason (notably
+    // IQErrorRateOverlimit / rate-overlimit) is lost by the time we see it.
+    const page = this.webjsPage();
+    if (!page) {
+      throw new UnprocessableEntityException(
+        'The WEBJS browser page is not available yet. Wait for the QR screen and retry.',
+      );
+    }
+    const result = await page.evaluate(async (phone: string) => {
+      try {
+        const api = (globalThis as any).require('WAWebAltDeviceLinkingApi');
+        api.setPairingType('ALT_DEVICE_LINKING');
+        await api.initializeAltDeviceLinking();
+        const code = await api.startAltLinkingFlow(phone, true);
+        return { ok: true, code };
+      } catch (e: any) {
+        return {
+          ok: false,
+          name: e?.name ?? 'Error',
+          type: e?.type?.name ?? null,
+          code: e?.type?.value?.code ?? null,
+          text: e?.type?.value?.text ?? null,
+        };
+      }
+    }, phoneNumber);
+
+    if (result?.ok && result.code) {
+      // Same ABCD-ABCD presentation as the BUNWEB engine.
+      const code = String(result.code);
+      const formatted =
+        code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code;
+      return { code: formatted, codeRaw: code, phoneNumber };
+    }
+    // 429 rate-overlimit is WhatsApp throttling this number/IP; retrying now
+    // only extends the window, so surface it as a retryable 429.
+    if (
+      result?.code === 429 ||
+      result?.text === 'rate-overlimit' ||
+      result?.type === 'IQErrorRateOverlimit'
+    ) {
+      throw new PairingRateLimitedException(10 * 60_000);
+    }
+    throw new UnprocessableEntityException(
+      `WhatsApp refused the pairing request (${result?.name ?? 'unknown error'}` +
+        `${result?.type ? `: ${result.type}` : ''}). Check that the number is registered ` +
+        'on WhatsApp, then request a new code.',
+    );
   }
 
   getSessionMeInfo(): MeInfo | null {
@@ -784,17 +948,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     this.ensureClientReady();
     const chatId = this.ensureSuffix(request.chatId);
 
-    const chats = await this.client!.getChats();
-    for (const chat of chats.slice(0, 10)) {
-      let msgs: any[];
-      try {
-        msgs = await chat.fetchMessages({ limit: 100 });
-      } catch {
-        continue;
-      }
-      const found = msgs.find((m: any) => this.matchesMessageId(m, request.messageId));
-      if (!found) continue;
-
+    const forward = async (found: any): Promise<WAMessage> => {
       try {
         await found.forward(chatId);
       } catch (err: any) {
@@ -816,15 +970,59 @@ export class WhatsappSessionWebJs extends WhatsappSession {
         return this.wrapMessage(sent[sent.length - 1]);
       }
       return { id: '', timestamp: Date.now(), from: '', fromMe: true, source: 'api', to: '' };
+    };
+
+    // Prefer the library's direct lookup; the chat scan below is a fallback for
+    // builds where getMessageById cannot answer.
+    const direct = await this.findMessageById(request.messageId);
+    if (direct) return forward(direct);
+
+    const chats = await this.client!.getChats();
+    for (const chat of chats.slice(0, 10)) {
+      let msgs: any[];
+      try {
+        msgs = await chat.fetchMessages({ limit: 100 });
+      } catch {
+        continue;
+      }
+      const found = msgs.find((m: any) => this.matchesMessageId(m, request.messageId));
+      if (!found) continue;
+      return forward(found);
     }
     throw new NotFoundException(`Message ${request.messageId} not found for forwarding`);
   }
 
+  /**
+   * Resolve a message by id.
+   *
+   * whatsapp-web.js can answer directly through `getMessageById`; the previous
+   * implementation only scanned the last 100 messages of one chat (or the
+   * first 10 chats), so replying to, reacting to or deleting an older message
+   * failed with "not found" even though the message existed.
+   */
+  private async findMessageById(messageId: string, chatId?: string): Promise<any | null> {
+    try {
+      const direct = await (this.client as any)?.getMessageById?.(messageId);
+      if (direct) return direct;
+    } catch {
+      // Fall through to the per-chat scan below.
+    }
+    if (!chatId) return null;
+    try {
+      const chat = await this.getChatOrFail(chatId);
+      const msgs = await chat.fetchMessages({ limit: 100 });
+      return msgs.find((m: any) => this.matchesMessageId(m, messageId)) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   async reply(request: MessageReplyRequest) {
     this.ensureClientReady();
-    const chat = await this.getChatOrFail(request.chatId);
-    const msgs = await chat.fetchMessages({ limit: 100 });
-    const target = msgs.find((m: any) => this.matchesMessageId(m, request.reply_to));
+    if (!request.reply_to) {
+      throw new BadRequestException('reply_to is required: send the message id to quote.');
+    }
+    const target = await this.findMessageById(request.reply_to, request.chatId);
     if (!target) {
       throw new NotFoundException(`Message ${request.reply_to} not found for reply`);
     }
@@ -858,9 +1056,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
   async setReaction(request: MessageReactionRequest) {
     this.ensureClientReady();
-    const chat = await this.getChatOrFail(request.chatId);
-    const msgs = await chat.fetchMessages({ limit: 100 });
-    const target = msgs.find((m: any) => this.matchesMessageId(m, request.messageId));
+    const target = await this.findMessageById(request.messageId, request.chatId);
     if (!target) {
       throw new NotFoundException(`Message ${request.messageId} not found for reaction`);
     }
@@ -972,12 +1168,37 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     const chat = await this.getChatOrFail(chatId);
     const limit = query?.limit || 50;
     const msgs = await chat.fetchMessages({ limit });
-    const messages = msgs.map((m: any) => this.mapMessageToWAMessage(m));
+    let messages = msgs.map((m: any) => this.mapMessageToWAMessage(m));
     if (query?.downloadMedia && messages.some((m: any) => m.hasMedia)) {
       this.notImplemented(
         'Downloading media through the media manager is not implemented by the WEBJS engine.',
       );
     }
+    // BUNWEB applies this filter in the store; WEBJS has no store, so apply the
+    // same contract client-side instead of ignoring the caller's query.
+    const timestampFilter = filter?.timestamp ?? {
+      gte: filter?.['filter.timestamp.gte'],
+      lte: filter?.['filter.timestamp.lte'],
+    };
+    const fromMeFilter = filter?.fromMe ?? filter?.['filter.fromMe'];
+    const ackFilter = filter?.ack?.length
+      ? filter.ack
+      : filter?.['filter.ack'] !== undefined
+        ? [filter['filter.ack'] as number]
+        : undefined;
+    messages = messages.filter((m: any) => {
+      if (timestampFilter?.gte != null && m.timestamp < timestampFilter.gte) return false;
+      if (timestampFilter?.lte != null && m.timestamp > timestampFilter.lte) return false;
+      if (fromMeFilter !== undefined && Boolean(m.fromMe) !== Boolean(fromMeFilter)) return false;
+      if (ackFilter && !ackFilter.includes(Number(m.ack))) return false;
+      return true;
+    });
+    // BUNWEB sorts by messageTimestamp DESC by default; webjs returns the chat's
+    // own order, which made the same endpoint answer differently per engine.
+    const ascending = String(query?.sortOrder || 'desc').toLowerCase() === 'asc';
+    messages.sort((a: any, b: any) =>
+      ascending ? a.timestamp - b.timestamp : b.timestamp - a.timestamp,
+    );
     return messages;
   }
 
@@ -1021,9 +1242,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     query: GetChatMessageQuery,
   ): Promise<WAMessage | null> {
     this.ensureClientReady();
-    const chat = await this.getChatOrFail(chatId);
-    const msgs = await chat.fetchMessages({ limit: 100 });
-    const found = msgs.find((m: any) => this.matchesMessageId(m, messageId));
+    const found = await this.findMessageById(messageId, chatId);
     if (!found) return null;
     const message = this.mapMessageToWAMessage(found);
     if (query?.downloadMedia && message.hasMedia) {
@@ -1036,11 +1255,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
   async deleteMessage(chatId: string, messageId: string) {
     this.ensureClientReady();
-    const chat = await this.getChatOrFail(chatId);
-    const msgs = await chat.fetchMessages({ limit: 100 });
-    const target = msgs.find((m: any) =>
-      this.messageIdSerialized(m.id) === messageId || m.id?.id === messageId,
-    );
+    const target = await this.findMessageById(messageId, chatId);
     if (!target) {
       throw new NotFoundException(`Message ${messageId} not found`);
     }
@@ -1468,10 +1683,16 @@ export class WhatsappSessionWebJs extends WhatsappSession {
 
   private ensureClientReady(): void {
     if (!this.client) {
-      throw new Error('Session is not started. Start the session first.');
+      throw new UnprocessableEntityException(
+        'The WEBJS session is not started. Start the session first.',
+      );
     }
     if (this.status !== BUNWASessionStatus.WORKING) {
-      throw new Error('Session is not ready yet');
+      // A plain Error became a 500 here; the rest of the API answers 422 with
+      // the reason when a session exists but is not usable.
+      throw new UnprocessableEntityException(
+        `The WEBJS session is not ready yet (status ${this.status}). Wait for WORKING.`,
+      );
     }
   }
 
@@ -1506,6 +1727,8 @@ export class WhatsappSessionWebJs extends WhatsappSession {
   }
 
   private mapIncomingMessage(msg: any): any {
+    const ack = Number.isFinite(msg.ack) ? Number(msg.ack) : WAMessageAck.PENDING;
+    const contextInfo = msg._data?.contextInfo;
     return {
       id: this.messageIdSerialized(msg.id),
       from: msg.from || '',
@@ -1519,12 +1742,28 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       // `fromMe`, the field BUNWEB and every consumer (dashboard, Chatwoot,
       // webhooks) read; this used to be `isFromMe`.
       fromMe: Boolean(msg.fromMe),
+      // BUNWEB marks every engine-originated message `api` and inbound `app`.
+      source: msg.fromMe ? 'api' : 'app',
       hasMedia: Boolean(msg.hasMedia),
       mediaMimeType: msg._data?.mimetype || undefined,
+      ack,
+      ackName: WAMessageAck[ack] || 'UNKNOWN',
+      replyTo: contextInfo?.quotedMessage
+        ? {
+            id: contextInfo.stanzaId,
+            participant: contextInfo.participant || undefined,
+            body: msg._data?.quotedMsg?.body || '',
+            hasMedia: Boolean(contextInfo.quotedMessage?.imageMessage || contextInfo.quotedMessage?.videoMessage || contextInfo.quotedMessage?.documentMessage),
+            media: null,
+            _data: contextInfo.quotedMessage,
+          }
+        : null,
+      _data: msg._data,
     };
   }
 
   private mapMessageToWAMessage(msg: any): WAMessage {
+    const ack = Number.isFinite(msg.ack) ? Number(msg.ack) : WAMessageAck.PENDING;
     return {
       id: this.messageIdSerialized(msg.id),
       from: msg.from || '',
@@ -1533,7 +1772,13 @@ export class WhatsappSessionWebJs extends WhatsappSession {
       fromMe: Boolean(msg.fromMe),
       source: msg.fromMe ? 'api' : 'app',
       body: msg.body || '',
+      type: mapWwebjsMessageType(msg.type || 'text'),
+      author: msg.author || undefined,
+      participant: msg.author || undefined,
       hasMedia: Boolean(msg.hasMedia),
+      ack,
+      ackName: WAMessageAck[ack] || 'UNKNOWN',
+      _data: msg._data,
     };
   }
 
@@ -1543,14 +1788,23 @@ export class WhatsappSessionWebJs extends WhatsappSession {
         'The WEBJS engine sent the message but could not read it back from WhatsApp Web.',
       );
     }
+    // Return what was actually sent, not an empty shell: callers use the body
+    // and type to update their own view of the chat (BUNWEB returns the full
+    // WAMessage from the protocol).
+    const ack = Number.isFinite(msg.ack) ? Number(msg.ack) : WAMessageAck.PENDING;
     return {
       id: this.messageIdSerialized(msg.id),
       from: msg.from || '',
       to: msg.to || '',
-      timestamp: Math.floor(Date.now() / 1000),
+      timestamp: msg.timestamp || Math.floor(Date.now() / 1000),
       fromMe: true,
       source: 'api',
-      body: '',
+      body: msg.body || '',
+      type: mapWwebjsMessageType(msg.type || 'text'),
+      hasMedia: Boolean(msg.hasMedia),
+      ack,
+      ackName: WAMessageAck[ack] || 'UNKNOWN',
+      _data: msg._data,
     };
   }
 }
