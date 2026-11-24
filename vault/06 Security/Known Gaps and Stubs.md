@@ -2,7 +2,7 @@
 type: note
 section: security
 tags: [bunwa, gap, reference]
-updated: 2026-11-23
+updated: 2026-11-24
 source: whole-repo audit (see each row)
 status: gap
 ---
@@ -89,6 +89,16 @@ DTOs. Every item below has a regression test or is covered by the existing suite
 WEBJS also now pins the WhatsApp Web build (see [[WEBJS Engine]]) — the root cause of the
 `CompanionHelloError` / 30 s `inject()` failures that were previously misread as a login problem.
 
+## 0.5 Resolved 2026-11-24: security default, dead code, capability map, WEBJS media
+
+| Item | Detail |
+|---|---|
+| Keyless access failed open | With no `BUNWA_API_KEY`, the REST API accepted every request and MCP returned its full tool list; safety required setting a switch. Policy now lives in `src/common/auth-policy.ts`: only the literal `BUNWA_ALLOW_NO_AUTH=true` opens keyless access, and REST, MCP, WebSocket auth and the boot banner share it. Existing `.env` files with `WAHA_ALLOW_NO_AUTH=true` still opt in through the env alias. |
+| Never-wired subsystems deleted | Plugin loader, hook manager, export/import service, `validateBody`/`validateQuery`, `PresenceProxy`, the unmounted `contacts.session.routes` and the empty rxjs shims had zero call sites and were removed. `sharp` is used by the attachment reader, so the stale "imported nowhere" row is gone. |
+| 14 inline send-policy blocks | BUNWEB now calls one `sendWithPolicy(chatId, fn)`; success/failure accounting is identical and a new send cannot forget the counter. |
+| No capability map | Both engines implement `getEngineInfo()` (text, media, voiceNotes, buttons, lists, polls, groups, channels, labels, status, presence, lid, calls, mediaStorage) and `GET /api/:session` returns it as `engine`. |
+| WEBJS stored no media | `WebJSMediaProcessor` downloads through `message.downloadMedia()`; `attachMedia()` publishes `media` + `mediaUrl` like BUNWEB, and `downloadMedia: true` works instead of answering 422. |
+
 ## 1. Routes that can never succeed
 
 These are mounted and documented, but always fail:
@@ -117,10 +127,6 @@ Full subsystems, written and tested in places, with **zero call sites**:
 
 | Subsystem | Files | Note |
 |---|---|---|
-| Plugin system | `src/core/plugins/plugin-loader.ts`, `plugin.interfaces.ts` | scans `plugins/*/manifest.json`, `enable/disable/unload` — **never instantiated** |
-| Hook system | `src/core/hooks/hook-manager.ts` | 17 hook events (session/message/webhook lifecycle), priority ordering, re-entrancy guard — **nothing emits hooks** |
-| File storage service | `src/core/storage/storage.service.ts` | local FS or S3, tar.gz export/import with entry/size caps — no routes, no consumers |
-| Export/import | `src/core/export-import.service.ts` | as above; `DATA_DIR`, `EXPORT_IMPORT_MAX_BACKUPS` are read by nothing else |
 | Postgres media storage | `src/plus/storage/postgres/PostgresMediaStorage.ts` | BYTEA table; factory comment says it is intentionally not connected |
 | Postgres / Mongo session auth | `src/plus/storage/{postgres,mongo}/*SessionAuthRepository.ts` | unreachable — `NowebAuthFactoryCore` only supports `LocalStore` |
 | App SDK | `src/apps/app_sdk/services/IAppsService.ts` | placeholder `[key: string]: any` class; "apps" are just the Chatwoot integration |
@@ -130,14 +136,9 @@ Full subsystems, written and tested in places, with **zero call sites**:
 
 ## 4. Dead code worth deleting
 
-- `src/api/contacts.session.routes.ts` — imported in `api/index.ts` but **never mounted** (2 dead routes).
-- `src/core/engines/bunweb/PresenceProxy.ts` — never imported.
-- `src/core/engines/noweb/rxjs.ts`, `rxjs/operators.ts`, `src/core/abc/rxjs/operators.ts`, `src/utils/reactive/*` — re-export shims with no users.
 - `src/core/engines/noweb/store/sql/SqlChatMethods.ts`, `SqlMessagesMethods.ts` — mixins nothing uses.
-- `validateBody` / `validateQuery` (`src/middleware/validation.ts`) — never applied to a route.
 - `sessionResolver()` (non-working variant) — unused.
 - `media/IMediaManager` style placeholder interfaces (`ISessionAuthRepository` etc.) — declared as `[key: string]: any` classes.
-- `sharp` — declared in `package.json`, **imported nowhere** in `src/`.
 - `@tanstack/react-query`, `recharts`, `date-fns` — installed in the frontend, unused ([[Dashboard]]).
 - `@casl/ability` — dependency present; authorisation is hand-rolled instead.
 
@@ -167,9 +168,9 @@ see [[Testing]] and [[Dependency Injection]]. The suite is now **104/104 green**
 
 ## 7. Structural gaps (by design or omission)
 
-- **No capability matrix.** `getEngineInfo()` returns `{}` and is never overridden; routes
-  feature-detect ad hoc, which is how section 1 happens. A declarative capability map would let the
-  API return "not supported by engine X" instead of 500 ([[Roadmap]]).
+- **Capability map shipped at the engine level** (`getEngineInfo`, surfaced as `engine` by
+  `GET /api/:session`). A few routes still feature-detect ad hoc where a capability is
+  finer-grained; adopting the map in every route is the remaining cleanup.
 - **No durable queue.** Bulk batches are in-memory; upstream's Redis/BullMQ processors were
   deliberately not ported ([[OpenWA Parity]], [[Templates and Bulk Send]]).
 - **No group MCP tools** despite a `'group'` tool category existing ([[MCP Tools Reference]]).

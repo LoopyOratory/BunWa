@@ -2,7 +2,7 @@
 type: note
 section: security
 tags: [bunwa, security, auth]
-updated: 2026-10-04
+updated: 2026-11-24
 source: src/middleware/, src/core/api-keys/, src/common/security/, src/core/exceptions.ts
 status: shipped
 ---
@@ -87,11 +87,11 @@ Applies to webhook delivery ([[Webhooks]]) and remote media/`file://`-style inpu
 
 ## ⚠️ Operational cautions
 
-1. **`WAHA_ALLOW_NO_AUTH` defaults to "true"** — with no `WAHA_API_KEY` set, the API is open. Boot logs a
-   warning only when `WAHA_ALLOW_NO_AUTH=false` *and* no key is set (i.e. the fail-closed misconfiguration).
-   Always set `WAHA_API_KEY` in production. The **MCP endpoint** honors the same switch — keyless calls are
-   refused once `WAHA_ALLOW_NO_AUTH=false` — and boot additionally warns whenever MCP is mounted without a
-   key; `MCP_ENABLED=false` unmounts MCP entirely.
+1. **Keyless access is opt-in** — with no `WAHA_API_KEY` set the API is **closed** unless
+   `BUNWA_ALLOW_NO_AUTH=true` is set explicitly. The old default opened the API (and the MCP tool
+   list) to anyone who could reach the port. Boot warns when no key is configured. The **MCP
+   endpoint** applies the same policy (`src/common/auth-policy.ts`); `MCP_ENABLED=false` unmounts it
+   entirely. Set `BUNWA_API_KEY` in production and leave `BUNWA_ALLOW_NO_AUTH` unset.
 2. **Dashboard credentials are admin credentials.** There is no separate read-only dashboard role, and
    the frontend stores the Basic token in `localStorage` (`waha_dashboard_auth`).
 3. **The dashboard sends a hardcoded `x-api-key: waha`** alongside Basic auth (`frontend/src/lib/api.ts`).

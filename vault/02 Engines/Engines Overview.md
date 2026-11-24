@@ -2,7 +2,7 @@
 type: note
 section: engines
 tags: [bunwa, engine, architecture]
-updated: 2026-11-23
+updated: 2026-11-24
 source: src/core/session/session.abc.ts, src/core/manager.core.ts, src/structures/enums.dto.ts
 status: shipped
 ---
@@ -59,12 +59,20 @@ otherwise                         ─►  engines/bunweb/session.bunweb.core (Wh
 The default comes from `WHATSAPP_DEFAULT_ENGINE` (`BUNWEB`). Any unrecognised value degrades to
 BUNWEB rather than failing.
 
-## Capability flags — there are none
+## Capability map
 
-> ⚠️ There is **no** formal capability matrix and **no** `supports` flag. `getEngineInfo()` exists on
-> the base class, returns `{}`, and is never overridden.
+`getEngineInfo()` is implemented by both engines and returned as `engine` by `GET /api/:session`.
+Clients can hide a feature the engine does not support instead of discovering it through a 422.
 
-Routes feature-detect ad hoc, and the two engines are **not** at parity — the honest matrix lives in
+```text
+BUNWEB  text media voiceNotes buttons lists polls groups channels labels
+        status presence lid mediaStorage        calls: false
+WEBJS   text media voiceNotes groups presence calls mediaStorage
+                                                buttons/lists/polls/channels/labels/status/lid: false
+```
+
+Routes still feature-detect where a capability is finer-grained (for example block/unblock on
+WEBJS), and the two engines are **not** at parity — the honest detail lives in
 [[WEBJS Engine#Verified capability]] and [[Known Gaps and Stubs]]. The gaps that still return an
 error are deliberate and documented:
 

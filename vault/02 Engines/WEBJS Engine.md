@@ -2,7 +2,7 @@
 type: note
 section: engines
 tags: [bunwa, engine, webjs, puppeteer]
-updated: 2026-11-23
+updated: 2026-11-24
 source: src/core/engines/webjs/session.webjs.core.ts, src/core/session/session.browser.ts
 status: partial
 ---
@@ -86,7 +86,6 @@ timeouts. The WEBJS work surface is smaller, but nothing answered 5xx.
 | archive, clear messages, block/unblock | same; the route stubs now delegate to the engine instead of a hardcoded 500 (block/unblock) or a silent 200 (clear messages) |
 | presence getters | same; WEBJS no longer pretends with empty lists |
 | profile and group picture updates | same |
-| media download | `Downloading media through the media manager is not implemented by the WEBJS engine...` |
 | `checkNumberStatus` for a username handle | `The WEBJS engine cannot look up a WhatsApp username...` |
 | missing chat or group | 404 `Chat <id> not found` / `Group <id> not found` |
 
@@ -110,6 +109,7 @@ gated by the library's own API shape:
 - Inbound dedupe: webjs emits both `message` and `message_create` for the same inbound message, and the engine listens to both because some LID chats fire only one. A 5-minute id cache keeps downstream consumers at one event, matching BUNWEB's `DistinctMessages()`.
 - Message contract: inbound and sent messages now carry `source` (`app`/`api`), `type`, `ack`, `ackName` and `replyTo`, and a send returns the real body instead of an empty string. Ack events carry `ackName`/`fromMe` instead of a private `status` string.
 - `getChatMessages`: applies the `timestamp` / `fromMe` / `ack` filter and sorts newest-first like the BUNWEB store, instead of returning the chat's own order and ignoring the filter.
+- Inbound media is stored like BUNWEB: `WebJSMediaProcessor` downloads through `message.downloadMedia()` and `attachMedia()` publishes `media` + `mediaUrl`; `downloadMedia: true` now works instead of answering 422.
 - Media inputs (`sendImage` / `sendFile` / `sendVoice` / `sendVideo`) resolve through the shared `src/core/media/media-input.ts`: buffer, base64, data URL, http(s) URL and local path are distinguished (a path is read from disk instead of being base64-encoded), and the declared mimetype/filename are carried into `MessageMedia`.
 - Pure mapping helpers (`mapWwebjsMessageType`, `toWebjsParticipantId`, `toGroupParticipant`, `splitProxyConfig`, `formatPairingCode`) live in `webjs.mappers.ts`, unit-tested without a browser.
 - Proxy: a `ProxyConfig` with `username`/`password` is split into `--proxy-server` plus wwebjs `proxyAuthentication` (Chromium ignores credentials in the flag).
