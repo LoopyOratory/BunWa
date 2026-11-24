@@ -5,6 +5,7 @@ import { DashboardConfigServiceCore } from '../core/config/DashboardConfigServic
 import { AuditService, AuditAction } from '../core/audit/audit.service';
 import { SessionManager } from '../core/manager.core';
 import { isRestApiKey, resolveRestApiKey } from '../core/api-keys/rest-api-keys';
+import { isNoAuthAllowed } from '../common/auth-policy';
 import { timingSafeEqual } from 'crypto';
 
 /** Best-effort client IP for audit logging (not spoof-proof; informational only). */
@@ -31,11 +32,12 @@ function safeCompare(a: string, b: string): boolean {
 }
 
 /**
- * Whether to allow requests without any authentication when no API key is configured.
- * Defaults to true for dev convenience; set BUNWA_ALLOW_NO_AUTH=false to disable.
+ * Whether to allow requests without any authentication when no API key is
+ * configured. Opt-in only (`BUNWA_ALLOW_NO_AUTH=true`); see
+ * common/auth-policy.ts.
  */
 function allowNoAuth(): boolean {
-  return process.env.BUNWA_ALLOW_NO_AUTH !== 'false';
+  return isNoAuthAllowed();
 }
 
 /**
@@ -144,14 +146,20 @@ export function apiKeyAuthMiddleware(): MiddlewareHandler {
       return c.json({ statusCode: 401, message: 'Invalid credentials' }, 401);
     }
 
-    // No API key configured and no auth provided — allow (dev mode) only if BUNWA_ALLOW_NO_AUTH is not false
+    // No API key configured and no auth provided. Keyless access is opt-in.
     if (!apiKey) {
       if (allowNoAuth()) {
         c.set('user', { isAdmin: true } as User);
         return next();
       }
-      // fail-closed: BUNWA_ALLOW_NO_AUTH=false, reject unauthenticated requests
-      return c.json({ statusCode: 401, message: 'BUNWA_ALLOW_NO_AUTH=false and no API key configured' }, 401);
+      return c.json(
+        {
+          statusCode: 401,
+          message:
+            'No API key is configured. Set BUNWA_API_KEY, or BUNWA_ALLOW_NO_AUTH=true for unauthenticated development access.',
+        },
+        401,
+      );
     }
 
     return c.json({ statusCode: 401, message: 'Authentication required' }, 401);

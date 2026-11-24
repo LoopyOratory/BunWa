@@ -9,6 +9,7 @@ import { container } from 'tsyringe';
 import { configureContainer } from './di/container';
 import { WhatsappConfigService } from './config.service';
 import { VERSION } from './version';
+import { isNoAuthAllowed } from './common/auth-policy';
 import { globalErrorHandler } from './middleware/error-handler';
 import { usingEncryptionKeyFallback } from './core/security/secret-box';
 import { chatRuntime } from './core/agent/chat-runtime';
@@ -169,11 +170,11 @@ async function bootstrap() {
   await verifyStorageAtBoot(config);
   log.info('Storage verified');
 
-  // Warn if running without API key in fail-closed mode
+  // Keyless access is opt-in; without a key the API rejects requests.
   const apiKey = config.getApiKey();
-  const allowNoAuth = process.env.BUNWA_ALLOW_NO_AUTH !== 'false';
+  const allowNoAuth = isNoAuthAllowed();
   if (!apiKey && !allowNoAuth) {
-    log.warn('BUNWA_ALLOW_NO_AUTH=false but no BUNWA_API_KEY is set — all API requests will be rejected. Set BUNWA_API_KEY or remove BUNWA_ALLOW_NO_AUTH.');
+    log.warn('No BUNWA_API_KEY is set — API requests will be rejected. Set BUNWA_API_KEY, or BUNWA_ALLOW_NO_AUTH=true for development.');
   }
 
   // Restore sessions from disk and start predefined ones
@@ -380,7 +381,7 @@ async function bootstrap() {
     log.info('MCP server available at POST /mcp');
     if (!apiKey && allowNoAuth) {
       log.warn(
-        'MCP is reachable without authentication (no BUNWA_API_KEY set). Set BUNWA_API_KEY, BUNWA_ALLOW_NO_AUTH=false, or MCP_ENABLED=false.',
+        'MCP is reachable without authentication (BUNWA_ALLOW_NO_AUTH=true and no BUNWA_API_KEY). Set BUNWA_API_KEY or MCP_ENABLED=false.',
       );
     }
   } else {
@@ -421,7 +422,7 @@ async function bootstrap() {
         const auth = await authenticateWebSocket(req, url, {
           apiKey: config.getApiKey(),
           dashboardCredentials: container.resolve(DashboardConfigServiceCore).credentials,
-          allowNoAuth: process.env.BUNWA_ALLOW_NO_AUTH !== 'false',
+          allowNoAuth: isNoAuthAllowed(),
           manager: sessionManager,
           tickets: wsTickets,
         });

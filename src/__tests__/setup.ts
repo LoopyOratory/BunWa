@@ -16,3 +16,10 @@ import { join } from 'path';
 if (!process.env.BUNWA_LOCAL_STORE_BASE_DIR) {
   process.env.BUNWA_LOCAL_STORE_BASE_DIR = mkdtempSync(join(tmpdir(), 'bunwa-test-sessions-'));
 }
+
+// Keyless access is opt-in in production (common/auth-policy.ts). The route
+// tests exercise handlers without credentials, so the suite opts in here; tests
+// that assert the closed default delete the variable themselves.
+if (process.env.BUNWA_ALLOW_NO_AUTH === undefined) {
+  process.env.BUNWA_ALLOW_NO_AUTH = 'true';
+}

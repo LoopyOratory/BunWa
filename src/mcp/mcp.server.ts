@@ -22,6 +22,7 @@ import { ToolRegistryService } from './tool-registry.service';
 import { container } from 'tsyringe';
 import { AuditService, AuditAction } from '../core/audit/audit.service';
 import { sendFailureMetadata } from '../core/audit/failure-reason';
+import { isNoAuthAllowed } from '../common/auth-policy';
 import { buildAllTools } from './tools';
 import { handleToolError, jsonToolResult, smartToolResult } from './tool-result';
 import { redactWireSecrets } from '../core/utils/redact';
@@ -56,12 +57,12 @@ function safeCompare(a: string, b: string): boolean {
 
 /**
  * API key validation against the configured key using timing-safe comparison.
- * With no key configured the endpoint is open (dev mode) unless the operator
- * set BUNWA_ALLOW_NO_AUTH=false — the same fail-closed switch the REST API
- * honors, so keyless MCP access dies with it.
+ * With no key configured the endpoint is closed unless the operator explicitly
+ * opted into keyless development access with BUNWA_ALLOW_NO_AUTH=true — the
+ * same policy the REST API applies (common/auth-policy.ts).
  */
 export function validateApiKey(rawKey: string | undefined, configuredKey: string | undefined): boolean {
-  if (!configuredKey) return process.env.BUNWA_ALLOW_NO_AUTH !== 'false';
+  if (!configuredKey) return isNoAuthAllowed();
   if (!rawKey) return false;
   return safeCompare(rawKey, configuredKey);
 }
