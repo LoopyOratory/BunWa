@@ -91,6 +91,7 @@ import {
   toGroupParticipant,
   toWebjsParticipantId,
 } from './webjs.mappers';
+import { WebJSMediaProcessor } from './webjs.media-processor';
 
 // ---------------------------------------------------------------------------
 // Chrome path — resolved at launch time by the shared browser-path helper
@@ -405,12 +406,36 @@ export class WhatsappSessionWebJs extends WhatsappSession {
         }
       } catch {}
 
+      await this.attachMedia(msg, waMsg);
+
       this.getEventSubject(BUNWAEvents.MESSAGE).next(waMsg);
       // message.any carries every message, incoming included (as on BUNWEB).
       this.getEventSubject(BUNWAEvents.MESSAGE_ANY).next(waMsg);
       this.maintainPresenceOnline();
     } catch (err) {
       this.logger.error({ err }, 'Error processing incoming message');
+    }
+  }
+
+  /**
+   * Download and store an inbound attachment, then publish it on the normalized
+   * message (`media` object + `mediaUrl`), matching BUNWEB. Failures never drop
+   * the message: the metadata is still delivered.
+   */
+  private async attachMedia(msg: any, waMsg: any): Promise<void> {
+    if (!waMsg?.hasMedia || !msg?.hasMedia) return;
+    try {
+      const media = await this.mediaManager?.processMedia(
+        new WebJSMediaProcessor(),
+        msg,
+        this.name,
+      );
+      if (media) {
+        waMsg.media = media;
+        waMsg.mediaUrl = media.url;
+      }
+    } catch (err) {
+      this.logger.warn({ err }, 'Failed to store inbound WEBJS media');
     }
   }
 
@@ -724,6 +749,29 @@ export class WhatsappSessionWebJs extends WhatsappSession {
         `${result?.type ? `: ${result.type}` : ''}). Check that the number is registered ` +
         'on WhatsApp, then request a new code.',
     );
+  }
+
+  async getEngineInfo(): Promise<any> {
+    return {
+      engine: BUNWAEngine.WEBJS,
+      capabilities: {
+        text: true,
+        media: true,
+        voiceNotes: true,
+        buttons: false,
+        lists: false,
+        polls: false,
+        pollVotes: false,
+        groups: true,
+        channels: false,
+        labels: false,
+        status: false,
+        presence: true,
+        lid: false,
+        calls: true,
+        mediaStorage: true,
+      },
+    };
   }
 
   getSessionMeInfo(): MeInfo | null {
@@ -1056,11 +1104,13 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     const chat = await this.getChatOrFail(chatId);
     const limit = query?.limit || 50;
     const msgs = await chat.fetchMessages({ limit });
-    let messages = msgs.map((m: any) => this.mapMessageToWAMessage(m));
-    if (query?.downloadMedia && messages.some((m: any) => m.hasMedia)) {
-      this.notImplemented(
-        'Downloading media through the media manager is not implemented by the WEBJS engine.',
-      );
+    let messages: WAMessage[] = [];
+    for (const m of msgs) {
+      const mapped = this.mapMessageToWAMessage(m);
+      if (query?.downloadMedia && mapped.hasMedia) {
+        await this.attachMedia(m, mapped);
+      }
+      messages.push(mapped);
     }
     // BUNWEB applies this filter in the store; WEBJS has no store, so apply the
     // same contract client-side instead of ignoring the caller's query.
@@ -1134,9 +1184,7 @@ export class WhatsappSessionWebJs extends WhatsappSession {
     if (!found) return null;
     const message = this.mapMessageToWAMessage(found);
     if (query?.downloadMedia && message.hasMedia) {
-      this.notImplemented(
-        'Downloading media through the media manager is not implemented by the WEBJS engine.',
-      );
+      await this.attachMedia(found, message);
     }
     return message;
   }

@@ -45,6 +45,9 @@ export function createSessionsRouter(): Hono {
         return c.json({
           name: sessionName,
           status: (session as any).status || 'STOPPED',
+          // Declarative engine surface: clients can hide features the engine
+          // does not support instead of discovering it through a 422.
+          engine: (await (session as any).getEngineInfo?.()) || null,
           config: redactSessionSecrets((session as any).sessionConfig || {}),
           me: (session as any).getSessionMeInfo?.() || null,
         });

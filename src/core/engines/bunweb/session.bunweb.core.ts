@@ -889,6 +889,29 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
     });
   }
 
+  public async getEngineInfo(): Promise<any> {
+    return {
+      engine: BUNWAEngine.BUNWEB,
+      capabilities: {
+        text: true,
+        media: true,
+        voiceNotes: true,
+        buttons: true,
+        lists: true,
+        polls: true,
+        pollVotes: false,
+        groups: true,
+        channels: true,
+        labels: true,
+        status: true,
+        presence: true,
+        lid: true,
+        calls: false,
+        mediaStorage: true,
+      },
+    };
+  }
+
   public getHistorySyncStatus(): HistorySyncStatus {
     const storeEnabled = this.sessionConfig?.bunweb?.store?.enabled ?? true;
     if (!storeEnabled) return emptyHistorySyncStatus('unsupported');
