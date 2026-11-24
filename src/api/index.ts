@@ -8,7 +8,6 @@ import { createChattingRouter } from './chatting.routes';
 import { createBulkRouter } from './chatting.routes';
 import { createChatsRouter } from './chats.routes';
 import { createContactsRouter } from './contacts.routes';
-import { createContactsSessionRouter } from './contacts.session.routes';
 import { createGroupsRouter } from './groups.routes';
 import { createChannelsRouter } from './channels.routes';
 import { createLabelsRouter } from './labels.routes';
