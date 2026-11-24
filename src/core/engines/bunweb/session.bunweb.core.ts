@@ -1532,6 +1532,22 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
   }
 
   /**
+   * Run one send under the sending-policy counters: record success or a failed
+   * attempt, then rethrow. Fourteen send methods repeated this try/catch
+   * inline, which made it easy for a new send to forget the counter.
+   */
+  private async sendWithPolicy<T>(chatId: string, send: () => Promise<T>): Promise<T> {
+    try {
+      const result = await send();
+      this.policyRecord(chatId, false);
+      return result;
+    } catch (error) {
+      this.policyRecord(chatId, true);
+      throw error;
+    }
+  }
+
+  /**
    * Security guard for edit/revoke protocol messages: the protocol key must
    * target the chat the event arrived on. A crafted protocol message naming a
    * different chat would otherwise let a message in one chat emit an edit or
@@ -1560,7 +1576,7 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
   @Activity()
   async sendText(request: MessageTextRequest) {
     const chatId = await this.resolveAndGate(request.chatId);
-    try {
+    return this.sendWithPolicy(chatId, async () => {
       const message: any = {
         text: request.text,
         mentions: request.mentions?.map(toJID),
@@ -1568,12 +1584,8 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
       };
       const options: any = await this.getMessageOptions(request);
       const result = await this.sock.sendMessage(chatId, message, options);
-      this.policyRecord(chatId, false);
       return result;
-    } catch (error) {
-      this.policyRecord(chatId, true);
-      throw error;
-    }
+    });
   }
 
   /**
@@ -1699,16 +1711,12 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
       throw new UnprocessableEntityException('No contacts provided');
     }
     const chatId = await this.resolveAndGate(request.chatId);
-    try {
+    return this.sendWithPolicy(chatId, async () => {
       const options: any = await this.getMessageOptions(request);
       const msg = { contacts: { contacts: contacts } };
       const result = await this.sock.sendMessage(chatId, msg, options);
-      this.policyRecord(chatId, false);
       return result;
-    } catch (error) {
-      this.policyRecord(chatId, true);
-      throw error;
-    }
+    });
   }
 
   @Activity()
@@ -1740,19 +1748,15 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
   @Activity()
   async reply(request: MessageReplyRequest) {
     const chatId = await this.resolveAndGate(request.chatId);
-    try {
+    return this.sendWithPolicy(chatId, async () => {
       const options: any = await this.getMessageOptions(request);
       const message = {
         text: request.text,
         mentions: request.mentions?.map(toJID),
       };
       const result = await this.sock.sendMessage(chatId, message, options);
-      this.policyRecord(chatId, false);
       return result;
-    } catch (error) {
-      this.policyRecord(chatId, true);
-      throw error;
-    }
+    });
   }
 
   /**
@@ -1820,7 +1824,7 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
   @Activity()
   async sendImage(request: MessageImageRequest) {
     const chatId = await this.resolveAndGate(request.chatId);
-    try {
+    return this.sendWithPolicy(chatId, async () => {
       const fileData = this.fileToBuffer(request.file);
       const message: any = {
         image: typeof fileData === 'string' ? { url: fileData } : fileData,
@@ -1829,18 +1833,14 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
       };
       const options: any = await this.getMessageOptions(request);
       const result = await this.sock.sendMessage(chatId, message, options);
-      this.policyRecord(chatId, false);
       return result;
-    } catch (error) {
-      this.policyRecord(chatId, true);
-      throw error;
-    }
+    });
   }
 
   @Activity()
   async sendFile(request: MessageFileRequest) {
     const chatId = await this.resolveAndGate(request.chatId);
-    try {
+    return this.sendWithPolicy(chatId, async () => {
       const fileData = this.fileToBuffer(request.file);
       const message: any = {
         document: typeof fileData === 'string' ? { url: fileData } : fileData,
@@ -1863,12 +1863,8 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
       }
       const options: any = await this.getMessageOptions(request);
       const result = await this.sock.sendMessage(chatId, message, options);
-      this.policyRecord(chatId, false);
       return result;
-    } catch (error) {
-      this.policyRecord(chatId, true);
-      throw error;
-    }
+    });
   }
 
   /**
@@ -1886,7 +1882,7 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
   @Activity()
   async sendVoice(request: MessageVoiceRequest) {
     const chatId = await this.resolveAndGate(request.chatId);
-    try {
+    return this.sendWithPolicy(chatId, async () => {
       const fileData = this.fileToBuffer(request.file);
       const convert = request.convert !== false; // default: transcode to OGG/Opus
 
@@ -1905,18 +1901,14 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
 
       const options: any = await this.getMessageOptions(request);
       const result = await this.sock.sendMessage(chatId, message, options);
-      this.policyRecord(chatId, false);
       return result;
-    } catch (error) {
-      this.policyRecord(chatId, true);
-      throw error;
-    }
+    });
   }
 
   @Activity()
   async sendVideo(request: MessageVideoRequest) {
     const chatId = await this.resolveAndGate(request.chatId);
-    try {
+    return this.sendWithPolicy(chatId, async () => {
       const fileData = this.fileToBuffer(request.file);
       const message: any = {
         video: typeof fileData === 'string' ? { url: fileData } : fileData,
@@ -1928,12 +1920,8 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
         message.notes = true;
       }
       const result = await this.sock.sendMessage(chatId, message, options);
-      this.policyRecord(chatId, false);
       return result;
-    } catch (error) {
-      this.policyRecord(chatId, true);
-      throw error;
-    }
+    });
   }
 
   @Activity()
@@ -1951,14 +1939,10 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
       },
     };
     const options: any = await this.getMessageOptions(request);
-    try {
+    return this.sendWithPolicy(chatId, async () => {
       const result = await this.sock.sendMessage(chatId, message as any, options);
-      this.policyRecord(chatId, false);
       return result;
-    } catch (error) {
-      this.policyRecord(chatId, true);
-      throw error;
-    }
+    });
   }
 
   /**
@@ -1986,14 +1970,10 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
       },
     };
     const options: any = await this.getMessageOptions(request as any);
-    try {
+    return this.sendWithPolicy(chatId, async () => {
       const result = await this.sock.sendMessage(chatId, message as any, options);
-      this.policyRecord(chatId, false);
       return this.toWAMessage(result) as any;
-    } catch (error) {
-      this.policyRecord(chatId, true);
-      throw error;
-    }
+    });
   }
 
   @Activity()
@@ -2015,7 +1995,7 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
       throw new UnprocessableEntityException('A link preview needs text or preview.url.');
     }
     const chatId = await this.resolveAndGate(request.chatId);
-    try {
+    return this.sendWithPolicy(chatId, async () => {
       const linkPreview = await buildCustomLinkPreview(text, preview, {
         highQuality: request.linkPreviewHighQuality === true,
         upload: this.sock?.waUploadToServer,
@@ -2024,12 +2004,8 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
       const msg: any = { text, linkPreview: linkPreview ?? null };
       const options: any = await this.getMessageOptions(request);
       const result = await this.sock.sendMessage(chatId, msg, options);
-      this.policyRecord(chatId, false);
       return result;
-    } catch (error) {
-      this.policyRecord(chatId, true);
-      throw error;
-    }
+    });
   }
 
   /**
@@ -2069,7 +2045,7 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
   @Activity()
   async sendButtons(request: SendButtonsRequest) {
     const chatId = await this.resolveAndGate(request.chatId);
-    try {
+    return this.sendWithPolicy(chatId, async () => {
       const headerImage = await this.uploadMedia(request.headerImage, 'image');
       const result = await sendButtonMessage(
         this.sock,
@@ -2081,18 +2057,14 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
         request.footer,
       );
       this.emitOwnMessage(result);
-      this.policyRecord(chatId, false);
       return result;
-    } catch (error) {
-      this.policyRecord(chatId, true);
-      throw error;
-    }
+    });
   }
 
   @Activity()
   async sendList(request: SendListRequest) {
     const chatId = await this.resolveAndGate(request.chatId);
-    try {
+    return this.sendWithPolicy(chatId, async () => {
       const sections = request.sections.map((s) => ({
         title: s.title || '',
         rows: (s.rows || []).map((r) => ({
@@ -2139,18 +2111,14 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
         additionalNodes: buildButtonBinaryNodes(chatId),
       });
       this.emitOwnMessage(fullMessage);
-      this.policyRecord(chatId, false);
       return fullMessage;
-    } catch (error) {
-      this.policyRecord(chatId, true);
-      throw error;
-    }
+    });
   }
 
   @Activity()
   async sendLocation(request: MessageLocationRequest) {
     const chatId = await this.resolveAndGate(request.chatId);
-    try {
+    return this.sendWithPolicy(chatId, async () => {
       const msg = {
         location: {
           name: request.title || null,
@@ -2160,12 +2128,8 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
       };
       const options: any = await this.getMessageOptions(request);
       const result = await this.sock.sendMessage(chatId, msg, options);
-      this.policyRecord(chatId, false);
       return result;
-    } catch (error) {
-      this.policyRecord(chatId, true);
-      throw error;
-    }
+    });
   }
 
   @Activity()
@@ -2190,7 +2154,7 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
   @Activity()
   async sendLinkPreview(request: MessageLinkPreviewRequest) {
     const chatId = await this.resolveAndGate(request.chatId);
-    try {
+    return this.sendWithPolicy(chatId, async () => {
       const text = request.title ? `${request.title}\n${request.url}` : request.url;
       // `linkPreview: true` used to go straight to Baileys, which reads it as
       // an (empty) preview object: no title, no thumbnail, no fetch. Build the
@@ -2205,12 +2169,8 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
       };
       const options: any = await this.getMessageOptions(request);
       const result = await this.sock.sendMessage(chatId, msg, options);
-      this.policyRecord(chatId, false);
       return result;
-    } catch (error) {
-      this.policyRecord(chatId, true);
-      throw error;
-    }
+    });
   }
 
   @Activity()
