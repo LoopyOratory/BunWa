@@ -178,6 +178,31 @@ describe('chat runtime pipeline', () => {
     expect((chatRuntime as any).isHumanActive('233555000333@c.us')).toBe(false);
   });
 
+  test('the echo of a sent id arrives serialized — still recognised as the bot', async () => {
+    calls.length = 0;
+    // The send receipt carries the bare WhatsApp id; the normalized event
+    // carries the serialized form. Regression: the mismatch used to pause the
+    // bot for 30 minutes right after its own reply.
+    (chatRuntime as any).botSentIds.add('RAWSEND1');
+    await (chatRuntime as any).handleInbound(
+      'bound',
+      message({ fromMe: true, id: 'true_233555000444@c.us_RAWSEND1', from: '233555000444@c.us' }),
+    );
+    expect((chatRuntime as any).isHumanActive('233555000444@c.us')).toBe(false);
+  });
+
+  test('an echo delivered before the send receipt is resolved is matched by body', async () => {
+    calls.length = 0;
+    // Simulate the race: answer() has not returned yet, so no id is known,
+    // but the sent body was registered.
+    (chatRuntime as any).botSentBodies.set(`233555000555@c.us\u0000Reply text`, nowMs + 60_000);
+    await (chatRuntime as any).handleInbound(
+      'bound',
+      message({ fromMe: true, id: 'race-echo-1', from: '233555000555@c.us', body: 'Reply text' }),
+    );
+    expect((chatRuntime as any).isHumanActive('233555000555@c.us')).toBe(false);
+  });
+
   test('model failure sends nothing', async () => {
     calls.length = 0;
     modelResponses.length = 0;

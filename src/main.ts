@@ -183,14 +183,16 @@ async function bootstrap() {
   // The chat runtime answers inbound WhatsApp messages for agents bound via
   // settings.chat = { enabled, session }. No binding means no behaviour.
   chatRuntime.configure({ manager: sessionManager, logger: log });
+  // Start the predefined sessions first: a bound session has no event stream
+  // until it is running, and the runtime must subscribe to the live object.
+  await sessionManager.startPredefinedSessions();
   void chatRuntime.start().catch((err) => log.warn({ err }, 'chat runtime: failed to start'));
   // Re-resolve bindings periodically: a new agent binding (or a removed one)
   // takes effect without a restart.
   const chatRuntimeRefresh = setInterval(() => {
     void chatRuntime.start().catch(() => {});
-  }, 60_000);
+  }, 15_000);
   chatRuntimeRefresh.unref?.();
-  await sessionManager.startPredefinedSessions();
 
   const app = new Hono();
 

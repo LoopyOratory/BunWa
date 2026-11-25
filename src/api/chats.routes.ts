@@ -143,7 +143,9 @@ export function createChatsRouter(): Hono<{ Variables: { session: any; body: any
       const session = c.get('session');
       const chatId = c.req.param('chatId');
       const messageId = c.req.param('messageId');
-      const message = await (session as any).getChatMessage(chatId, messageId, {});
+      const message = await (session as any).getChatMessage(chatId, messageId, {
+        downloadMedia: c.req.query('downloadMedia') === 'true',
+      });
       return c.json(redactWireSecrets(message));
     }
   );

@@ -126,6 +126,12 @@ class ChatRuntimeService {
   private humanActiveUntil = new Map<string, number>();
   /** Message ids this runtime sent, so its own echoes are not mistaken for human replies. */
   private botSentIds = new Set<string>();
+  /**
+   * Sent text keyed by chat+body, with an expiry. The id check covers the
+   * normal path; this covers the race where the echo is delivered before the
+   * send receipt resolves, and engines that return a serialized id.
+   */
+  private botSentBodies = new Map<string, number>();
   /** Per-chat single-flight: an in-flight pipeline swallows rapid follow-ups. */
   private inFlight = new Map<string, boolean>();
   private pending = new Map<string, NormalizedChatMessage>();
@@ -174,6 +180,14 @@ class ChatRuntimeService {
     // Subscribe new sessions, drop gone ones.
     for (const session of bound.keys()) {
       if (this.subscriptions.has(session)) continue;
+      // A stopped/not-yet-started session has no event stream yet; subscribing
+      // here would latch onto an empty observable forever. Skip it and let the
+      // periodic refresh pick it up once it is running.
+      try {
+        this.manager.getSession(session);
+      } catch {
+        continue;
+      }
       const unsubscribe = this.subscribeSession(session);
       this.subscriptions.set(session, unsubscribe);
       this.logger.info?.(`chat runtime: listening for inbound messages on session '${session}'`);
@@ -196,6 +210,7 @@ class ChatRuntimeService {
     }
     for (const unsubscribe of this.subscriptions.values()) unsubscribe();
     this.subscriptions.clear();
+    this.botSentBodies.clear();
   }
 
   private startPolling(): void {
@@ -285,11 +300,25 @@ class ChatRuntimeService {
 
     // Outbound: watch for human replies (the bot's own echoes are expected).
     if (payload.fromMe) {
-      if (!this.botSentIds.has(payload.id)) {
+      // `payload.id` is the serialized WAHA id (`true_<chat>_<id>`), while a
+      // send receipt carries the bare WhatsApp id. Compare the trailing id so
+      // the bot's own echo is not mistaken for a human reply.
+      const bareId = payload.id.includes('_')
+        ? payload.id.slice(payload.id.lastIndexOf('_') + 1)
+        : payload.id;
+      const echoKey = `${payload.from}\u0000${payload.body ?? ''}`;
+      const bodyEchoUntil = this.botSentBodies.get(echoKey) ?? 0;
+      const ownEcho =
+        this.botSentIds.has(payload.id) ||
+        this.botSentIds.has(bareId) ||
+        (bodyEchoUntil > this.now() && Boolean(payload.body));
+      if (!ownEcho) {
         this.humanActiveUntil.set(payload.from, this.now() + HUMAN_ACTIVE_HAND_BACK_MINUTES * 60_000);
         this.logger.info?.(`chat runtime: human reply detected in '${payload.from}' — bot pauses for ${HUMAN_ACTIVE_HAND_BACK_MINUTES} min`);
       } else {
         this.botSentIds.delete(payload.id);
+        this.botSentIds.delete(bareId);
+        this.botSentBodies.delete(echoKey);
       }
       return;
     }
@@ -413,6 +442,9 @@ class ChatRuntimeService {
       }
       const sentId = this.extractMessageId(sent);
       if (sentId) this.botSentIds.add(sentId);
+      // Fallback for the echo arriving before the send receipt, or an engine
+      // returning a serialized id: remember the exact text briefly.
+      if (reply) this.botSentBodies.set(`${chatId}\u0000${reply}`, this.now() + 120_000);
       await recorder.reply(reply);
     } catch (error) {
       this.logger.warn?.(`chat runtime: pipeline failed in '${chatId}': ${error instanceof Error ? error.message : String(error)}`);

@@ -202,6 +202,17 @@ fallback; providers are limited to OpenAI-compatible, Anthropic, and Google.
 Limits are 16 MB per attachment and 24,000 characters of returned text
 (documents are also capped at 10 MB by the extractor).
 
+Voice notes are transcribed by the **STT model** role (OpenAI-compatible
+`POST {baseUrl}/audio/transcriptions`). When that endpoint fails — a
+rate-limited key answers 429, the provider is down — `src/core/agent/stt.ts`
+falls back to Gemini chat completions with the audio inlined as 16 kHz mono WAV
+(ffmpeg, the same binary `sendVoice` already requires). The key comes from
+`GEMINI_API_KEY`/`GOOGLE_API_KEY`, or the vision role's stored key when no env
+key exists; `BUNWA_STT_GEMINI_MODEL` (default `gemini-2.5-flash`) picks the
+model. A failure of both legs leaves the reply text with a
+"[customer sent a voice note that could not be read]" note — never a dropped
+conversation.
+
 ## Analytics dashboard
 
 `GET /api/agents/analytics/dashboard?range=24h|7d|30d|90d&channel=all|whatsapp|voice&agentId=…`
