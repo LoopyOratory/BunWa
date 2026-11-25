@@ -34,8 +34,12 @@ async function main() {
     try {
       const response = await fetch(`${vision.baseUrl.replace(/\/$/, '')}/chat/completions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${vision.apiKey}` },
-        body: JSON.stringify({ model: vision.model, messages: [{ role: 'user', content: 'Reply with OK' }], max_tokens: 8 }),
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${vision.apiKey}`,
+          ...(vision.baseUrl.includes('opencode.ai') ? { 'x-opencode-session': 'bunwa-vision' } : {}),
+        },
+        body: JSON.stringify({ model: vision.model, messages: [{ role: 'user', content: 'Reply with OK' }], max_tokens: 600 }),
       });
       const text = await response.text();
       console.log('vision HTTP:', response.status, '->', text.slice(0, 160));

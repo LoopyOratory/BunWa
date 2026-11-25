@@ -19,7 +19,9 @@ import type { ModelProviderType, VisionSettings } from './agent.types';
 export const MAX_ATTACHMENT_BYTES = 16 * 1024 * 1024;
 export const MAX_ATTACHMENT_TEXT_CHARS = 24_000;
 const VISION_TIMEOUT_MS = 60_000;
-const VISION_MAX_TOKENS = 1_400;
+// DeepSeek v4.x and other reasoning models spend part of every budget on
+// reasoning before the visible answer; 1400 truncated real photos.
+const VISION_MAX_TOKENS = 3_000;
 const IMAGE_MAX_EDGE = 1_800;
 
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif']);
@@ -167,6 +169,9 @@ async function callOpenAiCompatible(
     headers: {
       'content-type': 'application/json',
       authorization: `Bearer ${endpoint.apiKey}`,
+      // OpenCode Go routes by session; without this header every image
+      // analysis through it answers 400 MissingSessionID.
+      ...(endpoint.baseUrl.includes('opencode.ai') ? { 'x-opencode-session': 'bunwa-vision' } : {}),
     },
     body: JSON.stringify({
       model: endpoint.model,
@@ -189,9 +194,13 @@ async function callOpenAiCompatible(
     throw new Error(`HTTP ${response.status}: ${detail.slice(0, 300)}`);
   }
   const body = (await response.json().catch(() => null)) as {
-    choices?: { message?: { content?: string } }[];
+    choices?: { message?: { content?: string; reasoning_content?: string } }[];
   } | null;
-  return body?.choices?.[0]?.message?.content?.trim() ?? '';
+  const message = body?.choices?.[0]?.message;
+  // Reasoning models (DeepSeek v4.x on OpenCode) can spend the whole budget on
+  // reasoning and leave `content` empty while the useful description sits in
+  // `reasoning_content`. Prefer the visible answer, but never return nothing.
+  return message?.content?.trim() || message?.reasoning_content?.trim() || '';
 }
 
 async function callAnthropic(

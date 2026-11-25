@@ -71,6 +71,30 @@ describe('attachment reader', () => {
     expect(JSON.stringify(captured?.body)).toContain('My order');
   });
 
+  test('a reasoning model that answers in reasoning_content still yields text', async () => {
+    globalThis.fetch = (async () => {
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              finish_reason: 'length',
+              message: { content: '', reasoning_content: 'The photo shows a red dress with a GHC 250 price tag.' },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    }) as typeof fetch;
+
+    const result = await readAttachment(
+      { bytes: await png(), mimetype: 'image/png', filename: 'dress.png' },
+      { settings: settings() },
+    );
+
+    expect(result.kind).toBe('image');
+    expect(result.text).toContain('GHC 250');
+  });
+
   test('falls back to the fallback vision model when the primary fails', async () => {
     const calls: string[] = [];
     globalThis.fetch = (async (url: string) => {
