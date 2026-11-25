@@ -43,6 +43,9 @@ async function probeOpenAiCompatible(endpoint: ProbeEndpoint, signal: AbortSigna
     headers: {
       'content-type': 'application/json',
       authorization: `Bearer ${endpoint.apiKey}`,
+      // OpenCode Go routes each request by session; without this header the
+      // probe answers 400 MissingSessionID even though the chat runtime works.
+      ...(endpoint.baseUrl.includes('opencode.ai') ? { 'x-opencode-session': 'bunwa-probe' } : {}),
     },
     body: JSON.stringify({
       model: endpoint.model,

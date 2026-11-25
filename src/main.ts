@@ -412,6 +412,10 @@ async function bootstrap() {
     // the /api/* middleware keeps every other route at 10MB and returns a
     // friendlier JSON 413 when a Content-Length header is present.
     maxRequestBodySize: uploadMaxBytes(),
+    // Model probes and other slow upstreams can take 20s+; Bun's default idle
+    // timeout closes the client connection before the handler answers, which
+    // surfaces as an empty reply in curl and the dashboard.
+    idleTimeout: 120,
     fetch: async (reqAny, server) => {
       const req = reqAny as any; // bun-types Request variance across versions
       // Handle WebSocket upgrade for /ws path
