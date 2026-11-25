@@ -602,12 +602,21 @@ export class WhatsappSessionBunWebCore extends WhatsappSession {
     if (markOnlineOnConnect == undefined) {
       markOnlineOnConnect = true;
     }
+    // A human needs time to reach the "Enter code" screen and type. Baileys
+    // keeps the first QR for 60s and later ones for 20s, then closes the
+    // socket — which invalidates any pairing code that was already issued.
+    // Give the whole flow a realistic window instead.
+    const pairingTimeoutMs = Math.min(
+      900_000,
+      Math.max(60_000, Number(process.env.BUNWA_PAIRING_TIMEOUT_MS) || 300_000),
+    );
     return {
       agent: agents?.socket,
       // Baileys media upload uses Node https.request in Node runtime.
       fetchAgent: agents?.fetch as Agent,
       auth: state,
       printQRInTerminal: false,
+      qrTimeout: pairingTimeoutMs,
       browser: browser,
       logger: this.engineLogger,
       mobile: false,
